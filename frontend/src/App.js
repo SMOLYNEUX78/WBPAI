@@ -1,5 +1,10 @@
 import React, { useEffect, useState } from "react";
-import { BrowserRouter as Router, Routes, Route, useNavigate } from "react-router-dom";
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  useNavigate
+} from "react-router-dom";
 import CreateProfile from "./pages/performance/CreateProfile";
 import PerformanceProfile from "./pages/performance/PerformanceProfile";
 
@@ -27,7 +32,7 @@ const SplashScreen = () => {
         alt="House"
         className="absolute inset-0 w-full h-full object-cover"
       />
-      
+
       {/* Overlay Text */}
       <h1 className="text-4xl font-bold text-blue-600 relative z-10">
         WHOLE BUILD PROFILE

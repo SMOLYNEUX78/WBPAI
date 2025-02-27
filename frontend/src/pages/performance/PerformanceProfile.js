@@ -36,7 +36,10 @@ const PerformanceProfile = () => {
 
       {/* Progress Bar */}
       <div className="mt-4 bg-gray-300 w-full h-6 rounded relative">
-        <div className="absolute left-0 top-0 bg-green-500 h-6 rounded" style={{ width: "100%" }}>
+        <div
+          className="absolute left-0 top-0 bg-green-500 h-6 rounded"
+          style={{ width: "100%" }}
+        >
           <span className="text-white ml-2">100% complete</span>
         </div>
       </div>
