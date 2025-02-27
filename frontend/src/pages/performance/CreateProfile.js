@@ -1,4 +1,3 @@
-// src/pages/performance/CreateProfile.js
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -133,4 +132,3 @@ const CreateProfile = () => {
 };
 
 export default CreateProfile;
-
