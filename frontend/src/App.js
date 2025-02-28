@@ -5,6 +5,7 @@ import {
   Route,
   useNavigate
 } from "react-router-dom";
+import BuildingDashboard from "./pages/performance/BuildingDashboard";
 import CreateProfile from "./pages/performance/CreateProfile";
 import PerformanceProfile from "./pages/performance/PerformanceProfile";
 
@@ -15,7 +16,7 @@ const SplashScreen = () => {
   useEffect(() => {
     const timer = setTimeout(() => {
       setFadeOut(true); // Start fade-out animation
-      setTimeout(() => navigate("/create-profile"), 500); // Wait for fade-out to complete before navigating
+      setTimeout(() => navigate("/dashboard"), 500); // Wait for fade-out to complete before navigating
     }, 2000);
     return () => clearTimeout(timer);
   }, [navigate]);
@@ -46,6 +47,7 @@ const App = () => {
     <Router>
       <Routes>
         <Route path="/" element={<SplashScreen />} />
+        <Route path="/dashboard" element={<BuildingDashboard />} />
         <Route path="/create-profile" element={<CreateProfile />} />
         <Route path="/performance-profile" element={<PerformanceProfile />} />
       </Routes>
