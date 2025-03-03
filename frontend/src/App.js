@@ -8,6 +8,7 @@ import {
 import BuildingDashboard from "./pages/performance/BuildingDashboard";
 
 
+
 const SplashScreen = () => {
   const navigate = useNavigate();
   const [fadeOut, setFadeOut] = useState(false); // State to handle fade effect
@@ -46,7 +47,7 @@ const App = () => {
     <Router>
       <Routes>
         <Route path="/" element={<SplashScreen />} />
-        <Route path="/dashboard" element={<BuildingDashboard />} />
+<Route path="/dashboard" element={<BuildingDashboard />} />
       </Routes>
     </Router>
   );

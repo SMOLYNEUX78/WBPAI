@@ -1,52 +1,66 @@
 // src/pages/performance/BuildingDashboard.js
 import React, { useState, useEffect } from "react";
 import AnalogGauge from "../../components/AnalogGauge";
+import axios from "axios"; // Placeholder for sensor data fetching
 
 const BuildingDashboard = () => {
   const [buildingArea, setBuildingArea] = useState(50);
   const [occupantCount, setOccupantCount] = useState(1);
   const [location, setLocation] = useState({ lat: null, lng: null });
   const [sensorData, setSensorData] = useState({
-    energyUse: 15.2,
-    temperature: 21.5,
-    externalTemp: 15.0,
-    humidity: 45,
-    co2: 400,
-    vocs: 0.12,
-    pm25: 12,
+    energyUse: 15.2, // kWh/day
+    temperature: 21.5, // °C
+    externalTemp: 15.0, // °C
+    humidity: 45, // %
+    co2: 400, // ppm
+    vocs: 0.12, // mg/m³
+    pm25: 12, // µg/m³
   });
   const [performanceValue, setPerformanceValue] = useState(0);
   const [carbonCredits, setCarbonCredits] = useState(0);
 
   useEffect(() => {
-    calculatePerformance(sensorData);
+    fetchSensorData(); // Placeholder for real sensor connection
+  }, []);
+
+  useEffect(() => {
+    calculatePerformance(sensorData, buildingArea);
     calculateCarbonCredits(sensorData, buildingArea);
   }, [sensorData, buildingArea]);
 
-  const calculatePerformance = (data) => {
+  const fetchSensorData = async () => {
+    try {
+      const response = await axios.get("https://api.example.com/sensors");
+      setSensorData(response.data);
+    } catch (error) {
+      console.error("Error fetching sensor data:", error);
+    }
+  };
+
+  const calculatePerformance = (data, area) => {
     let score = 100;
-    const tempDiff = Math.abs(data.temperature - 21);
-    score -= tempDiff * 2;
+    const adjustedArea = Math.max(area, 20);
+    const energyPerSqM = data.energyUse / adjustedArea;
+
+    if (energyPerSqM > 10) score -= 30;
+    else if (energyPerSqM > 5) score -= 15;
+    else if (energyPerSqM > 2) score -= 5;
+
+    score -= Math.abs(data.temperature - 21) * 3;
     if (data.humidity < 40 || data.humidity > 60) score -= 10;
     if (data.co2 > 600) score -= (data.co2 - 600) / 10;
-    if (score < 0) score = 0;
-    if (score > 100) score = 100;
+    if (data.vocs > 0.3) score -= (data.vocs - 0.3) * 10;
+    if (data.pm25 > 12) score -= (data.pm25 - 12) * 5;
+
+    score = Math.max(0, Math.min(100, score));
     setPerformanceValue(Math.round(score));
   };
 
   const calculateCarbonCredits = (data, area) => {
-    const baseline = (20 * area) / 50;
-    const savings = baseline - data.energyUse;
-    if (savings > 0) {
-      const co2Savings = savings * 0.4;
-      setCarbonCredits(Math.round(co2Savings));
-    } else {
-      setCarbonCredits(0);
-    }
+    const partLBaseline = (15 * area) / 50;
+    const savings = partLBaseline - data.energyUse;
+    setCarbonCredits(savings > 0 ? Math.round(savings * 0.4) : 0);
   };
-
-  const handleOccupantChange = (e) => setOccupantCount(Number(e.target.value));
-  const handleBuildingAreaChange = (e) => setBuildingArea(Number(e.target.value));
 
   const handleGeolocate = () => {
     if ("geolocation" in navigator) {
@@ -55,44 +69,25 @@ const BuildingDashboard = () => {
           setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
           alert(`Location found:\nLat: ${pos.coords.latitude}\nLng: ${pos.coords.longitude}`);
         },
-        (err) => {
-          alert("Unable to retrieve location.");
-          console.error(err);
-        }
+        (err) => console.error("Geolocation error:", err)
       );
-    } else {
-      alert("Geolocation is not supported by this browser.");
     }
-  };
-
-  const scanForSmartMeter = () => alert("Scanning for Smart Meter...");
-  const scanForSensors = () => alert("Scanning for Sensors...");
-  const handleSellCredits = () => {
-    alert(`You sold ${carbonCredits} DCC!`);
   };
 
   return (
     <div className="min-h-screen bg-white p-4 flex flex-col space-y-6">
-      {/* DATA SECTION */}
       <div className="bg-gray-100 p-4 rounded shadow">
-        <h2 className="text-lg font-bold mb-2">Data</h2>
-        {/* Dropdown for Auto-Scan/Manual Setup */}
+        <h2 className="text-lg font-bold mb-2">Data Input</h2>
         <div className="mb-2">
           <select className="border p-2" defaultValue="auto-scan">
             <option value="auto-scan">Auto-Scan</option>
             <option value="manual-setup">Manual Setup</option>
           </select>
         </div>
-        {/* Buttons: Both green, on one line */}
         <div className="flex flex-wrap items-center gap-4 mb-4">
-          <button onClick={scanForSmartMeter} className="bg-green-500 text-white px-3 py-2 rounded">
-            Scan for Smart Meter
-          </button>
-          <button onClick={scanForSensors} className="bg-green-500 text-white px-3 py-2 rounded">
-            Scan for Sensors
-          </button>
+          <button className="bg-green-500 text-white px-3 py-2 rounded">Scan for Smart Meter</button>
+          <button className="bg-green-500 text-white px-3 py-2 rounded">Scan for Sensors</button>
         </div>
-        {/* Internal Area & Occupants */}
         <div className="flex flex-wrap items-center gap-4 mb-4">
           <div className="flex items-center gap-2">
             <label className="font-semibold">Internal Area:</label>
@@ -100,70 +95,37 @@ const BuildingDashboard = () => {
               type="number" 
               className="border p-2 w-24" 
               value={buildingArea} 
-              onChange={handleBuildingAreaChange} 
+              onChange={(e) => setBuildingArea(Math.max(20, Number(e.target.value)))}
             />
             <span>m²</span>
           </div>
-          <div className="flex items-center gap-2">
-            <label className="font-semibold">Occupants:</label>
-            <select className="border p-2" value={occupantCount} onChange={handleOccupantChange}>
-              {[1, 2, 3, 4, 5, 6, 7, 8].map((val) => (
-                <option key={val} value={val}>
-                  {val}
-                </option>
-              ))}
-            </select>
-          </div>
-          <button onClick={handleGeolocate} className="bg-yellow-500 text-white px-3 py-2 rounded">
-            Geolocate
-          </button>
         </div>
       </div>
-
-      {/* PERFORMANCE SECTION */}
-      <div className="bg-gray-100 p-4 rounded shadow flex flex-col space-y-4">
+      <div className="bg-gray-100 p-4 rounded shadow">
         <h2 className="text-lg font-bold">Performance</h2>
-        <div className="flex flex-col md:flex-row">
-          {/* Left: Analog Gauge */}
-          <div className="flex-1 flex flex-col items-center mb-4 md:mb-0">
-            <p className="mb-2 font-semibold">Live Gauge</p>
-            <AnalogGauge value={performanceValue} />
-          </div>
-          {/* Right: Split into two groups */}
-          <div className="flex flex-col md:flex-row flex-1 gap-4 pl-0 md:pl-4 text-sm">
-            {/* Energy Group */}
-            <div className="flex-1 grid grid-cols-2 gap-2">
-              <span className="font-semibold">Energy use:</span>
-              <span>{sensorData.energyUse} kWh/day</span>
-              <span className="font-semibold">Temperature:</span>
-              <span>{sensorData.temperature} °C</span>
-              <span className="font-semibold">External Temp:</span>
-              <span>{sensorData.externalTemp} °C</span>
-            </div>
-            {/* IAQ Group */}
-            <div className="flex-1 grid grid-cols-2 gap-2">
-              <span className="font-semibold">Humidity:</span>
-              <span>{sensorData.humidity} %</span>
-              <span className="font-semibold">CO₂:</span>
-              <span>{sensorData.co2} ppm</span>
-              <span className="font-semibold">VOCs:</span>
-              <span>{sensorData.vocs} mg/m³</span>
-              <span className="font-semibold">PM2.5:</span>
-              <span>{sensorData.pm25} µg/m³</span>
-            </div>
-          </div>
+        <AnalogGauge value={performanceValue} />
+        <div className="grid grid-cols-2 gap-2 pt-4 text-sm">
+          <span className="font-semibold">Energy use:</span>
+          <span>{sensorData.energyUse} kWh/day</span>
+          <span className="font-semibold">Temperature:</span>
+          <span>{sensorData.temperature} °C</span>
+          <span className="font-semibold">External Temp:</span>
+          <span>{sensorData.externalTemp} °C</span>
+          <div className="col-span-2 border-t border-gray-400 my-2"></div>
+          <span className="font-semibold">Humidity:</span>
+          <span>{sensorData.humidity} %</span>
+          <span className="font-semibold">CO₂:</span>
+          <span>{sensorData.co2} ppm</span>
+          <span className="font-semibold">VOCs:</span>
+          <span>{sensorData.vocs} mg/m³</span>
+          <span className="font-semibold">PM2.5:</span>
+          <span>{sensorData.pm25} µg/m³</span>
         </div>
       </div>
-
-      {/* CREDITS SECTION */}
-      <div className="bg-gray-100 p-4 rounded shadow flex flex-col space-y-2">
-        <h2 className="text-lg font-bold">Credits</h2>
-        <p className="text-sm">
-          <strong>{carbonCredits}</strong> DCC (Digital Carbon Credits)
-        </p>
-        <button onClick={handleSellCredits} className="bg-red-500 text-white px-4 py-2 w-32 rounded">
-          SELL
-        </button>
+      <div className="bg-gray-100 p-4 rounded shadow">
+        <h2 className="text-lg font-bold">Digital Carbon Credits</h2>
+        <p><strong>{carbonCredits}</strong> DCC</p>
+        <button className="bg-red-500 text-white px-4 py-2 w-32 rounded">SELL CREDITS</button>
       </div>
     </div>
   );
