@@ -4,13 +4,13 @@ import AnalogGauge from "../../components/AnalogGauge";
 const BuildingDashboard = () => {
   const [buildingArea, setBuildingArea] = useState(50);
   const [sensorData, setSensorData] = useState({
-    energyUse: 0,
-    temperature: 0,
-    externalTemp: 0,
-    humidity: 0,
-    co2: 0,
-    vocs: 0,
-    pm25: 0,
+    energyUse: 15.2,
+    temperature: 21.5,
+    externalTemp: 15.0,
+    humidity: 45,
+    co2: 400,
+    vocs: 0.12,
+    pm25: 12,
   });
   const [performanceValue, setPerformanceValue] = useState(0);
   const [carbonCredits, setCarbonCredits] = useState(0);
@@ -27,8 +27,17 @@ const BuildingDashboard = () => {
 
   const fetchSensorData = async () => {
     try {
-      // Placeholder for real sensor data retrieval logic
-      console.log("Fetching sensor data from actual sensors...");
+      const simulatedData = {
+        energyUse: 10 + Math.random() * 10,
+        temperature: 19 + Math.random() * 4,
+        externalTemp: 10 + Math.random() * 10,
+        humidity: 35 + Math.random() * 30,
+        co2: 400 + Math.random() * 300,
+        vocs: 0.1 + Math.random() * 0.4,
+        pm25: 5 + Math.random() * 20,
+      };
+
+      setSensorData(simulatedData);
     } catch (error) {
       console.error("Error fetching sensor data:", error);
     }

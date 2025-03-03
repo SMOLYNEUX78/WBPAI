@@ -1,26 +1,23 @@
-// src/pages/performance/BuildingDashboard.js
 import React, { useState, useEffect } from "react";
 import AnalogGauge from "../../components/AnalogGauge";
-import axios from "axios"; // Placeholder for sensor data fetching
 
 const BuildingDashboard = () => {
   const [buildingArea, setBuildingArea] = useState(50);
-  const [occupantCount, setOccupantCount] = useState(1);
-  const [location, setLocation] = useState({ lat: null, lng: null });
   const [sensorData, setSensorData] = useState({
-    energyUse: 15.2, // kWh/day
-    temperature: 21.5, // °C
-    externalTemp: 15.0, // °C
-    humidity: 45, // %
-    co2: 400, // ppm
-    vocs: 0.12, // mg/m³
-    pm25: 12, // µg/m³
+    energyUse: 0,
+    temperature: 0,
+    externalTemp: 0,
+    humidity: 0,
+    co2: 0,
+    vocs: 0,
+    pm25: 0,
   });
   const [performanceValue, setPerformanceValue] = useState(0);
   const [carbonCredits, setCarbonCredits] = useState(0);
 
   useEffect(() => {
-    fetchSensorData(); // Placeholder for real sensor connection
+    const interval = setInterval(fetchSensorData, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
@@ -30,8 +27,8 @@ const BuildingDashboard = () => {
 
   const fetchSensorData = async () => {
     try {
-      const response = await axios.get("https://api.example.com/sensors");
-      setSensorData(response.data);
+      // Placeholder for real sensor data retrieval logic
+      console.log("Fetching sensor data from actual sensors...");
     } catch (error) {
       console.error("Error fetching sensor data:", error);
     }
@@ -60,18 +57,6 @@ const BuildingDashboard = () => {
     const partLBaseline = (15 * area) / 50;
     const savings = partLBaseline - data.energyUse;
     setCarbonCredits(savings > 0 ? Math.round(savings * 0.4) : 0);
-  };
-
-  const handleGeolocate = () => {
-    if ("geolocation" in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-          alert(`Location found:\nLat: ${pos.coords.latitude}\nLng: ${pos.coords.longitude}`);
-        },
-        (err) => console.error("Geolocation error:", err)
-      );
-    }
   };
 
   return (
@@ -103,23 +88,18 @@ const BuildingDashboard = () => {
       </div>
       <div className="bg-gray-100 p-4 rounded shadow">
         <h2 className="text-lg font-bold">Performance</h2>
-        <AnalogGauge value={performanceValue} />
-        <div className="grid grid-cols-2 gap-2 pt-4 text-sm">
-          <span className="font-semibold">Energy use:</span>
-          <span>{sensorData.energyUse} kWh/day</span>
-          <span className="font-semibold">Temperature:</span>
-          <span>{sensorData.temperature} °C</span>
-          <span className="font-semibold">External Temp:</span>
-          <span>{sensorData.externalTemp} °C</span>
-          <div className="col-span-2 border-t border-gray-400 my-2"></div>
-          <span className="font-semibold">Humidity:</span>
-          <span>{sensorData.humidity} %</span>
-          <span className="font-semibold">CO₂:</span>
-          <span>{sensorData.co2} ppm</span>
-          <span className="font-semibold">VOCs:</span>
-          <span>{sensorData.vocs} mg/m³</span>
-          <span className="font-semibold">PM2.5:</span>
-          <span>{sensorData.pm25} µg/m³</span>
+        <div className="flex items-center">
+          <AnalogGauge value={performanceValue} />
+          <div className="ml-4 text-sm">
+            <p><strong>Energy Use:</strong> {sensorData.energyUse.toFixed(1)} kWh</p>
+            <p><strong>Temperature:</strong> {sensorData.temperature.toFixed(1)} °C</p>
+            <p><strong>External Temp:</strong> {sensorData.externalTemp.toFixed(1)} °C</p>
+            <hr className="my-2" />
+            <p><strong>Humidity:</strong> {sensorData.humidity.toFixed(1)}%</p>
+            <p><strong>CO2:</strong> {sensorData.co2.toFixed(1)} ppm</p>
+            <p><strong>VOCs:</strong> {sensorData.vocs.toFixed(2)} ppm</p>
+            <p><strong>PM2.5:</strong> {sensorData.pm25.toFixed(1)} µg/m³</p>
+          </div>
         </div>
       </div>
       <div className="bg-gray-100 p-4 rounded shadow">
