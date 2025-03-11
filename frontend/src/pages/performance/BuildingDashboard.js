@@ -1,5 +1,12 @@
 import React, { useState, useEffect } from "react";
 import AnalogGauge from "../../components/AnalogGauge";
+import mqtt from "mqtt";
+import { openDB } from "idb";
+
+const TTN_BROKER = "wss://eu1.cloud.thethings.network";
+const TTN_USERNAME = process.env.REACT_APP_TTN_USERNAME;
+const TTN_PASSWORD = process.env.REACT_APP_TTN_PASSWORD;
+const CLOUD_DB_API = process.env.REACT_APP_CLOUD_DB_API;
 
 const BuildingDashboard = () => {
   const [buildingArea, setBuildingArea] = useState(50);
@@ -16,62 +23,55 @@ const BuildingDashboard = () => {
   const [carbonCredits, setCarbonCredits] = useState(0);
 
   useEffect(() => {
-    const interval = setInterval(fetchSensorData, 5000);
+    const fetchData = async () => {
+      try {
+        const response = await fetch(CLOUD_DB_API, {
+          headers: {
+            Authorization: `Bearer ${process.env.REACT_APP_CLOUD_DB_TOKEN}`,
+          },
+        });
+        const data = await response.json();
+        setSensorData(data);
+      } catch (error) {
+        console.error("Error fetching data:", error);
+      }
+    };
+
+    fetchData();
+    const interval = setInterval(fetchData, 60000);
     return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
-    calculatePerformance(sensorData, buildingArea);
-    calculateCarbonCredits(sensorData, buildingArea);
-  }, [sensorData, buildingArea]);
+    const client = mqtt.connect(TTN_BROKER, {
+      username: TTN_USERNAME,
+      password: TTN_PASSWORD,
+    });
 
-  const fetchSensorData = async () => {
-    try {
-      // Placeholder for real sensor data retrieval logic
-      console.log("Fetching sensor data from actual sensors...");
-    } catch (error) {
-      console.error("Error fetching sensor data:", error);
-    }
-  };
+    client.on("connect", () => {
+      console.log("Connected to TTN");
+      client.subscribe("v3/+/devices/+/up");
+    });
 
-  const calculatePerformance = (data, area) => {
-    let score = 100;
-    const adjustedArea = Math.max(area, 20);
-    const energyPerSqM = data.energyUse / adjustedArea;
+    client.on("message", (topic, message) => {
+      const payload = JSON.parse(message.toString());
+      setSensorData((prev) => ({ ...prev, ...payload }));
+    });
 
-    if (energyPerSqM > 10) score -= 30;
-    else if (energyPerSqM > 5) score -= 15;
-    else if (energyPerSqM > 2) score -= 5;
-
-    score -= Math.abs(data.temperature - 21) * 3;
-    if (data.humidity < 40 || data.humidity > 60) score -= 10;
-    if (data.co2 > 600) score -= (data.co2 - 600) / 10;
-    if (data.vocs > 0.3) score -= (data.vocs - 0.3) * 10;
-    if (data.pm25 > 12) score -= (data.pm25 - 12) * 5;
-
-    score = Math.max(0, Math.min(100, score));
-    setPerformanceValue(Math.round(score));
-  };
-
-  const calculateCarbonCredits = (data, area) => {
-    const partLBaseline = (15 * area) / 50;
-    const savings = partLBaseline - data.energyUse;
-    setCarbonCredits(savings > 0 ? Math.round(savings * 0.4) : 0);
-  };
+    return () => client.end();
+  }, []);
 
   return (
     <div className="min-h-screen bg-white p-4 flex flex-col space-y-6">
       <div className="bg-gray-100 p-4 rounded shadow">
         <h2 className="text-lg font-bold mb-2">Data Input</h2>
-        <div className="mb-2">
-          <select className="border p-2" defaultValue="auto-scan">
-            <option value="auto-scan">Auto-Scan</option>
-            <option value="manual-setup">Manual Setup</option>
-          </select>
-        </div>
         <div className="flex flex-wrap items-center gap-4 mb-4">
-          <button className="bg-green-500 text-white px-3 py-2 rounded">Scan for Smart Meter</button>
-          <button className="bg-green-500 text-white px-3 py-2 rounded">Scan for Sensors</button>
+          <button className="bg-green-500 text-white px-3 py-2 rounded">
+            Scan for Smart Meter
+          </button>
+          <button className="bg-green-500 text-white px-3 py-2 rounded">
+            Scan for Sensors
+          </button>
         </div>
         <div className="flex flex-wrap items-center gap-4 mb-4">
           <div className="flex items-center gap-2">
@@ -84,6 +84,7 @@ const BuildingDashboard = () => {
             />
             <span>m²</span>
           </div>
+          <button className="bg-green-500 text-white px-3 py-2 rounded">Geolocate</button>
         </div>
       </div>
       <div className="bg-gray-100 p-4 rounded shadow">
