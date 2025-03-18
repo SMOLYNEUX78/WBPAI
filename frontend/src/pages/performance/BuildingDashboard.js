@@ -20,6 +20,7 @@ const BuildingDashboard = () => {
     pm25: 0,
   });
   const [performanceValue, setPerformanceValue] = useState(0);
+  const [historicalPerformance, setHistoricalPerformance] = useState(0);
   const [carbonCredits, setCarbonCredits] = useState(0);
 
   useEffect(() => {
@@ -31,14 +32,14 @@ const BuildingDashboard = () => {
           },
         });
         const data = await response.json();
-        setSensorData(data);
+        setSensorData((prev) => ({ ...prev, ...data }));
       } catch (error) {
         console.error("Error fetching data:", error);
       }
     };
 
     fetchData();
-    const interval = setInterval(fetchData, 60000);
+    const interval = setInterval(fetchData, 300000); // Fetch every 5 minutes
     return () => clearInterval(interval);
   }, []);
 
@@ -59,6 +60,23 @@ const BuildingDashboard = () => {
     });
 
     return () => client.end();
+  }, []);
+
+  useEffect(() => {
+    const fetchHistoricalData = async () => {
+      try {
+        const response = await fetch(`${CLOUD_DB_API}/historical`, {
+          headers: {
+            Authorization: `Bearer ${process.env.REACT_APP_CLOUD_DB_TOKEN}`,
+          },
+        });
+        const data = await response.json();
+        setHistoricalPerformance(data.averagePerformance);
+      } catch (error) {
+        console.error("Error fetching historical data:", error);
+      }
+    };
+    fetchHistoricalData();
   }, []);
 
   return (
@@ -90,7 +108,7 @@ const BuildingDashboard = () => {
       <div className="bg-gray-100 p-4 rounded shadow">
         <h2 className="text-lg font-bold">Performance</h2>
         <div className="flex items-center">
-          <AnalogGauge value={performanceValue} />
+          <AnalogGauge value={performanceValue} historicalValue={historicalPerformance} />
           <div className="ml-4 text-sm">
             <p><strong>Energy Use:</strong> {sensorData.energyUse.toFixed(1)} kWh</p>
             <p><strong>Temperature:</strong> {sensorData.temperature.toFixed(1)} °C</p>
