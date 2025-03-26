@@ -2,8 +2,6 @@ import React, { useState, useEffect } from "react";
 import AnalogGauge from "../../components/AnalogGauge";
 import mqtt from "mqtt";
 import { openDB } from "idb";
-import { ethers } from "ethers";
-import { getEthereumContract, connectWallet } from "../../utils/ethers";
 
 const TTN_BROKER = "wss://eu1.cloud.thethings.network";
 const TTN_USERNAME = process.env.REACT_APP_TTN_USERNAME;
@@ -24,8 +22,6 @@ const BuildingDashboard = () => {
   const [performanceValue, setPerformanceValue] = useState(0);
   const [historicalPerformance, setHistoricalPerformance] = useState(0);
   const [carbonCredits, setCarbonCredits] = useState(0);
-  const [wallet, setWallet] = useState(null);
-  const [contract, setContract] = useState(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -83,29 +79,6 @@ const BuildingDashboard = () => {
     fetchHistoricalData();
   }, []);
 
-  useEffect(() => {
-    const initBlockchain = async () => {
-      const walletAddress = await connectWallet();
-      if (walletAddress) {
-        setWallet(walletAddress);
-        setContract(getEthereumContract());
-      }
-    };
-    initBlockchain();
-  }, []);
-
-  const sellCredits = async () => {
-    if (contract && wallet) {
-      try {
-        const tx = await contract.sellCredits(ethers.utils.parseUnits(carbonCredits.toString(), "ether"));
-        await tx.wait();
-        alert("Credits sold successfully!");
-      } catch (error) {
-        console.error("Error selling credits:", error);
-      }
-    }
-  };
-
   return (
     <div className="min-h-screen bg-white p-4 flex flex-col space-y-6">
       <div className="bg-gray-100 p-4 rounded shadow">
@@ -151,7 +124,7 @@ const BuildingDashboard = () => {
       <div className="bg-gray-100 p-4 rounded shadow">
         <h2 className="text-lg font-bold">Digital Carbon Credits</h2>
         <p><strong>{carbonCredits}</strong> DCC</p>
-        <button onClick={sellCredits} className="bg-red-500 text-white px-4 py-2 w-32 rounded">SELL CREDITS</button>
+        <button className="bg-red-500 text-white px-4 py-2 w-32 rounded">SELL CREDITS</button>
       </div>
     </div>
   );
