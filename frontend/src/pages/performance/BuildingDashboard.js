@@ -22,6 +22,7 @@ const BuildingDashboard = () => {
   const [performanceValue, setPerformanceValue] = useState(0);
   const [historicalPerformance, setHistoricalPerformance] = useState(0);
   const [carbonCredits, setCarbonCredits] = useState(0);
+  const [location, setLocation] = useState(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -79,6 +80,24 @@ const BuildingDashboard = () => {
     fetchHistoricalData();
   }, []);
 
+  const handleGeolocate = () => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          setLocation({ latitude, longitude });
+          console.log(`Latitude: ${latitude}, Longitude: ${longitude}`);
+          // Further logic, such as sending location to an API, can be added here
+        },
+        (error) => {
+          console.error("Error getting location:", error);
+        }
+      );
+    } else {
+      console.error("Geolocation is not supported by this browser.");
+    }
+  };
+
   return (
     <div className="min-h-screen bg-white p-4 flex flex-col space-y-6">
       <div className="bg-gray-100 p-4 rounded shadow">
@@ -94,41 +113,70 @@ const BuildingDashboard = () => {
         <div className="flex flex-wrap items-center gap-4 mb-4">
           <div className="flex items-center gap-2">
             <label className="font-semibold">Internal Area:</label>
-            <input 
-              type="number" 
-              className="border p-2 w-24" 
-              value={buildingArea} 
-              onChange={(e) => setBuildingArea(Math.max(20, Number(e.target.value)))}
+            <input
+              type="number"
+              className="border p-2 w-24"
+              value={buildingArea}
+              onChange={(e) =>
+                setBuildingArea(Math.max(20, Number(e.target.value)))
+              }
             />
             <span>m²</span>
           </div>
-          <button className="bg-green-500 text-white px-3 py-2 rounded">Geolocate</button>
+          <button
+            className="bg-green-500 text-white px-3 py-2 rounded"
+            onClick={handleGeolocate}
+          >
+            Geolocate
+          </button>
         </div>
       </div>
       <div className="bg-gray-100 p-4 rounded shadow">
         <h2 className="text-lg font-bold">Performance</h2>
         <div className="flex items-center">
-          <AnalogGauge value={performanceValue} historicalValue={historicalPerformance} />
+          <AnalogGauge
+            value={performanceValue}
+            historicalValue={historicalPerformance}
+          />
           <div className="ml-4 text-sm">
-            <p><strong>Energy Use:</strong> {sensorData.energyUse.toFixed(1)} kWh</p>
-            <p><strong>Temperature:</strong> {sensorData.temperature.toFixed(1)} °C</p>
-            <p><strong>External Temp:</strong> {sensorData.externalTemp.toFixed(1)} °C</p>
+            <p>
+              <strong>Energy Use:</strong> {sensorData.energyUse.toFixed(1)} kWh
+            </p>
+            <p>
+              <strong>Temperature:</strong> {sensorData.temperature.toFixed(1)}{" "}
+              °C
+            </p>
+            <p>
+              <strong>External Temp:</strong>{" "}
+              {sensorData.externalTemp.toFixed(1)} °C
+            </p>
             <hr className="my-2" />
-            <p><strong>Humidity:</strong> {sensorData.humidity.toFixed(1)}%</p>
-            <p><strong>CO2:</strong> {sensorData.co2.toFixed(1)} ppm</p>
-            <p><strong>VOCs:</strong> {sensorData.vocs.toFixed(2)} ppm</p>
-            <p><strong>PM2.5:</strong> {sensorData.pm25.toFixed(1)} µg/m³</p>
+            <p>
+              <strong>Humidity:</strong> {sensorData.humidity.toFixed(1)}%
+            </p>
+            <p>
+              <strong>CO2:</strong> {sensorData.co2.toFixed(1)} ppm
+            </p>
+            <p>
+              <strong>VOCs:</strong> {sensorData.vocs.toFixed(2)} ppm
+            </p>
+            <p>
+              <strong>PM2.5:</strong> {sensorData.pm25.toFixed(1)} µg/m³
+            </p>
           </div>
         </div>
       </div>
       <div className="bg-gray-100 p-4 rounded shadow">
         <h2 className="text-lg font-bold">Digital Carbon Credits</h2>
-        <p><strong>{carbonCredits}</strong> DCC</p>
-        <button className="bg-red-500 text-white px-4 py-2 w-32 rounded">SELL CREDITS</button>
+        <p>
+          <strong>{carbonCredits}</strong> DCC
+        </p>
+        <button className="bg-red-500 text-white px-4 py-2 w-32 rounded">
+          SELL CREDITS
+        </button>
       </div>
     </div>
   );
 };
 
 export default BuildingDashboard;
-
