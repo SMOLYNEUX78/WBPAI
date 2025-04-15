@@ -3,6 +3,7 @@ import AnalogGauge from "../../components/AnalogGauge";
 import mqtt from "mqtt";
 import { openDB } from "idb";
 
+
 const TTN_BROKER = "wss://eu1.cloud.thethings.network";
 const TTN_USERNAME = process.env.REACT_APP_TTN_USERNAME;
 const TTN_PASSWORD = process.env.REACT_APP_TTN_PASSWORD;
