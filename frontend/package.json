@@ -2,6 +2,7 @@
   "name": "frontend",
   "version": "0.1.0",
   "private": true,
+  "homepage": ".",
   "dependencies": {
     "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "^6.6.3",
@@ -10,8 +11,8 @@
     "axios": "^1.8.1",
     "ethers": "^6.13.5",
     "mqtt": "^5.10.4",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
     "react-router-dom": "^6.29.0",
     "react-scripts": "^5.0.1",
     "web-vitals": "^2.1.4"
