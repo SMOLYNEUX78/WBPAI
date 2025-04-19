@@ -1,14 +1,7 @@
-// ===================================
-// BuildingDashboard.js (frontend)
-// ===================================
+// BuildingDashboard.js
 import React, { useState, useEffect } from "react";
 import AnalogGauge from "../../components/AnalogGauge";
-import mqtt from "mqtt";
-import { openDB } from "idb";
 
-const TTN_BROKER = "wss://eu1.cloud.thethings.network";
-const TTN_USERNAME = process.env.REACT_APP_TTN_USERNAME;
-const TTN_PASSWORD = process.env.REACT_APP_TTN_PASSWORD;
 const CLOUD_DB_API = process.env.REACT_APP_CLOUD_DB_API;
 const CLOUD_DB_TOKEN = process.env.REACT_APP_CLOUD_DB_TOKEN;
 
@@ -44,27 +37,8 @@ const BuildingDashboard = () => {
     };
 
     fetchData();
-    const interval = setInterval(fetchData, 300000); // Fetch every 5 minutes
+    const interval = setInterval(fetchData, 300000); // 5 min refresh
     return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    const client = mqtt.connect(TTN_BROKER, {
-      username: TTN_USERNAME,
-      password: TTN_PASSWORD,
-    });
-
-    client.on("connect", () => {
-      console.log("Connected to TTN");
-      client.subscribe("v3/+/devices/+/up");
-    });
-
-    client.on("message", (topic, message) => {
-      const payload = JSON.parse(message.toString());
-      setSensorData((prev) => ({ ...prev, ...payload }));
-    });
-
-    return () => client.end();
   }, []);
 
   useEffect(() => {
@@ -87,22 +61,19 @@ const BuildingDashboard = () => {
   const handleGeolocate = () => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const { latitude, longitude } = position.coords;
+        ({ coords }) => {
+          const { latitude, longitude } = coords;
           setLocation({ latitude, longitude });
-          console.log(`Latitude: ${latitude}, Longitude: ${longitude}`);
+          console.log(`📍 Latitude: ${latitude}, Longitude: ${longitude}`);
         },
-        (error) => {
-          console.error("Error getting location:", error);
-        }
+        (err) => console.error("Geolocation error:", err)
       );
-    } else {
-      console.error("Geolocation is not supported by this browser.");
     }
   };
 
   return (
     <div className="min-h-screen bg-white p-4 flex flex-col space-y-6">
+      {/* Input Section */}
       <div className="bg-gray-100 p-4 rounded shadow">
         <h2 className="text-lg font-bold mb-2">Data Input</h2>
         <div className="flex flex-wrap items-center gap-4 mb-4">
@@ -113,19 +84,17 @@ const BuildingDashboard = () => {
             Scan for Sensors
           </button>
         </div>
-        <div className="flex flex-wrap items-center gap-4 mb-4">
-          <div className="flex items-center gap-2">
-            <label className="font-semibold">Internal Area:</label>
-            <input
-              type="number"
-              className="border p-2 w-24"
-              value={buildingArea}
-              onChange={(e) =>
-                setBuildingArea(Math.max(20, Number(e.target.value)))
-              }
-            />
-            <span>m²</span>
-          </div>
+        <div className="flex items-center gap-2 mb-4">
+          <label className="font-semibold">Internal Area:</label>
+          <input
+            type="number"
+            className="border p-2 w-24"
+            value={buildingArea}
+            onChange={(e) =>
+              setBuildingArea(Math.max(20, Number(e.target.value)))
+            }
+          />
+          <span>m²</span>
           <button
             className="bg-green-500 text-white px-3 py-2 rounded"
             onClick={handleGeolocate}
@@ -134,6 +103,8 @@ const BuildingDashboard = () => {
           </button>
         </div>
       </div>
+
+      {/* Performance Section */}
       <div className="bg-gray-100 p-4 rounded shadow">
         <h2 className="text-lg font-bold">Performance</h2>
         <div className="flex items-center">
@@ -167,6 +138,8 @@ const BuildingDashboard = () => {
           </div>
         </div>
       </div>
+
+      {/* Carbon Credit Section */}
       <div className="bg-gray-100 p-4 rounded shadow">
         <h2 className="text-lg font-bold">Digital Carbon Credits</h2>
         <p>
