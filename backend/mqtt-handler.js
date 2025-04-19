@@ -2,7 +2,7 @@ const mqtt = require('mqtt');
 const supabase = require('./supabaseClient');
 require('dotenv').config();
 
-// MQTT options (no auth for local broker unless you've configured it)
+// MQTT options
 const options = {
   clientId: `mqtt_${Math.random().toString(16).slice(3)}`,
   keepalive: 60,
@@ -26,10 +26,13 @@ client.on('connect', () => {
 
 client.on('message', async (topic, message) => {
   try {
-    const payload = JSON.parse(message.toString());
-    console.log(`📬 Topic: ${topic}`);
-    console.log(`📦 Payload:`, payload);
+    const payloadStr = message.toString();
+    const payload = JSON.parse(payloadStr);
 
+    console.log(`📬 Topic: ${topic}`);
+    console.log(`📦 Raw Payload:`, payload);
+
+    // Match your CAD topic shape
     if (topic.includes('SENSOR/electricitymeter')) {
       const powerValue = payload?.power?.value;
 
@@ -46,11 +49,14 @@ client.on('message', async (topic, message) => {
           console.log(`✅ Logged to Supabase: ${powerValue} kW @ ${timestamp}`);
         }
       } else {
-        console.warn('⚠️ Missing power.value in payload');
+        console.warn('⚠️ Payload received but power.value is missing or not a number:', payload);
       }
+    } else {
+      console.log('🔍 Ignored topic (not SENSOR/electricitymeter)');
     }
   } catch (err) {
     console.error('❌ Failed to handle message:', err.message);
+    console.error('🧪 Raw message:', message.toString());
   }
 });
 

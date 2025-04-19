@@ -30,7 +30,18 @@ const BuildingDashboard = () => {
           },
         });
         const data = await response.json();
-        setSensorData((prev) => ({ ...prev, ...data }));
+
+        // Map Supabase field names to frontend expected keys
+        setSensorData((prev) => ({
+          ...prev,
+          energyUse: data.energy_usage || 0,
+          temperature: data.temperature_inside || 0,
+          externalTemp: data.temperature_outside || 0,
+          humidity: data.humidity || 0,
+          co2: data.co2_level || 0,
+          vocs: data.voc_level || 0,
+          pm25: data.pm25_level || 0,
+        }));
       } catch (error) {
         console.error("Error fetching data:", error);
       }
