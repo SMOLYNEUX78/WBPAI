@@ -1,13 +1,16 @@
+// ===================================
+// BuildingDashboard.js (frontend)
+// ===================================
 import React, { useState, useEffect } from "react";
 import AnalogGauge from "../../components/AnalogGauge";
 import mqtt from "mqtt";
 import { openDB } from "idb";
 
-
 const TTN_BROKER = "wss://eu1.cloud.thethings.network";
 const TTN_USERNAME = process.env.REACT_APP_TTN_USERNAME;
 const TTN_PASSWORD = process.env.REACT_APP_TTN_PASSWORD;
 const CLOUD_DB_API = process.env.REACT_APP_CLOUD_DB_API;
+const CLOUD_DB_TOKEN = process.env.REACT_APP_CLOUD_DB_TOKEN;
 
 const BuildingDashboard = () => {
   const [buildingArea, setBuildingArea] = useState(50);
@@ -28,9 +31,9 @@ const BuildingDashboard = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await fetch(CLOUD_DB_API, {
+        const response = await fetch(`${CLOUD_DB_API}/latest`, {
           headers: {
-            Authorization: `Bearer ${process.env.REACT_APP_CLOUD_DB_TOKEN}`,
+            Authorization: `Bearer ${CLOUD_DB_TOKEN}`,
           },
         });
         const data = await response.json();
@@ -69,7 +72,7 @@ const BuildingDashboard = () => {
       try {
         const response = await fetch(`${CLOUD_DB_API}/historical`, {
           headers: {
-            Authorization: `Bearer ${process.env.REACT_APP_CLOUD_DB_TOKEN}`,
+            Authorization: `Bearer ${CLOUD_DB_TOKEN}`,
           },
         });
         const data = await response.json();
@@ -88,7 +91,6 @@ const BuildingDashboard = () => {
           const { latitude, longitude } = position.coords;
           setLocation({ latitude, longitude });
           console.log(`Latitude: ${latitude}, Longitude: ${longitude}`);
-          // Further logic, such as sending location to an API, can be added here
         },
         (error) => {
           console.error("Error getting location:", error);
@@ -144,12 +146,10 @@ const BuildingDashboard = () => {
               <strong>Energy Use:</strong> {sensorData.energyUse.toFixed(1)} kWh
             </p>
             <p>
-              <strong>Temperature:</strong> {sensorData.temperature.toFixed(1)}{" "}
-              °C
+              <strong>Temperature:</strong> {sensorData.temperature.toFixed(1)} °C
             </p>
             <p>
-              <strong>External Temp:</strong>{" "}
-              {sensorData.externalTemp.toFixed(1)} °C
+              <strong>External Temp:</strong> {sensorData.externalTemp.toFixed(1)} °C
             </p>
             <hr className="my-2" />
             <p>
@@ -181,3 +181,4 @@ const BuildingDashboard = () => {
 };
 
 export default BuildingDashboard;
+

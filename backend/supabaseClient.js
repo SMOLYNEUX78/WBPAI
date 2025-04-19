@@ -1,4 +1,3 @@
-// supabaseClient.js
 const { createClient } = require('@supabase/supabase-js');
 require('dotenv').config();
 
@@ -8,4 +7,3 @@ const supabase = createClient(
 );
 
 module.exports = supabase;
-
