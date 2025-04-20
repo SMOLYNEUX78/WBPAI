@@ -1,6 +1,7 @@
 const mqtt = require('mqtt');
 const supabase = require('./supabaseClient');
 require('dotenv').config();
+const fs = require('fs');
 
 // MQTT options
 const options = {
