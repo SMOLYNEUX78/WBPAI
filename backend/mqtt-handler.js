@@ -42,7 +42,7 @@ client.on('message', async (topic, message) => {
 
         const { data, error } = await supabase
           .from('Readings')
-          .insert([{ timestamp, energy_usage: powerValue }]);
+          .insert([{ timestamp, energy_usage: powerValue / 1000}]);
 
         if (error) {
           console.error('❌ Supabase insert error:', error);
