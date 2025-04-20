@@ -1,16 +1,27 @@
+require('dotenv').config();
 const mqtt = require('mqtt');
 const supabase = require('./supabaseClient');
-require('dotenv').config();
 const fs = require('fs');
 
-// MQTT options
+// ===== Debug: Check environment and dependency =====
+console.log('📂 Current dir:', process.cwd());
+console.log('📄 .env URL:', process.env.SUPABASE_URL);
+try {
+  require.resolve('@supabase/supabase-js');
+  console.log('✅ supabase-js is installed');
+} catch {
+  console.error('❌ supabase-js is NOT installed!');
+}
+
+// ===== MQTT connection options =====
 const options = {
   clientId: `mqtt_${Math.random().toString(16).slice(3)}`,
   keepalive: 60,
   clean: true,
 };
 
-const client = mqtt.connect('mqtt://localhost:1883', options); // Local Mosquitto broker
+// ===== Connect to local Mosquitto broker =====
+const client = mqtt.connect('mqtt://localhost:1883', options);
 
 client.on('connect', () => {
   console.log('✅ Connected to local Mosquitto broker');
@@ -38,19 +49,20 @@ client.on('message', async (topic, message) => {
       const powerValue = payload?.power?.value;
 
       if (typeof powerValue === 'number') {
+        const energyUsage = powerValue / 1000; // Convert to kW
         const timestamp = new Date().toISOString();
 
         const { data, error } = await supabase
           .from('Readings')
-          .insert([{ timestamp, energy_usage: powerValue / 1000}]);
+          .insert([{ timestamp, energy_usage: energyUsage }]);
 
         if (error) {
           console.error('❌ Supabase insert error:', error);
         } else {
-          console.log(`✅ Logged to Supabase: ${powerValue} kW @ ${timestamp}`);
+          console.log(`✅ Logged to Supabase: ${energyUsage} kW @ ${timestamp}`);
         }
       } else {
-        console.warn('⚠️ Payload received but power.value is missing or not a number:', payload);
+        console.warn('⚠️ power.value missing or invalid:', payload);
       }
     } else {
       console.log('🔍 Ignored topic (not SENSOR/electricitymeter)');
