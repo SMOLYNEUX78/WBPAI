@@ -3,16 +3,6 @@ const supabase = require('./supabaseClient');
 require('dotenv').config();
 const fs = require('fs');
 
-// Diagnostics
-console.log('📂 Current dir:', process.cwd());
-console.log('📄 .env URL:', process.env.SUPABASE_URL);
-try {
-  require.resolve('@supabase/supabase-js');
-  console.log('✅ supabase-js is installed');
-} catch {
-  console.error('❌ supabase-js is NOT installed!');
-}
-
 // MQTT options
 const options = {
   clientId: `mqtt_${Math.random().toString(16).slice(3)}`,
@@ -43,27 +33,27 @@ client.on('message', async (topic, message) => {
     console.log(`📬 Topic: ${topic}`);
     console.log(`📦 Raw Payload:`, payload);
 
-    // Look for electricity meter readings in glow topic
-    if (topic.includes('glow') && topic.includes('electricitymeter')) {
-      const powerValue = Array.isArray(payload?.data) ? payload.data[0] : null;
+    // Match your CAD topic shape
+    if (topic.includes('SENSOR/electricitymeter')) {
+      const powerValue = payload?.power?.value;
 
       if (typeof powerValue === 'number') {
         const timestamp = new Date().toISOString();
 
         const { data, error } = await supabase
           .from('Readings')
-          .insert([{ timestamp, energy_usage: powerValue / 1000 }]); // watts to kWh
+          .insert([{ timestamp, energy_usage: powerValue }]);
 
         if (error) {
           console.error('❌ Supabase insert error:', error);
         } else {
-          console.log(`✅ Logged to Supabase: ${powerValue} W @ ${timestamp}`);
+          console.log(`✅ Logged to Supabase: ${powerValue} kW @ ${timestamp}`);
         }
       } else {
-        console.warn('⚠️ Payload received but data[0] is missing or not a number:', payload);
+        console.warn('⚠️ Payload received but power.value is missing or not a number:', payload);
       }
     } else {
-      console.log('🔍 Ignored topic:', topic);
+      console.log('🔍 Ignored topic (not SENSOR/electricitymeter)');
     }
   } catch (err) {
     console.error('❌ Failed to handle message:', err.message);
