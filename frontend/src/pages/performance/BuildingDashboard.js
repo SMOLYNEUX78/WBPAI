@@ -1,7 +1,9 @@
 // BuildingDashboard.js
 import React, { useState, useEffect } from "react";
 import AnalogGauge from "../../components/AnalogGauge";
-import apiClient from "../../apiClient"; // Import our secure Axios instance
+
+const CLOUD_DB_API = process.env.REACT_APP_CLOUD_DB_API;
+const CLOUD_DB_TOKEN = process.env.REACT_APP_CLOUD_DB_TOKEN;
 
 const BuildingDashboard = () => {
   const [buildingArea, setBuildingArea] = useState(50);
@@ -22,8 +24,14 @@ const BuildingDashboard = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const { data } = await apiClient.get("/latest");
+        const response = await fetch(`${CLOUD_DB_API}/latest`, {
+          headers: {
+            Authorization: `Bearer ${CLOUD_DB_TOKEN}`,
+          },
+        });
+        const data = await response.json();
 
+        // Map Supabase field names to frontend expected keys
         setSensorData((prev) => ({
           ...prev,
           energyUse: data.energy_usage || 0,
@@ -35,25 +43,29 @@ const BuildingDashboard = () => {
           pm25: data.pm25_level || 0,
         }));
       } catch (error) {
-        console.error("❌ Error fetching latest sensor data:", error);
+        console.error("Error fetching data:", error);
       }
     };
 
     fetchData();
-    const interval = setInterval(fetchData, 300000);
+    const interval = setInterval(fetchData, 300000); // 5 min refresh
     return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
     const fetchHistoricalData = async () => {
       try {
-        const { data } = await apiClient.get("/historical");
-        setHistoricalPerformance(data.averagePerformance || 0);
+        const response = await fetch(`${CLOUD_DB_API}/historical`, {
+          headers: {
+            Authorization: `Bearer ${CLOUD_DB_TOKEN}`,
+          },
+        });
+        const data = await response.json();
+        setHistoricalPerformance(data.averagePerformance);
       } catch (error) {
-        console.error("❌ Error fetching historical data:", error);
+        console.error("Error fetching historical data:", error);
       }
     };
-
     fetchHistoricalData();
   }, []);
 
