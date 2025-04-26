@@ -1,9 +1,7 @@
 // BuildingDashboard.js
 import React, { useState, useEffect } from "react";
 import AnalogGauge from "../../components/AnalogGauge";
-
-const CLOUD_DB_API = process.env.REACT_APP_CLOUD_DB_API;
-const CLOUD_DB_TOKEN = process.env.REACT_APP_CLOUD_DB_TOKEN;
+import supabase from "../../supabaseClient";
 
 const BuildingDashboard = () => {
   const [buildingArea, setBuildingArea] = useState(50);
@@ -21,19 +19,21 @@ const BuildingDashboard = () => {
   const [carbonCredits, setCarbonCredits] = useState(0);
   const [location, setLocation] = useState(null);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const response = await fetch(`${CLOUD_DB_API}/latest`, {
-          headers: {
-            Authorization: `Bearer ${CLOUD_DB_TOKEN}`,
-          },
-        });
-        const data = await response.json();
+  const fetchLatestData = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('Readings')
+        .select('*')
+        .order('timestamp', { ascending: false })
+        .limit(1)
+        .single();
 
-        // Map Supabase field names to frontend expected keys
-        setSensorData((prev) => ({
-          ...prev,
+      if (error) throw error;
+
+      console.log("Fetched latest reading:", data); // See what comes back
+
+      if (data) {
+        setSensorData({
           energyUse: data.energy_usage || 0,
           temperature: data.temperature_inside || 0,
           externalTemp: data.temperature_outside || 0,
@@ -41,41 +41,47 @@ const BuildingDashboard = () => {
           co2: data.co2_level || 0,
           vocs: data.voc_level || 0,
           pm25: data.pm25_level || 0,
-        }));
-      } catch (error) {
-        console.error("Error fetching data:", error);
-      }
-    };
-
-    fetchData();
-    const interval = setInterval(fetchData, 300000); // 5 min refresh
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    const fetchHistoricalData = async () => {
-      try {
-        const response = await fetch(`${CLOUD_DB_API}/historical`, {
-          headers: {
-            Authorization: `Bearer ${CLOUD_DB_TOKEN}`,
-          },
         });
-        const data = await response.json();
-        setHistoricalPerformance(data.averagePerformance);
-      } catch (error) {
-        console.error("Error fetching historical data:", error);
+
+        setPerformanceValue(data.energy_usage || 0);
       }
-    };
-    fetchHistoricalData();
+    } catch (err) {
+      console.error("Error fetching latest data:", err.message);
+    }
+  };
+
+  const fetchHistoricalAverage = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('Readings')
+        .select('energy_usage')
+        .gte('timestamp', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
+
+      if (error) throw error;
+
+      const values = data.map(row => row.energy_usage || 0);
+      const avg = values.length > 0
+        ? values.reduce((sum, val) => sum + val, 0) / values.length
+        : 0;
+
+      setHistoricalPerformance(avg);
+    } catch (err) {
+      console.error("Error fetching historical performance:", err.message);
+    }
+  };
+
+  // 🔥 Fetch data when page loads
+  useEffect(() => {
+    fetchLatestData();
+    fetchHistoricalAverage();
   }, []);
 
   const handleGeolocate = () => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         ({ coords }) => {
-          const { latitude, longitude } = coords;
-          setLocation({ latitude, longitude });
-          console.log(`📍 Latitude: ${latitude}, Longitude: ${longitude}`);
+          setLocation({ latitude: coords.latitude, longitude: coords.longitude });
+          console.log(`📍 Latitude: ${coords.latitude}, Longitude: ${coords.longitude}`);
         },
         (err) => console.error("Geolocation error:", err)
       );
@@ -124,28 +130,14 @@ const BuildingDashboard = () => {
             historicalValue={historicalPerformance}
           />
           <div className="ml-4 text-sm">
-            <p>
-              <strong>Energy Use:</strong> {sensorData.energyUse.toFixed(1)} kWh
-            </p>
-            <p>
-              <strong>Temperature:</strong> {sensorData.temperature.toFixed(1)} °C
-            </p>
-            <p>
-              <strong>External Temp:</strong> {sensorData.externalTemp.toFixed(1)} °C
-            </p>
+            <p><strong>Energy Use:</strong> {sensorData.energyUse.toFixed(4)} kWh</p>
+            <p><strong>Temperature:</strong> {sensorData.temperature.toFixed(1)} °C</p>
+            <p><strong>External Temp:</strong> {sensorData.externalTemp.toFixed(1)} °C</p>
             <hr className="my-2" />
-            <p>
-              <strong>Humidity:</strong> {sensorData.humidity.toFixed(1)}%
-            </p>
-            <p>
-              <strong>CO2:</strong> {sensorData.co2.toFixed(1)} ppm
-            </p>
-            <p>
-              <strong>VOCs:</strong> {sensorData.vocs.toFixed(2)} ppm
-            </p>
-            <p>
-              <strong>PM2.5:</strong> {sensorData.pm25.toFixed(1)} µg/m³
-            </p>
+            <p><strong>Humidity:</strong> {sensorData.humidity.toFixed(1)}%</p>
+            <p><strong>CO2:</strong> {sensorData.co2.toFixed(1)} ppm</p>
+            <p><strong>VOCs:</strong> {sensorData.vocs.toFixed(2)} ppm</p>
+            <p><strong>PM2.5:</strong> {sensorData.pm25.toFixed(1)} µg/m³</p>
           </div>
         </div>
       </div>
@@ -153,9 +145,7 @@ const BuildingDashboard = () => {
       {/* Carbon Credit Section */}
       <div className="bg-gray-100 p-4 rounded shadow">
         <h2 className="text-lg font-bold">Digital Carbon Credits</h2>
-        <p>
-          <strong>{carbonCredits}</strong> DCC
-        </p>
+        <p><strong>{carbonCredits}</strong> DCC</p>
         <button className="bg-red-500 text-white px-4 py-2 w-32 rounded">
           SELL CREDITS
         </button>
