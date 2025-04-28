@@ -13,6 +13,14 @@ const BuildingDashboard = () => {
     return savedLocation ? JSON.parse(savedLocation) : null;
   });
 
+  const [isAreaLocked, setIsAreaLocked] = useState(() => {
+    return localStorage.getItem('isAreaLocked') === 'true';
+  });
+
+  const [isLocationLocked, setIsLocationLocked] = useState(() => {
+    return localStorage.getItem('isLocationLocked') === 'true';
+  });
+
   const [sensorData, setSensorData] = useState({
     energyUse: 0,
     temperature: 0,
@@ -60,30 +68,27 @@ const BuildingDashboard = () => {
       const invertedPerformance = energyPerSqM > 0 ? (1 / energyPerSqM) : 0;
       const scaledPerformanceValue = Math.min(invertedPerformance * 10, 100);
       setPerformanceValue(scaledPerformanceValue);
-      console.log("Performance Value updated (on initial load):", scaledPerformanceValue);
-    } else {
-      console.log("Skipping performance value update. Check if historicalPerformance and buildingArea are valid.");
+      console.log("Performance Value updated:", scaledPerformanceValue);
     }
   }, [historicalPerformance, buildingArea]);
 
   const handleAreaChange = (e) => {
-    const newArea = Math.max(20, Number(e.target.value));
-    console.log("Building area changed:", newArea);
+    if (isAreaLocked) return;
+    const newArea = Number(e.target.value);
     setBuildingArea(newArea);
     localStorage.setItem('buildingArea', newArea);
+  };
 
-    if (historicalPerformance && newArea > 0) {
-      const energyPerSqM = historicalPerformance / newArea;
-      const invertedPerformance = energyPerSqM > 0 ? (1 / energyPerSqM) : 0;
-      const scaledPerformanceValue = Math.min(invertedPerformance * 10, 100);
-      setPerformanceValue(scaledPerformanceValue);
-      console.log("Performance Value recalculated due to area change:", scaledPerformanceValue);
-    } else {
-      console.log("Error in recalculating performance value due to invalid historicalPerformance or area.");
-    }
+  const handleAreaLockToggle = () => {
+    const newLockState = !isAreaLocked;
+    setIsAreaLocked(newLockState);
+    localStorage.setItem('isAreaLocked', newLockState);
+    console.log(`Building area lock toggled: ${newLockState}`);
   };
 
   const handleGeolocate = () => {
+    if (isLocationLocked) return;
+
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         ({ coords }) => {
@@ -95,6 +100,13 @@ const BuildingDashboard = () => {
         (err) => console.error("Geolocation error:", err)
       );
     }
+  };
+
+  const handleLocationLockToggle = () => {
+    const newLockState = !isLocationLocked;
+    setIsLocationLocked(newLockState);
+    localStorage.setItem('isLocationLocked', newLockState);
+    console.log(`Location lock toggled: ${newLockState}`);
   };
 
   console.log("Sensor Data:", sensorData);
@@ -115,6 +127,7 @@ const BuildingDashboard = () => {
           </button>
         </div>
 
+        {/* Building Area */}
         <div className="flex items-center gap-2 mb-4">
           <label className="font-semibold">Internal Area:</label>
           <input
@@ -122,19 +135,39 @@ const BuildingDashboard = () => {
             className="border p-2 w-24"
             value={buildingArea}
             onChange={handleAreaChange}
+            disabled={isAreaLocked}
           />
           <span>m²</span>
+          <button
+            onClick={handleAreaLockToggle}
+            className={`ml-2 px-2 py-1 rounded ${isAreaLocked ? 'bg-red-500' : 'bg-green-500'} text-white`}
+          >
+            {isAreaLocked ? "🔓 Unlock" : "🔒 Lock"}
+          </button>
         </div>
 
-        {/* Geolocate button */}
-        <div className="mb-4">
+        {/* Geolocation */}
+        <div className="flex items-center gap-2 mb-4">
           <button
-            className="bg-green-500 text-white px-3 py-2 rounded"
+            className={`px-3 py-2 rounded ${isLocationLocked ? 'bg-gray-400' : 'bg-green-500'} text-white`}
             onClick={handleGeolocate}
+            disabled={isLocationLocked}
           >
             Geolocate
           </button>
+          <button
+            onClick={handleLocationLockToggle}
+            className={`ml-2 px-2 py-1 rounded ${isLocationLocked ? 'bg-red-500' : 'bg-green-500'} text-white`}
+          >
+            {isLocationLocked ? "🔓 Unlock" : "🔒 Lock"}
+          </button>
         </div>
+
+        {location && (
+          <div className="text-sm text-gray-600">
+            📍 Lat: {location.latitude.toFixed(5)}, Lng: {location.longitude.toFixed(5)}
+          </div>
+        )}
       </div>
 
       {/* Performance Section */}
