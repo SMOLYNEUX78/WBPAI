@@ -1,0 +1,40 @@
+// supabase/functions/insert_daily_energy_total/index.ts
+
+import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js'
+
+serve(async (_req) => {
+  const supabase = createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')! // needs service role for insert
+  )
+
+  // Sum up today's energy usage
+  const { data, error } = await supabase
+    .from('Readings')
+    .select('energy_usage, timestamp')
+    .gte('timestamp', new Date(new Date().setUTCHours(0,0,0,0)).toISOString()) // start of today (UTC)
+
+  if (error) {
+    console.error('Error fetching today readings:', error)
+    return new Response('Failed to fetch readings', { status: 500 })
+  }
+
+  const total = data?.reduce((sum, row) => sum + (row.energy_usage ?? 0), 0) ?? 0
+
+  // Insert into DailyEnergyTotals
+  const { error: insertError } = await supabase
+    .from('DailyEnergyTotals')
+    .insert({
+      day: new Date().toISOString().slice(0, 10), // YYYY-MM-DD
+      total_energy_kwh: total
+    }, { onConflict: 'day' }) // avoid duplicates
+
+  if (insertError) {
+    console.error('Error inserting daily total:', insertError)
+    return new Response('Failed to insert', { status: 500 })
+  }
+
+  return new Response('Success', { status: 200 })
+})
+

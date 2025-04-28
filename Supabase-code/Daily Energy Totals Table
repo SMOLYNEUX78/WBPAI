@@ -1,0 +1,7 @@
+create table DailyEnergyTotals (
+  id bigserial primary key,
+  date date unique not null,
+  total_energy_kwh numeric not null,
+  inserted_at timestamp with time zone default timezone('utc'::text, now())
+);
+

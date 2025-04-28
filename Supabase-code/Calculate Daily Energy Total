@@ -1,0 +1,25 @@
+create or replace function calculate_yesterday_total()
+returns void as $$
+declare
+  total numeric;
+  start_time timestamp;
+  end_time timestamp;
+begin
+  start_time := date_trunc('day', now() - interval '1 day');
+  end_time := date_trunc('day', now());
+
+  select sum(energy_usage) into total
+  from "Readings"
+  where timestamp >= start_time and timestamp < end_time;
+
+  if total is null then
+    total := 0;
+  end if;
+
+  insert into "DailyEnergyTotals" (date, total_energy_kwh)
+  values (start_time::date, total)
+  on conflict (date) do update
+  set total_energy_kwh = excluded.total_energy_kwh;
+end;
+$$ language plpgsql;
+

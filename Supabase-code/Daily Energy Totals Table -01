@@ -1,0 +1,21 @@
+-- 1. Create the DailyEnergyTotals table if it doesn't exist
+create table if not exists "DailyEnergyTotals" (
+  id uuid primary key default gen_random_uuid(),
+  day date not null unique,
+  total_energy_kwh double precision not null,
+  inserted_at timestamp with time zone default timezone('utc', now())
+);
+
+-- 2. Insert daily totals based on your Readings table
+insert into "DailyEnergyTotals" (day, total_energy_kwh)
+select
+  date_trunc('day', timestamp) as day,
+  sum(energy_usage) as total_energy_kwh
+from
+  "Readings"
+where
+  energy_usage is not null
+group by
+  date_trunc('day', timestamp)
+on conflict (day) do nothing; -- avoids duplicate entries if rerun
+

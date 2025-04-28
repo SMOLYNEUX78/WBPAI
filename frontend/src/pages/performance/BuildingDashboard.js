@@ -1,4 +1,3 @@
-// BuildingDashboard.js
 import React, { useState, useEffect } from "react";
 import AnalogGauge from "../../components/AnalogGauge";
 import supabase from "../../supabaseClient";
@@ -19,62 +18,34 @@ const BuildingDashboard = () => {
   const [carbonCredits, setCarbonCredits] = useState(0);
   const [location, setLocation] = useState(null);
 
-  const fetchLatestData = async () => {
+  // Fetch the daily total energy usage from "DailyEnergyTotals" view
+  const fetchLongTermAverage = async () => {
     try {
       const { data, error } = await supabase
-        .from('Readings')
-        .select('*')
-        .order('timestamp', { ascending: false })
-        .limit(1)
-        .single();
+        .from('DailyEnergyTotals')
+        .select('total_energy_kwh, day')
+        .order('day', { ascending: false })
+        .limit(1) // Get the most recent daily data
+        .single(); // Fetch the most recent daily total energy usage
 
       if (error) throw error;
-
-      console.log("Fetched latest reading:", data); // See what comes back
 
       if (data) {
-        setSensorData({
-          energyUse: data.energy_usage || 0,
-          temperature: data.temperature_inside || 0,
-          externalTemp: data.temperature_outside || 0,
-          humidity: data.humidity || 0,
-          co2: data.co2_level || 0,
-          vocs: data.voc_level || 0,
-          pm25: data.pm25_level || 0,
-        });
+        const dailyTotalEnergy = data.total_energy_kwh || 0;
 
-        setPerformanceValue(data.energy_usage || 0);
+        // Set historical performance to the most recent daily total energy
+        setHistoricalPerformance(dailyTotalEnergy);
+        setPerformanceValue(dailyTotalEnergy);  // Set the same value for performance display
+        console.log("Fetched historical performance (daily total energy):", dailyTotalEnergy); // Debugging
       }
     } catch (err) {
-      console.error("Error fetching latest data:", err.message);
+      console.error("Error fetching historical performance data:", err.message);
     }
   };
 
-  const fetchHistoricalAverage = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('Readings')
-        .select('energy_usage')
-        .gte('timestamp', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
-
-      if (error) throw error;
-
-      const values = data.map(row => row.energy_usage || 0);
-      const avg = values.length > 0
-        ? values.reduce((sum, val) => sum + val, 0) / values.length
-        : 0;
-
-      setHistoricalPerformance(avg);
-    } catch (err) {
-      console.error("Error fetching historical performance:", err.message);
-    }
-  };
-
-  // 🔥 Fetch data when page loads
   useEffect(() => {
-    fetchLatestData();
-    fetchHistoricalAverage();
-  }, []);
+    fetchLongTermAverage();  // Fetch historical daily energy data
+  }, []);  // Empty dependency to run once
 
   const handleGeolocate = () => {
     if (navigator.geolocation) {
@@ -87,6 +58,11 @@ const BuildingDashboard = () => {
       );
     }
   };
+
+  // Debugging: log the sensor data and performance values before rendering
+  console.log("Sensor Data:", sensorData);
+  console.log("Performance Value:", performanceValue);
+  console.log("Historical Performance:", historicalPerformance);
 
   return (
     <div className="min-h-screen bg-white p-4 flex flex-col space-y-6">
@@ -130,14 +106,20 @@ const BuildingDashboard = () => {
             historicalValue={historicalPerformance}
           />
           <div className="ml-4 text-sm">
-            <p><strong>Energy Use:</strong> {sensorData.energyUse.toFixed(4)} kWh</p>
-            <p><strong>Temperature:</strong> {sensorData.temperature.toFixed(1)} °C</p>
-            <p><strong>External Temp:</strong> {sensorData.externalTemp.toFixed(1)} °C</p>
+            <p>
+              <strong>Energy Use:</strong> {historicalPerformance ? historicalPerformance.toFixed(4) : 'No Data'} kWh
+            </p>
+            <p>
+              <strong>Temperature:</strong> {sensorData.temperature !== null ? sensorData.temperature.toFixed(1) : 'No Data'} °C
+            </p>
+            <p>
+              <strong>External Temp:</strong> {sensorData.externalTemp !== null ? sensorData.externalTemp.toFixed(1) : 'No Data'} °C
+            </p>
             <hr className="my-2" />
-            <p><strong>Humidity:</strong> {sensorData.humidity.toFixed(1)}%</p>
-            <p><strong>CO2:</strong> {sensorData.co2.toFixed(1)} ppm</p>
-            <p><strong>VOCs:</strong> {sensorData.vocs.toFixed(2)} ppm</p>
-            <p><strong>PM2.5:</strong> {sensorData.pm25.toFixed(1)} µg/m³</p>
+            <p><strong>Humidity:</strong> {sensorData.humidity !== null ? sensorData.humidity.toFixed(1) : 'No Data'}%</p>
+            <p><strong>CO2:</strong> {sensorData.co2 !== null ? sensorData.co2.toFixed(1) : 'No Data'} ppm</p>
+            <p><strong>VOCs:</strong> {sensorData.vocs !== null ? sensorData.vocs.toFixed(2) : 'No Data'} ppm</p>
+            <p><strong>PM2.5:</strong> {sensorData.pm25 !== null ? sensorData.pm25.toFixed(1) : 'No Data'} µg/m³</p>
           </div>
         </div>
       </div>

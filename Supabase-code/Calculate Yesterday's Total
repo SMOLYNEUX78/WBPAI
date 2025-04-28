@@ -1,0 +1,2 @@
+select calculate_yesterday_total();
+
