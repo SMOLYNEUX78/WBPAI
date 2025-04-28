@@ -3,7 +3,16 @@ import AnalogGauge from "../../components/AnalogGauge";
 import supabase from "../../supabaseClient";
 
 const BuildingDashboard = () => {
-  const [buildingArea, setBuildingArea] = useState(50);
+  const [buildingArea, setBuildingArea] = useState(() => {
+    const savedArea = localStorage.getItem('buildingArea');
+    return savedArea ? Number(savedArea) : 50;
+  });
+
+  const [location, setLocation] = useState(() => {
+    const savedLocation = localStorage.getItem('location');
+    return savedLocation ? JSON.parse(savedLocation) : null;
+  });
+
   const [sensorData, setSensorData] = useState({
     energyUse: 0,
     temperature: 0,
@@ -13,30 +22,28 @@ const BuildingDashboard = () => {
     vocs: 0,
     pm25: 0,
   });
+
   const [performanceValue, setPerformanceValue] = useState(0);
   const [historicalPerformance, setHistoricalPerformance] = useState(0);
   const [carbonCredits, setCarbonCredits] = useState(0);
-  const [location, setLocation] = useState(null);
 
-  // Fetch the daily total energy usage from "DailyEnergyTotals" view
   const fetchLongTermAverage = async () => {
     try {
       const { data, error } = await supabase
         .from('DailyEnergyTotals')
         .select('total_energy_kwh, day')
         .order('day', { ascending: false })
-        .limit(1) // Get the most recent daily data
-        .single(); // Fetch the most recent daily total energy usage
+        .limit(1)
+        .single();
 
       if (error) throw error;
 
       if (data) {
         const dailyTotalEnergy = data.total_energy_kwh || 0;
-
-        // Set historical performance to the most recent daily total energy
         setHistoricalPerformance(dailyTotalEnergy);
-        setPerformanceValue(dailyTotalEnergy);  // Set the same value for performance display
-        console.log("Fetched historical performance (daily total energy):", dailyTotalEnergy); // Debugging
+        console.log("Fetched historical performance (daily total energy):", dailyTotalEnergy);
+      } else {
+        console.log("No historical data found.");
       }
     } catch (err) {
       console.error("Error fetching historical performance data:", err.message);
@@ -44,14 +51,45 @@ const BuildingDashboard = () => {
   };
 
   useEffect(() => {
-    fetchLongTermAverage();  // Fetch historical daily energy data
-  }, []);  // Empty dependency to run once
+    fetchLongTermAverage();
+  }, []);
+
+  useEffect(() => {
+    if (historicalPerformance && buildingArea > 0) {
+      const energyPerSqM = historicalPerformance / buildingArea;
+      const invertedPerformance = energyPerSqM > 0 ? (1 / energyPerSqM) : 0;
+      const scaledPerformanceValue = Math.min(invertedPerformance * 10, 100);
+      setPerformanceValue(scaledPerformanceValue);
+      console.log("Performance Value updated (on initial load):", scaledPerformanceValue);
+    } else {
+      console.log("Skipping performance value update. Check if historicalPerformance and buildingArea are valid.");
+    }
+  }, [historicalPerformance, buildingArea]);
+
+  const handleAreaChange = (e) => {
+    const newArea = Math.max(20, Number(e.target.value));
+    console.log("Building area changed:", newArea);
+    setBuildingArea(newArea);
+    localStorage.setItem('buildingArea', newArea);
+
+    if (historicalPerformance && newArea > 0) {
+      const energyPerSqM = historicalPerformance / newArea;
+      const invertedPerformance = energyPerSqM > 0 ? (1 / energyPerSqM) : 0;
+      const scaledPerformanceValue = Math.min(invertedPerformance * 10, 100);
+      setPerformanceValue(scaledPerformanceValue);
+      console.log("Performance Value recalculated due to area change:", scaledPerformanceValue);
+    } else {
+      console.log("Error in recalculating performance value due to invalid historicalPerformance or area.");
+    }
+  };
 
   const handleGeolocate = () => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         ({ coords }) => {
-          setLocation({ latitude: coords.latitude, longitude: coords.longitude });
+          const newLocation = { latitude: coords.latitude, longitude: coords.longitude };
+          setLocation(newLocation);
+          localStorage.setItem('location', JSON.stringify(newLocation));
           console.log(`📍 Latitude: ${coords.latitude}, Longitude: ${coords.longitude}`);
         },
         (err) => console.error("Geolocation error:", err)
@@ -59,7 +97,6 @@ const BuildingDashboard = () => {
     }
   };
 
-  // Debugging: log the sensor data and performance values before rendering
   console.log("Sensor Data:", sensorData);
   console.log("Performance Value:", performanceValue);
   console.log("Historical Performance:", historicalPerformance);
@@ -77,17 +114,20 @@ const BuildingDashboard = () => {
             Scan for Sensors
           </button>
         </div>
+
         <div className="flex items-center gap-2 mb-4">
           <label className="font-semibold">Internal Area:</label>
           <input
             type="number"
             className="border p-2 w-24"
             value={buildingArea}
-            onChange={(e) =>
-              setBuildingArea(Math.max(20, Number(e.target.value)))
-            }
+            onChange={handleAreaChange}
           />
           <span>m²</span>
+        </div>
+
+        {/* Geolocate button */}
+        <div className="mb-4">
           <button
             className="bg-green-500 text-white px-3 py-2 rounded"
             onClick={handleGeolocate}
@@ -107,7 +147,7 @@ const BuildingDashboard = () => {
           />
           <div className="ml-4 text-sm">
             <p>
-              <strong>Energy Use:</strong> {historicalPerformance ? historicalPerformance.toFixed(4) : 'No Data'} kWh
+              <strong>Daily Average Energy Use:</strong> {historicalPerformance ? historicalPerformance.toFixed(4) : 'No Data'} kWh
             </p>
             <p>
               <strong>Temperature:</strong> {sensorData.temperature !== null ? sensorData.temperature.toFixed(1) : 'No Data'} °C
