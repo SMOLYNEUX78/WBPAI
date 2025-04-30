@@ -8,7 +8,6 @@ import {
 import BuildingDashboard from "./pages/performance/BuildingDashboard";
 
 
-
 const SplashScreen = () => {
   const navigate = useNavigate();
   const [fadeOut, setFadeOut] = useState(false); // State to handle fade effect

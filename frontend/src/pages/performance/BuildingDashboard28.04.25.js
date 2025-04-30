@@ -3,12 +3,6 @@ import AnalogGauge from "../../components/AnalogGauge";
 import supabase from "../../supabaseClient";
 
 const BuildingDashboard = () => {
-  // 🔒 Helper: get boolean from localStorage safely
-  const getPersistentBoolean = (key, fallback = false) => {
-    const val = localStorage.getItem(key);
-    return val === null ? fallback : val === 'true';
-  };
-
   const [buildingArea, setBuildingArea] = useState(() => {
     const savedArea = localStorage.getItem('buildingArea');
     return savedArea ? Number(savedArea) : 50;
@@ -19,8 +13,13 @@ const BuildingDashboard = () => {
     return savedLocation ? JSON.parse(savedLocation) : null;
   });
 
-  const [isAreaLocked, setIsAreaLocked] = useState(() => getPersistentBoolean('isAreaLocked'));
-  const [isLocationLocked, setIsLocationLocked] = useState(() => getPersistentBoolean('isLocationLocked'));
+  const [isAreaLocked, setIsAreaLocked] = useState(() => {
+    return localStorage.getItem('isAreaLocked') === 'true';
+  });
+
+  const [isLocationLocked, setIsLocationLocked] = useState(() => {
+    return localStorage.getItem('isLocationLocked') === 'true';
+  });
 
   const [sensorData, setSensorData] = useState({
     energyUse: 0,
@@ -35,36 +34,6 @@ const BuildingDashboard = () => {
   const [performanceValue, setPerformanceValue] = useState(0);
   const [historicalPerformance, setHistoricalPerformance] = useState(0);
   const [carbonCredits, setCarbonCredits] = useState(0);
-
-  // 🔁 Sync lock states to localStorage
-  useEffect(() => {
-    localStorage.setItem('isAreaLocked', isAreaLocked);
-  }, [isAreaLocked]);
-
-  useEffect(() => {
-    localStorage.setItem('isLocationLocked', isLocationLocked);
-  }, [isLocationLocked]);
-
-  // 🌡️ Fetch external temp based on saved location
-  const fetchExternalTemperature = async () => {
-    if (!location) {
-      console.log("No location saved yet, skipping external temp fetch.");
-      return;
-    }
-    try {
-      const response = await fetch(`http://localhost:5000/api/getExternalTemperature?lat=${location.latitude}&lon=${location.longitude}`);
-      const data = await response.json();
-      console.log("Fetched data:", data);  // Log the response data
-      if (data && data.externalTemperature !== undefined) {
-        setSensorData(prev => ({ ...prev, externalTemp: data.externalTemperature }));
-        console.log("Updated external temperature:", data.externalTemperature);
-      } else {
-        console.error("No externalTemperature in response:", data);
-      }
-    } catch (error) {
-      console.error("Error fetching external temperature:", error);
-    }
-  };
 
   const fetchLongTermAverage = async () => {
     try {
@@ -103,12 +72,6 @@ const BuildingDashboard = () => {
     }
   }, [historicalPerformance, buildingArea]);
 
-  useEffect(() => {
-    fetchExternalTemperature();
-    const interval = setInterval(fetchExternalTemperature, 60 * 60 * 1000); // refresh hourly
-    return () => clearInterval(interval);
-  }, [location]);
-
   const handleAreaChange = (e) => {
     if (isAreaLocked) return;
     const newArea = Number(e.target.value);
@@ -117,8 +80,10 @@ const BuildingDashboard = () => {
   };
 
   const handleAreaLockToggle = () => {
-    setIsAreaLocked(prev => !prev);
-    console.log("Toggled area lock");
+    const newLockState = !isAreaLocked;
+    setIsAreaLocked(newLockState);
+    localStorage.setItem('isAreaLocked', newLockState);
+    console.log(`Building area lock toggled: ${newLockState}`);
   };
 
   const handleGeolocate = () => {
@@ -138,8 +103,10 @@ const BuildingDashboard = () => {
   };
 
   const handleLocationLockToggle = () => {
-    setIsLocationLocked(prev => !prev);
-    console.log("Toggled location lock");
+    const newLockState = !isLocationLocked;
+    setIsLocationLocked(newLockState);
+    localStorage.setItem('isLocationLocked', newLockState);
+    console.log(`Location lock toggled: ${newLockState}`);
   };
 
   console.log("Sensor Data:", sensorData);
