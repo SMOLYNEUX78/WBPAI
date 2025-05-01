@@ -20,27 +20,25 @@ const updateExternalTemperature = async () => {
   try {
     const apiKey = process.env.WBP;
     const response = await axios.get('https://api.openweathermap.org/data/2.5/weather', {
-      params: {
-        lat,
-        lon,
-        units: 'metric',
-        appid: apiKey,
-      }
+      params: { lat, lon, units: 'metric', appid: apiKey }
     });
 
     const externalTemp = response.data.main.temp;
 
     const { data, error } = await supabase
       .from('Readings')
-      .update({ temperature_outside: externalTemp })
-      .order('timestamp', { ascending: false })
-      .limit(1)
-      .select();
+      .insert([
+        {
+          temperature_outside: externalTemp,
+          timestamp: new Date().toISOString(), // Optional, depending on Supabase config
+          // You can include device_id, room_id, etc. if needed
+        }
+      ]);
 
     if (error) {
-      console.error('Supabase error during auto-update:', error.message);
+      console.error('Supabase error during insert:', error.message);
     } else {
-      console.log(`✔ Updated external temp to ${externalTemp}°C`);
+      console.log(`✔ Inserted external temp: ${externalTemp}°C`);
     }
   } catch (err) {
     console.error("Auto-fetch failed:", err.message);
@@ -50,7 +48,7 @@ const updateExternalTemperature = async () => {
 // 🔁 Run every 5 minutes
 setInterval(updateExternalTemperature, 5 * 60 * 1000);
 
-// 🔗 Keep your existing API routes
+// 🔗 Existing API routes
 app.get('/api/getExternalTemperature', async (req, res) => {
   const { lat, lon } = req.query;
 
@@ -78,13 +76,15 @@ app.get('/api/pushTestTemperature', async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('Readings')
-      .update({ temperature_outside: 12.3 })
-      .order('timestamp', { ascending: false })
-      .limit(1)
-      .select();
+      .insert([
+        {
+          temperature_outside: 12.3,
+          timestamp: new Date().toISOString(), // Optional
+        }
+      ]);
 
     if (error) {
-      console.error('Supabase error:', error.message);
+      console.error('Supabase error in test insert:', error.message);
       return res.status(500).json({ error: error.message });
     }
 
@@ -99,11 +99,6 @@ app.get('/api/pushTestTemperature', async (req, res) => {
 const port = 5000;
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
+  updateExternalTemperature(); // Run once on start
 });
-
-// Run the update once on server start
-updateExternalTemperature();
-
-// 🔁 Then run every 5 minutes
-setInterval(updateExternalTemperature, 5 * 60 * 1000);
 

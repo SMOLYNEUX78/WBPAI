@@ -35,28 +35,31 @@ const BuildingDashboard = () => {
   const [historicalPerformance, setHistoricalPerformance] = useState(0);
   const [carbonCredits, setCarbonCredits] = useState(0);
 
-const fetchLongTermAverage = async () => {
-  try {
-    const { data, error } = await supabase
-      .from("DailyEnergyTotals")
-      .select("total_energy_kwh, day")
-      .order("day", { ascending: false });
+  const fetchLongTermAverage = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("DailyEnergyTotals")
+        .select("total_energy_kwh, day")
+        .order("day", { ascending: false })
+        .limit(1)
+        .single();
 
-    if (error) throw error;
+      if (error) throw error;
 
-    const validEntry = data.find((row) => row.total_energy_kwh !== null);
-
-    if (validEntry) {
-      setHistoricalPerformance(validEntry.total_energy_kwh);
-      console.log("Fetched valid historical performance:", validEntry);
-    } else {
-      console.log("No valid historical energy data found.");
+      if (data) {
+        const dailyTotalEnergy = data.total_energy_kwh || 0;
+        setHistoricalPerformance(dailyTotalEnergy);
+        console.log(
+          "Fetched historical performance (daily total energy):",
+          dailyTotalEnergy
+        );
+      } else {
+        console.log("No historical data found.");
+      }
+    } catch (err) {
+      console.error("Error fetching historical performance data:", err.message);
     }
-  } catch (err) {
-    console.error("Error fetching historical performance data:", err.message);
-  }
-};
-
+  };
 
   const fetchExternalTemp = async () => {
     try {
