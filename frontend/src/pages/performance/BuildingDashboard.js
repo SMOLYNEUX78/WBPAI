@@ -61,11 +61,12 @@ const fetchLongTermAverage = async () => {
   const fetchExternalTemp = async () => {
     try {
       const { data, error } = await supabase
-        .from("Readings")
-        .select("temperature_outside")
-        .order("timestamp", { ascending: false })
-        .limit(1)
-        .single();
+    .from("Readings")
+  .select("temperature_outside")
+  .not("temperature_outside", "is", null)
+  .order("timestamp", { ascending: false })
+  .limit(1)
+  .single();
 
       if (error) throw error;
 
