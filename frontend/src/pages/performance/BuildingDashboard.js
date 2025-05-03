@@ -39,16 +39,18 @@ const fetchLongTermAverage = async () => {
   try {
     const { data, error } = await supabase
       .from("DailyEnergyTotals")
-      .select("total_energy_kwh, day")
-      .order("day", { ascending: false });
+      .select("total_energy_kwh");
 
     if (error) throw error;
 
-    const validEntry = data.find((row) => row.total_energy_kwh !== null);
+    const validEntries = data.filter(row => row.total_energy_kwh !== null);
 
-    if (validEntry) {
-      setHistoricalPerformance(validEntry.total_energy_kwh);
-      console.log("Fetched valid historical performance:", validEntry);
+    if (validEntries.length > 0) {
+      const total = validEntries.reduce((sum, row) => sum + row.total_energy_kwh, 0);
+      const avg = total / validEntries.length;
+
+      setHistoricalPerformance(avg);
+      console.log("Calculated long-term average energy use:", avg);
     } else {
       console.log("No valid historical energy data found.");
     }
@@ -56,6 +58,7 @@ const fetchLongTermAverage = async () => {
     console.error("Error fetching historical performance data:", err.message);
   }
 };
+
 
 
   const fetchExternalTemp = async () => {
