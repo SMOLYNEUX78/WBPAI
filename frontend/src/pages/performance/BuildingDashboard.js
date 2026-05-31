@@ -33,7 +33,46 @@ const BuildingDashboard = () => {
 
   const [performanceValue, setPerformanceValue] = useState(0);
   const [historicalPerformance, setHistoricalPerformance] = useState(0);
+  const [energyScore, setEnergyScore] = useState(0);
+  const [iaqScore, setIaqScore] = useState(0);
+  const [comfortScore, setComfortScore] = useState(0);
   const [carbonCredits] = useState(0);
+
+  const scoreRange = (value, idealMin, idealMax, hardMin, hardMax) => {
+    if (value >= idealMin && value <= idealMax) return 100;
+
+    if (value < idealMin) {
+      return Math.max(
+        0,
+        ((value - hardMin) / (idealMin - hardMin)) * 100
+      );
+    }
+
+    return Math.max(
+      0,
+      ((hardMax - value) / (hardMax - idealMax)) * 100
+    );
+  };
+
+  const calculateIAQScore = ({ co2, pm25, vocs }) => {
+    const co2Score =
+      co2 <= 800 ? 100 : Math.max(0, 100 - ((co2 - 800) / 800) * 100);
+
+    const pm25Score =
+      pm25 <= 12 ? 100 : Math.max(0, 100 - ((pm25 - 12) / 25) * 100);
+
+    const vocScore =
+      vocs <= 200 ? 100 : Math.max(0, 100 - ((vocs - 200) / 400) * 100);
+
+    return (co2Score + pm25Score + vocScore) / 3;
+  };
+
+  const calculateComfortScore = ({ temperature, humidity }) => {
+    const tempScore = scoreRange(temperature, 18, 22, 10, 30);
+    const humidityScore = scoreRange(humidity, 40, 60, 20, 80);
+
+    return (tempScore + humidityScore) / 2;
+  };
 
   const fetchLongTermAverage = async () => {
     try {
@@ -97,7 +136,6 @@ const BuildingDashboard = () => {
         .single();
 
       if (error) throw error;
-
       if (!data) return;
 
       setSensorData((prev) => ({
@@ -132,11 +170,23 @@ const BuildingDashboard = () => {
     if (historicalPerformance && buildingArea > 0) {
       const energyPerSqM = historicalPerformance / buildingArea;
       const invertedPerformance = energyPerSqM > 0 ? 1 / energyPerSqM : 0;
-      const scaledPerformanceValue = Math.min(invertedPerformance * 10, 100);
+      const calculatedEnergyScore = Math.min(invertedPerformance * 10, 100);
 
-      setPerformanceValue(scaledPerformanceValue);
+      const calculatedIAQScore = calculateIAQScore(sensorData);
+      const calculatedComfortScore = calculateComfortScore(sensorData);
+
+      const buildingPerformanceIndex = Math.round(
+        calculatedEnergyScore * 0.4 +
+          calculatedIAQScore * 0.4 +
+          calculatedComfortScore * 0.2
+      );
+
+      setEnergyScore(calculatedEnergyScore);
+      setIaqScore(calculatedIAQScore);
+      setComfortScore(calculatedComfortScore);
+      setPerformanceValue(buildingPerformanceIndex);
     }
-  }, [historicalPerformance, buildingArea]);
+  }, [historicalPerformance, buildingArea, sensorData]);
 
   const handleAreaChange = (e) => {
     if (isAreaLocked) return;
@@ -242,7 +292,7 @@ const BuildingDashboard = () => {
       </div>
 
       <div className="bg-gray-100 p-4 rounded shadow">
-        <h2 className="text-lg font-bold">Performance</h2>
+        <h2 className="text-lg font-bold">Building Performance Index</h2>
 
         <div className="flex items-center">
           <AnalogGauge
@@ -252,11 +302,37 @@ const BuildingDashboard = () => {
 
           <div className="ml-4 text-sm">
             <p>
+              <strong>Overall Score:</strong> {performanceValue}/100
+            </p>
+
+            <p>
+              <strong>Energy Score:</strong> {energyScore.toFixed(0)}/100
+            </p>
+
+            <p>
+              <strong>Air Quality Score:</strong> {iaqScore.toFixed(0)}/100
+            </p>
+
+            <p>
+              <strong>Comfort Score:</strong> {comfortScore.toFixed(0)}/100
+            </p>
+
+            <hr className="my-2" />
+
+            <p>
               <strong>Daily Average Energy Use:</strong>{" "}
               {historicalPerformance
                 ? historicalPerformance.toFixed(4)
                 : "No Data"}{" "}
               kWh
+            </p>
+
+            <p>
+              <strong>Energy per m²:</strong>{" "}
+              {historicalPerformance && buildingArea
+                ? (historicalPerformance / buildingArea).toFixed(4)
+                : "No Data"}{" "}
+              kWh/m²
             </p>
 
             <p>
