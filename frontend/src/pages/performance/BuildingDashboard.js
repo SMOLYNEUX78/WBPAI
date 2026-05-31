@@ -8,21 +8,7 @@ const BuildingDashboard = () => {
     return savedArea ? Number(savedArea) : 50;
   });
 
-  const [location, setLocation] = useState(() => {
-    const savedLocation = localStorage.getItem("location");
-    return savedLocation ? JSON.parse(savedLocation) : null;
-  });
-
-  const [isAreaLocked, setIsAreaLocked] = useState(() => {
-    return localStorage.getItem("isAreaLocked") === "true";
-  });
-
-  const [isLocationLocked, setIsLocationLocked] = useState(() => {
-    return localStorage.getItem("isLocationLocked") === "true";
-  });
-
   const [sensorData, setSensorData] = useState({
-    energyUse: 0,
     temperature: 0,
     externalTemp: 0,
     humidity: 0,
@@ -33,25 +19,24 @@ const BuildingDashboard = () => {
 
   const [performanceValue, setPerformanceValue] = useState(0);
   const [historicalPerformance, setHistoricalPerformance] = useState(0);
-  const [energyScore, setEnergyScore] = useState(0);
-  const [iaqScore, setIaqScore] = useState(0);
-  const [comfortScore, setComfortScore] = useState(0);
   const [carbonCredits] = useState(0);
+
+  const [performanceBreakdown, setPerformanceBreakdown] = useState({
+    energy: 0,
+    iaq: 0,
+    comfort: 0,
+    heatResilience: 0,
+    humidityRisk: 0,
+  });
 
   const scoreRange = (value, idealMin, idealMax, hardMin, hardMax) => {
     if (value >= idealMin && value <= idealMax) return 100;
 
     if (value < idealMin) {
-      return Math.max(
-        0,
-        ((value - hardMin) / (idealMin - hardMin)) * 100
-      );
+      return Math.max(0, ((value - hardMin) / (idealMin - hardMin)) * 100);
     }
 
-    return Math.max(
-      0,
-      ((hardMax - value) / (hardMax - idealMax)) * 100
-    );
+    return Math.max(0, ((hardMax - value) / (hardMax - idealMax)) * 100);
   };
 
   const calculateIAQScore = ({ co2, pm25, vocs }) => {
@@ -82,9 +67,7 @@ const BuildingDashboard = () => {
 
       if (error) throw error;
 
-      const validEntries = data.filter(
-        (row) => row.total_energy_kwh !== null
-      );
+      const validEntries = data.filter((row) => row.total_energy_kwh !== null);
 
       if (validEntries.length > 0) {
         const total = validEntries.reduce(
@@ -92,8 +75,7 @@ const BuildingDashboard = () => {
           0
         );
 
-        const avg = total / validEntries.length;
-        setHistoricalPerformance(avg);
+        setHistoricalPerformance(total / validEntries.length);
       }
     } catch (err) {
       console.error("Error fetching historical performance:", err.message);
@@ -112,12 +94,10 @@ const BuildingDashboard = () => {
 
       if (error) throw error;
 
-      if (data?.temperature_outside !== undefined) {
-        setSensorData((prev) => ({
-          ...prev,
-          externalTemp: Number(data.temperature_outside) || 0,
-        }));
-      }
+      setSensorData((prev) => ({
+        ...prev,
+        externalTemp: Number(data?.temperature_outside) || 0,
+      }));
     } catch (err) {
       console.error("Error fetching external temp:", err.message);
     }
@@ -146,10 +126,91 @@ const BuildingDashboard = () => {
         vocs: Number(data.vocs) || 0,
         pm25: Number(data.pm25) || 0,
       }));
-
-      console.log("Latest IAQ data from Supabase:", data);
     } catch (err) {
       console.error("Error fetching IAQ data:", err.message);
+    }
+  };
+
+  const fetchLongTermBuildingPerformance = async () => {
+    try {
+      const since = new Date();
+      since.setDate(since.getDate() - 7);
+
+      const { data, error } = await supabase
+        .from("Readings")
+        .select(
+          "temperature, temperature_outside, humidity, co2, vocs, pm25, timestamp"
+        )
+        .gte("timestamp", since.toISOString());
+
+      if (error) throw error;
+      if (!data || data.length === 0) return;
+
+      const valid = (key) =>
+        data
+          .map((row) => Number(row[key]))
+          .filter((value) => !Number.isNaN(value) && value !== 0);
+
+      const avg = (values) =>
+        values.length
+          ? values.reduce((sum, value) => sum + value, 0) / values.length
+          : 0;
+
+      const avgTemp = avg(valid("temperature"));
+      const avgOutsideTemp = avg(valid("temperature_outside"));
+      const avgHumidity = avg(valid("humidity"));
+      const avgCo2 = avg(valid("co2"));
+      const avgVocs = avg(valid("vocs"));
+      const avgPm25 = avg(valid("pm25"));
+
+      const calculatedIAQScore = calculateIAQScore({
+        co2: avgCo2,
+        vocs: avgVocs,
+        pm25: avgPm25,
+      });
+
+      const calculatedComfortScore = calculateComfortScore({
+        temperature: avgTemp,
+        humidity: avgHumidity,
+      });
+
+      const heatResilienceScore =
+        avgOutsideTemp > 24
+          ? scoreRange(avgOutsideTemp - avgTemp, 3, 8, -2, 12)
+          : 100;
+
+      const humidityRiskScore = scoreRange(avgHumidity, 40, 60, 25, 80);
+
+      const energyPerSqM =
+        historicalPerformance && buildingArea
+          ? historicalPerformance / buildingArea
+          : 0;
+
+      const calculatedEnergyScore =
+        energyPerSqM > 0 ? Math.min((1 / energyPerSqM) * 10, 100) : 0;
+
+      const buildingPerformanceIndex = Math.round(
+        calculatedEnergyScore * 0.3 +
+          calculatedIAQScore * 0.25 +
+          calculatedComfortScore * 0.2 +
+          heatResilienceScore * 0.15 +
+          humidityRiskScore * 0.1
+      );
+
+      setPerformanceBreakdown({
+        energy: calculatedEnergyScore,
+        iaq: calculatedIAQScore,
+        comfort: calculatedComfortScore,
+        heatResilience: heatResilienceScore,
+        humidityRisk: humidityRiskScore,
+      });
+
+      setPerformanceValue(buildingPerformanceIndex);
+    } catch (err) {
+      console.error(
+        "Error calculating long-term building performance:",
+        err.message
+      );
     }
   };
 
@@ -157,87 +218,30 @@ const BuildingDashboard = () => {
     fetchLongTermAverage();
     fetchExternalTemp();
     fetchIAQData();
+  }, []);
+
+  useEffect(() => {
+    fetchLongTermBuildingPerformance();
 
     const interval = setInterval(() => {
       fetchIAQData();
       fetchExternalTemp();
+      fetchLongTermBuildingPerformance();
     }, 60000);
 
     return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    if (historicalPerformance && buildingArea > 0) {
-      const energyPerSqM = historicalPerformance / buildingArea;
-      const invertedPerformance = energyPerSqM > 0 ? 1 / energyPerSqM : 0;
-      const calculatedEnergyScore = Math.min(invertedPerformance * 10, 100);
-
-      const calculatedIAQScore = calculateIAQScore(sensorData);
-      const calculatedComfortScore = calculateComfortScore(sensorData);
-
-      const buildingPerformanceIndex = Math.round(
-        calculatedEnergyScore * 0.4 +
-          calculatedIAQScore * 0.4 +
-          calculatedComfortScore * 0.2
-      );
-
-      setEnergyScore(calculatedEnergyScore);
-      setIaqScore(calculatedIAQScore);
-      setComfortScore(calculatedComfortScore);
-      setPerformanceValue(buildingPerformanceIndex);
-    }
-  }, [historicalPerformance, buildingArea, sensorData]);
+  }, [historicalPerformance, buildingArea]);
 
   const handleAreaChange = (e) => {
-    if (isAreaLocked) return;
-
     const newArea = Number(e.target.value);
     setBuildingArea(newArea);
     localStorage.setItem("buildingArea", newArea);
-  };
-
-  const handleAreaLockToggle = () => {
-    const newLockState = !isAreaLocked;
-    setIsAreaLocked(newLockState);
-    localStorage.setItem("isAreaLocked", newLockState);
-  };
-
-  const handleGeolocate = () => {
-    if (isLocationLocked) return;
-
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(({ coords }) => {
-        const newLocation = {
-          latitude: coords.latitude,
-          longitude: coords.longitude,
-        };
-
-        setLocation(newLocation);
-        localStorage.setItem("location", JSON.stringify(newLocation));
-      });
-    }
-  };
-
-  const handleLocationLockToggle = () => {
-    const newLockState = !isLocationLocked;
-    setIsLocationLocked(newLockState);
-    localStorage.setItem("isLocationLocked", newLockState);
   };
 
   return (
     <div className="min-h-screen bg-white p-4 flex flex-col space-y-6">
       <div className="bg-gray-100 p-4 rounded shadow">
         <h2 className="text-lg font-bold mb-2">Data Input</h2>
-
-        <div className="flex flex-wrap items-center gap-4 mb-4">
-          <button className="bg-green-500 text-white px-3 py-2 rounded">
-            Scan for Smart Meter
-          </button>
-
-          <button className="bg-green-500 text-white px-3 py-2 rounded">
-            Scan for Sensors
-          </button>
-        </div>
 
         <div className="flex items-center gap-2 mb-4">
           <label className="font-semibold">Internal Area:</label>
@@ -247,52 +251,14 @@ const BuildingDashboard = () => {
             className="border p-2 w-24"
             value={buildingArea}
             onChange={handleAreaChange}
-            disabled={isAreaLocked}
           />
 
           <span>m²</span>
-
-          <button
-            onClick={handleAreaLockToggle}
-            className={`ml-2 px-2 py-1 rounded ${
-              isAreaLocked ? "bg-red-500" : "bg-green-500"
-            } text-white`}
-          >
-            {isAreaLocked ? "🔓 Unlock" : "🔒 Lock"}
-          </button>
         </div>
-
-        <div className="flex items-center gap-2 mb-4">
-          <button
-            className={`px-3 py-2 rounded ${
-              isLocationLocked ? "bg-gray-400" : "bg-green-500"
-            } text-white`}
-            onClick={handleGeolocate}
-            disabled={isLocationLocked}
-          >
-            Geolocate
-          </button>
-
-          <button
-            onClick={handleLocationLockToggle}
-            className={`ml-2 px-2 py-1 rounded ${
-              isLocationLocked ? "bg-red-500" : "bg-green-500"
-            } text-white`}
-          >
-            {isLocationLocked ? "🔓 Unlock" : "🔒 Lock"}
-          </button>
-        </div>
-
-        {location && (
-          <div className="text-sm text-gray-600">
-            📍 Lat: {location.latitude.toFixed(5)}, Lng:{" "}
-            {location.longitude.toFixed(5)}
-          </div>
-        )}
       </div>
 
       <div className="bg-gray-100 p-4 rounded shadow">
-        <h2 className="text-lg font-bold">Building Performance Index</h2>
+        <h2 className="text-lg font-bold">7-Day Building Performance Index</h2>
 
         <div className="flex items-center">
           <AnalogGauge
@@ -306,21 +272,34 @@ const BuildingDashboard = () => {
             </p>
 
             <p>
-              <strong>Energy Score:</strong> {energyScore.toFixed(0)}/100
+              <strong>Energy:</strong>{" "}
+              {performanceBreakdown.energy.toFixed(0)}/100
             </p>
 
             <p>
-              <strong>Air Quality Score:</strong> {iaqScore.toFixed(0)}/100
+              <strong>Air Quality:</strong>{" "}
+              {performanceBreakdown.iaq.toFixed(0)}/100
             </p>
 
             <p>
-              <strong>Comfort Score:</strong> {comfortScore.toFixed(0)}/100
+              <strong>Comfort:</strong>{" "}
+              {performanceBreakdown.comfort.toFixed(0)}/100
+            </p>
+
+            <p>
+              <strong>Heat Resilience:</strong>{" "}
+              {performanceBreakdown.heatResilience.toFixed(0)}/100
+            </p>
+
+            <p>
+              <strong>Humidity Risk:</strong>{" "}
+              {performanceBreakdown.humidityRisk.toFixed(0)}/100
             </p>
 
             <hr className="my-2" />
 
             <p>
-              <strong>Daily Average Energy Use:</strong>{" "}
+              <strong>Daily Average Energy:</strong>{" "}
               {historicalPerformance
                 ? historicalPerformance.toFixed(4)
                 : "No Data"}{" "}
@@ -335,17 +314,17 @@ const BuildingDashboard = () => {
               kWh/m²
             </p>
 
+            <hr className="my-2" />
+
             <p>
-              <strong>Internal Temp:</strong>{" "}
+              <strong>Current Internal Temp:</strong>{" "}
               {sensorData.temperature.toFixed(1)} °C
             </p>
 
             <p>
-              <strong>External Temp:</strong>{" "}
+              <strong>Current External Temp:</strong>{" "}
               {sensorData.externalTemp.toFixed(1)} °C
             </p>
-
-            <hr className="my-2" />
 
             <p>
               <strong>Humidity:</strong> {sensorData.humidity.toFixed(1)}%
