@@ -33,7 +33,7 @@ const BuildingDashboard = () => {
 
   const [performanceValue, setPerformanceValue] = useState(0);
   const [historicalPerformance, setHistoricalPerformance] = useState(0);
-  const [carbonCredits, setCarbonCredits] = useState(0);
+  const [carbonCredits] = useState(0);
 
   const fetchLongTermAverage = async () => {
     try {
