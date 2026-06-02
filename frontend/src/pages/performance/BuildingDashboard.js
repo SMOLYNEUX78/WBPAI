@@ -9,7 +9,7 @@ const BuildingDashboard = () => {
   });
 
   const [sensorData, setSensorData] = useState({
-    temperature: 0,
+    internalTemp: 0,
     externalTemp: 0,
     humidity: 0,
     co2: 0,
@@ -30,33 +30,63 @@ const BuildingDashboard = () => {
   });
 
   const scoreRange = (value, idealMin, idealMax, hardMin, hardMax) => {
+    if (!value && value !== 0) return 0;
+
     if (value >= idealMin && value <= idealMax) return 100;
 
     if (value < idealMin) {
-      return Math.max(0, ((value - hardMin) / (idealMin - hardMin)) * 100);
+      return Math.max(
+        0,
+        ((value - hardMin) / (idealMin - hardMin)) * 100
+      );
     }
 
-    return Math.max(0, ((hardMax - value) / (hardMax - idealMax)) * 100);
+    return Math.max(
+      0,
+      ((hardMax - value) / (hardMax - idealMax)) * 100
+    );
   };
 
   const calculateIAQScore = ({ co2, pm25, vocs }) => {
     const co2Score =
-      co2 <= 800 ? 100 : Math.max(0, 100 - ((co2 - 800) / 800) * 100);
+      co2 > 0
+        ? co2 <= 800
+          ? 100
+          : Math.max(0, 100 - ((co2 - 800) / 800) * 100)
+        : 0;
 
     const pm25Score =
-      pm25 <= 12 ? 100 : Math.max(0, 100 - ((pm25 - 12) / 25) * 100);
+      pm25 > 0
+        ? pm25 <= 12
+          ? 100
+          : Math.max(0, 100 - ((pm25 - 12) / 25) * 100)
+        : 0;
 
     const vocScore =
-      vocs <= 200 ? 100 : Math.max(0, 100 - ((vocs - 200) / 400) * 100);
+      vocs > 0
+        ? vocs <= 200
+          ? 100
+          : Math.max(0, 100 - ((vocs - 200) / 400) * 100)
+        : 0;
 
-    return (co2Score + pm25Score + vocScore) / 3;
+    const scores = [co2Score, pm25Score, vocScore].filter(
+      (score) => score > 0
+    );
+
+    return scores.length
+      ? scores.reduce((sum, score) => sum + score, 0) / scores.length
+      : 0;
   };
 
-  const calculateComfortScore = ({ temperature, humidity }) => {
-    const tempScore = scoreRange(temperature, 18, 22, 10, 30);
+  const calculateComfortScore = ({ internalTemp, humidity }) => {
+    const tempScore = scoreRange(internalTemp, 18, 22, 10, 30);
     const humidityScore = scoreRange(humidity, 40, 60, 20, 80);
 
-    return (tempScore + humidityScore) / 2;
+    const scores = [tempScore, humidityScore].filter((score) => score > 0);
+
+    return scores.length
+      ? scores.reduce((sum, score) => sum + score, 0) / scores.length
+      : 0;
   };
 
   const fetchLongTermAverage = async () => {
@@ -67,7 +97,9 @@ const BuildingDashboard = () => {
 
       if (error) throw error;
 
-      const validEntries = data.filter((row) => row.total_energy_kwh !== null);
+      const validEntries = data.filter(
+        (row) => row.total_energy_kwh !== null
+      );
 
       if (validEntries.length > 0) {
         const total = validEntries.reduce(
@@ -107,9 +139,9 @@ const BuildingDashboard = () => {
     try {
       const { data, error } = await supabase
         .from("Readings")
-        .select("temperature, humidity, co2, vocs, pm25")
+        .select("temperature_inside, humidity, co2, vocs, pm25")
         .or(
-          "temperature.not.is.null,humidity.not.is.null,co2.not.is.null,vocs.not.is.null,pm25.not.is.null"
+          "temperature_inside.not.is.null,humidity.not.is.null,co2.not.is.null,vocs.not.is.null,pm25.not.is.null"
         )
         .order("timestamp", { ascending: false })
         .limit(1)
@@ -120,12 +152,14 @@ const BuildingDashboard = () => {
 
       setSensorData((prev) => ({
         ...prev,
-        temperature: Number(data.temperature) || 0,
+        internalTemp: Number(data.temperature_inside) || 0,
         humidity: Number(data.humidity) || 0,
         co2: Number(data.co2) || 0,
         vocs: Number(data.vocs) || 0,
         pm25: Number(data.pm25) || 0,
       }));
+
+      console.log("Latest IAQ data from Supabase:", data);
     } catch (err) {
       console.error("Error fetching IAQ data:", err.message);
     }
@@ -139,7 +173,7 @@ const BuildingDashboard = () => {
       const { data, error } = await supabase
         .from("Readings")
         .select(
-          "temperature, temperature_outside, humidity, co2, vocs, pm25, timestamp"
+          "temperature_inside, temperature_outside, humidity, co2, vocs, pm25, timestamp"
         )
         .gte("timestamp", since.toISOString());
 
@@ -156,7 +190,7 @@ const BuildingDashboard = () => {
           ? values.reduce((sum, value) => sum + value, 0) / values.length
           : 0;
 
-      const avgTemp = avg(valid("temperature"));
+      const avgInternalTemp = avg(valid("temperature_inside"));
       const avgOutsideTemp = avg(valid("temperature_outside"));
       const avgHumidity = avg(valid("humidity"));
       const avgCo2 = avg(valid("co2"));
@@ -170,16 +204,18 @@ const BuildingDashboard = () => {
       });
 
       const calculatedComfortScore = calculateComfortScore({
-        temperature: avgTemp,
+        internalTemp: avgInternalTemp,
         humidity: avgHumidity,
       });
 
       const heatResilienceScore =
-        avgOutsideTemp > 24
-          ? scoreRange(avgOutsideTemp - avgTemp, 3, 8, -2, 12)
+        avgOutsideTemp > 24 && avgInternalTemp > 0
+          ? scoreRange(avgOutsideTemp - avgInternalTemp, 3, 8, -2, 12)
           : 100;
 
-      const humidityRiskScore = scoreRange(avgHumidity, 40, 60, 25, 80);
+      const humidityRiskScore = avgHumidity
+        ? scoreRange(avgHumidity, 40, 60, 25, 80)
+        : 0;
 
       const energyPerSqM =
         historicalPerformance && buildingArea
@@ -187,7 +223,9 @@ const BuildingDashboard = () => {
           : 0;
 
       const calculatedEnergyScore =
-        energyPerSqM > 0 ? Math.min((1 / energyPerSqM) * 10, 100) : 0;
+        energyPerSqM > 0
+          ? Math.min((1 / energyPerSqM) * 10, 100)
+          : 0;
 
       const buildingPerformanceIndex = Math.round(
         calculatedEnergyScore * 0.3 +
@@ -258,7 +296,9 @@ const BuildingDashboard = () => {
       </div>
 
       <div className="bg-gray-100 p-4 rounded shadow">
-        <h2 className="text-lg font-bold">7-Day Building Performance Index</h2>
+        <h2 className="text-lg font-bold">
+          7-Day Building Performance Index
+        </h2>
 
         <div className="flex items-center">
           <AnalogGauge
@@ -318,28 +358,32 @@ const BuildingDashboard = () => {
 
             <p>
               <strong>Current Internal Temp:</strong>{" "}
-              {sensorData.temperature.toFixed(1)} °C
+              {(sensorData.internalTemp ?? 0).toFixed(1)} °C
             </p>
 
             <p>
               <strong>Current External Temp:</strong>{" "}
-              {sensorData.externalTemp.toFixed(1)} °C
+              {(sensorData.externalTemp ?? 0).toFixed(1)} °C
             </p>
 
             <p>
-              <strong>Humidity:</strong> {sensorData.humidity.toFixed(1)}%
+              <strong>Humidity:</strong>{" "}
+              {(sensorData.humidity ?? 0).toFixed(1)}%
             </p>
 
             <p>
-              <strong>CO2:</strong> {sensorData.co2.toFixed(1)} ppm
+              <strong>CO2:</strong>{" "}
+              {(sensorData.co2 ?? 0).toFixed(1)} ppm
             </p>
 
             <p>
-              <strong>VOCs:</strong> {sensorData.vocs.toFixed(1)} ppb
+              <strong>VOCs:</strong>{" "}
+              {(sensorData.vocs ?? 0).toFixed(1)} ppb
             </p>
 
             <p>
-              <strong>PM2.5:</strong> {sensorData.pm25.toFixed(1)} µg/m³
+              <strong>PM2.5:</strong>{" "}
+              {(sensorData.pm25 ?? 0).toFixed(1)} µg/m³
             </p>
           </div>
         </div>

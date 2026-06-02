@@ -1,5 +1,7 @@
-import WebSocket from "ws";
-import supabase from "./supabaseClient.js";
+const WebSocket = require("ws");
+const supabase = require("./supabaseClient");
+
+require("dotenv").config();
 
 const TOKEN = process.env.THINGSBOARD_TOKEN;
 
@@ -58,8 +60,6 @@ ws.on("open", () => {
 });
 
 ws.on("message", async (msg) => {
-  console.log("Raw ThingsBoard message:", msg.toString());
-
   try {
     const parsed = JSON.parse(msg.toString());
 
@@ -108,7 +108,7 @@ setInterval(async () => {
     }
 
     const { error } = await supabase.from("Readings").insert({
-      temperature: latestValues.temperature,
+      temperature_inside: latestValues.temperature,
       humidity: latestValues.humidity,
       co2: latestValues.co2,
       vocs: latestValues.tvoc,
