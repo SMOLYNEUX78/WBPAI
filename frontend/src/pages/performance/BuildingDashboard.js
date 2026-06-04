@@ -593,6 +593,8 @@ const BuildingDashboardPanel = ({ building }) => {
     fetchLongTermAverage();
     fetchExternalTemp();
     fetchIAQData();
+    // Building switch refresh only; polling effect below handles continuing updates.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [building.id]);
 
   useEffect(() => {
@@ -605,6 +607,8 @@ const BuildingDashboardPanel = ({ building }) => {
     }, 60000);
 
     return () => clearInterval(interval);
+    // The interval should reset only when the selected building or area source changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [building.id, historicalPerformance, matterportMetadata.internalArea]);
 
   const handleMatterportInputChange = (e) => {
