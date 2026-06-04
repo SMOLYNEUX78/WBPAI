@@ -15,13 +15,15 @@ const MQTT_TOPIC_BUILDING_MAP = process.env.MQTT_TOPIC_BUILDING_MAP || "";
 const MQTT_USERNAME = process.env.MQTT_USERNAME || process.env.BRIGHT_USERNAME;
 const MQTT_PASSWORD = process.env.MQTT_PASSWORD || process.env.BRIGHT_PASSWORD;
 const GLOW_RAW_ENERGY_DIVISOR = Number(process.env.GLOW_RAW_ENERGY_DIVISOR || 1000);
+const COLLECTOR_INSTANCE = process.env.COLLECTOR_INSTANCE || "unknown";
+const SOURCE_NAME = `mqtt:${COLLECTOR_INSTANCE}`;
 const topicBuildingMap = parseTopicBuildingMap(MQTT_TOPIC_BUILDING_MAP);
 const mqttTopics = MQTT_TOPIC.split(",")
   .map((topic) => topic.trim())
   .filter(Boolean);
 
 console.log(
-  `Starting MQTT collector for ${BUILDING_ID || "unscoped building"} on ${MQTT_URL}`
+  `Starting MQTT collector (${COLLECTOR_INSTANCE}) for ${BUILDING_ID || "unscoped building"} on ${MQTT_URL}`
 );
 
 const withBuildingId = (topic, payload) => {
@@ -148,7 +150,7 @@ const pickFirstNumeric = (payload, candidates, options) => {
 const buildEnergyReadings = ({ topic, timestamp, payload }) => {
   const baseReading = withBuildingId(topic, {
     timestamp,
-    source: "mqtt",
+    source: SOURCE_NAME,
     topic,
     raw_payload: payload,
   });

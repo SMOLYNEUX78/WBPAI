@@ -14,6 +14,8 @@ const GLOW_API_BASE_URL =
 const GLOW_API_POLL_INTERVAL_MS = Number(
   process.env.GLOW_API_POLL_INTERVAL_MS || 60000
 );
+const COLLECTOR_INSTANCE = process.env.COLLECTOR_INSTANCE || "unknown";
+const SOURCE_NAME = `glow-api:${COLLECTOR_INSTANCE}`;
 const GLOW_API_RESOURCES = process.env.GLOW_API_RESOURCES || "";
 
 let cachedToken = null;
@@ -150,7 +152,7 @@ async function collectResource(resource) {
       reading_type: "daily_total",
       usage_kwh: daily.value,
       power_kw: null,
-      source: "glow-api",
+      source: SOURCE_NAME,
       topic: resource.resourceId,
       raw_payload: dailyData,
     });
@@ -168,7 +170,7 @@ async function collectResource(resource) {
         reading_type: "instant_power",
         usage_kwh: null,
         power_kw: current.value / 1000,
-        source: "glow-api",
+        source: SOURCE_NAME,
         topic: resource.resourceId,
         raw_payload: currentData,
       });
@@ -209,7 +211,7 @@ if (!GLOW_USERNAME || !GLOW_PASSWORD) {
 }
 
 console.log(
-  `Starting Glow API collector for ${resources.length} resource(s) every ${GLOW_API_POLL_INTERVAL_MS}ms`
+  `Starting Glow API collector (${COLLECTOR_INSTANCE}) for ${resources.length} resource(s) every ${GLOW_API_POLL_INTERVAL_MS}ms`
 );
 
 pollGlowApi();

@@ -87,6 +87,7 @@ Museum:
 
 ```env
 BUILDING_ID=museum
+COLLECTOR_INSTANCE=museum-tablet
 MQTT_URL=mqtt://localhost
 MQTT_TOPIC=glow/#
 MQTT_USERNAME=
@@ -99,6 +100,7 @@ Home:
 
 ```env
 BUILDING_ID=home
+COLLECTOR_INSTANCE=home-tablet
 COLLECTOR_PROCESSES=mqtt,glow-api
 MQTT_URL=mqtt://localhost
 MQTT_TOPIC=glow/#
@@ -112,6 +114,7 @@ Future home Milesight IAQ:
 
 ```env
 BUILDING_ID=home
+COLLECTOR_INSTANCE=home-tablet
 COLLECTOR_PROCESSES=mqtt,glow-api,milesight
 MILESIGHT_API_BASE_URL=
 MILESIGHT_USERNAME=
