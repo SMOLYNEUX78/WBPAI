@@ -326,22 +326,35 @@ const BuildingDashboardPanel = ({ building }) => {
 
   const fetchLongTermAverage = async () => {
     try {
-      const { data, error } = await supabase
+      const { data: dailyData, error: dailyError } = await supabase
         .from("EnergyReadings")
-        .select("timestamp, fuel_type, reading_type, usage_kwh, power_kw")
+        .select("timestamp, fuel_type, usage_kwh")
         .eq("building_id", building.id)
+        .eq("reading_type", "daily_total")
         .order("timestamp", { ascending: false })
         .limit(2000);
 
-      if (error) throw error;
+      if (dailyError) throw dailyError;
 
-      if (data && data.length > 0) {
+      const { data: latestElectricPowerRows, error: powerError } =
+        await supabase
+          .from("EnergyReadings")
+          .select("power_kw")
+          .eq("building_id", building.id)
+          .eq("fuel_type", "electricity")
+          .eq("reading_type", "instant_power")
+          .not("power_kw", "is", null)
+          .order("timestamp", { ascending: false })
+          .limit(1);
+
+      if (powerError) throw powerError;
+
+      const rows = dailyData || [];
+      const latestElectricPower = latestElectricPowerRows?.[0];
+
+      if (rows.length > 0 || latestElectricPower) {
         const todayKey = new Date().toISOString().slice(0, 10);
-        const dailyTotalsByFuel = data.reduce((totals, row) => {
-          if (row.reading_type !== "daily_total") {
-            return totals;
-          }
-
+        const dailyTotalsByFuel = rows.reduce((totals, row) => {
           const usageKwh = Number(row.usage_kwh);
           if (!Number.isFinite(usageKwh)) {
             return totals;
@@ -388,13 +401,7 @@ const BuildingDashboardPanel = ({ building }) => {
         const totalDailyAverage = electricityDailyAverage + gasDailyAverage;
         const electricityTodayKwh = latestDailyTotal("electricity");
         const gasTodayKwh = latestDailyTotal("gas");
-        const latestElectricPower = data.find(
-          (row) =>
-            row.fuel_type === "electricity" &&
-            row.reading_type === "instant_power" &&
-            Number.isFinite(Number(row.power_kw))
-        );
-        const hasGasData = data.some((row) => row.fuel_type === "gas");
+        const hasGasData = rows.some((row) => row.fuel_type === "gas");
 
         setEnergySummary({
           electricityDailyAverage,
@@ -601,6 +608,7 @@ const BuildingDashboardPanel = ({ building }) => {
     fetchLongTermBuildingPerformance();
 
     const interval = setInterval(() => {
+      fetchLongTermAverage();
       fetchIAQData();
       fetchExternalTemp();
       fetchLongTermBuildingPerformance();
