@@ -19,6 +19,19 @@ const supabase = createClient(
   process.env.SUPABASE_KEY
 );
 
+const BUILDING_ID = process.env.BUILDING_ID || "";
+
+const withBuildingId = (payload) => {
+  if (!BUILDING_ID) {
+    return payload;
+  }
+
+  return {
+    ...payload,
+    building_id: BUILDING_ID,
+  };
+};
+
 // =====================================
 // WEATHER FETCH
 // =====================================
@@ -55,13 +68,13 @@ const updateExternalTemperature = async () => {
     const { error } = await supabase
       .from('Readings')
       .insert([
-        {
+        withBuildingId({
           temperature_outside:
             externalTemp,
 
           timestamp:
             new Date().toISOString(),
-        },
+        }),
       ]);
 
     if (error) {
@@ -104,7 +117,7 @@ app.post(
         pm25_level,
       } = req.body;
 
-      const payload = {
+      const payload = withBuildingId({
         temperature_inside,
         humidity,
         co2,
@@ -112,7 +125,7 @@ app.post(
         pm25_level,
         timestamp:
           new Date().toISOString(),
-      };
+      });
 
       console.log(
         '📡 Incoming IAQ payload:',
@@ -218,12 +231,12 @@ app.get(
         await supabase
           .from('Readings')
           .insert([
-            {
+            withBuildingId({
               temperature_outside: 12.3,
 
               timestamp:
                 new Date().toISOString(),
-            },
+            }),
           ]);
 
       if (error) {

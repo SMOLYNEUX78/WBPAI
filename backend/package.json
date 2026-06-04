@@ -4,7 +4,11 @@
   "description": "Backend for WBPAI",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "start:collectors": "node collector-runner.js",
+    "start:mqtt": "node mqtt-handler.js",
+    "start:glow-api": "node glow-api-handler.js",
+    "start:thingsboard": "node thingsboard-handler.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.4",

@@ -1,0 +1,97 @@
+# WBPAI collector setup
+
+Use one always-on collector device per building.
+
+## Processes to run
+
+From `backend/`, run:
+
+```sh
+npm run start:collectors
+```
+
+That starts and restarts:
+
+- `server.js` for backend routes and external temperature writes
+- `mqtt-handler.js` for CAD / smart meter MQTT energy readings
+- `glow-api-handler.js` for Glow API energy polling when cloud MQTT is quiet
+- `thingsboard-handler.js` for ThingsBoard IAQ readings
+
+## Per-building environment
+
+Each collector needs its own `backend/.env`.
+
+Museum:
+
+```env
+BUILDING_ID=museum
+MQTT_URL=mqtt://localhost
+MQTT_TOPIC=glow/#
+MQTT_USERNAME=
+MQTT_PASSWORD=
+DEFAULT_LAT=52.0901
+DEFAULT_LON=-1.3210
+```
+
+Home:
+
+```env
+BUILDING_ID=home
+MQTT_URL=mqtt://localhost
+MQTT_TOPIC=glow/#
+MQTT_USERNAME=
+MQTT_PASSWORD=
+DEFAULT_LAT=your-home-latitude
+DEFAULT_LON=your-home-longitude
+```
+
+If the tablet connects directly to Glow/Bright MQTT instead of a local CAD /
+Mosquitto broker, use:
+
+```env
+MQTT_URL=mqtts://glowmqtt.energyhive.com:8883
+MQTT_TOPIC=SMART/HILD/<cad-or-ihd-device-id>
+MQTT_TOPIC_BUILDING_MAP=SMART/HILD/<cad-or-ihd-device-id>=home
+MQTT_PROTOCOL_VERSION=4
+MQTT_USERNAME=your-bright-username
+MQTT_PASSWORD=your-bright-password
+```
+
+For Glow cloud MQTT, `device/#` can connect but fail to subscribe. The usual
+topic shape is `SMART/HILD/<device-id>` with no trailing slash.
+
+If one Glow account contains multiple buildings, subscribe to both topics and
+map each one to the building that should be written to Supabase:
+
+```env
+MQTT_TOPIC=SMART/HILD/E0E2E62C5584,SMART/HILD/BCDDC2C52AA0
+MQTT_TOPIC_BUILDING_MAP=SMART/HILD/E0E2E62C5584=home,SMART/HILD/BCDDC2C52AA0=museum
+```
+
+Keep real Supabase, OpenWeather and ThingsBoard values in `.env` only.
+
+## Glow API fallback
+
+Glow cloud MQTT can accept subscriptions but still remain quiet. The API
+collector polls resource IDs directly and writes electricity/gas rows into
+`EnergyReadings`.
+
+```env
+GLOW_API_POLL_INTERVAL_MS=60000
+GLOW_API_RESOURCES=home:electricity:042517ae-601f-4928-b3d2-e49b1de0e695,home:gas:a2130979-fb09-48bf-89f9-5703c30037b8,museum:electricity:12e31e6d-11dc-4bc3-a70b-dab6f76fc73c
+```
+
+## Supabase requirement
+
+The shared architecture expects `Readings` to include a nullable text column:
+
+```sql
+alter table "Readings"
+add column if not exists building_id text;
+```
+
+Existing museum rows can remain blank while the current dashboard keeps using
+legacy unscoped museum data. New collectors should write `museum` or `home`.
+
+If `DailyEnergyTotals` is a view, update it to include or group by `building_id`
+before relying on home energy averages.

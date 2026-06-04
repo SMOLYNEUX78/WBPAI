@@ -1,51 +1,70 @@
 const axios = require('axios');
 require('dotenv').config();
 
-const username = process.env.BRIGHT_USERNAME;
-const password = process.env.BRIGHT_PASSWORD;
+const username = process.env.BRIGHT_USERNAME || process.env.MQTT_USERNAME;
+const password = process.env.BRIGHT_PASSWORD || process.env.MQTT_PASSWORD;
+const applicationId =
+  process.env.GLOW_APPLICATION_ID || 'b0f1b774-a586-4f72-9edd-27ead8aa7a8d';
+const apiBaseUrl = 'https://api.glowmarkt.com/api/v0-1';
 
 async function getDevices() {
   try {
-    console.log(`🔐 Logging in with: ${username}`);
+    console.log(`Logging in with: ${username}`);
 
-    // Step 1: Login
     const loginRes = await axios.post(
-      'https://api.glowmarkt.com/api/login-user',
+      `${apiBaseUrl}/auth`,
       { username, password },
       {
         headers: {
-          'applicationId': 'bright_app',
-          'Content-Type': 'application/json'
-        }
+          applicationId,
+          'Content-Type': 'application/json',
+        },
       }
     );
 
     const token = loginRes.data.token;
-    console.log('✅ Login successful. Token received:', token.slice(0, 12) + '...');
+    console.log('Login successful. Token received.');
 
-    // Step 2: Get devices
- const deviceUrl = 'https://api.glowmarkt.com/api/v1/device';
-    console.log(`📡 Fetching devices from: ${deviceUrl}`);
+    const headers = {
+      applicationId,
+      token,
+    };
 
-    const deviceRes = await axios.get(deviceUrl, {
-      headers: {
-        'applicationId': 'bright_app',
-        'Authorization': `Bearer ${token}`,
-      }
-    });
+    const [resourceRes, deviceRes] = await Promise.all([
+      axios.get(`${apiBaseUrl}/resource`, { headers }),
+      axios.get(`${apiBaseUrl}/device`, { headers }),
+    ]);
 
-    console.log('📦 Devices retrieved successfully:');
-    console.log(JSON.stringify(deviceRes.data, null, 2));
+    const devices = deviceRes.data.map((device) => ({
+      hardwareId: device.hardwareId,
+      parentHardwareId: device.parentHardwareId,
+      tags: device.tags,
+      sensors: (device.protocol?.sensors || []).map((sensor) => ({
+        protocolId: sensor.protocolId,
+        resourceId: sensor.resourceId,
+      })),
+    }));
+
+    const resources = resourceRes.data.map((resource) => ({
+      name: resource.name,
+      classifier: resource.classifier,
+      type: resource.dataSourceResourceTypeInfo?.type,
+      unit: resource.baseUnit || resource.dataSourceResourceTypeInfo?.unit,
+      resourceId: resource.resourceId,
+      updatedAt: resource.updatedAt,
+    }));
+
+    console.log('Devices retrieved successfully:');
+    console.log(JSON.stringify({ devices, resources }, null, 2));
   } catch (error) {
     if (error.response) {
-      console.error('❌ API responded with error:');
+      console.error('API responded with error:');
       console.error('Status:', error.response.status);
       console.error('Data:', error.response.data);
     } else {
-      console.error('❌ Error:', error.message);
+      console.error('Error:', error.message);
     }
   }
 }
 
 getDevices();
-
