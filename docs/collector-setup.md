@@ -15,7 +15,25 @@ That starts and restarts:
 - `server.js` for backend routes and external temperature writes
 - `mqtt-handler.js` for CAD / smart meter MQTT energy readings
 - `glow-api-handler.js` for Glow API energy polling when cloud MQTT is quiet
+- `milesight-handler.js` for future home Milesight IAQ API polling
 - `thingsboard-handler.js` for ThingsBoard IAQ readings
+
+Set `COLLECTOR_PROCESSES` in `backend/.env` to run only the collectors needed
+on a specific device:
+
+```env
+COLLECTOR_PROCESSES=mqtt,glow-api
+```
+
+Recommended device roles:
+
+- House tablet now: `COLLECTOR_PROCESSES=mqtt,glow-api`
+- House tablet later with Milesight IAQ API: `COLLECTOR_PROCESSES=mqtt,glow-api,milesight`
+- Museum IAQ tablet: `BUILDING_ID=museum` and `COLLECTOR_PROCESSES=thingsboard`
+
+Do not include `thingsboard` on the house tablet. That collector is the museum
+ThingsBoard/dashboard workaround. Do not include `milesight` until the home
+Milesight API credentials and endpoint are configured.
 
 ## Termux tablet auto-update
 
@@ -79,12 +97,25 @@ Home:
 
 ```env
 BUILDING_ID=home
+COLLECTOR_PROCESSES=mqtt,glow-api
 MQTT_URL=mqtt://localhost
 MQTT_TOPIC=glow/#
 MQTT_USERNAME=
 MQTT_PASSWORD=
 DEFAULT_LAT=your-home-latitude
 DEFAULT_LON=your-home-longitude
+```
+
+Future home Milesight IAQ:
+
+```env
+BUILDING_ID=home
+COLLECTOR_PROCESSES=mqtt,glow-api,milesight
+MILESIGHT_API_BASE_URL=
+MILESIGHT_USERNAME=
+MILESIGHT_PASSWORD=
+MILESIGHT_API_TOKEN=
+MILESIGHT_POLL_INTERVAL_MS=60000
 ```
 
 If the tablet connects directly to Glow/Bright MQTT instead of a local CAD /

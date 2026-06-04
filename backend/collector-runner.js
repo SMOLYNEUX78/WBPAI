@@ -1,14 +1,39 @@
 const { spawn } = require("child_process");
 const path = require("path");
+require("dotenv").config();
 
 const backendDir = __dirname;
+const enabledProcessNames = (process.env.COLLECTOR_PROCESSES || "")
+  .split(",")
+  .map((name) => name.trim())
+  .filter(Boolean);
 
-const processes = [
+const allProcesses = [
   { name: "api", script: "server.js" },
   { name: "mqtt", script: "mqtt-handler.js" },
   { name: "glow-api", script: "glow-api-handler.js" },
+  { name: "milesight", script: "milesight-handler.js" },
   { name: "thingsboard", script: "thingsboard-handler.js" },
 ];
+const processes =
+  enabledProcessNames.length > 0
+    ? allProcesses.filter((processConfig) =>
+        enabledProcessNames.includes(processConfig.name)
+      )
+    : allProcesses;
+
+if (processes.length === 0) {
+  console.error(
+    `[runner] No matching collectors for COLLECTOR_PROCESSES=${process.env.COLLECTOR_PROCESSES}`
+  );
+  process.exit(1);
+}
+
+console.log(
+  `[runner] Starting collectors: ${processes
+    .map((processConfig) => processConfig.name)
+    .join(", ")}`
+);
 
 const runningChildren = new Map();
 let stopping = false;
