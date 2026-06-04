@@ -10,6 +10,7 @@ const enabledProcessNames = (process.env.COLLECTOR_PROCESSES || "")
 
 const allProcesses = [
   { name: "api", script: "server.js" },
+  { name: "weather", script: "weather-handler.js" },
   { name: "mqtt", script: "mqtt-handler.js" },
   { name: "glow-api", script: "glow-api-handler.js" },
   { name: "milesight", script: "milesight-handler.js" },

@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "start:collectors": "node collector-runner.js",
+    "start:weather": "node weather-handler.js",
     "start:mqtt": "node mqtt-handler.js",
     "start:glow-api": "node glow-api-handler.js",
     "start:milesight": "node milesight-handler.js",

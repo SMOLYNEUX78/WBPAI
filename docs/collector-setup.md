@@ -13,6 +13,7 @@ npm run start:collectors
 That starts and restarts:
 
 - `server.js` for backend routes and external temperature writes
+- `weather-handler.js` for per-building external temperature writes
 - `mqtt-handler.js` for CAD / smart meter MQTT energy readings
 - `glow-api-handler.js` for Glow API energy polling when cloud MQTT is quiet
 - `milesight-handler.js` for future home Milesight IAQ API polling
@@ -29,6 +30,7 @@ Recommended device roles:
 
 - House tablet now: `COLLECTOR_PROCESSES=mqtt,glow-api`
 - House tablet later with Milesight IAQ API: `COLLECTOR_PROCESSES=mqtt,glow-api,milesight`
+- Any always-on collector that should write weather: include `weather`
 - Museum IAQ tablet: `BUILDING_ID=museum` and `COLLECTOR_PROCESSES=thingsboard`
 
 Do not include `thingsboard` on the house tablet. That collector is the museum
@@ -117,6 +119,20 @@ MILESIGHT_PASSWORD=
 MILESIGHT_API_TOKEN=
 MILESIGHT_POLL_INTERVAL_MS=60000
 ```
+
+## Per-building external temperature
+
+Do not rely on a single `DEFAULT_LAT` / `DEFAULT_LON` once the dashboard has
+more than one building. Use `weather-handler.js` with an explicit building map:
+
+```env
+COLLECTOR_PROCESSES=weather,mqtt,glow-api
+WEATHER_POLL_INTERVAL_MS=300000
+WEATHER_LOCATIONS=museum:52.0901:-1.3210,home:your-home-latitude:your-home-longitude
+```
+
+Later, once the Matterport SDK/API integration is complete, the Matterport model
+coordinates can be used to populate or update this building coordinate map.
 
 If the tablet connects directly to Glow/Bright MQTT instead of a local CAD /
 Mosquitto broker, use:

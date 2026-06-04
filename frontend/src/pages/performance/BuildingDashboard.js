@@ -159,6 +159,8 @@ const BuildingDashboardPanel = ({ building }) => {
     return query.eq("building_id", building.id);
   };
 
+  const applyStrictBuildingScope = (query) => query.eq("building_id", building.id);
+
   const getValidValues = (rows, key) =>
     rows
       .map((row) => Number(row[key]))
@@ -461,7 +463,7 @@ const BuildingDashboardPanel = ({ building }) => {
 
   const fetchExternalTemp = async () => {
     try {
-      const { data, error } = await applyBuildingScope(
+      const { data, error } = await applyStrictBuildingScope(
         supabase
         .from("Readings")
         .select("temperature_outside")
