@@ -71,6 +71,18 @@ cd ~/WBPAI
 ./scripts/termux-start.sh
 ```
 
+To configure the house tablet after the repo is already cloned and `backend/.env`
+already contains Supabase and Glow credentials:
+
+```sh
+cd ~/WBPAI
+git pull origin main
+sh scripts/termux-config-home-tablet.sh
+```
+
+That sets the tablet to `COLLECTOR_INSTANCE=home-tablet` and limits Glow API
+polling to the home electricity and gas resources.
+
 The collectors keep running inside a `tmux` session. To inspect them later:
 
 ```sh
