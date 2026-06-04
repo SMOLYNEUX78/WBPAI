@@ -17,6 +17,48 @@ That starts and restarts:
 - `glow-api-handler.js` for Glow API energy polling when cloud MQTT is quiet
 - `thingsboard-handler.js` for ThingsBoard IAQ readings
 
+## Termux tablet auto-update
+
+On an Android tablet running Termux, use the repo script so the tablet keeps
+pulling GitHub and restarts the collectors when `main` changes:
+
+```sh
+pkg update -y
+pkg install -y git nodejs tmux
+cd ~
+git clone https://github.com/SMOLYNEUX78/WBPAI.git
+cd WBPAI
+chmod +x scripts/termux-auto-update.sh scripts/termux-start.sh
+cd backend
+npm install
+```
+
+Create `backend/.env` locally on the tablet. The easiest way in Termux is to
+paste the whole file in one go:
+
+```sh
+cat > .env
+```
+
+Paste the environment values, then press `Ctrl+D` on a hardware keyboard. If
+using the on-screen keyboard, Termux's extra key row usually has `CTRL`; tap
+`CTRL`, then tap `D`.
+
+Then start the auto-updater:
+
+```sh
+cd ~/WBPAI
+./scripts/termux-start.sh
+```
+
+The collectors keep running inside a `tmux` session. To inspect them later:
+
+```sh
+tmux attach -t wbpai
+```
+
+Detach without stopping them by pressing `Ctrl+B`, then `D`.
+
 ## Per-building environment
 
 Each collector needs its own `backend/.env`.
