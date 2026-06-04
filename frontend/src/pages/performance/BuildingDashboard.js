@@ -10,6 +10,8 @@ const BUILDINGS = [
     name: "Museum",
     subtitle: "CAD monitor, smart meter and IAQ tablet collector",
     defaultMatterportUrl: DEFAULT_MATTERPORT_URL,
+    latitude: 52.0901,
+    longitude: -1.321,
     estimatedInternalArea: 145,
     nationalAverageEui: 200,
     legacyUnscopedData: true,
@@ -19,6 +21,8 @@ const BUILDINGS = [
     name: "Home",
     subtitle: "Home smart meter, CAD and MQTT collector",
     defaultMatterportUrl: "https://my.matterport.com/show/?m=8A48K5upwWN",
+    latitude: 52.0945,
+    longitude: 1.30488,
     estimatedInternalArea: 99.2,
     nationalAverageEui: 150,
     legacyUnscopedData: false,
@@ -64,10 +68,10 @@ const buildMatterportEmbedUrl = (value) => {
   return `https://my.matterport.com/show/?m=${modelId}&play=1&qs=1&brand=0&mls=2`;
 };
 
-const createEmptyMatterportMetadata = (statusText) => ({
+const createEmptyMatterportMetadata = (statusText, building = {}) => ({
   address: statusText,
-  latitude: "--",
-  longitude: "--",
+  latitude: building.latitude ?? "--",
+  longitude: building.longitude ?? "--",
   internalArea: "--",
   source: "Matterport SDK / API pending",
 });
@@ -88,7 +92,10 @@ const BuildingDashboardPanel = ({ building }) => {
     );
   });
   const [matterportMetadata, setMatterportMetadata] = useState(() =>
-    createEmptyMatterportMetadata("Connect Matterport SDK / API to load geodata")
+    createEmptyMatterportMetadata(
+      "Connect Matterport SDK / API to load geodata",
+      building
+    )
   );
 
   const [sensorData, setSensorData] = useState({
@@ -138,14 +145,15 @@ const BuildingDashboardPanel = ({ building }) => {
   useEffect(() => {
     if (!matterportModelId) {
       setMatterportMetadata(
-        createEmptyMatterportMetadata("Paste a Matterport URL or ID")
+        createEmptyMatterportMetadata("Paste a Matterport URL or ID", building)
       );
       return;
     }
 
     setMatterportMetadata({
       ...createEmptyMatterportMetadata(
-        "Model connected, geodata awaiting SDK / API"
+        "Model connected, geodata awaiting SDK / API",
+        building
       ),
       internalArea: getEstimatedInternalArea(matterportModelId, building),
     });
