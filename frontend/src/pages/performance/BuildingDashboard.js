@@ -13,6 +13,7 @@ const BUILDINGS = [
     latitude: 52.0945,
     longitude: 1.30488,
     estimatedInternalArea: 99.2,
+    targetEui: 35,
     nationalAverageEui: 150,
     legacyUnscopedData: false,
   },
@@ -24,6 +25,7 @@ const BUILDINGS = [
     latitude: 52.0901,
     longitude: -1.321,
     estimatedInternalArea: 145,
+    targetEui: 65,
     nationalAverageEui: 200,
     legacyUnscopedData: true,
   },
@@ -314,8 +316,14 @@ const BuildingDashboardPanel = ({ building }) => {
     return Math.round(Math.min(energy, indoorEnvironment));
   };
 
-  const calculateEnergyScore = (annualEui, nationalAverageEui) => {
-    if (!Number.isFinite(annualEui) || !nationalAverageEui) {
+  const calculateEnergyScore = (annualEui, targetEui, nationalAverageEui) => {
+    if (
+      !Number.isFinite(annualEui) ||
+      !Number.isFinite(targetEui) ||
+      !Number.isFinite(nationalAverageEui) ||
+      targetEui <= 0 ||
+      nationalAverageEui <= targetEui
+    ) {
       return 0;
     }
 
@@ -323,8 +331,14 @@ const BuildingDashboardPanel = ({ building }) => {
       return 100;
     }
 
+    if (annualEui <= targetEui) {
+      return 85 + (1 - annualEui / targetEui) * 15;
+    }
+
     if (annualEui <= nationalAverageEui) {
-      return 50 + (1 - annualEui / nationalAverageEui) * 50;
+      const targetToAverage =
+        (annualEui - targetEui) / (nationalAverageEui - targetEui);
+      return 50 + (1 - targetToAverage) * 35;
     }
 
     return Math.max(
@@ -579,6 +593,7 @@ const BuildingDashboardPanel = ({ building }) => {
 
       const calculatedEnergyScore = calculateEnergyScore(
         annualEui,
+        building.targetEui,
         building.nationalAverageEui
       );
 
