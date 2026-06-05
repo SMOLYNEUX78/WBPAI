@@ -6,17 +6,6 @@ const DEFAULT_MATTERPORT_URL = "https://my.matterport.com/show/?m=zHm8SwWeHiN";
 
 const BUILDINGS = [
   {
-    id: "museum",
-    name: "Museum",
-    subtitle: "CAD monitor, smart meter and IAQ tablet collector",
-    defaultMatterportUrl: DEFAULT_MATTERPORT_URL,
-    latitude: 52.0901,
-    longitude: -1.321,
-    estimatedInternalArea: 145,
-    nationalAverageEui: 200,
-    legacyUnscopedData: true,
-  },
-  {
     id: "home",
     name: "Home",
     subtitle: "Home smart meter, CAD and MQTT collector",
@@ -26,6 +15,17 @@ const BUILDINGS = [
     estimatedInternalArea: 99.2,
     nationalAverageEui: 150,
     legacyUnscopedData: false,
+  },
+  {
+    id: "museum",
+    name: "Museum",
+    subtitle: "CAD monitor, smart meter and IAQ tablet collector",
+    defaultMatterportUrl: DEFAULT_MATTERPORT_URL,
+    latitude: 52.0901,
+    longitude: -1.321,
+    estimatedInternalArea: 145,
+    nationalAverageEui: 200,
+    legacyUnscopedData: true,
   },
 ];
 
