@@ -28,7 +28,7 @@ COLLECTOR_PROCESSES=mqtt,glow-api
 
 Recommended device roles:
 
-- House tablet now: `COLLECTOR_PROCESSES=mqtt,glow-api`
+- House tablet now: `COLLECTOR_PROCESSES=glow-api`
 - House tablet later with Milesight IAQ API: `COLLECTOR_PROCESSES=mqtt,glow-api,milesight`
 - Any always-on collector that should write weather: include `weather`
 - Museum IAQ tablet: `BUILDING_ID=museum` and `COLLECTOR_PROCESSES=thingsboard`
@@ -80,8 +80,8 @@ git pull origin main
 sh scripts/termux-config-home-tablet.sh
 ```
 
-That sets the tablet to `COLLECTOR_INSTANCE=home-tablet` and limits Glow API
-polling to the home electricity and gas resources.
+That sets the tablet to `COLLECTOR_INSTANCE=home-tablet` and uses Glow API
+polling for home electricity, home gas, and museum electricity.
 
 The collectors keep running inside a `tmux` session. To inspect them later:
 
@@ -113,7 +113,7 @@ Home:
 ```env
 BUILDING_ID=home
 COLLECTOR_INSTANCE=home-tablet
-COLLECTOR_PROCESSES=mqtt,glow-api
+COLLECTOR_PROCESSES=glow-api
 MQTT_URL=mqtt://localhost
 MQTT_TOPIC=glow/#
 MQTT_USERNAME=

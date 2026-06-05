@@ -26,7 +26,7 @@ fi
 set_env "BUILDING_ID" "home"
 set_env "COLLECTOR_INSTANCE" "home-tablet"
 set_env "COLLECTOR_PROCESSES" "glow-api"
-set_env "GLOW_API_RESOURCES" "home:electricity:042517ae-601f-4928-b3d2-e49b1de0e695,home:gas:a2130979-fb09-48bf-89f9-5703c30037b8"
+set_env "GLOW_API_RESOURCES" "home:electricity:042517ae-601f-4928-b3d2-e49b1de0e695,home:gas:a2130979-fb09-48bf-89f9-5703c30037b8,museum:electricity:12e31e6d-11dc-4bc3-a70b-dab6f76fc73c"
 
 tmux kill-session -t wbpai 2>/dev/null || true
 "${REPO_DIR}/scripts/termux-start.sh"
