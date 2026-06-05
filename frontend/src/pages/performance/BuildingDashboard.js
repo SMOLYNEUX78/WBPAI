@@ -337,11 +337,12 @@ const BuildingDashboardPanel = ({ building }) => {
     try {
       const { data: dailyData, error: dailyError } = await supabase
         .from("EnergyReadings")
-        .select("timestamp, fuel_type, usage_kwh")
+        .select("timestamp, created_at, fuel_type, usage_kwh")
         .eq("building_id", building.id)
         .eq("reading_type", "daily_total")
         .order("timestamp", { ascending: false })
-        .limit(2000);
+        .order("created_at", { ascending: false })
+        .limit(5000);
 
       if (dailyError) throw dailyError;
 
