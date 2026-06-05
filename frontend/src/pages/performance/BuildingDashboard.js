@@ -738,8 +738,8 @@ const BuildingDashboardPanel = ({ building }) => {
       <div className="bg-gray-100 p-4 rounded shadow">
         <h2 className="text-lg font-bold mb-3">Performance</h2>
 
-        <div className="grid gap-5 grid-cols-[minmax(0,1fr)_320px] items-start">
-          <div className="bg-white rounded border p-4">
+        <div className="grid gap-3 grid-cols-[minmax(0,1fr)_minmax(0,0.88fr)] sm:gap-5 sm:grid-cols-[minmax(0,1fr)_320px] items-start">
+          <div className="bg-white rounded border p-2.5 sm:p-4 min-w-0">
             <div className="flex justify-center">
               <AnalogGauge
                 value={performanceValue}
@@ -747,7 +747,7 @@ const BuildingDashboardPanel = ({ building }) => {
               />
             </div>
 
-            <div className="mt-4 space-y-1 text-sm leading-tight">
+            <div className="mt-2 sm:mt-4 space-y-0.5 sm:space-y-1 text-[10px] min-[390px]:text-xs sm:text-sm leading-tight">
               <p>
                 <strong>Health:</strong> {performanceBreakdown.health.toFixed(0)}
                 /100
@@ -759,11 +759,13 @@ const BuildingDashboardPanel = ({ building }) => {
             </div>
           </div>
 
-          <div className="bg-white rounded border p-4">
-            <h3 className="text-base font-semibold mb-3">Live Data</h3>
+          <div className="bg-white rounded border p-2.5 sm:p-4 min-w-0 overflow-hidden">
+            <h3 className="text-xs min-[390px]:text-sm sm:text-base font-semibold mb-1.5 sm:mb-3">
+              Live Data
+            </h3>
 
-            <div className="space-y-6 text-sm leading-tight">
-              <div className="space-y-0.5">
+            <div className="space-y-2 min-[390px]:space-y-3 sm:space-y-6 text-[10px] min-[390px]:text-xs sm:text-sm leading-tight">
+              <div className="space-y-0.5 break-words">
                 <p>
                   <strong>Annualised EUI:</strong>{" "}
                   {historicalPerformance > 0 &&
@@ -777,7 +779,7 @@ const BuildingDashboardPanel = ({ building }) => {
                 </p>
               </div>
 
-              <div className="space-y-0.5">
+              <div className="space-y-0.5 break-words">
                 <h4 className="font-semibold">Electricity</h4>
                 <p>
                   <strong>Daily Average:</strong>{" "}
@@ -797,7 +799,7 @@ const BuildingDashboardPanel = ({ building }) => {
               </div>
 
               {energySummary.hasGasData ? (
-                <div className="space-y-0.5">
+                <div className="space-y-0.5 break-words">
                   <h4 className="font-semibold">Gas</h4>
                   <p>
                     <strong>Daily Average:</strong>{" "}
@@ -812,7 +814,7 @@ const BuildingDashboardPanel = ({ building }) => {
                 </div>
               ) : null}
 
-              <div className="space-y-0.5">
+              <div className="space-y-0.5 break-words">
                 <p>
                   <strong>Internal Temp:</strong>{" "}
                   {(sensorData.internalTemp ?? 0).toFixed(1)} deg C
@@ -823,7 +825,7 @@ const BuildingDashboardPanel = ({ building }) => {
                 </p>
               </div>
 
-              <div className="space-y-0.5">
+              <div className="space-y-0.5 break-words">
                 <p>
                   <strong>Humidity:</strong> {(sensorData.humidity ?? 0).toFixed(1)}%
                 </p>
