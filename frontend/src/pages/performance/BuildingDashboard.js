@@ -640,8 +640,8 @@ const BuildingDashboardPanel = ({ building }) => {
       <div className="bg-gray-100 p-4 rounded shadow">
         <h2 className="text-lg font-bold mb-3">Building Input</h2>
 
-        <div className="grid gap-5 grid-cols-[minmax(0,1fr)_320px] md:grid-cols-[minmax(0,1fr)_360px] items-start">
-          <div className="space-y-4">
+        <div className="grid gap-3 grid-cols-[minmax(0,1fr)_minmax(0,0.88fr)] sm:gap-5 sm:grid-cols-[minmax(0,1fr)_320px] md:grid-cols-[minmax(0,1fr)_360px] items-start">
+          <div className="space-y-3 sm:space-y-4 min-w-0">
             <div className="grid gap-3 md:grid-cols-3">
               <div className="bg-white rounded border p-3">
                 <p className="text-xs uppercase tracking-wide text-gray-500">
@@ -702,13 +702,15 @@ const BuildingDashboardPanel = ({ building }) => {
             </details>
           </div>
 
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <h3 className="font-semibold">Model Preview</h3>
+          <div className="space-y-1.5 sm:space-y-2 min-w-0 overflow-hidden">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="font-semibold text-xs min-[390px]:text-sm sm:text-base">
+                Model Preview
+              </h3>
 
               {matterportShareUrl ? (
                 <a
-                  className="text-blue-700 text-sm underline"
+                  className="text-blue-700 text-[10px] min-[390px]:text-xs sm:text-sm underline text-right leading-tight"
                   href={matterportShareUrl}
                   target="_blank"
                   rel="noreferrer"
@@ -722,11 +724,11 @@ const BuildingDashboardPanel = ({ building }) => {
               <iframe
                 title="Matterport model"
                 src={matterportEmbedUrl}
-                className="w-full h-[280px] border rounded bg-white"
+                className="w-full h-[150px] min-[390px]:h-[180px] sm:h-[280px] border rounded bg-white"
                 allow="fullscreen; xr-spatial-tracking; vr"
               />
             ) : (
-              <div className="w-full h-[280px] border rounded bg-white flex items-center justify-center text-gray-500 text-sm p-6 text-center">
+              <div className="w-full h-[150px] min-[390px]:h-[180px] sm:h-[280px] border rounded bg-white flex items-center justify-center text-gray-500 text-[10px] min-[390px]:text-xs sm:text-sm p-2 sm:p-6 text-center">
                 Paste a Matterport model URL or ID to load the 3D scan here.
               </div>
             )}
