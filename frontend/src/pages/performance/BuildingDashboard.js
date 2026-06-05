@@ -856,8 +856,10 @@ const BuildingDashboardPanel = ({ building }) => {
 };
 
 const BuildingDashboard = () => {
-  const [activeIndex, setActiveIndex] = useState(0);
+  const homeIndex = BUILDINGS.findIndex((building) => building.id === "home");
+  const [activeIndex, setActiveIndex] = useState(homeIndex >= 0 ? homeIndex : 0);
   const touchStartX = useRef(null);
+  const [dragOffset, setDragOffset] = useState(0);
 
   const activeBuilding = BUILDINGS[activeIndex];
 
@@ -868,6 +870,17 @@ const BuildingDashboard = () => {
 
   const handleTouchStart = (event) => {
     touchStartX.current = event.touches[0].clientX;
+    setDragOffset(0);
+  };
+
+  const handleTouchMove = (event) => {
+    if (touchStartX.current === null) {
+      return;
+    }
+
+    const touchX = event.touches[0].clientX;
+    const deltaX = touchX - touchStartX.current;
+    setDragOffset(Math.max(-140, Math.min(140, deltaX)));
   };
 
   const handleTouchEnd = (event) => {
@@ -878,6 +891,7 @@ const BuildingDashboard = () => {
     const touchEndX = event.changedTouches[0].clientX;
     const deltaX = touchEndX - touchStartX.current;
     touchStartX.current = null;
+    setDragOffset(0);
 
     if (Math.abs(deltaX) < 60) {
       return;
@@ -890,6 +904,7 @@ const BuildingDashboard = () => {
     <div
       className="min-h-screen bg-white"
       onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
       <div className="sticky top-0 z-20 bg-white border-b px-4 py-3">
@@ -917,7 +932,25 @@ const BuildingDashboard = () => {
         </div>
       </div>
 
-      <BuildingDashboardPanel key={activeBuilding.id} building={activeBuilding} />
+      <div className="overflow-hidden">
+        <div
+          className="flex"
+          style={{
+            width: `${BUILDINGS.length * 100}%`,
+            transform: `translateX(calc(${-activeIndex * (100 / BUILDINGS.length)}% + ${dragOffset}px))`,
+            transition: dragOffset ? "none" : "transform 280ms ease-out",
+          }}
+        >
+          {BUILDINGS.map((building) => (
+            <div
+              key={building.id}
+              style={{ width: `${100 / BUILDINGS.length}%` }}
+            >
+              <BuildingDashboardPanel building={building} />
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 };
