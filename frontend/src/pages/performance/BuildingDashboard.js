@@ -358,35 +358,53 @@ const BuildingDashboardPanel = ({ building }) => {
     );
   };
 
-  const fetchLongTermAverage = async () => {
-    try {
-      const todayKey = new Date().toISOString().slice(0, 10);
-      const todayStart = `${todayKey}T00:00:00+00:00`;
+  const fetchEnergyDailyTotals = async ({ beforeToday }) => {
+    const todayKey = new Date().toISOString().slice(0, 10);
+    const todayStart = `${todayKey}T00:00:00+00:00`;
+    const pageSize = 1000;
+    const maxPages = 20;
+    const allRows = [];
 
-      const { data: completedDailyData, error: completedDailyError } =
-        await supabase
-          .from("EnergyReadings")
-          .select("timestamp, created_at, fuel_type, usage_kwh")
-          .eq("building_id", building.id)
-          .eq("reading_type", "daily_total")
-          .lt("timestamp", todayStart)
-          .order("timestamp", { ascending: false })
-          .order("created_at", { ascending: false })
-          .limit(5000);
-
-      if (completedDailyError) throw completedDailyError;
-
-      const { data: todayDailyData, error: todayDailyError } = await supabase
+    for (let page = 0; page < maxPages; page += 1) {
+      let query = supabase
         .from("EnergyReadings")
-        .select("timestamp, created_at, fuel_type, usage_kwh")
+        .select("timestamp, fuel_type, usage_kwh")
         .eq("building_id", building.id)
         .eq("reading_type", "daily_total")
-        .gte("timestamp", todayStart)
         .order("timestamp", { ascending: false })
         .order("created_at", { ascending: false })
-        .limit(5000);
+        .range(page * pageSize, (page + 1) * pageSize - 1);
 
-      if (todayDailyError) throw todayDailyError;
+      query = beforeToday
+        ? query.lt("timestamp", todayStart)
+        : query.gte("timestamp", todayStart);
+
+      const { data, error } = await query;
+
+      if (error) {
+        throw error;
+      }
+
+      if (!data || data.length === 0) {
+        break;
+      }
+
+      allRows.push(...data);
+
+      if (data.length < pageSize) {
+        break;
+      }
+    }
+
+    return allRows;
+  };
+
+  const fetchLongTermAverage = async () => {
+    try {
+      const [completedDailyData, todayDailyData] = await Promise.all([
+        fetchEnergyDailyTotals({ beforeToday: true }),
+        fetchEnergyDailyTotals({ beforeToday: false }),
+      ]);
 
       const { data: latestElectricPowerRows, error: powerError } =
         await supabase
