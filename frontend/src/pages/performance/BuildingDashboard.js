@@ -360,16 +360,33 @@ const BuildingDashboardPanel = ({ building }) => {
 
   const fetchLongTermAverage = async () => {
     try {
-      const { data: dailyData, error: dailyError } = await supabase
+      const todayKey = new Date().toISOString().slice(0, 10);
+      const todayStart = `${todayKey}T00:00:00+00:00`;
+
+      const { data: completedDailyData, error: completedDailyError } =
+        await supabase
+          .from("EnergyReadings")
+          .select("timestamp, created_at, fuel_type, usage_kwh")
+          .eq("building_id", building.id)
+          .eq("reading_type", "daily_total")
+          .lt("timestamp", todayStart)
+          .order("timestamp", { ascending: false })
+          .order("created_at", { ascending: false })
+          .limit(5000);
+
+      if (completedDailyError) throw completedDailyError;
+
+      const { data: todayDailyData, error: todayDailyError } = await supabase
         .from("EnergyReadings")
         .select("timestamp, created_at, fuel_type, usage_kwh")
         .eq("building_id", building.id)
         .eq("reading_type", "daily_total")
+        .gte("timestamp", todayStart)
         .order("timestamp", { ascending: false })
         .order("created_at", { ascending: false })
-        .limit(30000);
+        .limit(5000);
 
-      if (dailyError) throw dailyError;
+      if (todayDailyError) throw todayDailyError;
 
       const { data: latestElectricPowerRows, error: powerError } =
         await supabase
@@ -384,12 +401,13 @@ const BuildingDashboardPanel = ({ building }) => {
 
       if (powerError) throw powerError;
 
-      const rows = dailyData || [];
+      const completedRows = completedDailyData || [];
+      const todayRows = todayDailyData || [];
+      const rows = [...completedRows, ...todayRows];
       const latestElectricPower = latestElectricPowerRows?.[0];
 
       if (rows.length > 0 || latestElectricPower) {
-        const todayKey = new Date().toISOString().slice(0, 10);
-        const dailyTotalsByFuel = rows.reduce((totals, row) => {
+        const completedDailyTotalsByFuel = completedRows.reduce((totals, row) => {
           const usageKwh = Number(row.usage_kwh);
           if (!Number.isFinite(usageKwh)) {
             return totals;
@@ -401,15 +419,19 @@ const BuildingDashboardPanel = ({ building }) => {
           return totals;
         }, {});
 
-        const dailyValues = (fuelType, { includeToday = false } = {}) =>
-          Object.entries(dailyTotalsByFuel)
-            .filter(([key]) => {
-              const [keyFuelType, day] = key.split(":");
-              return (
-                keyFuelType === fuelType &&
-                (includeToday || day !== todayKey)
-              );
-            })
+        const todayDailyTotalsByFuel = todayRows.reduce((totals, row) => {
+          const usageKwh = Number(row.usage_kwh);
+          if (!Number.isFinite(usageKwh)) {
+            return totals;
+          }
+
+          totals[row.fuel_type] = Math.max(totals[row.fuel_type] || 0, usageKwh);
+          return totals;
+        }, {});
+
+        const dailyValues = (fuelType) =>
+          Object.entries(completedDailyTotalsByFuel)
+            .filter(([key]) => key.startsWith(`${fuelType}:`))
             .map(([, value]) => value);
 
         const averageDailyUsage = (fuelType) => {
@@ -423,12 +445,7 @@ const BuildingDashboardPanel = ({ building }) => {
         };
 
         const latestDailyTotal = (fuelType) => {
-          const values = Object.entries(dailyTotalsByFuel)
-            .filter(([key]) => key.startsWith(`${fuelType}:`))
-            .sort(([leftKey], [rightKey]) => rightKey.localeCompare(leftKey))
-            .map(([, value]) => value);
-
-          return values[0] || 0;
+          return todayDailyTotalsByFuel[fuelType] || 0;
         };
 
         const electricityDailyAverage = averageDailyUsage("electricity");
