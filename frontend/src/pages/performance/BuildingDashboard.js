@@ -29,6 +29,19 @@ const BUILDINGS = [
     nationalAverageEui: 200,
     legacyUnscopedData: true,
   },
+  {
+    id: "new",
+    name: "New",
+    subtitle: "New building setup",
+    setupOnly: true,
+    defaultMatterportUrl: "",
+    latitude: "",
+    longitude: "",
+    estimatedInternalArea: "",
+    targetEui: 65,
+    nationalAverageEui: 200,
+    legacyUnscopedData: false,
+  },
 ];
 
 const extractMatterportModelId = (value) => {
@@ -1359,6 +1372,237 @@ const BuildingDashboardPanel = ({ building }) => {
   );
 };
 
+const NewBuildingSetupPanel = () => {
+  const [setupMode, setSetupMode] = useState("api");
+  const [apiDetails, setApiDetails] = useState("");
+  const [modelInput, setModelInput] = useState("");
+  const [manualData, setManualData] = useState({
+    address: "",
+    latitude: "",
+    longitude: "",
+    internalArea: "",
+  });
+
+  const modelId = useMemo(() => extractMatterportModelId(modelInput), [modelInput]);
+  const modelUrl = useMemo(() => normalizeMatterportUrl(modelInput), [modelInput]);
+  const embedUrl = useMemo(() => buildMatterportEmbedUrl(modelInput), [modelInput]);
+  const hasManualBuildingInput =
+    manualData.address ||
+    manualData.latitude ||
+    manualData.longitude ||
+    manualData.internalArea;
+
+  const handleManualChange = (field, value) => {
+    setManualData((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  };
+
+  return (
+    <div className="min-h-screen bg-white p-4 flex flex-col space-y-6">
+      <div className="bg-gray-100 p-4 rounded shadow">
+        <h2 className="text-lg font-bold mb-3">New Building</h2>
+
+        <div className="mx-auto max-w-3xl bg-white rounded border p-4 space-y-3">
+          <h3 className="text-base font-semibold text-center">Matterport Data</h3>
+
+          <textarea
+            className="border p-3 w-full min-h-[110px] text-sm"
+            value={apiDetails}
+            onChange={(event) => setApiDetails(event.target.value)}
+            placeholder="Paste Matterport SDK / API details when available"
+          />
+
+          <div className="flex flex-wrap gap-2 justify-center">
+            <button
+              type="button"
+              className={`px-3 py-2 rounded border text-sm font-semibold ${
+                setupMode === "api" ? "bg-blue-600 text-white" : "bg-white"
+              }`}
+              onClick={() => setSetupMode("api")}
+            >
+              Use SDK / API details
+            </button>
+            <button
+              type="button"
+              className={`px-3 py-2 rounded border text-sm font-semibold ${
+                setupMode === "manual" ? "bg-blue-600 text-white" : "bg-white"
+              }`}
+              onClick={() => setSetupMode("manual")}
+            >
+              No SDK / API details
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {setupMode === "api" && apiDetails ? (
+        <div className="bg-gray-100 p-4 rounded shadow">
+          <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_360px]">
+            <div className="bg-white rounded border p-3">
+              <h3 className="font-semibold mb-2">Building Input</h3>
+              <p className="text-sm text-gray-600">
+                SDK/API parsing is ready for integration. Once connected, this
+                section will be populated from the Matterport account/model
+                response.
+              </p>
+            </div>
+
+            <div className="bg-white rounded border p-3">
+              <h3 className="font-semibold mb-2">Model Preview</h3>
+              <div className="h-[220px] border rounded flex items-center justify-center text-sm text-gray-500 text-center p-4">
+                Waiting for API-backed model URL.
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {setupMode === "manual" ? (
+        <div className="bg-gray-100 p-4 rounded shadow">
+          <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_360px] items-start">
+            <div className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="bg-white rounded border p-3">
+                  <p className="text-xs uppercase tracking-wide text-gray-500">
+                    Address
+                  </p>
+                  <input
+                    type="text"
+                    className="border p-2 w-full text-sm mt-2"
+                    value={manualData.address}
+                    onChange={(event) =>
+                      handleManualChange("address", event.target.value)
+                    }
+                    placeholder="Building address"
+                  />
+                </div>
+
+                <div className="bg-white rounded border p-3">
+                  <p className="text-xs uppercase tracking-wide text-gray-500">
+                    Coordinates
+                  </p>
+                  <div className="grid grid-cols-2 gap-2 mt-2">
+                    <input
+                      type="number"
+                      className="border p-2 w-full text-sm"
+                      value={manualData.latitude}
+                      onChange={(event) =>
+                        handleManualChange("latitude", event.target.value)
+                      }
+                      placeholder="Lat"
+                    />
+                    <input
+                      type="number"
+                      className="border p-2 w-full text-sm"
+                      value={manualData.longitude}
+                      onChange={(event) =>
+                        handleManualChange("longitude", event.target.value)
+                      }
+                      placeholder="Long"
+                    />
+                  </div>
+                </div>
+
+                <div className="bg-white rounded border p-3">
+                  <p className="text-xs uppercase tracking-wide text-gray-500">
+                    Internal Area
+                  </p>
+                  <input
+                    type="number"
+                    className="border p-2 w-full text-sm mt-2"
+                    value={manualData.internalArea}
+                    onChange={(event) =>
+                      handleManualChange("internalArea", event.target.value)
+                    }
+                    placeholder="m2"
+                  />
+                </div>
+              </div>
+
+              {hasManualBuildingInput ? (
+                <div className="bg-white rounded border p-3 text-sm">
+                  <h3 className="font-semibold mb-2">Current Building Input</h3>
+                  <p>
+                    <strong>Address:</strong> {manualData.address || "Pending"}
+                  </p>
+                  <p>
+                    <strong>Coordinates:</strong>{" "}
+                    {manualData.latitude || "--"}, {manualData.longitude || "--"}
+                  </p>
+                  <p>
+                    <strong>Internal Area:</strong>{" "}
+                    {manualData.internalArea
+                      ? `${manualData.internalArea} m2`
+                      : "Pending"}
+                  </p>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="space-y-2 bg-white rounded border p-3">
+              <h3 className="font-semibold">Matterport Data</h3>
+              <input
+                type="text"
+                className="border p-2 w-full text-sm"
+                value={modelInput}
+                onChange={(event) => setModelInput(event.target.value)}
+                placeholder="Model URL"
+              />
+              <input
+                type="text"
+                className="border p-2 w-full text-sm"
+                value={modelId || modelInput}
+                onChange={(event) => setModelInput(event.target.value)}
+                placeholder="Model number"
+              />
+              <div className="text-xs bg-gray-50 border rounded p-2 break-all">
+                <strong>Model URL:</strong> {modelUrl || "Pending"}
+              </div>
+
+              {embedUrl ? (
+                <iframe
+                  title="New Matterport model"
+                  src={embedUrl}
+                  className="w-full h-[220px] border rounded bg-white"
+                  allow="fullscreen; xr-spatial-tracking; vr"
+                />
+              ) : (
+                <div className="w-full h-[220px] border rounded bg-white flex items-center justify-center text-gray-500 text-sm p-4 text-center">
+                  Enter a model URL or model number to preview it here.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="bg-gray-100 p-4 rounded shadow">
+        <h2 className="text-lg font-bold mb-3">Performance</h2>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="bg-white rounded border p-4">
+            <h3 className="font-semibold mb-2">Energy Data</h3>
+            <p className="text-sm text-gray-600">
+              Connect smart-meter/API data or upload historical energy CSVs to
+              calculate daily averages, annualised EUI, HDD intensity and future
+              regulated/unregulated splits.
+            </p>
+          </div>
+          <div className="bg-white rounded border p-4">
+            <h3 className="font-semibold mb-2">Health Data</h3>
+            <p className="text-sm text-gray-600">
+              Connect IAQ/comfort data for health scoring, seasonal resilience
+              and HTC calculations once indoor and outdoor temperatures are
+              available.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const BuildingDashboard = () => {
   const homeIndex = BUILDINGS.findIndex((building) => building.id === "home");
   const [activeIndex, setActiveIndex] = useState(homeIndex >= 0 ? homeIndex : 0);
@@ -1450,7 +1694,11 @@ const BuildingDashboard = () => {
               key={building.id}
               style={{ width: `${100 / BUILDINGS.length}%` }}
             >
-              <BuildingDashboardPanel building={building} />
+              {building.setupOnly ? (
+                <NewBuildingSetupPanel />
+              ) : (
+                <BuildingDashboardPanel building={building} />
+              )}
             </div>
           ))}
         </div>
