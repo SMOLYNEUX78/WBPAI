@@ -86,6 +86,201 @@ const getEstimatedInternalArea = (modelId, building) => {
   return building.estimatedInternalArea;
 };
 
+const normaliseHeader = (value) =>
+  value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+
+const parseCsvLine = (line) => {
+  const cells = [];
+  let current = "";
+  let quoted = false;
+
+  for (let index = 0; index < line.length; index += 1) {
+    const char = line[index];
+    const nextChar = line[index + 1];
+
+    if (char === '"' && quoted && nextChar === '"') {
+      current += '"';
+      index += 1;
+    } else if (char === '"') {
+      quoted = !quoted;
+    } else if (char === "," && !quoted) {
+      cells.push(current.trim());
+      current = "";
+    } else {
+      current += char;
+    }
+  }
+
+  cells.push(current.trim());
+  return cells;
+};
+
+const parseCsv = (text) => {
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (lines.length < 2) {
+    return [];
+  }
+
+  const headers = parseCsvLine(lines[0]).map(normaliseHeader);
+
+  return lines.slice(1).map((line) => {
+    const cells = parseCsvLine(line);
+    return headers.reduce((row, header, index) => {
+      row[header] = cells[index] ?? "";
+      return row;
+    }, {});
+  });
+};
+
+const firstValue = (row, keys) => {
+  for (const key of keys) {
+    if (row[key] !== undefined && row[key] !== "") {
+      return row[key];
+    }
+  }
+
+  return "";
+};
+
+const numberValue = (row, keys) => {
+  const value = Number(String(firstValue(row, keys)).replace(/[^0-9.-]/g, ""));
+  return Number.isFinite(value) ? value : null;
+};
+
+const dateKeyFromRow = (row) => {
+  const rawDate = firstValue(row, [
+    "date",
+    "day",
+    "timestamp",
+    "time",
+    "start_date",
+    "period_start",
+    "billing_period_start",
+  ]);
+  const parsedDate = new Date(rawDate);
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return null;
+  }
+
+  return parsedDate.toISOString().slice(0, 10);
+};
+
+const analyseHistoricalRows = (rows, area) => {
+  const dailyTotals = {};
+  let hddTotal = 0;
+  let hddEnergyTotal = 0;
+  let htcTotal = 0;
+  let htcSamples = 0;
+
+  rows.forEach((row) => {
+    const day = dateKeyFromRow(row);
+    if (!day) {
+      return;
+    }
+
+    const fuelType = normaliseHeader(
+      firstValue(row, ["fuel_type", "fuel", "meter_type", "utility"])
+    );
+    const electricityKwh =
+      numberValue(row, ["electricity_kwh", "electricity", "import_kwh"]) ??
+      (fuelType.includes("electric")
+        ? numberValue(row, ["usage_kwh", "kwh", "energy_kwh", "consumption_kwh"])
+        : null);
+    const gasKwh =
+      numberValue(row, ["gas_kwh", "gas"]) ??
+      (fuelType.includes("gas")
+        ? numberValue(row, ["usage_kwh", "kwh", "energy_kwh", "consumption_kwh"])
+        : null);
+    const hdd = numberValue(row, [
+      "hdd",
+      "heating_degree_days",
+      "degree_days",
+      "hdd_15_5",
+    ]);
+    const indoorTemp = numberValue(row, [
+      "internal_temp",
+      "temperature_inside",
+      "inside_temp",
+      "indoor_temp",
+    ]);
+    const outdoorTemp = numberValue(row, [
+      "external_temp",
+      "temperature_outside",
+      "outside_temp",
+      "outdoor_temp",
+    ]);
+
+    if (!dailyTotals[day]) {
+      dailyTotals[day] = { electricity: 0, gas: 0 };
+    }
+
+    if (Number.isFinite(electricityKwh)) {
+      dailyTotals[day].electricity += electricityKwh;
+    }
+
+    if (Number.isFinite(gasKwh)) {
+      dailyTotals[day].gas += gasKwh;
+    }
+
+    const totalKwh =
+      (Number.isFinite(electricityKwh) ? electricityKwh : 0) +
+      (Number.isFinite(gasKwh) ? gasKwh : 0);
+
+    if (Number.isFinite(hdd) && hdd > 0 && totalKwh > 0) {
+      hddTotal += hdd;
+      hddEnergyTotal += totalKwh;
+    }
+
+    if (
+      Number.isFinite(indoorTemp) &&
+      Number.isFinite(outdoorTemp) &&
+      indoorTemp > outdoorTemp &&
+      totalKwh > 0
+    ) {
+      const averagePowerWatts = (totalKwh * 1000) / 24;
+      htcTotal += averagePowerWatts / (indoorTemp - outdoorTemp);
+      htcSamples += 1;
+    }
+  });
+
+  const days = Object.values(dailyTotals);
+  const electricityDailyAverage = days.length
+    ? days.reduce((sum, day) => sum + day.electricity, 0) / days.length
+    : null;
+  const gasDailyAverage = days.length
+    ? days.reduce((sum, day) => sum + day.gas, 0) / days.length
+    : null;
+  const totalDailyAverage =
+    Number.isFinite(electricityDailyAverage) || Number.isFinite(gasDailyAverage)
+      ? (electricityDailyAverage || 0) + (gasDailyAverage || 0)
+      : null;
+  const annualisedEui =
+    Number.isFinite(totalDailyAverage) && Number.isFinite(area) && area > 0
+      ? (totalDailyAverage * 365) / area
+      : null;
+
+  return {
+    rowCount: rows.length,
+    dayCount: days.length,
+    electricityDailyAverage,
+    gasDailyAverage,
+    totalDailyAverage,
+    annualisedEui,
+    kwhPerHdd: hddTotal > 0 ? hddEnergyTotal / hddTotal : null,
+    htcEstimate: htcSamples > 0 ? htcTotal / htcSamples : null,
+    htcSamples,
+  };
+};
+
 const BuildingDashboardPanel = ({ building }) => {
   const [matterportInput, setMatterportInput] = useState(() => {
     return (
@@ -129,6 +324,11 @@ const BuildingDashboardPanel = ({ building }) => {
     iaq: null,
     comfort: null,
     humidity: null,
+  });
+  const [historicalImport, setHistoricalImport] = useState({
+    fileName: "",
+    summary: null,
+    error: "",
   });
 
   const matterportModelId = useMemo(
@@ -767,6 +967,33 @@ const BuildingDashboardPanel = ({ building }) => {
     localStorage.setItem(`${building.id}:matterportModelInput`, nextValue);
   };
 
+  const handleHistoricalImport = async (event) => {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    try {
+      const text = await file.text();
+      const rows = parseCsv(text);
+      const area = Number(matterportMetadata.internalArea);
+      const summary = analyseHistoricalRows(rows, area);
+
+      setHistoricalImport({
+        fileName: file.name,
+        summary,
+        error: "",
+      });
+    } catch (error) {
+      setHistoricalImport({
+        fileName: file.name,
+        summary: null,
+        error: error.message,
+      });
+    }
+  };
+
   return (
     <div className="min-h-screen bg-white p-4 flex flex-col space-y-6">
       <div className="bg-gray-100 p-4 rounded shadow">
@@ -889,6 +1116,22 @@ const BuildingDashboardPanel = ({ building }) => {
                 <strong>Energy:</strong> {formatScore(performanceBreakdown.energy)}
               </p>
             </div>
+
+            <div className="mt-3 sm:mt-4 border-t pt-3 space-y-2 text-[10px] min-[390px]:text-xs sm:text-sm leading-tight">
+              <h3 className="font-semibold">Historical Evidence</h3>
+              <input
+                type="file"
+                accept=".csv,text/csv"
+                onChange={handleHistoricalImport}
+                className="block w-full text-[10px] min-[390px]:text-xs"
+              />
+              <p className="text-gray-600">
+                CSV from supplier bills, smart-meter exports or DegreeDays.net.
+              </p>
+              {historicalImport.error ? (
+                <p className="text-red-700">{historicalImport.error}</p>
+              ) : null}
+            </div>
           </div>
 
           <div className="bg-white rounded border p-2.5 sm:p-4 min-w-0 overflow-hidden">
@@ -972,6 +1215,38 @@ const BuildingDashboardPanel = ({ building }) => {
                   <strong>PM2.5:</strong> {formatMeasurement(sensorData.pm25)} ug/m3
                 </p>
               </div>
+
+              {historicalImport.summary ? (
+                <div className="space-y-0.5 break-words">
+                  <h4 className="font-semibold">Imported History</h4>
+                  <p>
+                    <strong>File:</strong> {historicalImport.fileName}
+                  </p>
+                  <p>
+                    <strong>Rows / Days:</strong>{" "}
+                    {historicalImport.summary.rowCount} /{" "}
+                    {historicalImport.summary.dayCount}
+                  </p>
+                  <p>
+                    <strong>Imported EUI:</strong>{" "}
+                    {formatNumber(historicalImport.summary.annualisedEui)}{" "}
+                    kWh/m2/yr
+                  </p>
+                  <p>
+                    <strong>HDD Intensity:</strong>{" "}
+                    {formatNumber(historicalImport.summary.kwhPerHdd, 3)}{" "}
+                    kWh/HDD
+                  </p>
+                  <p>
+                    <strong>HTC Estimate:</strong>{" "}
+                    {formatNumber(historicalImport.summary.htcEstimate, 1)} W/K
+                  </p>
+                  <p>
+                    <strong>NILMTK:</strong> ready for labelled/high-resolution
+                    disaggregation inputs
+                  </p>
+                </div>
+              ) : null}
             </div>
           </div>
         </div>
