@@ -101,34 +101,34 @@ const BuildingDashboardPanel = ({ building }) => {
   );
 
   const [sensorData, setSensorData] = useState({
-    internalTemp: 0,
-    externalTemp: 0,
-    humidity: 0,
-    co2: 0,
-    vocs: 0,
-    pm25: 0,
+    internalTemp: null,
+    externalTemp: null,
+    humidity: null,
+    co2: null,
+    vocs: null,
+    pm25: null,
   });
 
-  const [performanceValue, setPerformanceValue] = useState(0);
-  const [historicalPerformance, setHistoricalPerformance] = useState(0);
+  const [performanceValue, setPerformanceValue] = useState(null);
+  const [historicalPerformance, setHistoricalPerformance] = useState(null);
   const [carbonCredits] = useState(0);
   const [energySummary, setEnergySummary] = useState({
-    electricityDailyAverage: 0,
+    electricityDailyAverage: null,
     electricityTodayKwh: 0,
-    gasDailyAverage: 0,
+    gasDailyAverage: null,
     gasTodayKwh: 0,
-    totalDailyAverage: 0,
+    totalDailyAverage: null,
     electricityPowerKw: 0,
     hasGasData: false,
   });
 
   const [performanceBreakdown, setPerformanceBreakdown] = useState({
-    health: 0,
-    energy: 0,
-    resilience: 0,
-    iaq: 0,
-    comfort: 0,
-    humidity: 0,
+    health: null,
+    energy: null,
+    resilience: null,
+    iaq: null,
+    comfort: null,
+    humidity: null,
   });
 
   const matterportModelId = useMemo(
@@ -182,6 +182,12 @@ const BuildingDashboardPanel = ({ building }) => {
   const formatNumber = (value, digits = 4) =>
     Number.isFinite(value) ? value.toFixed(digits) : "No Data";
 
+  const formatScore = (value) =>
+    Number.isFinite(value) ? `${value.toFixed(0)}/100` : "Pending";
+
+  const formatMeasurement = (value, digits = 1) =>
+    Number.isFinite(value) ? value.toFixed(digits) : "No Data";
+
   const percentageWithin = (values, predicate) => {
     if (!values.length) {
       return 0;
@@ -196,7 +202,7 @@ const BuildingDashboardPanel = ({ building }) => {
 
     return validScores.length
       ? validScores.reduce((sum, score) => sum + score, 0) / validScores.length
-      : 0;
+      : null;
   };
 
   const calculateIAQScore = ({ co2Values, pm25Values, vocValues }) => {
@@ -208,28 +214,28 @@ const BuildingDashboardPanel = ({ building }) => {
           percentageWithin(co2Values, (value) => value <= 1000),
           percentageWithin(co2Values, (value) => value > 1500)
         )
-      : 0;
+      : null;
 
     const pm25Score = pm25Values.length
       ? metricScore(
           percentageWithin(pm25Values, (value) => value <= 12),
           percentageWithin(pm25Values, (value) => value > 35)
         )
-      : 0;
+      : null;
 
     const vocScore = vocValues.length
       ? metricScore(
           percentageWithin(vocValues, (value) => value <= 200),
           percentageWithin(vocValues, (value) => value > 500)
         )
-      : 0;
+      : null;
 
     return averageScore([co2Score, pm25Score, vocScore]);
   };
 
   const calculateComfortScore = ({ internalTempValues }) => {
     if (!internalTempValues.length) {
-      return 0;
+      return null;
     }
 
     const comfortableRatio = percentageWithin(
@@ -246,7 +252,7 @@ const BuildingDashboardPanel = ({ building }) => {
 
   const calculateHumidityScore = (humidityValues) => {
     if (!humidityValues.length) {
-      return 0;
+      return null;
     }
 
     const stableRatio = percentageWithin(
@@ -307,12 +313,17 @@ const BuildingDashboardPanel = ({ building }) => {
     return Math.round((hotScore + coldScore) / 2);
   };
 
-  const calculateOverallPerformanceScore = ({
-    health,
-    energy,
-    resilience,
-  }) => {
+  const calculateOverallPerformanceScore = ({ health, energy, resilience }) => {
+    if (!Number.isFinite(health) || !Number.isFinite(energy)) {
+      return null;
+    }
+
     const indoorEnvironment = averageScore([health, resilience]);
+
+    if (!Number.isFinite(indoorEnvironment)) {
+      return null;
+    }
+
     return Math.round(Math.min(energy, indoorEnvironment));
   };
 
@@ -324,7 +335,7 @@ const BuildingDashboardPanel = ({ building }) => {
       targetEui <= 0 ||
       nationalAverageEui <= targetEui
     ) {
-      return 0;
+      return null;
     }
 
     if (annualEui <= 0) {
@@ -408,7 +419,7 @@ const BuildingDashboardPanel = ({ building }) => {
             return average(completedDays);
           }
 
-          return average(dailyValues(fuelType, { includeToday: true }));
+          return null;
         };
 
         const latestDailyTotal = (fuelType) => {
@@ -422,7 +433,13 @@ const BuildingDashboardPanel = ({ building }) => {
 
         const electricityDailyAverage = averageDailyUsage("electricity");
         const gasDailyAverage = averageDailyUsage("gas");
-        const totalDailyAverage = electricityDailyAverage + gasDailyAverage;
+        const availableDailyAverages = [
+          electricityDailyAverage,
+          gasDailyAverage,
+        ].filter((value) => Number.isFinite(value));
+        const totalDailyAverage = availableDailyAverages.length
+          ? availableDailyAverages.reduce((sum, value) => sum + value, 0)
+          : null;
         const electricityTodayKwh = latestDailyTotal("electricity");
         const gasTodayKwh = latestDailyTotal("gas");
         const hasGasData = rows.some((row) => row.fuel_type === "gas");
@@ -444,15 +461,15 @@ const BuildingDashboardPanel = ({ building }) => {
 
       if (!building.legacyUnscopedData) {
         setEnergySummary({
-          electricityDailyAverage: 0,
+          electricityDailyAverage: null,
           electricityTodayKwh: 0,
-          gasDailyAverage: 0,
+          gasDailyAverage: null,
           gasTodayKwh: 0,
-          totalDailyAverage: 0,
+          totalDailyAverage: null,
           electricityPowerKw: 0,
           hasGasData: false,
         });
-        setHistoricalPerformance(0);
+        setHistoricalPerformance(null);
         return;
       }
 
@@ -507,7 +524,9 @@ const BuildingDashboardPanel = ({ building }) => {
 
       setSensorData((prev) => ({
         ...prev,
-        externalTemp: Number(data?.temperature_outside) || 0,
+        externalTemp: Number.isFinite(Number(data?.temperature_outside))
+          ? Number(data.temperature_outside)
+          : null,
       }));
     } catch (err) {
       console.error("Error fetching external temp:", err.message);
@@ -532,11 +551,15 @@ const BuildingDashboardPanel = ({ building }) => {
 
       setSensorData((prev) => ({
         ...prev,
-        internalTemp: Number(data.temperature_inside) || 0,
-        humidity: Number(data.humidity) || 0,
-        co2: Number(data.co2) || 0,
-        vocs: Number(data.vocs) || 0,
-        pm25: Number(data.pm25) || 0,
+        internalTemp: Number.isFinite(Number(data.temperature_inside))
+          ? Number(data.temperature_inside)
+          : null,
+        humidity: Number.isFinite(Number(data.humidity))
+          ? Number(data.humidity)
+          : null,
+        co2: Number.isFinite(Number(data.co2)) ? Number(data.co2) : null,
+        vocs: Number.isFinite(Number(data.vocs)) ? Number(data.vocs) : null,
+        pm25: Number.isFinite(Number(data.pm25)) ? Number(data.pm25) : null,
       }));
     } catch (err) {
       console.error("Error fetching IAQ data:", err.message);
@@ -584,12 +607,13 @@ const BuildingDashboardPanel = ({ building }) => {
         matterportMetadata.internalArea !== "--"
           ? Number(matterportMetadata.internalArea)
           : 145;
-      const annualEnergyUse =
-        historicalPerformance > 0 ? historicalPerformance * 365 : 0;
+      const annualEnergyUse = Number.isFinite(historicalPerformance)
+        ? historicalPerformance * 365
+        : null;
       const annualEui =
-        historicalPerformance && estimatedArea
+        Number.isFinite(annualEnergyUse) && estimatedArea
           ? annualEnergyUse / estimatedArea
-          : 0;
+          : null;
 
       const calculatedEnergyScore = calculateEnergyScore(
         annualEui,
@@ -766,12 +790,10 @@ const BuildingDashboardPanel = ({ building }) => {
 
             <div className="mt-2 sm:mt-4 space-y-0.5 sm:space-y-1 text-[10px] min-[390px]:text-xs sm:text-sm leading-tight">
               <p>
-                <strong>Health:</strong> {performanceBreakdown.health.toFixed(0)}
-                /100
+                <strong>Health:</strong> {formatScore(performanceBreakdown.health)}
               </p>
               <p>
-                <strong>Energy:</strong> {performanceBreakdown.energy.toFixed(0)}
-                /100
+                <strong>Energy:</strong> {formatScore(performanceBreakdown.energy)}
               </p>
             </div>
           </div>
@@ -785,7 +807,7 @@ const BuildingDashboardPanel = ({ building }) => {
               <div className="space-y-0.5 break-words">
                 <p>
                   <strong>Annualised EUI:</strong>{" "}
-                  {historicalPerformance > 0 &&
+                  {Number.isFinite(historicalPerformance) &&
                   matterportMetadata.internalArea !== "--"
                     ? (
                         (historicalPerformance * 365) /
@@ -804,7 +826,7 @@ const BuildingDashboardPanel = ({ building }) => {
                   kWh
                 </p>
                 <p>
-                  <strong>Today:</strong>{" "}
+                  <strong>Today so far:</strong>{" "}
                   {formatNumber(energySummary.electricityTodayKwh)}{" "}
                   kWh
                 </p>
@@ -824,7 +846,7 @@ const BuildingDashboardPanel = ({ building }) => {
                     kWh
                   </p>
                   <p>
-                    <strong>Today:</strong>{" "}
+                    <strong>Today so far:</strong>{" "}
                     {formatNumber(energySummary.gasTodayKwh)}{" "}
                     kWh
                   </p>
@@ -834,26 +856,27 @@ const BuildingDashboardPanel = ({ building }) => {
               <div className="space-y-0.5 break-words">
                 <p>
                   <strong>Internal Temp:</strong>{" "}
-                  {(sensorData.internalTemp ?? 0).toFixed(1)} deg C
+                  {formatMeasurement(sensorData.internalTemp)} deg C
                 </p>
                 <p>
                   <strong>External Temp:</strong>{" "}
-                  {(sensorData.externalTemp ?? 0).toFixed(1)} deg C
+                  {formatMeasurement(sensorData.externalTemp)} deg C
                 </p>
               </div>
 
               <div className="space-y-0.5 break-words">
                 <p>
-                  <strong>Humidity:</strong> {(sensorData.humidity ?? 0).toFixed(1)}%
+                  <strong>Humidity:</strong>{" "}
+                  {formatMeasurement(sensorData.humidity)}%
                 </p>
                 <p>
-                  <strong>CO2:</strong> {(sensorData.co2 ?? 0).toFixed(1)} ppm
+                  <strong>CO2:</strong> {formatMeasurement(sensorData.co2)} ppm
                 </p>
                 <p>
-                  <strong>VOCs:</strong> {(sensorData.vocs ?? 0).toFixed(1)} ppb
+                  <strong>VOCs:</strong> {formatMeasurement(sensorData.vocs)} ppb
                 </p>
                 <p>
-                  <strong>PM2.5:</strong> {(sensorData.pm25 ?? 0).toFixed(1)} ug/m3
+                  <strong>PM2.5:</strong> {formatMeasurement(sensorData.pm25)} ug/m3
                 </p>
               </div>
             </div>

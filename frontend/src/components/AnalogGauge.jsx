@@ -25,9 +25,10 @@ const AnalogGauge = ({ value }) => {
   const cx = 100;
   const cy = 100;
   const radius = 80;
+  const hasValue = Number.isFinite(value);
   
   // Map value (0 to 100) to an angle between -90 and +90.
-  const angle = -90 + (value / 100) * 180;
+  const angle = hasValue ? -90 + (value / 100) * 180 : 0;
   
   // Define colored arcs for three zones:
   // Red zone: 0–33% (–90° to about -30.6°)
@@ -48,17 +49,30 @@ const AnalogGauge = ({ value }) => {
       <path d={amberArc} stroke="#facc15" strokeWidth="10" fill="none" />
       <path d={greenArc} stroke="#4ade80" strokeWidth="10" fill="none" />
       
-      {/* Draw the needle */}
-      <line
-        x1={cx}
-        y1={cy}
-        x2={needleEnd.x}
-        y2={needleEnd.y}
-        stroke="#1f2937"
-        strokeWidth="4"
-      />
-      {/* Center dot */}
-      <circle cx={cx} cy={cy} r="5" fill="#1f2937" />
+      {hasValue ? (
+        <>
+          <line
+            x1={cx}
+            y1={cy}
+            x2={needleEnd.x}
+            y2={needleEnd.y}
+            stroke="#1f2937"
+            strokeWidth="4"
+          />
+          <circle cx={cx} cy={cy} r="5" fill="#1f2937" />
+        </>
+      ) : (
+        <text
+          x={cx}
+          y={cy - 8}
+          textAnchor="middle"
+          fill="#6b7280"
+          fontSize="14"
+          fontWeight="600"
+        >
+          Pending
+        </text>
+      )}
     </svg>
   );
 };
