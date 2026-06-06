@@ -367,7 +367,7 @@ const BuildingDashboardPanel = ({ building }) => {
         .eq("reading_type", "daily_total")
         .order("timestamp", { ascending: false })
         .order("created_at", { ascending: false })
-        .limit(5000);
+        .limit(30000);
 
       if (dailyError) throw dailyError;
 
