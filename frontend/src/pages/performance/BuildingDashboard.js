@@ -205,28 +205,63 @@ const BuildingDashboardPanel = ({ building }) => {
       : null;
   };
 
-  const calculateIAQScore = ({ co2Values, pm25Values, vocValues }) => {
-    const metricScore = (healthyRatio, poorRatio) =>
-      Math.max(0, Math.min(100, healthyRatio * 100 - poorRatio * 35));
+  const clampScore = (value) => Math.max(0, Math.min(100, value));
 
+  const linearScore = (value, bands) => {
+    for (const band of bands) {
+      if (value <= band.max) {
+        const span = band.max - band.min;
+
+        if (span <= 0) {
+          return band.endScore;
+        }
+
+        const progress = (value - band.min) / span;
+        return clampScore(
+          band.startScore + (band.endScore - band.startScore) * progress
+        );
+      }
+    }
+
+    return bands[bands.length - 1].endScore;
+  };
+
+  const calculateIAQScore = ({ co2Values, pm25Values, vocValues }) => {
     const co2Score = co2Values.length
-      ? metricScore(
-          percentageWithin(co2Values, (value) => value <= 1000),
-          percentageWithin(co2Values, (value) => value > 1500)
+      ? average(
+          co2Values.map((value) =>
+            linearScore(value, [
+              { min: 0, max: 800, startScore: 100, endScore: 100 },
+              { min: 800, max: 1000, startScore: 100, endScore: 90 },
+              { min: 1000, max: 1500, startScore: 90, endScore: 45 },
+              { min: 1500, max: 2500, startScore: 45, endScore: 0 },
+            ])
+          )
         )
       : null;
 
     const pm25Score = pm25Values.length
-      ? metricScore(
-          percentageWithin(pm25Values, (value) => value <= 12),
-          percentageWithin(pm25Values, (value) => value > 35)
+      ? average(
+          pm25Values.map((value) =>
+            linearScore(value, [
+              { min: 0, max: 5, startScore: 100, endScore: 100 },
+              { min: 5, max: 12, startScore: 100, endScore: 85 },
+              { min: 12, max: 35, startScore: 85, endScore: 30 },
+              { min: 35, max: 75, startScore: 30, endScore: 0 },
+            ])
+          )
         )
       : null;
 
     const vocScore = vocValues.length
-      ? metricScore(
-          percentageWithin(vocValues, (value) => value <= 200),
-          percentageWithin(vocValues, (value) => value > 500)
+      ? average(
+          vocValues.map((value) =>
+            linearScore(value, [
+              { min: 0, max: 200, startScore: 100, endScore: 100 },
+              { min: 200, max: 500, startScore: 100, endScore: 55 },
+              { min: 500, max: 1000, startScore: 55, endScore: 0 },
+            ])
+          )
         )
       : null;
 
@@ -238,16 +273,28 @@ const BuildingDashboardPanel = ({ building }) => {
       return null;
     }
 
-    const comfortableRatio = percentageWithin(
-      internalTempValues,
-      (value) => value >= 18 && value <= 25
-    );
-    const stressRatio = percentageWithin(
-      internalTempValues,
-      (value) => value < 16 || value > 28
-    );
+    return average(
+      internalTempValues.map((value) => {
+        if (value >= 20 && value <= 24) {
+          return 100;
+        }
 
-    return Math.max(0, Math.min(100, comfortableRatio * 100 - stressRatio * 30));
+        if (value < 20) {
+          return linearScore(value, [
+            { min: -10, max: 12, startScore: 0, endScore: 0 },
+            { min: 12, max: 16, startScore: 0, endScore: 45 },
+            { min: 16, max: 18, startScore: 45, endScore: 75 },
+            { min: 18, max: 20, startScore: 75, endScore: 100 },
+          ]);
+        }
+
+        return linearScore(value, [
+          { min: 24, max: 25, startScore: 100, endScore: 85 },
+          { min: 25, max: 28, startScore: 85, endScore: 40 },
+          { min: 28, max: 35, startScore: 40, endScore: 0 },
+        ]);
+      })
+    );
   };
 
   const calculateHumidityScore = (humidityValues) => {
@@ -255,16 +302,27 @@ const BuildingDashboardPanel = ({ building }) => {
       return null;
     }
 
-    const stableRatio = percentageWithin(
-      humidityValues,
-      (value) => value >= 40 && value <= 60
-    );
-    const riskyRatio = percentageWithin(
-      humidityValues,
-      (value) => value < 30 || value > 70
-    );
+    return average(
+      humidityValues.map((value) => {
+        if (value >= 40 && value <= 60) {
+          return 100;
+        }
 
-    return Math.max(0, Math.min(100, stableRatio * 100 - riskyRatio * 35));
+        if (value < 40) {
+          return linearScore(value, [
+            { min: 0, max: 25, startScore: 0, endScore: 0 },
+            { min: 25, max: 30, startScore: 0, endScore: 45 },
+            { min: 30, max: 40, startScore: 45, endScore: 100 },
+          ]);
+        }
+
+        return linearScore(value, [
+          { min: 60, max: 65, startScore: 100, endScore: 75 },
+          { min: 65, max: 70, startScore: 75, endScore: 35 },
+          { min: 70, max: 90, startScore: 35, endScore: 0 },
+        ]);
+      })
+    );
   };
 
   const calculateSeasonalResilienceScore = (rows) => {
