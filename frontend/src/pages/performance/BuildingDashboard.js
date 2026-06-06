@@ -1407,12 +1407,14 @@ const NewBuildingSetupPanel = () => {
         <div className="mx-auto max-w-3xl bg-white rounded border p-4 space-y-3">
           <h3 className="text-base font-semibold text-center">Matterport Data</h3>
 
-          <textarea
-            className="border p-3 w-full min-h-[110px] text-sm"
-            value={apiDetails}
-            onChange={(event) => setApiDetails(event.target.value)}
-            placeholder="Paste Matterport SDK / API details when available"
-          />
+          {setupMode === "api" ? (
+            <textarea
+              className="border p-3 w-full min-h-[110px] text-sm"
+              value={apiDetails}
+              onChange={(event) => setApiDetails(event.target.value)}
+              placeholder="Paste Matterport SDK / API details when available"
+            />
+          ) : null}
 
           <div className="flex flex-wrap gap-2 justify-center">
             <button
@@ -1434,6 +1436,28 @@ const NewBuildingSetupPanel = () => {
               No SDK / API details
             </button>
           </div>
+
+          {setupMode === "manual" ? (
+            <div className="grid gap-2">
+              <input
+                type="text"
+                className="border p-2 w-full text-sm"
+                value={modelInput}
+                onChange={(event) => setModelInput(event.target.value)}
+                placeholder="Model URL"
+              />
+              <input
+                type="text"
+                className="border p-2 w-full text-sm"
+                value={modelId || modelInput}
+                onChange={(event) => setModelInput(event.target.value)}
+                placeholder="Model number"
+              />
+              <div className="text-xs bg-gray-50 border rounded p-2 break-all">
+                <strong>Model URL:</strong> {modelUrl || "Pending"}
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -1542,25 +1566,7 @@ const NewBuildingSetupPanel = () => {
             </div>
 
             <div className="space-y-2 bg-white rounded border p-3">
-              <h3 className="font-semibold">Matterport Data</h3>
-              <input
-                type="text"
-                className="border p-2 w-full text-sm"
-                value={modelInput}
-                onChange={(event) => setModelInput(event.target.value)}
-                placeholder="Model URL"
-              />
-              <input
-                type="text"
-                className="border p-2 w-full text-sm"
-                value={modelId || modelInput}
-                onChange={(event) => setModelInput(event.target.value)}
-                placeholder="Model number"
-              />
-              <div className="text-xs bg-gray-50 border rounded p-2 break-all">
-                <strong>Model URL:</strong> {modelUrl || "Pending"}
-              </div>
-
+              <h3 className="font-semibold">Model Preview</h3>
               {embedUrl ? (
                 <iframe
                   title="New Matterport model"
