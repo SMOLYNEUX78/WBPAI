@@ -288,6 +288,19 @@ const BuildingDashboardPanel = ({ building }) => {
       building.defaultMatterportUrl
     );
   });
+  const [manualMatterportData, setManualMatterportData] = useState(() => {
+    const savedData = localStorage.getItem(`${building.id}:matterportManualData`);
+
+    if (savedData) {
+      try {
+        return JSON.parse(savedData);
+      } catch (error) {
+        return {};
+      }
+    }
+
+    return {};
+  });
   const [matterportMetadata, setMatterportMetadata] = useState(() =>
     createEmptyMatterportMetadata(
       "Connect Matterport SDK / API to load geodata",
@@ -347,7 +360,10 @@ const BuildingDashboardPanel = ({ building }) => {
   useEffect(() => {
     if (!matterportModelId) {
       setMatterportMetadata(
-        createEmptyMatterportMetadata("Paste a Matterport URL or ID", building)
+        {
+          ...createEmptyMatterportMetadata("Paste a Matterport URL or ID", building),
+          ...manualMatterportData,
+        }
       );
       return;
     }
@@ -358,8 +374,9 @@ const BuildingDashboardPanel = ({ building }) => {
         building
       ),
       internalArea: getEstimatedInternalArea(matterportModelId, building),
+      ...manualMatterportData,
     });
-  }, [building, matterportModelId]);
+  }, [building, matterportModelId, manualMatterportData]);
 
   const applyBuildingScope = (query) => {
     if (building.legacyUnscopedData) {
@@ -967,6 +984,21 @@ const BuildingDashboardPanel = ({ building }) => {
     localStorage.setItem(`${building.id}:matterportModelInput`, nextValue);
   };
 
+  const handleManualMatterportDataChange = (field, value) => {
+    const numericFields = ["internalArea", "latitude", "longitude"];
+    const nextData = {
+      ...manualMatterportData,
+      [field]: numericFields.includes(field) && value !== "" ? Number(value) : value,
+      source: "Matterport model with manual fallback data",
+    };
+
+    setManualMatterportData(nextData);
+    localStorage.setItem(
+      `${building.id}:matterportManualData`,
+      JSON.stringify(nextData)
+    );
+  };
+
   const handleHistoricalImport = async (event) => {
     const file = event.target.files?.[0];
 
@@ -1035,11 +1067,31 @@ const BuildingDashboardPanel = ({ building }) => {
               </div>
             </div>
 
-            <details className="bg-white rounded border">
-              <summary className="cursor-pointer px-3 py-3 font-semibold">
-                Matterport SDK / API Options
+          </div>
+
+          <div className="space-y-2 min-w-0 overflow-hidden bg-white rounded border p-2.5 sm:p-3">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="font-semibold text-xs min-[390px]:text-sm sm:text-base">
+                Matterport Data
+              </h3>
+
+              {matterportShareUrl ? (
+                <a
+                  className="text-blue-700 text-[10px] min-[390px]:text-xs sm:text-sm underline text-right leading-tight"
+                  href={matterportShareUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Open in Matterport
+                </a>
+              ) : null}
+            </div>
+
+            <details className="border rounded">
+              <summary className="cursor-pointer px-2 py-2 font-semibold text-[10px] min-[390px]:text-xs sm:text-sm">
+                SDK / API Options
               </summary>
-              <div className="px-3 pb-3 text-sm space-y-3">
+              <div className="px-2 pb-2 space-y-2 text-[10px] min-[390px]:text-xs sm:text-sm">
                 <input
                   type="text"
                   className="border p-2 w-full"
@@ -1059,25 +1111,65 @@ const BuildingDashboardPanel = ({ building }) => {
                 </div>
               </div>
             </details>
-          </div>
 
-          <div className="space-y-1.5 sm:space-y-2 min-w-0 overflow-hidden">
-            <div className="flex items-center justify-between gap-2">
-              <h3 className="font-semibold text-xs min-[390px]:text-sm sm:text-base">
-                Model Preview
-              </h3>
-
-              {matterportShareUrl ? (
-                <a
-                  className="text-blue-700 text-[10px] min-[390px]:text-xs sm:text-sm underline text-right leading-tight"
-                  href={matterportShareUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Open in Matterport
-                </a>
-              ) : null}
-            </div>
+            <details className="border rounded">
+              <summary className="cursor-pointer px-2 py-2 font-semibold text-[10px] min-[390px]:text-xs sm:text-sm">
+                Address / GIA / Coordinates
+              </summary>
+              <div className="px-2 pb-2 grid gap-2 text-[10px] min-[390px]:text-xs sm:text-sm">
+                <input
+                  type="text"
+                  className="border p-2 w-full"
+                  value={manualMatterportData.address || ""}
+                  onChange={(event) =>
+                    handleManualMatterportDataChange("address", event.target.value)
+                  }
+                  placeholder="Address from model or manual fallback"
+                />
+                <input
+                  type="number"
+                  className="border p-2 w-full"
+                  value={manualMatterportData.internalArea || ""}
+                  onChange={(event) =>
+                    handleManualMatterportDataChange(
+                      "internalArea",
+                      event.target.value
+                    )
+                  }
+                  placeholder="Internal area m2"
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="number"
+                    className="border p-2 w-full"
+                    value={manualMatterportData.latitude || ""}
+                    onChange={(event) =>
+                      handleManualMatterportDataChange(
+                        "latitude",
+                        event.target.value
+                      )
+                    }
+                    placeholder="Latitude"
+                  />
+                  <input
+                    type="number"
+                    className="border p-2 w-full"
+                    value={manualMatterportData.longitude || ""}
+                    onChange={(event) =>
+                      handleManualMatterportDataChange(
+                        "longitude",
+                        event.target.value
+                      )
+                    }
+                    placeholder="Longitude"
+                  />
+                </div>
+                <p className="text-gray-600">
+                  Auto-fill needs Matterport API access for the model. These
+                  fields are used as the dashboard fallback.
+                </p>
+              </div>
+            </details>
 
             {matterportEmbedUrl ? (
               <iframe
