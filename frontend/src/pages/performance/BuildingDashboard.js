@@ -3,6 +3,7 @@ import AnalogGauge from "../../components/AnalogGauge";
 import supabase from "../../supabaseClient";
 
 const DEFAULT_MATTERPORT_URL = "https://my.matterport.com/show/?m=zHm8SwWeHiN";
+const HDD_BASE_TEMP_C = 15.5;
 
 const BUILDINGS = [
   {
@@ -355,6 +356,12 @@ const BuildingDashboardPanel = ({ building }) => {
     fileName: "",
     summary: null,
     error: "",
+  });
+  const [heatLossSummary, setHeatLossSummary] = useState({
+    kwhPerHdd: null,
+    htcEstimate: null,
+    hddDays: 0,
+    htcSamples: 0,
   });
 
   const matterportModelId = useMemo(
@@ -832,6 +839,110 @@ const BuildingDashboardPanel = ({ building }) => {
     }
   };
 
+  const fetchHeatLossSummary = async () => {
+    try {
+      const completedRows = await fetchEnergyDailyTotals({ beforeToday: true });
+      const { data: temperatureRows, error: temperatureError } =
+        await applyBuildingScope(
+          supabase
+            .from("Readings")
+            .select("timestamp, temperature_inside, temperature_outside")
+            .order("timestamp", { ascending: true })
+            .limit(5000)
+        );
+
+      if (temperatureError) throw temperatureError;
+
+      const dailyEnergy = completedRows.reduce((totals, row) => {
+        const usageKwh = Number(row.usage_kwh);
+
+        if (!Number.isFinite(usageKwh)) {
+          return totals;
+        }
+
+        const day = new Date(row.timestamp).toISOString().slice(0, 10);
+        const fuelType = row.fuel_type || "unknown";
+        totals[day] = totals[day] || {};
+        totals[day][fuelType] = Math.max(totals[day][fuelType] || 0, usageKwh);
+        return totals;
+      }, {});
+
+      const dailyTemperatures = (temperatureRows || []).reduce((totals, row) => {
+        const day = new Date(row.timestamp).toISOString().slice(0, 10);
+        totals[day] = totals[day] || { inside: [], outside: [] };
+
+        const inside = Number(row.temperature_inside);
+        const outside = Number(row.temperature_outside);
+
+        if (Number.isFinite(inside) && inside !== 0) {
+          totals[day].inside.push(inside);
+        }
+
+        if (Number.isFinite(outside) && outside !== 0) {
+          totals[day].outside.push(outside);
+        }
+
+        return totals;
+      }, {});
+
+      let hddTotal = 0;
+      let hddEnergyTotal = 0;
+      let htcTotal = 0;
+      let hddDays = 0;
+      let htcSamples = 0;
+
+      Object.entries(dailyEnergy).forEach(([day, fuels]) => {
+        const totalKwh = Object.values(fuels).reduce(
+          (sum, value) => sum + value,
+          0
+        );
+        const temperatures = dailyTemperatures[day];
+        const outsideAverage = temperatures?.outside.length
+          ? average(temperatures.outside)
+          : null;
+        const insideAverage = temperatures?.inside.length
+          ? average(temperatures.inside)
+          : null;
+
+        if (Number.isFinite(outsideAverage)) {
+          const hdd = Math.max(0, HDD_BASE_TEMP_C - outsideAverage);
+
+          if (hdd > 0 && totalKwh > 0) {
+            hddTotal += hdd;
+            hddEnergyTotal += totalKwh;
+            hddDays += 1;
+          }
+        }
+
+        if (
+          Number.isFinite(insideAverage) &&
+          Number.isFinite(outsideAverage) &&
+          insideAverage > outsideAverage &&
+          totalKwh > 0
+        ) {
+          const averagePowerWatts = (totalKwh * 1000) / 24;
+          htcTotal += averagePowerWatts / (insideAverage - outsideAverage);
+          htcSamples += 1;
+        }
+      });
+
+      setHeatLossSummary({
+        kwhPerHdd: hddTotal > 0 ? hddEnergyTotal / hddTotal : null,
+        htcEstimate: htcSamples > 0 ? htcTotal / htcSamples : null,
+        hddDays,
+        htcSamples,
+      });
+    } catch (err) {
+      console.error("Error fetching heat loss summary:", err.message);
+      setHeatLossSummary({
+        kwhPerHdd: null,
+        htcEstimate: null,
+        hddDays: 0,
+        htcSamples: 0,
+      });
+    }
+  };
+
   const fetchExternalTemp = async () => {
     try {
       const { data, error } = await applyBuildingScope(
@@ -970,6 +1081,7 @@ const BuildingDashboardPanel = ({ building }) => {
 
   useEffect(() => {
     fetchLongTermAverage();
+    fetchHeatLossSummary();
     fetchExternalTemp();
     fetchIAQData();
     // Building switch refresh only; polling effect below handles continuing updates.
@@ -981,6 +1093,7 @@ const BuildingDashboardPanel = ({ building }) => {
 
     const interval = setInterval(() => {
       fetchLongTermAverage();
+      fetchHeatLossSummary();
       fetchIAQData();
       fetchExternalTemp();
       fetchLongTermBuildingPerformance();
@@ -1243,19 +1356,26 @@ const BuildingDashboardPanel = ({ building }) => {
                 <h4 className="font-semibold">Heat Loss Analysis</h4>
                 <p>
                   <strong>HDD Intensity:</strong>{" "}
-                  {Number.isFinite(historicalImport.summary?.kwhPerHdd)
+                  {Number.isFinite(heatLossSummary.kwhPerHdd)
+                    ? `${formatNumber(heatLossSummary.kwhPerHdd, 3)} kWh/HDD`
+                    : Number.isFinite(historicalImport.summary?.kwhPerHdd)
                     ? `${formatNumber(historicalImport.summary.kwhPerHdd, 3)} kWh/HDD`
-                    : "Pending historical energy + HDD data"}
+                    : "Pending completed energy + HDD data"}
                 </p>
                 <p>
                   <strong>HTC Estimate:</strong>{" "}
-                  {Number.isFinite(historicalImport.summary?.htcEstimate)
+                  {Number.isFinite(heatLossSummary.htcEstimate)
+                    ? `${formatNumber(heatLossSummary.htcEstimate, 1)} W/K`
+                    : Number.isFinite(historicalImport.summary?.htcEstimate)
                     ? `${formatNumber(historicalImport.summary.htcEstimate, 1)} W/K`
                     : "Pending energy + indoor/outdoor temperature overlap"}
                 </p>
                 <p>
-                  <strong>HTC Samples:</strong>{" "}
-                  {historicalImport.summary?.htcSamples || 0}
+                  <strong>HDD / HTC Days:</strong>{" "}
+                  {heatLossSummary.hddDays || 0} /{" "}
+                  {heatLossSummary.htcSamples ||
+                    historicalImport.summary?.htcSamples ||
+                    0}
                 </p>
               </div>
             </div>
