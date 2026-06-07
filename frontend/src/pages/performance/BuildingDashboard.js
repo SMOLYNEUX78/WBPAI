@@ -1336,19 +1336,8 @@ const BuildingDashboardPanel = ({ building }) => {
                   {formatNumber(energySummary.electricityDailyAverage)}{" "}
                   kWh
                 </p>
-                <p>
-                  <strong>Today so far:</strong>{" "}
-                  {formatNumber(energySummary.electricityTodayKwh)}{" "}
-                  kWh
-                </p>
-                <p>
-                  <strong>Live:</strong>{" "}
-                  {formatNumber(energySummary.electricityPowerKw, 3)}{" "}
-                  kW
-                </p>
 
                 {energySummary.hasGasData ? (
-                  <>
                   <p>
                     <strong>Gas</strong>
                     <br />
@@ -1357,12 +1346,6 @@ const BuildingDashboardPanel = ({ building }) => {
                     {formatNumber(energySummary.gasDailyAverage)}{" "}
                     kWh
                   </p>
-                  <p>
-                    <strong>Today so far:</strong>{" "}
-                    {formatNumber(energySummary.gasTodayKwh)}{" "}
-                    kWh
-                  </p>
-                  </>
                 ) : (
                   <p>
                     <strong>Gas</strong>
