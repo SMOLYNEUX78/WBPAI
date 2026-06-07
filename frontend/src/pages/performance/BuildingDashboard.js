@@ -359,9 +359,11 @@ const BuildingDashboardPanel = ({ building }) => {
   });
   const [heatLossSummary, setHeatLossSummary] = useState({
     kwhPerHdd: null,
+    weatherNormalisedEui: null,
     htcEstimate: null,
     hddDays: 0,
     htcSamples: 0,
+    hddSource: "current",
   });
 
   const matterportModelId = useMemo(
@@ -441,6 +443,8 @@ const BuildingDashboardPanel = ({ building }) => {
       ? validScores.reduce((sum, score) => sum + score, 0) / validScores.length
       : null;
   };
+
+  const dayKey = (timestamp) => new Date(timestamp).toISOString().slice(0, 10);
 
   const clampScore = (value) => Math.max(0, Math.min(100, value));
 
@@ -694,6 +698,93 @@ const BuildingDashboardPanel = ({ building }) => {
     return allRows;
   };
 
+  const fetchLegacyMuseumHddSummary = async (area) => {
+    if (building.id !== "museum") {
+      return null;
+    }
+
+    const { data: legacyRows, error: legacyError } = await supabase
+      .from("DailyEnergyTotals")
+      .select("day, total_energy_kwh")
+      .not("total_energy_kwh", "is", null)
+      .limit(500);
+
+    if (legacyError) throw legacyError;
+
+    const validLegacyRows = (legacyRows || []).filter((row) => {
+      const energy = Number(row.total_energy_kwh);
+      return row.day && Number.isFinite(energy) && energy > 0;
+    });
+
+    const hddResults = [];
+    const batchSize = 6;
+
+    for (let index = 0; index < validLegacyRows.length; index += batchSize) {
+      const batch = validLegacyRows.slice(index, index + batchSize);
+      const dayResults = await Promise.all(
+        batch.map(async (row) => {
+          const day = dayKey(row.day);
+          const nextDay = new Date(`${day}T00:00:00+00:00`);
+          nextDay.setUTCDate(nextDay.getUTCDate() + 1);
+
+          const { data, error } = await supabase
+            .from("Readings")
+            .select("temperature_outside")
+            .not("temperature_outside", "is", null)
+            .gte("timestamp", `${day}T00:00:00+00:00`)
+            .lt("timestamp", nextDay.toISOString())
+            .limit(500);
+
+          if (error) throw error;
+
+          const outsideValues = (data || [])
+            .map((temperatureRow) => Number(temperatureRow.temperature_outside))
+            .filter((value) => Number.isFinite(value) && value !== 0);
+
+          if (outsideValues.length === 0) {
+            return null;
+          }
+
+          const outsideAverage = average(outsideValues);
+          const hdd = Math.max(0, HDD_BASE_TEMP_C - outsideAverage);
+          const totalKwh = Number(row.total_energy_kwh);
+
+          if (hdd <= 0 || totalKwh <= 0) {
+            return null;
+          }
+
+          return { hdd, totalKwh };
+        })
+      );
+
+      hddResults.push(...dayResults.filter(Boolean));
+    }
+
+    const hddTotal = hddResults.reduce((sum, result) => sum + result.hdd, 0);
+    const hddEnergyTotal = hddResults.reduce(
+      (sum, result) => sum + result.totalKwh,
+      0
+    );
+    const hddDays = hddResults.length;
+
+    if (hddTotal <= 0 || hddDays === 0) {
+      return null;
+    }
+
+    const kwhPerHdd = hddEnergyTotal / hddTotal;
+    const annualHddEstimate = (hddTotal / hddDays) * 365;
+
+    return {
+      kwhPerHdd,
+      weatherNormalisedEui:
+        Number.isFinite(area) && area > 0
+          ? (kwhPerHdd * annualHddEstimate) / area
+          : null,
+      hddDays,
+      hddSource: "legacy",
+    };
+  };
+
   const fetchLongTermAverage = async () => {
     try {
       const [completedDailyData, todayDailyData] = await Promise.all([
@@ -841,6 +932,7 @@ const BuildingDashboardPanel = ({ building }) => {
 
   const fetchHeatLossSummary = async () => {
     try {
+      const area = Number(matterportMetadata.internalArea);
       const completedRows = await fetchEnergyDailyTotals({ beforeToday: true });
       const { data: temperatureRows, error: temperatureError } =
         await applyBuildingScope(
@@ -926,19 +1018,41 @@ const BuildingDashboardPanel = ({ building }) => {
         }
       });
 
-      setHeatLossSummary({
-        kwhPerHdd: hddTotal > 0 ? hddEnergyTotal / hddTotal : null,
-        htcEstimate: htcSamples > 0 ? htcTotal / htcSamples : null,
+      const currentKwhPerHdd = hddTotal > 0 ? hddEnergyTotal / hddTotal : null;
+      const currentAnnualHddEstimate =
+        hddDays > 0 ? (hddTotal / hddDays) * 365 : null;
+      const currentWeatherNormalisedEui =
+        Number.isFinite(currentKwhPerHdd) &&
+        Number.isFinite(currentAnnualHddEstimate) &&
+        Number.isFinite(area) &&
+        area > 0
+          ? (currentKwhPerHdd * currentAnnualHddEstimate) / area
+          : null;
+      const legacyMuseumHddSummary = await fetchLegacyMuseumHddSummary(area);
+      const hddSummary = legacyMuseumHddSummary || {
+        kwhPerHdd: currentKwhPerHdd,
+        weatherNormalisedEui: currentWeatherNormalisedEui,
         hddDays,
+        hddSource: "current",
+      };
+
+      setHeatLossSummary({
+        kwhPerHdd: hddSummary.kwhPerHdd,
+        weatherNormalisedEui: hddSummary.weatherNormalisedEui,
+        htcEstimate: htcSamples > 0 ? htcTotal / htcSamples : null,
+        hddDays: hddSummary.hddDays || 0,
         htcSamples,
+        hddSource: hddSummary.hddSource || "current",
       });
     } catch (err) {
       console.error("Error fetching heat loss summary:", err.message);
       setHeatLossSummary({
         kwhPerHdd: null,
+        weatherNormalisedEui: null,
         htcEstimate: null,
         hddDays: 0,
         htcSamples: 0,
+        hddSource: "current",
       });
     }
   };
@@ -1049,11 +1163,20 @@ const BuildingDashboardPanel = ({ building }) => {
           ? annualEnergyUse / estimatedArea
           : null;
 
-      const calculatedEnergyScore = calculateEnergyScore(
+      const annualEuiScore = calculateEnergyScore(
         annualEui,
         building.targetEui,
         building.nationalAverageEui
       );
+      const weatherNormalisedEuiScore = calculateEnergyScore(
+        heatLossSummary.weatherNormalisedEui,
+        building.targetEui,
+        building.nationalAverageEui
+      );
+      const calculatedEnergyScore = averageScore([
+        annualEuiScore,
+        weatherNormalisedEuiScore,
+      ]);
 
       const buildingPerformanceIndex = calculateOverallPerformanceScore({
         health: calculatedHealthScore,
@@ -1093,7 +1216,6 @@ const BuildingDashboardPanel = ({ building }) => {
 
     const interval = setInterval(() => {
       fetchLongTermAverage();
-      fetchHeatLossSummary();
       fetchIAQData();
       fetchExternalTemp();
       fetchLongTermBuildingPerformance();
@@ -1102,7 +1224,12 @@ const BuildingDashboardPanel = ({ building }) => {
     return () => clearInterval(interval);
     // The interval should reset only when the selected building or area source changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [building.id, historicalPerformance, matterportMetadata.internalArea]);
+  }, [
+    building.id,
+    historicalPerformance,
+    matterportMetadata.internalArea,
+    heatLossSummary.weatherNormalisedEui,
+  ]);
 
   const handleHistoricalImport = async (event) => {
     const file = event.target.files?.[0];
@@ -1376,6 +1503,20 @@ const BuildingDashboardPanel = ({ building }) => {
                   {heatLossSummary.htcSamples ||
                     historicalImport.summary?.htcSamples ||
                     0}
+                </p>
+                <p>
+                  <strong>Weather-normalised EUI:</strong>{" "}
+                  {Number.isFinite(heatLossSummary.weatherNormalisedEui)
+                    ? `${formatNumber(
+                        heatLossSummary.weatherNormalisedEui
+                      )} kWh/m2/yr`
+                    : "Pending"}
+                </p>
+                <p>
+                  <strong>HDD Source:</strong>{" "}
+                  {heatLossSummary.hddSource === "legacy"
+                    ? "Legacy museum daily totals"
+                    : "Current building data"}
                 </p>
               </div>
             </div>
