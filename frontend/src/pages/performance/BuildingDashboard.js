@@ -1270,38 +1270,37 @@ const BuildingDashboardPanel = ({ building }) => {
       <div className="bg-gray-100 p-4 rounded shadow">
         <h2 className="text-lg font-bold mb-3">Performance</h2>
 
-        <div className="grid gap-3 grid-cols-2 sm:gap-5 items-start">
+        <div className="space-y-3 sm:space-y-5">
           <div className="bg-white rounded border p-2.5 sm:p-4 min-w-0">
-            <div className="flex justify-center">
+            <div className="grid grid-cols-[minmax(0,120px)_minmax(0,1fr)_minmax(0,160px)] gap-2 sm:gap-4 items-start">
+              <div className="space-y-0.5 sm:space-y-1 text-[10px] min-[390px]:text-xs sm:text-sm leading-tight">
+                <p>
+                  <strong>Health:</strong> {formatScore(performanceBreakdown.health)}
+                </p>
+                <p>
+                  <strong>Energy:</strong> {formatScore(performanceBreakdown.energy)}
+                </p>
+              </div>
+
+              <div className="flex justify-center min-w-0">
               <AnalogGauge
                 value={performanceValue}
                 historicalValue={historicalPerformance}
               />
-            </div>
+              </div>
 
-            <div className="mt-2 sm:mt-4 space-y-0.5 sm:space-y-1 text-[10px] min-[390px]:text-xs sm:text-sm leading-tight">
-              <p>
-                <strong>Health:</strong> {formatScore(performanceBreakdown.health)}
-              </p>
-              <p>
-                <strong>Energy:</strong> {formatScore(performanceBreakdown.energy)}
-              </p>
-            </div>
-
-            <div className="mt-3 sm:mt-4 border-t pt-3 space-y-2 text-[10px] min-[390px]:text-xs sm:text-sm leading-tight">
-              <h3 className="font-semibold">Historical Evidence</h3>
-              <input
-                type="file"
-                accept=".csv,text/csv"
-                onChange={handleHistoricalImport}
-                className="block w-full text-[10px] min-[390px]:text-xs"
-              />
-              <p className="text-gray-600">
-                CSV from supplier bills, smart-meter exports or DegreeDays.net.
-              </p>
-              {historicalImport.error ? (
-                <p className="text-red-700">{historicalImport.error}</p>
-              ) : null}
+              <div className="space-y-1 text-[10px] min-[390px]:text-xs sm:text-sm leading-tight min-w-0">
+                <h3 className="font-semibold">Historical Evidence</h3>
+                <input
+                  type="file"
+                  accept=".csv,text/csv"
+                  onChange={handleHistoricalImport}
+                  className="block w-full text-[10px] min-[390px]:text-xs"
+                />
+                {historicalImport.error ? (
+                  <p className="text-red-700">{historicalImport.error}</p>
+                ) : null}
+              </div>
             </div>
           </div>
 
@@ -1310,25 +1309,26 @@ const BuildingDashboardPanel = ({ building }) => {
               Live Data
             </h3>
 
-            <div className="space-y-2 min-[390px]:space-y-3 sm:space-y-6 text-[10px] min-[390px]:text-xs sm:text-sm leading-tight">
-              <div className="space-y-0.5 break-words">
+            <div className="grid grid-cols-3 gap-2 sm:gap-5 text-[10px] min-[390px]:text-xs sm:text-sm leading-tight">
+              <div className="space-y-2 sm:space-y-3 break-words min-w-0">
                 <p>
-                  <strong>Annualised EUI:</strong>{" "}
+                  <strong>Annualised EUI</strong>
+                  <br />
                   {Number.isFinite(historicalPerformance) &&
                   matterportMetadata.internalArea !== "--"
                     ? (
                         (historicalPerformance * 365) /
                         Number(matterportMetadata.internalArea)
                       ).toFixed(4)
-                    : "No Data"}{" "}
+                    : "No Data"}
+                  <br />
                   kWh/m2/yr
                 </p>
-              </div>
-
-              <div className="space-y-0.5 break-words">
-                <h4 className="font-semibold">Electricity</h4>
                 <p>
-                  <strong>Daily Average:</strong>{" "}
+                  <strong>Electricity</strong>
+                  <br />
+                  Daily Average
+                  <br />
                   {formatNumber(energySummary.electricityDailyAverage)}{" "}
                   kWh
                 </p>
@@ -1342,13 +1342,14 @@ const BuildingDashboardPanel = ({ building }) => {
                   {formatNumber(energySummary.electricityPowerKw, 3)}{" "}
                   kW
                 </p>
-              </div>
 
-              {energySummary.hasGasData ? (
-                <div className="space-y-0.5 break-words">
-                  <h4 className="font-semibold">Gas</h4>
+                {energySummary.hasGasData ? (
+                  <>
                   <p>
-                    <strong>Daily Average:</strong>{" "}
+                    <strong>Gas</strong>
+                    <br />
+                    Daily Average
+                    <br />
                     {formatNumber(energySummary.gasDailyAverage)}{" "}
                     kWh
                   </p>
@@ -1357,10 +1358,19 @@ const BuildingDashboardPanel = ({ building }) => {
                     {formatNumber(energySummary.gasTodayKwh)}{" "}
                     kWh
                   </p>
-                </div>
-              ) : null}
+                  </>
+                ) : (
+                  <p>
+                    <strong>Gas</strong>
+                    <br />
+                    Daily Average
+                    <br />
+                    No Data
+                  </p>
+                )}
+              </div>
 
-              <div className="space-y-0.5 break-words">
+              <div className="space-y-0.5 break-words min-w-0">
                 <p>
                   <strong>Internal Temp:</strong>{" "}
                   {formatMeasurement(sensorData.internalTemp)} deg C
@@ -1369,9 +1379,6 @@ const BuildingDashboardPanel = ({ building }) => {
                   <strong>External Temp:</strong>{" "}
                   {formatMeasurement(sensorData.externalTemp)} deg C
                 </p>
-              </div>
-
-              <div className="space-y-0.5 break-words">
                 <p>
                   <strong>Humidity:</strong>{" "}
                   {formatMeasurement(sensorData.humidity)}%
@@ -1387,68 +1394,70 @@ const BuildingDashboardPanel = ({ building }) => {
                 </p>
               </div>
 
-              {historicalImport.summary ? (
-                <div className="space-y-0.5 break-words">
-                  <h4 className="font-semibold">Imported History</h4>
+              <div className="space-y-2 sm:space-y-3 break-words min-w-0">
+                {historicalImport.summary ? (
+                  <div className="space-y-0.5">
+                    <h4 className="font-semibold">Imported History</h4>
+                    <p>
+                      <strong>File:</strong> {historicalImport.fileName}
+                    </p>
+                    <p>
+                      <strong>Rows / Days:</strong>{" "}
+                      {historicalImport.summary.rowCount} /{" "}
+                      {historicalImport.summary.dayCount}
+                    </p>
+                    <p>
+                      <strong>Imported EUI:</strong>{" "}
+                      {formatNumber(historicalImport.summary.annualisedEui)}{" "}
+                      kWh/m2/yr
+                    </p>
+                    <p>
+                      <strong>NILMTK:</strong> ready for labelled/high-resolution
+                      disaggregation inputs
+                    </p>
+                  </div>
+                ) : null}
+
+                <div className="space-y-0.5">
+                  <h4 className="font-semibold">Heat Loss Analysis</h4>
                   <p>
-                    <strong>File:</strong> {historicalImport.fileName}
+                    <strong>HDD Intensity:</strong>{" "}
+                    {Number.isFinite(heatLossSummary.kwhPerHdd)
+                      ? `${formatNumber(heatLossSummary.kwhPerHdd, 3)} kWh/HDD`
+                      : Number.isFinite(historicalImport.summary?.kwhPerHdd)
+                      ? `${formatNumber(historicalImport.summary.kwhPerHdd, 3)} kWh/HDD`
+                      : "Pending completed energy + HDD data"}
                   </p>
                   <p>
-                    <strong>Rows / Days:</strong>{" "}
-                    {historicalImport.summary.rowCount} /{" "}
-                    {historicalImport.summary.dayCount}
+                    <strong>HTC Estimate:</strong>{" "}
+                    {Number.isFinite(heatLossSummary.htcEstimate)
+                      ? `${formatNumber(heatLossSummary.htcEstimate, 1)} W/K`
+                      : Number.isFinite(historicalImport.summary?.htcEstimate)
+                      ? `${formatNumber(historicalImport.summary.htcEstimate, 1)} W/K`
+                      : "Pending energy + indoor/outdoor temperature overlap"}
                   </p>
                   <p>
-                    <strong>Imported EUI:</strong>{" "}
-                    {formatNumber(historicalImport.summary.annualisedEui)}{" "}
-                    kWh/m2/yr
+                    <strong>HDD / HTC Days:</strong>{" "}
+                    {heatLossSummary.hddDays || 0} /{" "}
+                    {heatLossSummary.htcSamples ||
+                      historicalImport.summary?.htcSamples ||
+                      0}
                   </p>
                   <p>
-                    <strong>NILMTK:</strong> ready for labelled/high-resolution
-                    disaggregation inputs
+                    <strong>Weather-normalised EUI:</strong>{" "}
+                    {Number.isFinite(heatLossSummary.weatherNormalisedEui)
+                      ? `${formatNumber(
+                          heatLossSummary.weatherNormalisedEui
+                        )} kWh/m2/yr`
+                      : "Pending"}
+                  </p>
+                  <p>
+                    <strong>HDD Source:</strong>{" "}
+                    {heatLossSummary.hddSource === "legacy"
+                      ? "Legacy museum daily totals"
+                      : "Current building data"}
                   </p>
                 </div>
-              ) : null}
-
-              <div className="space-y-0.5 break-words">
-                <h4 className="font-semibold">Heat Loss Analysis</h4>
-                <p>
-                  <strong>HDD Intensity:</strong>{" "}
-                  {Number.isFinite(heatLossSummary.kwhPerHdd)
-                    ? `${formatNumber(heatLossSummary.kwhPerHdd, 3)} kWh/HDD`
-                    : Number.isFinite(historicalImport.summary?.kwhPerHdd)
-                    ? `${formatNumber(historicalImport.summary.kwhPerHdd, 3)} kWh/HDD`
-                    : "Pending completed energy + HDD data"}
-                </p>
-                <p>
-                  <strong>HTC Estimate:</strong>{" "}
-                  {Number.isFinite(heatLossSummary.htcEstimate)
-                    ? `${formatNumber(heatLossSummary.htcEstimate, 1)} W/K`
-                    : Number.isFinite(historicalImport.summary?.htcEstimate)
-                    ? `${formatNumber(historicalImport.summary.htcEstimate, 1)} W/K`
-                    : "Pending energy + indoor/outdoor temperature overlap"}
-                </p>
-                <p>
-                  <strong>HDD / HTC Days:</strong>{" "}
-                  {heatLossSummary.hddDays || 0} /{" "}
-                  {heatLossSummary.htcSamples ||
-                    historicalImport.summary?.htcSamples ||
-                    0}
-                </p>
-                <p>
-                  <strong>Weather-normalised EUI:</strong>{" "}
-                  {Number.isFinite(heatLossSummary.weatherNormalisedEui)
-                    ? `${formatNumber(
-                        heatLossSummary.weatherNormalisedEui
-                      )} kWh/m2/yr`
-                    : "Pending"}
-                </p>
-                <p>
-                  <strong>HDD Source:</strong>{" "}
-                  {heatLossSummary.hddSource === "legacy"
-                    ? "Legacy museum daily totals"
-                    : "Current building data"}
-                </p>
               </div>
             </div>
           </div>
