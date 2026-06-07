@@ -16,6 +16,9 @@ const SAVE_INTERVAL_MS = Number(
 const RECONNECT_DELAY_MS = Number(
   process.env.THINGSBOARD_RECONNECT_DELAY_MS || 10000
 );
+const STALE_TELEMETRY_MS = Number(
+  process.env.THINGSBOARD_STALE_TELEMETRY_MS || 5 * 60 * 1000
+);
 const BUILDING_ID = process.env.BUILDING_ID || "";
 
 const latestValues = {
@@ -69,6 +72,8 @@ let currentRefreshToken = null;
 let websocket = null;
 let reconnectTimer = null;
 let isShuttingDown = false;
+let lastTelemetryAt = 0;
+let lastPersistedTelemetryAt = 0;
 
 const decodeJwtPayload = (token) => {
   try {
@@ -219,6 +224,7 @@ const handleTelemetryMessage = (msg) => {
         : numericValue;
     }
 
+    lastTelemetryAt = Date.now();
     console.log("Updated museum telemetry:", latestValues);
   } catch (error) {
     console.error("WebSocket parse error:", error.message);
@@ -285,6 +291,21 @@ const startWebsocket = async () => {
 
 const persistLatestValues = async () => {
   try {
+    if (!lastTelemetryAt) {
+      console.log("No ThingsBoard telemetry yet; skipping insert");
+      return;
+    }
+
+    if (lastTelemetryAt <= lastPersistedTelemetryAt) {
+      console.log("No new ThingsBoard telemetry since last insert; skipping");
+      return;
+    }
+
+    if (Date.now() - lastTelemetryAt > STALE_TELEMETRY_MS) {
+      console.warn("ThingsBoard telemetry is stale; skipping insert");
+      return;
+    }
+
     const hasAnyValue = Object.values(latestValues).some(
       (value) => value !== null
     );
@@ -307,6 +328,7 @@ const persistLatestValues = async () => {
       throw error;
     }
 
+    lastPersistedTelemetryAt = lastTelemetryAt;
     console.log("Inserted Milesight telemetry into Supabase");
   } catch (error) {
     console.error("Supabase insert error:", error.message);
@@ -333,7 +355,24 @@ const shutdown = (signal) => {
 setInterval(persistLatestValues, SAVE_INTERVAL_MS);
 setInterval(() => {
   if (!isTokenFreshEnough(currentToken)) {
+    console.warn("ThingsBoard token is expiring or expired; reconnecting.");
     currentToken = null;
+    currentRefreshToken = null;
+
+    if (websocket) {
+      websocket.close(4001, "Token refresh");
+    } else {
+      scheduleReconnect();
+    }
+  }
+
+  if (
+    lastTelemetryAt &&
+    Date.now() - lastTelemetryAt > STALE_TELEMETRY_MS &&
+    websocket?.readyState === WebSocket.OPEN
+  ) {
+    console.warn("ThingsBoard websocket telemetry stale; reconnecting.");
+    websocket.close(4000, "Telemetry stale");
   }
 }, 60000);
 
