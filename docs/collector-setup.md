@@ -185,6 +185,35 @@ GLOW_API_POLL_INTERVAL_MS=60000
 GLOW_API_RESOURCES=home:electricity:042517ae-601f-4928-b3d2-e49b1de0e695,home:gas:a2130979-fb09-48bf-89f9-5703c30037b8,museum:electricity:12e31e6d-11dc-4bc3-a70b-dab6f76fc73c
 ```
 
+## Glow historical backfill
+
+The always-on Glow collector only polls current daily/live readings. To pull
+the historical Bright/Glow half-hour data that is still available from the API,
+run the backfill manually from `backend/`.
+
+First run the optional duplicate guard SQL in Supabase:
+
+```sql
+create unique index if not exists energy_readings_unique_source_interval
+on public."EnergyReadings" (
+  building_id,
+  fuel_type,
+  reading_type,
+  "timestamp"
+)
+where reading_type = 'interval_30m';
+```
+
+Then run a bounded test import:
+
+```sh
+GLOW_HISTORY_FROM=2026-06-01 GLOW_HISTORY_TO=2026-06-03 npm run backfill:glow-history
+```
+
+For the full available history, widen `GLOW_HISTORY_FROM`. The script requests
+`PT30M` readings in chunks, skips existing timestamps for the same building and
+fuel, and writes rows with `reading_type=interval_30m`.
+
 ## Supabase requirement
 
 The shared architecture expects `Readings` to include a nullable text column:
@@ -194,8 +223,8 @@ alter table "Readings"
 add column if not exists building_id text;
 ```
 
-Existing museum rows can remain blank while the current dashboard keeps using
-legacy unscoped museum data. New collectors should write `museum` or `home`.
+Collectors should write `museum` or `home` so the dashboard can keep health,
+weather and energy readings scoped to the active building.
 
 If `DailyEnergyTotals` is a view, update it to include or group by `building_id`
 before relying on home energy averages.
