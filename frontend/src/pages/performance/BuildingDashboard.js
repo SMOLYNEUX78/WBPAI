@@ -1272,34 +1272,38 @@ const BuildingDashboardPanel = ({ building }) => {
 
         <div className="space-y-3 sm:space-y-5">
           <div className="bg-white rounded border p-2.5 sm:p-4 min-w-0">
-            <div className="grid grid-cols-[minmax(0,120px)_minmax(0,1fr)_minmax(0,160px)] gap-2 sm:gap-4 items-start">
-              <div className="space-y-0.5 sm:space-y-1 text-[10px] min-[390px]:text-xs sm:text-sm leading-tight">
-                <p>
-                  <strong>Health:</strong> {formatScore(performanceBreakdown.health)}
-                </p>
-                <p>
-                  <strong>Energy:</strong> {formatScore(performanceBreakdown.energy)}
-                </p>
+            <div className="grid grid-cols-[minmax(0,150px)_minmax(0,1fr)] gap-3 sm:gap-6 items-start">
+              <div className="space-y-4 sm:space-y-6 text-[10px] min-[390px]:text-xs sm:text-sm leading-tight">
+                <div className="space-y-0.5 sm:space-y-1">
+                  <p>
+                    <strong>Health:</strong>{" "}
+                    {formatScore(performanceBreakdown.health)}
+                  </p>
+                  <p>
+                    <strong>Energy:</strong>{" "}
+                    {formatScore(performanceBreakdown.energy)}
+                  </p>
+                </div>
+
+                <div className="space-y-1 min-w-0">
+                  <h3 className="font-semibold">Historical Evidence</h3>
+                  <input
+                    type="file"
+                    accept=".csv,text/csv"
+                    onChange={handleHistoricalImport}
+                    className="block w-full text-[10px] min-[390px]:text-xs"
+                  />
+                  {historicalImport.error ? (
+                    <p className="text-red-700">{historicalImport.error}</p>
+                  ) : null}
+                </div>
               </div>
 
-              <div className="flex justify-center min-w-0">
-              <AnalogGauge
-                value={performanceValue}
-                historicalValue={historicalPerformance}
-              />
-              </div>
-
-              <div className="space-y-1 text-[10px] min-[390px]:text-xs sm:text-sm leading-tight min-w-0">
-                <h3 className="font-semibold">Historical Evidence</h3>
-                <input
-                  type="file"
-                  accept=".csv,text/csv"
-                  onChange={handleHistoricalImport}
-                  className="block w-full text-[10px] min-[390px]:text-xs"
+              <div className="flex justify-center min-w-0 scale-110 sm:scale-125 origin-top">
+                <AnalogGauge
+                  value={performanceValue}
+                  historicalValue={historicalPerformance}
                 />
-                {historicalImport.error ? (
-                  <p className="text-red-700">{historicalImport.error}</p>
-                ) : null}
               </div>
             </div>
           </div>
