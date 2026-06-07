@@ -444,8 +444,6 @@ const BuildingDashboardPanel = ({ building }) => {
       : null;
   };
 
-  const dayKey = (timestamp) => new Date(timestamp).toISOString().slice(0, 10);
-
   const clampScore = (value) => Math.max(0, Math.min(100, value));
 
   const linearScore = (value, bands) => {
@@ -667,7 +665,7 @@ const BuildingDashboardPanel = ({ building }) => {
     for (let page = 0; page < maxPages; page += 1) {
       let query = supabase
         .from("EnergyReadings")
-        .select("timestamp, fuel_type, usage_kwh")
+        .select("timestamp, fuel_type, usage_kwh, raw_payload, source")
         .eq("building_id", building.id)
         .eq("reading_type", "daily_total")
         .order("timestamp", { ascending: false })
@@ -696,93 +694,6 @@ const BuildingDashboardPanel = ({ building }) => {
     }
 
     return allRows;
-  };
-
-  const fetchLegacyMuseumHddSummary = async (area) => {
-    if (building.id !== "museum") {
-      return null;
-    }
-
-    const { data: legacyRows, error: legacyError } = await supabase
-      .from("DailyEnergyTotals")
-      .select("day, total_energy_kwh")
-      .not("total_energy_kwh", "is", null)
-      .limit(500);
-
-    if (legacyError) throw legacyError;
-
-    const validLegacyRows = (legacyRows || []).filter((row) => {
-      const energy = Number(row.total_energy_kwh);
-      return row.day && Number.isFinite(energy) && energy > 0;
-    });
-
-    const hddResults = [];
-    const batchSize = 6;
-
-    for (let index = 0; index < validLegacyRows.length; index += batchSize) {
-      const batch = validLegacyRows.slice(index, index + batchSize);
-      const dayResults = await Promise.all(
-        batch.map(async (row) => {
-          const day = dayKey(row.day);
-          const nextDay = new Date(`${day}T00:00:00+00:00`);
-          nextDay.setUTCDate(nextDay.getUTCDate() + 1);
-
-          const { data, error } = await supabase
-            .from("Readings")
-            .select("temperature_outside")
-            .not("temperature_outside", "is", null)
-            .gte("timestamp", `${day}T00:00:00+00:00`)
-            .lt("timestamp", nextDay.toISOString())
-            .limit(500);
-
-          if (error) throw error;
-
-          const outsideValues = (data || [])
-            .map((temperatureRow) => Number(temperatureRow.temperature_outside))
-            .filter((value) => Number.isFinite(value) && value !== 0);
-
-          if (outsideValues.length === 0) {
-            return null;
-          }
-
-          const outsideAverage = average(outsideValues);
-          const hdd = Math.max(0, HDD_BASE_TEMP_C - outsideAverage);
-          const totalKwh = Number(row.total_energy_kwh);
-
-          if (hdd <= 0 || totalKwh <= 0) {
-            return null;
-          }
-
-          return { hdd, totalKwh };
-        })
-      );
-
-      hddResults.push(...dayResults.filter(Boolean));
-    }
-
-    const hddTotal = hddResults.reduce((sum, result) => sum + result.hdd, 0);
-    const hddEnergyTotal = hddResults.reduce(
-      (sum, result) => sum + result.totalKwh,
-      0
-    );
-    const hddDays = hddResults.length;
-
-    if (hddTotal <= 0 || hddDays === 0) {
-      return null;
-    }
-
-    const kwhPerHdd = hddEnergyTotal / hddTotal;
-    const annualHddEstimate = (hddTotal / hddDays) * 365;
-
-    return {
-      kwhPerHdd,
-      weatherNormalisedEui:
-        Number.isFinite(area) && area > 0
-          ? (kwhPerHdd * annualHddEstimate) / area
-          : null,
-      hddDays,
-      hddSource: "legacy",
-    };
   };
 
   const fetchLongTermAverage = async () => {
@@ -954,8 +865,21 @@ const BuildingDashboardPanel = ({ building }) => {
 
         const day = new Date(row.timestamp).toISOString().slice(0, 10);
         const fuelType = row.fuel_type || "unknown";
-        totals[day] = totals[day] || {};
-        totals[day][fuelType] = Math.max(totals[day][fuelType] || 0, usageKwh);
+        totals[day] = totals[day] || { fuels: {}, hdd: null, usesLegacy: false };
+        totals[day].fuels[fuelType] = Math.max(
+          totals[day].fuels[fuelType] || 0,
+          usageKwh
+        );
+
+        const rowHdd = Number(row.raw_payload?.hdd);
+        if (Number.isFinite(rowHdd)) {
+          totals[day].hdd = rowHdd;
+        }
+
+        if (row.source?.startsWith("legacy-readings-")) {
+          totals[day].usesLegacy = true;
+        }
+
         return totals;
       }, {});
 
@@ -983,8 +907,10 @@ const BuildingDashboardPanel = ({ building }) => {
       let hddDays = 0;
       let htcSamples = 0;
 
-      Object.entries(dailyEnergy).forEach(([day, fuels]) => {
-        const totalKwh = Object.values(fuels).reduce(
+      let usesLegacyMuseumEnergy = false;
+
+      Object.entries(dailyEnergy).forEach(([day, dayEnergy]) => {
+        const totalKwh = Object.values(dayEnergy.fuels).reduce(
           (sum, value) => sum + value,
           0
         );
@@ -996,14 +922,20 @@ const BuildingDashboardPanel = ({ building }) => {
           ? average(temperatures.inside)
           : null;
 
-        if (Number.isFinite(outsideAverage)) {
-          const hdd = Math.max(0, HDD_BASE_TEMP_C - outsideAverage);
+        const hdd = Number.isFinite(dayEnergy.hdd)
+          ? dayEnergy.hdd
+          : Number.isFinite(outsideAverage)
+          ? Math.max(0, HDD_BASE_TEMP_C - outsideAverage)
+          : null;
 
-          if (hdd > 0 && totalKwh > 0) {
-            hddTotal += hdd;
-            hddEnergyTotal += totalKwh;
-            hddDays += 1;
-          }
+        if (Number.isFinite(hdd) && hdd > 0 && totalKwh > 0) {
+          hddTotal += hdd;
+          hddEnergyTotal += totalKwh;
+          hddDays += 1;
+        }
+
+        if (dayEnergy.usesLegacy) {
+          usesLegacyMuseumEnergy = true;
         }
 
         if (
@@ -1028,12 +960,11 @@ const BuildingDashboardPanel = ({ building }) => {
         area > 0
           ? (currentKwhPerHdd * currentAnnualHddEstimate) / area
           : null;
-      const legacyMuseumHddSummary = await fetchLegacyMuseumHddSummary(area);
-      const hddSummary = legacyMuseumHddSummary || {
+      const hddSummary = {
         kwhPerHdd: currentKwhPerHdd,
         weatherNormalisedEui: currentWeatherNormalisedEui,
         hddDays,
-        hddSource: "current",
+        hddSource: usesLegacyMuseumEnergy ? "legacy" : "current",
       };
 
       setHeatLossSummary({
