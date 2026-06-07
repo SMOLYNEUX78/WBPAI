@@ -1233,20 +1233,31 @@ const BuildingDashboardPanel = ({ building }) => {
                     kWh/m2/yr
                   </p>
                   <p>
-                    <strong>HDD Intensity:</strong>{" "}
-                    {formatNumber(historicalImport.summary.kwhPerHdd, 3)}{" "}
-                    kWh/HDD
-                  </p>
-                  <p>
-                    <strong>HTC Estimate:</strong>{" "}
-                    {formatNumber(historicalImport.summary.htcEstimate, 1)} W/K
-                  </p>
-                  <p>
                     <strong>NILMTK:</strong> ready for labelled/high-resolution
                     disaggregation inputs
                   </p>
                 </div>
               ) : null}
+
+              <div className="space-y-0.5 break-words">
+                <h4 className="font-semibold">Heat Loss Analysis</h4>
+                <p>
+                  <strong>HDD Intensity:</strong>{" "}
+                  {Number.isFinite(historicalImport.summary?.kwhPerHdd)
+                    ? `${formatNumber(historicalImport.summary.kwhPerHdd, 3)} kWh/HDD`
+                    : "Pending historical energy + HDD data"}
+                </p>
+                <p>
+                  <strong>HTC Estimate:</strong>{" "}
+                  {Number.isFinite(historicalImport.summary?.htcEstimate)
+                    ? `${formatNumber(historicalImport.summary.htcEstimate, 1)} W/K`
+                    : "Pending energy + indoor/outdoor temperature overlap"}
+                </p>
+                <p>
+                  <strong>HTC Samples:</strong>{" "}
+                  {historicalImport.summary?.htcSamples || 0}
+                </p>
+              </div>
             </div>
           </div>
         </div>
