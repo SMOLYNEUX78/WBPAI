@@ -17,6 +17,7 @@ That starts and restarts:
 - `mqtt-handler.js` for CAD / smart meter MQTT energy readings
 - `glow-api-handler.js` for Glow API energy polling when cloud MQTT is quiet
 - `milesight-handler.js` for future home Milesight IAQ API polling
+- `dyson-handler.js` for home Dyson purifier IAQ polling over local MQTT
 - `thingsboard-handler.js` for ThingsBoard IAQ readings
 
 Set `COLLECTOR_PROCESSES` in `backend/.env` to run only the collectors needed
@@ -29,7 +30,8 @@ COLLECTOR_PROCESSES=mqtt,glow-api
 Recommended device roles:
 
 - House tablet now: `COLLECTOR_PROCESSES=glow-api`
-- House tablet later with Milesight IAQ API: `COLLECTOR_PROCESSES=mqtt,glow-api,milesight`
+- House tablet with Dyson purifier IAQ: `COLLECTOR_PROCESSES=glow-api,dyson`
+- House tablet later with Milesight IAQ API: `COLLECTOR_PROCESSES=glow-api,dyson,milesight`
 - Any always-on collector that should write weather: include `weather`
 - Museum IAQ tablet: `BUILDING_ID=museum` and `COLLECTOR_PROCESSES=thingsboard`
 
@@ -134,6 +136,28 @@ MILESIGHT_PASSWORD=
 MILESIGHT_API_TOKEN=
 MILESIGHT_POLL_INTERVAL_MS=60000
 ```
+
+Home Dyson purifier IAQ:
+
+```env
+BUILDING_ID=home
+COLLECTOR_INSTANCE=home-tablet
+COLLECTOR_PROCESSES=glow-api,dyson
+DYSON_DEVICES=downstairs:192.168.1.50:438:DYSON-SERIAL:DYSON-LOCAL-PASSWORD,upstairs:192.168.1.51:438:DYSON-SERIAL:DYSON-LOCAL-PASSWORD
+DYSON_POLL_INTERVAL_MS=60000
+DYSON_SAVE_INTERVAL_MS=60000
+```
+
+`DYSON_DEVICES` is comma-separated. Each device uses:
+
+```text
+friendly-name:local-ip:product-code:serial:local-mqtt-password
+```
+
+The collector averages the available purifier IAQ values into one `home` row in
+`Readings`. It maps Dyson temperature, humidity, PM2.5 and VOC-style values
+where the model exposes them. Most Dyson purifiers do not provide CO2, so the
+house still needs a separate CO2 monitor for a complete ventilation picture.
 
 ## Per-building external temperature
 

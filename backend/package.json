@@ -11,6 +11,7 @@
     "start:glow-api": "node glow-api-handler.js",
     "backfill:glow-history": "node glow-history-backfill.js",
     "start:milesight": "node milesight-handler.js",
+    "start:dyson": "node dyson-handler.js",
     "start:thingsboard": "node thingsboard-handler.js"
   },
   "dependencies": {
