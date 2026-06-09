@@ -76,6 +76,14 @@ function average(values) {
   return finiteValues.reduce((sum, value) => sum + value, 0) / finiteValues.length;
 }
 
+function slug(value) {
+  return String(value)
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
 function mapEnvironmentalData(data) {
   return {
     temperature_inside: celsiusFromKelvinTimesTen(data.tact || data.temperature),
@@ -154,7 +162,28 @@ function connectDevice(device) {
   }, DYSON_POLL_INTERVAL_MS);
 }
 
-async function persistCombinedReading() {
+function buildReadingRow(values, readingType) {
+  return {
+    building_id: BUILDING_ID,
+    temperature_inside: average(values.map((value) => value.temperature_inside)),
+    humidity: average(values.map((value) => value.humidity)),
+    vocs: average(values.map((value) => value.vocs)),
+    pm25: average(values.map((value) => value.pm25)),
+    timestamp: new Date().toISOString(),
+    reading_type: readingType,
+  };
+}
+
+function hasAnyReadingValue(row) {
+  return [
+    row.temperature_inside,
+    row.humidity,
+    row.vocs,
+    row.pm25,
+  ].some((value) => Number.isFinite(value));
+}
+
+async function persistReadings() {
   const values = [...latestByDevice.values()];
 
   if (values.length === 0) {
@@ -171,28 +200,19 @@ async function persistCombinedReading() {
     return;
   }
 
-  const row = {
-    building_id: BUILDING_ID,
-    temperature_inside: average(values.map((value) => value.temperature_inside)),
-    humidity: average(values.map((value) => value.humidity)),
-    vocs: average(values.map((value) => value.vocs)),
-    pm25: average(values.map((value) => value.pm25)),
-    timestamp: new Date().toISOString(),
-  };
+  const rows = [
+    buildReadingRow(values, "dyson:whole_home"),
+    ...values.map((value) =>
+      buildReadingRow([value], `dyson:${slug(value.device)}`)
+    ),
+  ].filter(hasAnyReadingValue);
 
-  const hasAnyValue = [
-    row.temperature_inside,
-    row.humidity,
-    row.vocs,
-    row.pm25,
-  ].some((value) => Number.isFinite(value));
-
-  if (!hasAnyValue) {
+  if (rows.length === 0) {
     console.log("[dyson] Purifier telemetry had no mapped IAQ values; skipping");
     return;
   }
 
-  const { error } = await supabase.from("Readings").insert(row);
+  const { error } = await supabase.from("Readings").insert(rows);
 
   if (error) {
     console.error("[dyson] Supabase insert error:", error.message);
@@ -200,7 +220,9 @@ async function persistCombinedReading() {
   }
 
   lastSavedAt = latestTimestamp;
-  console.log(`[dyson] Inserted combined purifier telemetry for ${BUILDING_ID}`);
+  console.log(
+    `[dyson] Inserted ${rows.length} purifier telemetry row(s) for ${BUILDING_ID}`
+  );
 }
 
 if (DYSON_DEVICES.length === 0) {
@@ -215,4 +237,4 @@ console.log(
 );
 
 DYSON_DEVICES.forEach(connectDevice);
-setInterval(persistCombinedReading, DYSON_SAVE_INTERVAL_MS);
+setInterval(persistReadings, DYSON_SAVE_INTERVAL_MS);

@@ -330,6 +330,7 @@ const BuildingDashboardPanel = ({ building }) => {
     vocs: null,
     pm25: null,
   });
+  const [roomIaqData, setRoomIaqData] = useState([]);
 
   const [performanceValue, setPerformanceValue] = useState(null);
   const [historicalPerformance, setHistoricalPerformance] = useState(null);
@@ -426,6 +427,39 @@ const BuildingDashboardPanel = ({ building }) => {
 
   const formatMeasurement = (value, digits = 1) =>
     Number.isFinite(value) ? value.toFixed(digits) : "No Data";
+
+  const normaliseRoomLabel = (readingType) => {
+    const roomKey = String(readingType || "").replace(/^dyson:/, "");
+
+    if (roomKey === "living_room" || roomKey === "downstairs") {
+      return "Downstairs";
+    }
+
+    if (roomKey === "upstairs") {
+      return "Upstairs";
+    }
+
+    return roomKey
+      .split("_")
+      .filter(Boolean)
+      .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
+      .join(" ");
+  };
+
+  const numericOrNull = (value) => {
+    const numericValue = Number(value);
+    return Number.isFinite(numericValue) ? numericValue : null;
+  };
+
+  const averageNullableValues = (values) => {
+    const finiteValues = values.filter((value) => Number.isFinite(value));
+
+    if (finiteValues.length === 0) {
+      return null;
+    }
+
+    return finiteValues.reduce((sum, value) => sum + value, 0) / finiteValues.length;
+  };
 
   const percentageWithin = (values, predicate) => {
     if (!values.length) {
@@ -1017,28 +1051,72 @@ const BuildingDashboardPanel = ({ building }) => {
       const { data, error } = await applyBuildingScope(
         supabase
         .from("Readings")
-        .select("temperature_inside, humidity, co2, vocs, pm25")
+        .select("temperature_inside, humidity, co2, vocs, pm25, reading_type")
         .or(
           "temperature_inside.not.is.null,humidity.not.is.null,co2.not.is.null,vocs.not.is.null,pm25.not.is.null"
         )
         .order("timestamp", { ascending: false })
-        .limit(1)
-      ).single();
+        .limit(30)
+      );
 
       if (error) throw error;
-      if (!data) return;
+      if (!data || data.length === 0) return;
+
+      const dysonRows = data.filter((row) =>
+        String(row.reading_type || "").startsWith("dyson:")
+      );
+      const wholeHomeRow =
+        dysonRows.find((row) => row.reading_type === "dyson:whole_home") ||
+        null;
+      const roomRows = dysonRows
+        .filter((row) => row.reading_type !== "dyson:whole_home")
+        .reduce((rooms, row) => {
+          if (!row.reading_type || rooms.some((room) => room.key === row.reading_type)) {
+            return rooms;
+          }
+
+          rooms.push({
+            key: row.reading_type,
+            label: normaliseRoomLabel(row.reading_type),
+            internalTemp: numericOrNull(row.temperature_inside),
+            humidity: numericOrNull(row.humidity),
+            co2: numericOrNull(row.co2),
+            vocs: numericOrNull(row.vocs),
+            pm25: numericOrNull(row.pm25),
+          });
+          return rooms;
+        }, [])
+        .sort((a, b) => {
+          const order = { Downstairs: 0, Upstairs: 1 };
+          return (order[a.label] ?? 10) - (order[b.label] ?? 10);
+        });
+
+      const fallbackIaqRow = data[0];
+      const sourceRow = wholeHomeRow || fallbackIaqRow;
+      const combinedFromRooms =
+        !wholeHomeRow && roomRows.length > 0
+          ? {
+              temperature_inside: averageNullableValues(
+                roomRows.map((row) => row.internalTemp)
+              ),
+              humidity: averageNullableValues(roomRows.map((row) => row.humidity)),
+              co2: averageNullableValues(roomRows.map((row) => row.co2)),
+              vocs: averageNullableValues(roomRows.map((row) => row.vocs)),
+              pm25: averageNullableValues(roomRows.map((row) => row.pm25)),
+            }
+          : null;
+
+      setRoomIaqData(roomRows);
 
       setSensorData((prev) => ({
         ...prev,
-        internalTemp: Number.isFinite(Number(data.temperature_inside))
-          ? Number(data.temperature_inside)
-          : null,
-        humidity: Number.isFinite(Number(data.humidity))
-          ? Number(data.humidity)
-          : null,
-        co2: Number.isFinite(Number(data.co2)) ? Number(data.co2) : null,
-        vocs: Number.isFinite(Number(data.vocs)) ? Number(data.vocs) : null,
-        pm25: Number.isFinite(Number(data.pm25)) ? Number(data.pm25) : null,
+        internalTemp: numericOrNull(
+          combinedFromRooms?.temperature_inside ?? sourceRow.temperature_inside
+        ),
+        humidity: numericOrNull(combinedFromRooms?.humidity ?? sourceRow.humidity),
+        co2: numericOrNull(combinedFromRooms?.co2 ?? sourceRow.co2),
+        vocs: numericOrNull(combinedFromRooms?.vocs ?? sourceRow.vocs),
+        pm25: numericOrNull(combinedFromRooms?.pm25 ?? sourceRow.pm25),
       }));
     } catch (err) {
       console.error("Error fetching IAQ data:", err.message);
@@ -1379,6 +1457,25 @@ const BuildingDashboardPanel = ({ building }) => {
                 <p>
                   <strong>PM2.5:</strong> {formatMeasurement(sensorData.pm25)} ug/m3
                 </p>
+                {roomIaqData.length > 0 ? (
+                  <div className="pt-1 mt-1 border-t border-gray-200 space-y-1">
+                    {roomIaqData.map((room) => (
+                      <div key={room.key} className="space-y-0.5">
+                        <p className="font-semibold">{room.label}</p>
+                        <p>
+                          Temp {formatMeasurement(room.internalTemp)} deg C
+                          {" / "}
+                          RH {formatMeasurement(room.humidity)}%
+                        </p>
+                        <p>
+                          VOC {formatMeasurement(room.vocs)} ppb
+                          {" / "}
+                          PM2.5 {formatMeasurement(room.pm25)} ug/m3
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
               </div>
 
               <div className="space-y-2 sm:space-y-3 break-words min-w-0">
