@@ -1577,29 +1577,38 @@ const BuildingDashboardPanel = ({ building }) => {
                 ) : null}
                 {roomIaqData.length > 0 ? (
                   <div className="pt-1 mt-1 border-t border-gray-200 space-y-1">
-                    {roomIaqData.map((room) => (
-                      <div key={room.key} className="space-y-0.5">
-                        <p className="font-semibold">{room.label}</p>
-                        <p>
-                          Temp {formatMeasurement(room.internalTemp)} deg C
-                          {" / "}
-                          RH {formatMeasurement(room.humidity)}%
-                        </p>
-                        <p>
-                          VOC {formatMeasurement(room.vocs)} ppb
-                          {" / "}
-                          PM2.5 {formatMeasurement(room.pm25)} ug/m3
-                        </p>
-                        {Number.isFinite(room.pm10) ||
-                        Number.isFinite(room.hcho) ? (
+                    {roomIaqData.map((room) => {
+                      const roomMetrics = [
+                        {
+                          label: "Temp",
+                          value: room.internalTemp,
+                          unit: "deg C",
+                        },
+                        { label: "RH", value: room.humidity, unit: "%" },
+                        { label: "VOC", value: room.vocs, unit: "ppb" },
+                        { label: "PM2.5", value: room.pm25, unit: "ug/m3" },
+                        { label: "PM10", value: room.pm10, unit: "ug/m3" },
+                        { label: "HCHO", value: room.hcho, unit: "ppb" },
+                      ].filter((metric) => Number.isFinite(metric.value));
+
+                      return (
+                        <div key={room.key} className="space-y-0.5">
+                          <p className="font-semibold">{room.label}</p>
                           <p>
-                            PM10 {formatMeasurement(room.pm10)} ug/m3
-                            {" / "}
-                            HCHO {formatMeasurement(room.hcho)} ppb
+                            {roomMetrics.length
+                              ? roomMetrics
+                                  .map(
+                                    (metric) =>
+                                      `${metric.label} ${formatMeasurement(
+                                        metric.value
+                                      )} ${metric.unit}`
+                                  )
+                                  .join(" / ")
+                              : "No IAQ data"}
                           </p>
-                        ) : null}
-                      </div>
-                    ))}
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : null}
               </div>
