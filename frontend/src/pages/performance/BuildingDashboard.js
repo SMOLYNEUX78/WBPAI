@@ -536,6 +536,38 @@ const BuildingDashboardPanel = ({ building }) => {
     return finiteValues.reduce((sum, value) => sum + value, 0) / finiteValues.length;
   };
 
+  const percentile = (values, percentileValue) => {
+    const sortedValues = values
+      .filter((value) => Number.isFinite(value))
+      .sort((a, b) => a - b);
+
+    if (sortedValues.length === 0) {
+      return null;
+    }
+
+    const index = Math.min(
+      sortedValues.length - 1,
+      Math.max(0, Math.floor((percentileValue / 100) * sortedValues.length))
+    );
+    return sortedValues[index];
+  };
+
+  const tailAwareScore = (values, scoreValue, tailPercentile, tailWeight = 0.45) => {
+    if (!values.length) {
+      return null;
+    }
+
+    const typicalScore = average(values.map(scoreValue));
+    const tailValue = percentile(values, tailPercentile);
+    const tailScore = Number.isFinite(tailValue) ? scoreValue(tailValue) : null;
+
+    if (!Number.isFinite(tailScore)) {
+      return typicalScore;
+    }
+
+    return typicalScore * (1 - tailWeight) + tailScore * tailWeight;
+  };
+
   const percentageWithin = (values, predicate) => {
     if (!values.length) {
       return 0;
@@ -651,28 +683,28 @@ const BuildingDashboardPanel = ({ building }) => {
       return null;
     }
 
-    return average(
-      internalTempValues.map((value) => {
-        if (value >= 20 && value <= 24) {
-          return 100;
-        }
+    const scoreTemperature = (value) => {
+      if (value >= 20 && value <= 24) {
+        return 100;
+      }
 
-        if (value < 20) {
-          return linearScore(value, [
-            { min: -10, max: 12, startScore: 0, endScore: 0 },
-            { min: 12, max: 16, startScore: 0, endScore: 45 },
-            { min: 16, max: 18, startScore: 45, endScore: 75 },
-            { min: 18, max: 20, startScore: 75, endScore: 100 },
-          ]);
-        }
-
+      if (value < 20) {
         return linearScore(value, [
-          { min: 24, max: 25, startScore: 100, endScore: 85 },
-          { min: 25, max: 28, startScore: 85, endScore: 40 },
-          { min: 28, max: 35, startScore: 40, endScore: 0 },
+          { min: -10, max: 12, startScore: 0, endScore: 0 },
+          { min: 12, max: 16, startScore: 0, endScore: 35 },
+          { min: 16, max: 18, startScore: 35, endScore: 70 },
+          { min: 18, max: 20, startScore: 70, endScore: 100 },
         ]);
-      })
-    );
+      }
+
+      return linearScore(value, [
+        { min: 24, max: 25, startScore: 100, endScore: 85 },
+        { min: 25, max: 28, startScore: 85, endScore: 40 },
+        { min: 28, max: 35, startScore: 40, endScore: 0 },
+      ]);
+    };
+
+    return tailAwareScore(internalTempValues, scoreTemperature, 10, 0.5);
   };
 
   const calculateHumidityScore = (humidityValues) => {
@@ -680,27 +712,27 @@ const BuildingDashboardPanel = ({ building }) => {
       return null;
     }
 
-    return average(
-      humidityValues.map((value) => {
-        if (value >= 40 && value <= 60) {
-          return 100;
-        }
+    const scoreHumidity = (value) => {
+      if (value >= 40 && value <= 60) {
+        return 100;
+      }
 
-        if (value < 40) {
-          return linearScore(value, [
-            { min: 0, max: 25, startScore: 0, endScore: 0 },
-            { min: 25, max: 30, startScore: 0, endScore: 45 },
-            { min: 30, max: 40, startScore: 45, endScore: 100 },
-          ]);
-        }
-
+      if (value < 40) {
         return linearScore(value, [
-          { min: 60, max: 65, startScore: 100, endScore: 75 },
-          { min: 65, max: 70, startScore: 75, endScore: 35 },
-          { min: 70, max: 90, startScore: 35, endScore: 0 },
+          { min: 0, max: 25, startScore: 0, endScore: 0 },
+          { min: 25, max: 30, startScore: 0, endScore: 45 },
+          { min: 30, max: 40, startScore: 45, endScore: 100 },
         ]);
-      })
-    );
+      }
+
+      return linearScore(value, [
+        { min: 60, max: 65, startScore: 100, endScore: 65 },
+        { min: 65, max: 70, startScore: 65, endScore: 20 },
+        { min: 70, max: 90, startScore: 20, endScore: 0 },
+      ]);
+    };
+
+    return tailAwareScore(humidityValues, scoreHumidity, 90, 0.55);
   };
 
   const calculateSeasonalResilienceScore = (rows) => {
@@ -749,18 +781,18 @@ const BuildingDashboardPanel = ({ building }) => {
     return Math.round((hotScore + coldScore) / 2);
   };
 
-  const calculateOverallPerformanceScore = ({ health, energy, resilience }) => {
+  const calculateGlobalIeqEnergyIndex = ({ health, energy, resilience }) => {
     if (!Number.isFinite(health) || !Number.isFinite(energy)) {
       return null;
     }
 
-    const indoorEnvironment = averageScore([health, resilience]);
+    const ieqScore = averageScore([health, resilience]);
 
-    if (!Number.isFinite(indoorEnvironment)) {
+    if (!Number.isFinite(ieqScore)) {
       return null;
     }
 
-    return Math.round(Math.min(energy, indoorEnvironment));
+    return Math.round(Math.min(energy, ieqScore));
   };
 
   const calculateEnergyScore = (annualEui, targetEui, nationalAverageEui) => {
@@ -1233,18 +1265,37 @@ const BuildingDashboardPanel = ({ building }) => {
     try {
       const { data, error } = await fetchScopedIaqRows({
         includeTimestamp: true,
+        includeReadingType: true,
       });
 
       if (error) throw error;
       if (!data || data.length === 0) return;
 
-      const internalTempValues = getValidValues(data, "temperature_inside");
-      const humidityValues = getValidValues(data, "humidity");
-      const co2Values = getValidValues(data, "co2");
-      const vocValues = getValidValues(data, "vocs");
-      const pm25Values = getValidValues(data, "pm25");
-      const pm10Values = getValidValues(data, "pm10");
-      const hchoValues = getValidValues(data, "hcho");
+      const ieqRows = data.map((row) => {
+        if (
+          building.id === "home" &&
+          row.reading_type === "dyson:living_room"
+        ) {
+          return {
+            ...row,
+            co2: null,
+            vocs: null,
+            pm25: null,
+            pm10: null,
+            hcho: null,
+          };
+        }
+
+        return row;
+      });
+
+      const internalTempValues = getValidValues(ieqRows, "temperature_inside");
+      const humidityValues = getValidValues(ieqRows, "humidity");
+      const co2Values = getValidValues(ieqRows, "co2");
+      const vocValues = getValidValues(ieqRows, "vocs");
+      const pm25Values = getValidValues(ieqRows, "pm25");
+      const pm10Values = getValidValues(ieqRows, "pm10");
+      const hchoValues = getValidValues(ieqRows, "hcho");
 
       const calculatedIAQScore = calculateIAQScore({
         co2Values,
@@ -1259,12 +1310,21 @@ const BuildingDashboardPanel = ({ building }) => {
       });
 
       const humidityStabilityScore = calculateHumidityScore(humidityValues);
-      const calculatedHealthScore = averageScore([
+      const blendedHealthScore = averageScore([
         calculatedIAQScore,
         calculatedComfortScore,
         humidityStabilityScore,
       ]);
-      const resilienceScore = calculateSeasonalResilienceScore(data);
+      const ieqComponentScores = [
+        calculatedIAQScore,
+        calculatedComfortScore,
+        humidityStabilityScore,
+      ].filter((score) => Number.isFinite(score));
+      const calculatedHealthScore =
+        ieqComponentScores.length > 0
+          ? Math.min(blendedHealthScore, ...ieqComponentScores)
+          : null;
+      const resilienceScore = calculateSeasonalResilienceScore(ieqRows);
 
       const estimatedArea =
         matterportMetadata.internalArea !== "--"
@@ -1293,7 +1353,7 @@ const BuildingDashboardPanel = ({ building }) => {
         weatherNormalisedEuiScore,
       ]);
 
-      const buildingPerformanceIndex = calculateOverallPerformanceScore({
+      const buildingPerformanceIndex = calculateGlobalIeqEnergyIndex({
         health: calculatedHealthScore,
         energy: calculatedEnergyScore,
         resilience: resilienceScore,
@@ -1578,6 +1638,7 @@ const BuildingDashboardPanel = ({ building }) => {
                 {roomIaqData.length > 0 ? (
                   <div className="pt-1 mt-1 border-t border-gray-200 space-y-1">
                     {roomIaqData.map((room) => {
+                      const comfortOnlyRoom = room.label === "Downstairs";
                       const roomMetrics = [
                         {
                           label: "Temp",
@@ -1585,10 +1646,14 @@ const BuildingDashboardPanel = ({ building }) => {
                           unit: "deg C",
                         },
                         { label: "RH", value: room.humidity, unit: "%" },
-                        { label: "VOC", value: room.vocs, unit: "ppb" },
-                        { label: "PM2.5", value: room.pm25, unit: "ug/m3" },
-                        { label: "PM10", value: room.pm10, unit: "ug/m3" },
-                        { label: "HCHO", value: room.hcho, unit: "ppb" },
+                        ...(comfortOnlyRoom
+                          ? []
+                          : [
+                              { label: "VOC", value: room.vocs, unit: "ppb" },
+                              { label: "PM2.5", value: room.pm25, unit: "ug/m3" },
+                              { label: "PM10", value: room.pm10, unit: "ug/m3" },
+                              { label: "HCHO", value: room.hcho, unit: "ppb" },
+                            ]),
                       ].filter((metric) => Number.isFinite(metric.value));
 
                       return (
