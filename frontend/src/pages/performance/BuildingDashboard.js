@@ -10,6 +10,7 @@ const BUILDINGS = [
     id: "home",
     name: "Home",
     subtitle: "Home smart meter, CAD and MQTT collector",
+    address: "14 Bridgewood Rd, Woodbridge, Suffolk IP12 4HA",
     defaultMatterportUrl: "https://my.matterport.com/show/?m=8A48K5upwWN",
     latitude: 52.0945,
     longitude: 1.30488,
@@ -22,6 +23,7 @@ const BUILDINGS = [
     id: "museum",
     name: "Museum",
     subtitle: "CAD monitor, smart meter and IAQ tablet collector",
+    address: "Woodbridge Tide Mill Museum, Tide Mill Way IP12 1BY",
     defaultMatterportUrl: DEFAULT_MATTERPORT_URL,
     latitude: 52.0901,
     longitude: -1.321,
@@ -85,7 +87,7 @@ const buildMatterportEmbedUrl = (value) => {
 };
 
 const createEmptyMatterportMetadata = (statusText, building = {}) => ({
-  address: statusText,
+  address: building.address || statusText,
   latitude: building.latitude ?? "--",
   longitude: building.longitude ?? "--",
   internalArea: "--",
@@ -98,201 +100,6 @@ const getEstimatedInternalArea = (modelId, building) => {
   }
 
   return building.estimatedInternalArea;
-};
-
-const normaliseHeader = (value) =>
-  value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
-
-const parseCsvLine = (line) => {
-  const cells = [];
-  let current = "";
-  let quoted = false;
-
-  for (let index = 0; index < line.length; index += 1) {
-    const char = line[index];
-    const nextChar = line[index + 1];
-
-    if (char === '"' && quoted && nextChar === '"') {
-      current += '"';
-      index += 1;
-    } else if (char === '"') {
-      quoted = !quoted;
-    } else if (char === "," && !quoted) {
-      cells.push(current.trim());
-      current = "";
-    } else {
-      current += char;
-    }
-  }
-
-  cells.push(current.trim());
-  return cells;
-};
-
-const parseCsv = (text) => {
-  const lines = text
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
-
-  if (lines.length < 2) {
-    return [];
-  }
-
-  const headers = parseCsvLine(lines[0]).map(normaliseHeader);
-
-  return lines.slice(1).map((line) => {
-    const cells = parseCsvLine(line);
-    return headers.reduce((row, header, index) => {
-      row[header] = cells[index] ?? "";
-      return row;
-    }, {});
-  });
-};
-
-const firstValue = (row, keys) => {
-  for (const key of keys) {
-    if (row[key] !== undefined && row[key] !== "") {
-      return row[key];
-    }
-  }
-
-  return "";
-};
-
-const numberValue = (row, keys) => {
-  const value = Number(String(firstValue(row, keys)).replace(/[^0-9.-]/g, ""));
-  return Number.isFinite(value) ? value : null;
-};
-
-const dateKeyFromRow = (row) => {
-  const rawDate = firstValue(row, [
-    "date",
-    "day",
-    "timestamp",
-    "time",
-    "start_date",
-    "period_start",
-    "billing_period_start",
-  ]);
-  const parsedDate = new Date(rawDate);
-
-  if (Number.isNaN(parsedDate.getTime())) {
-    return null;
-  }
-
-  return parsedDate.toISOString().slice(0, 10);
-};
-
-const analyseHistoricalRows = (rows, area) => {
-  const dailyTotals = {};
-  let hddTotal = 0;
-  let hddEnergyTotal = 0;
-  let htcTotal = 0;
-  let htcSamples = 0;
-
-  rows.forEach((row) => {
-    const day = dateKeyFromRow(row);
-    if (!day) {
-      return;
-    }
-
-    const fuelType = normaliseHeader(
-      firstValue(row, ["fuel_type", "fuel", "meter_type", "utility"])
-    );
-    const electricityKwh =
-      numberValue(row, ["electricity_kwh", "electricity", "import_kwh"]) ??
-      (fuelType.includes("electric")
-        ? numberValue(row, ["usage_kwh", "kwh", "energy_kwh", "consumption_kwh"])
-        : null);
-    const gasKwh =
-      numberValue(row, ["gas_kwh", "gas"]) ??
-      (fuelType.includes("gas")
-        ? numberValue(row, ["usage_kwh", "kwh", "energy_kwh", "consumption_kwh"])
-        : null);
-    const hdd = numberValue(row, [
-      "hdd",
-      "heating_degree_days",
-      "degree_days",
-      "hdd_15_5",
-    ]);
-    const indoorTemp = numberValue(row, [
-      "internal_temp",
-      "temperature_inside",
-      "inside_temp",
-      "indoor_temp",
-    ]);
-    const outdoorTemp = numberValue(row, [
-      "external_temp",
-      "temperature_outside",
-      "outside_temp",
-      "outdoor_temp",
-    ]);
-
-    if (!dailyTotals[day]) {
-      dailyTotals[day] = { electricity: 0, gas: 0 };
-    }
-
-    if (Number.isFinite(electricityKwh)) {
-      dailyTotals[day].electricity += electricityKwh;
-    }
-
-    if (Number.isFinite(gasKwh)) {
-      dailyTotals[day].gas += gasKwh;
-    }
-
-    const totalKwh =
-      (Number.isFinite(electricityKwh) ? electricityKwh : 0) +
-      (Number.isFinite(gasKwh) ? gasKwh : 0);
-
-    if (Number.isFinite(hdd) && hdd > 0 && totalKwh > 0) {
-      hddTotal += hdd;
-      hddEnergyTotal += totalKwh;
-    }
-
-    if (
-      Number.isFinite(indoorTemp) &&
-      Number.isFinite(outdoorTemp) &&
-      indoorTemp > outdoorTemp &&
-      totalKwh > 0
-    ) {
-      const averagePowerWatts = (totalKwh * 1000) / 24;
-      htcTotal += averagePowerWatts / (indoorTemp - outdoorTemp);
-      htcSamples += 1;
-    }
-  });
-
-  const days = Object.values(dailyTotals);
-  const electricityDailyAverage = days.length
-    ? days.reduce((sum, day) => sum + day.electricity, 0) / days.length
-    : null;
-  const gasDailyAverage = days.length
-    ? days.reduce((sum, day) => sum + day.gas, 0) / days.length
-    : null;
-  const totalDailyAverage =
-    Number.isFinite(electricityDailyAverage) || Number.isFinite(gasDailyAverage)
-      ? (electricityDailyAverage || 0) + (gasDailyAverage || 0)
-      : null;
-  const annualisedEui =
-    Number.isFinite(totalDailyAverage) && Number.isFinite(area) && area > 0
-      ? (totalDailyAverage * 365) / area
-      : null;
-
-  return {
-    rowCount: rows.length,
-    dayCount: days.length,
-    electricityDailyAverage,
-    gasDailyAverage,
-    totalDailyAverage,
-    annualisedEui,
-    kwhPerHdd: hddTotal > 0 ? hddEnergyTotal / hddTotal : null,
-    htcEstimate: htcSamples > 0 ? htcTotal / htcSamples : null,
-    htcSamples,
-  };
 };
 
 const BuildingDashboardPanel = ({ building }) => {
@@ -356,11 +163,6 @@ const BuildingDashboardPanel = ({ building }) => {
     comfort: null,
     humidity: null,
   });
-  const [historicalImport, setHistoricalImport] = useState({
-    fileName: "",
-    summary: null,
-    error: "",
-  });
   const [heatLossSummary, setHeatLossSummary] = useState({
     kwhPerHdd: null,
     weatherNormalisedEui: null,
@@ -389,6 +191,7 @@ const BuildingDashboardPanel = ({ building }) => {
         {
           ...createEmptyMatterportMetadata("Paste a Matterport URL or ID", building),
           ...manualMatterportData,
+          address: building.address || manualMatterportData.address,
         }
       );
       return;
@@ -401,6 +204,7 @@ const BuildingDashboardPanel = ({ building }) => {
       ),
       internalArea: getEstimatedInternalArea(matterportModelId, building),
       ...manualMatterportData,
+      address: building.address || manualMatterportData.address,
     });
   }, [building, matterportModelId, manualMatterportData]);
 
@@ -1406,33 +1210,6 @@ const BuildingDashboardPanel = ({ building }) => {
     heatLossSummary.weatherNormalisedEui,
   ]);
 
-  const handleHistoricalImport = async (event) => {
-    const file = event.target.files?.[0];
-
-    if (!file) {
-      return;
-    }
-
-    try {
-      const text = await file.text();
-      const rows = parseCsv(text);
-      const area = Number(matterportMetadata.internalArea);
-      const summary = analyseHistoricalRows(rows, area);
-
-      setHistoricalImport({
-        fileName: file.name,
-        summary,
-        error: "",
-      });
-    } catch (error) {
-      setHistoricalImport({
-        fileName: file.name,
-        summary: null,
-        error: error.message,
-      });
-    }
-  };
-
   return (
     <div className="min-h-screen bg-white p-4 flex flex-col space-y-6">
       <div className="bg-gray-100 p-4 rounded shadow">
@@ -1528,19 +1305,6 @@ const BuildingDashboardPanel = ({ building }) => {
                     {formatScore(performanceBreakdown.energy)}
                   </p>
                 </div>
-
-                <div className="space-y-1 min-w-0">
-                  <h3 className="font-semibold">Historical Evidence</h3>
-                  <input
-                    type="file"
-                    accept=".csv,text/csv"
-                    onChange={handleHistoricalImport}
-                    className="block w-full text-[10px] min-[390px]:text-xs"
-                  />
-                  {historicalImport.error ? (
-                    <p className="text-red-700">{historicalImport.error}</p>
-                  ) : null}
-                </div>
               </div>
 
               <div className="flex justify-center min-w-0 scale-110 sm:scale-125 origin-top">
@@ -1554,7 +1318,7 @@ const BuildingDashboardPanel = ({ building }) => {
 
           <div className="bg-white rounded border p-2.5 sm:p-4 min-w-0 overflow-hidden">
             <h3 className="text-xs min-[390px]:text-sm sm:text-base font-semibold mb-1.5 sm:mb-3">
-              Live Data
+              Energy
             </h3>
 
             <div className="grid grid-cols-3 gap-2 sm:gap-5 text-[10px] min-[390px]:text-xs sm:text-sm leading-tight">
@@ -1602,6 +1366,7 @@ const BuildingDashboardPanel = ({ building }) => {
               </div>
 
               <div className="space-y-0.5 break-words min-w-0">
+                <h4 className="font-semibold">IAQ Data</h4>
                 <p>
                   <strong>Internal Temp:</strong>{" "}
                   {formatMeasurement(sensorData.internalTemp)} deg C
@@ -1679,53 +1444,24 @@ const BuildingDashboardPanel = ({ building }) => {
               </div>
 
               <div className="space-y-2 sm:space-y-3 break-words min-w-0">
-                {historicalImport.summary ? (
-                  <div className="space-y-0.5">
-                    <h4 className="font-semibold">Imported History</h4>
-                    <p>
-                      <strong>File:</strong> {historicalImport.fileName}
-                    </p>
-                    <p>
-                      <strong>Rows / Days:</strong>{" "}
-                      {historicalImport.summary.rowCount} /{" "}
-                      {historicalImport.summary.dayCount}
-                    </p>
-                    <p>
-                      <strong>Imported EUI:</strong>{" "}
-                      {formatNumber(historicalImport.summary.annualisedEui)}{" "}
-                      kWh/m2/yr
-                    </p>
-                    <p>
-                      <strong>NILMTK:</strong> ready for labelled/high-resolution
-                      disaggregation inputs
-                    </p>
-                  </div>
-                ) : null}
-
                 <div className="space-y-0.5">
                   <h4 className="font-semibold">Heat Loss Analysis</h4>
                   <p>
                     <strong>HDD Intensity:</strong>{" "}
                     {Number.isFinite(heatLossSummary.kwhPerHdd)
                       ? `${formatNumber(heatLossSummary.kwhPerHdd, 3)} kWh/HDD`
-                      : Number.isFinite(historicalImport.summary?.kwhPerHdd)
-                      ? `${formatNumber(historicalImport.summary.kwhPerHdd, 3)} kWh/HDD`
                       : "Pending completed energy + HDD data"}
                   </p>
                   <p>
                     <strong>HTC Estimate:</strong>{" "}
                     {Number.isFinite(heatLossSummary.htcEstimate)
                       ? `${formatNumber(heatLossSummary.htcEstimate, 1)} W/K`
-                      : Number.isFinite(historicalImport.summary?.htcEstimate)
-                      ? `${formatNumber(historicalImport.summary.htcEstimate, 1)} W/K`
                       : "Pending energy + indoor/outdoor temperature overlap"}
                   </p>
                   <p>
                     <strong>HDD / HTC Days:</strong>{" "}
                     {heatLossSummary.hddDays || 0} /{" "}
-                    {heatLossSummary.htcSamples ||
-                      historicalImport.summary?.htcSamples ||
-                      0}
+                    {heatLossSummary.htcSamples || 0}
                   </p>
                   <p>
                     <strong>Weather-normalised EUI:</strong>{" "}
