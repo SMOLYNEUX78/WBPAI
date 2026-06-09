@@ -6,3 +6,6 @@ backend/.env
 frontend/.env
 
 node_modules/
+
+backend/.dyson-tools/
+backend/__pycache__/
