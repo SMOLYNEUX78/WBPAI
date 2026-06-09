@@ -1918,10 +1918,10 @@ const NewBuildingSetupPanel = () => {
             </div>
 
             <div className="border rounded p-3 bg-gray-50 space-y-2">
-              <h4 className="font-semibold text-sm">Historical Data Upload</h4>
+              <h4 className="font-semibold text-sm">Energy Bill / Tariff Evidence Upload</h4>
               <input
                 type="file"
-                accept=".csv,.xlsx,.xls,text/csv"
+                accept=".pdf,.jpg,.jpeg,.png,.csv,.xlsx,.xls,application/pdf,image/*,text/csv"
                 className="block w-full text-xs"
                 onChange={(event) =>
                   setHistoricalDataFileName(event.target.files?.[0]?.name || "")
@@ -1933,8 +1933,9 @@ const NewBuildingSetupPanel = () => {
                 </p>
               ) : null}
               <p className="text-xs text-gray-600">
-                Accepts supplier exports, Bright/Glow downloads or n3rgy-style
-                half-hourly consumption files.
+                Upload bills, tariff documents, green tariff evidence or non-smart-meter
+                meter-read histories. Half-hourly consumption should come through
+                the n3rgy/API registration path where available.
               </p>
             </div>
 
