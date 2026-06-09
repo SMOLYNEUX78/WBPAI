@@ -1721,6 +1721,67 @@ const NewBuildingSetupPanel = () => {
               </p>
             </div>
 
+            <div className="border rounded p-3 bg-gray-50 space-y-3">
+              <div>
+                <h4 className="font-semibold text-sm">n3rgy Registration Mock</h4>
+                <p className="text-xs text-gray-600">
+                  Capture the consent and meter identifiers needed before importing
+                  half-hourly smart-meter history.
+                </p>
+              </div>
+
+              <div className="grid gap-2 sm:grid-cols-2">
+                <input
+                  type="text"
+                  className="border rounded p-2 w-full text-xs"
+                  placeholder="MPAN / MPRN"
+                />
+                <input
+                  type="text"
+                  className="border rounded p-2 w-full text-xs"
+                  placeholder="IHD MAC / Device ID"
+                />
+                <input
+                  type="text"
+                  className="border rounded p-2 w-full text-xs"
+                  placeholder="House number or name"
+                />
+                <input
+                  type="text"
+                  className="border rounded p-2 w-full text-xs"
+                  placeholder="Postcode"
+                />
+                <input
+                  type="date"
+                  className="border rounded p-2 w-full text-xs"
+                  aria-label="Historical data start date"
+                />
+                <select
+                  className="border rounded p-2 w-full text-xs"
+                  defaultValue="half-hourly"
+                >
+                  <option value="half-hourly">Half-hourly consumption</option>
+                  <option value="daily">Daily consumption</option>
+                  <option value="inventory">Meter inventory check</option>
+                </select>
+              </div>
+
+              <label className="flex items-start gap-2 text-xs text-gray-700">
+                <input type="checkbox" className="mt-0.5" />
+                <span>
+                  Customer has given consent for WBPAI to retrieve historical smart-meter
+                  data for this building profile.
+                </span>
+              </label>
+
+              <button
+                type="button"
+                className="bg-blue-600 text-white px-4 py-2 rounded text-sm font-semibold"
+              >
+                Register Data Access
+              </button>
+            </div>
+
             <div className="border rounded p-3 bg-gray-50 space-y-2">
               <h4 className="font-semibold text-sm">Historical Data Upload</h4>
               <input
