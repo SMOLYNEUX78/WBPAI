@@ -36,7 +36,12 @@ def parse_ip_map(value: str) -> dict[str, str]:
             continue
         serial, ip_address = entry.split("=", 1)
         result[serial.strip()] = ip_address.strip()
+        result[normalise_serial(serial)] = ip_address.strip()
     return result
+
+
+def normalise_serial(value: str) -> str:
+    return value.strip().replace("-", "").upper()
 
 
 def safe_name(value: str) -> str:
@@ -99,7 +104,9 @@ def main() -> int:
         print(f"  firmware: {firmware or ''}")
         print(f"  has_local_mqtt: {'yes' if local_password else 'no'}")
 
-        host = ip_map.get(device.serial_number)
+        host = ip_map.get(device.serial_number) or ip_map.get(
+            normalise_serial(device.serial_number)
+        )
         if host and local_password:
             env_entries.append(
                 ":".join(
