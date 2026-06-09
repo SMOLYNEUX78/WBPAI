@@ -1795,30 +1795,6 @@ const NewBuildingSetupPanel = () => {
               </p>
             </div>
 
-            <div className="border rounded overflow-hidden text-xs">
-              <div className="bg-gray-100 px-3 py-2 font-semibold">
-                n3rgy import preview
-              </div>
-              <div className="grid grid-cols-4 bg-white border-t font-semibold">
-                <div className="p-2 border-r">Start</div>
-                <div className="p-2 border-r">Fuel</div>
-                <div className="p-2 border-r">kWh</div>
-                <div className="p-2">Source</div>
-              </div>
-              {[
-                ["2026-01-01 00:00", "electricity", "0.18", "n3rgy"],
-                ["2026-01-01 00:30", "electricity", "0.21", "n3rgy"],
-                ["2026-01-01 01:00", "gas", "0.52", "n3rgy"],
-              ].map((row) => (
-                <div key={row.join("-")} className="grid grid-cols-4 bg-white border-t">
-                  {row.map((cell) => (
-                    <div key={cell} className="p-2 border-r last:border-r-0 break-words">
-                      {cell}
-                    </div>
-                  ))}
-                </div>
-              ))}
-            </div>
           </div>
 
           <div className="bg-white rounded border p-4 space-y-4">
