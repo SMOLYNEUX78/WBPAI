@@ -10,3 +10,4 @@ node_modules/
 backend/.dyson-tools/
 backend/__pycache__/
 backend/logs/
+frontend/logs/

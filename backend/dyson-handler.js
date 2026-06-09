@@ -169,6 +169,8 @@ function buildReadingRow(values, readingType) {
     humidity: average(values.map((value) => value.humidity)),
     vocs: average(values.map((value) => value.vocs)),
     pm25: average(values.map((value) => value.pm25)),
+    pm10: average(values.map((value) => value.pm10)),
+    hcho: average(values.map((value) => value.hcho)),
     timestamp: new Date().toISOString(),
     reading_type: readingType,
   };
@@ -180,7 +182,40 @@ function hasAnyReadingValue(row) {
     row.humidity,
     row.vocs,
     row.pm25,
+    row.pm10,
+    row.hcho,
   ].some((value) => Number.isFinite(value));
+}
+
+function withoutExtendedIaqColumns(rows) {
+  return rows.map(({ pm10, hcho, ...row }) => row);
+}
+
+async function insertReadingRows(rows) {
+  const { error } = await supabase.from("Readings").insert(rows);
+
+  if (!error) {
+    return null;
+  }
+
+  const missingExtendedColumn =
+    /pm10|hcho/i.test(error.message || "") ||
+    /pm10|hcho/i.test(error.details || "") ||
+    error.code === "PGRST204";
+
+  if (!missingExtendedColumn) {
+    return error;
+  }
+
+  console.warn(
+    "[dyson] Readings table is missing pm10/hcho columns; retrying without extended IAQ fields"
+  );
+
+  const retry = await supabase
+    .from("Readings")
+    .insert(withoutExtendedIaqColumns(rows));
+
+  return retry.error || null;
 }
 
 async function persistReadings() {
@@ -212,7 +247,7 @@ async function persistReadings() {
     return;
   }
 
-  const { error } = await supabase.from("Readings").insert(rows);
+  const error = await insertReadingRows(rows);
 
   if (error) {
     console.error("[dyson] Supabase insert error:", error.message);

@@ -329,8 +329,11 @@ const BuildingDashboardPanel = ({ building }) => {
     co2: null,
     vocs: null,
     pm25: null,
+    pm10: null,
+    hcho: null,
   });
   const [roomIaqData, setRoomIaqData] = useState([]);
+  const supportsExtendedIaqColumns = useRef(true);
 
   const [performanceValue, setPerformanceValue] = useState(null);
   const [historicalPerformance, setHistoricalPerformance] = useState(null);
@@ -407,6 +410,78 @@ const BuildingDashboardPanel = ({ building }) => {
     }
 
     return query.eq("building_id", building.id);
+  };
+
+  const buildIaqSelect = ({ includeTimestamp = false, includeReadingType = false, includeExtended = true } = {}) => {
+    const columns = [
+      "temperature_inside",
+      "temperature_outside",
+      "humidity",
+      "co2",
+      "vocs",
+      "pm25",
+    ];
+
+    if (includeExtended && supportsExtendedIaqColumns.current) {
+      columns.push("pm10", "hcho");
+    }
+
+    if (includeTimestamp) {
+      columns.push("timestamp");
+    }
+
+    if (includeReadingType) {
+      columns.push("reading_type");
+    }
+
+    return columns.join(", ");
+  };
+
+  const fetchScopedIaqRows = async ({
+    includeTimestamp = false,
+    includeReadingType = false,
+    limit,
+    orderDescending = false,
+  } = {}) => {
+    const runQuery = async (includeExtended) => {
+      let query = applyBuildingScope(
+        supabase
+          .from("Readings")
+          .select(
+            buildIaqSelect({
+              includeTimestamp,
+              includeReadingType,
+              includeExtended,
+            })
+          )
+          .or(
+            "temperature_inside.not.is.null,humidity.not.is.null,co2.not.is.null,vocs.not.is.null,pm25.not.is.null"
+          )
+      );
+
+      if (orderDescending) {
+        query = query.order("timestamp", { ascending: false });
+      }
+
+      if (limit) {
+        query = query.limit(limit);
+      }
+
+      return query;
+    };
+
+    let result = await runQuery(true);
+
+    if (
+      result.error &&
+      supportsExtendedIaqColumns.current &&
+      /pm10|hcho|schema cache/i.test(result.error.message || "")
+    ) {
+      supportsExtendedIaqColumns.current = false;
+      result = await runQuery(false);
+    }
+
+    return result;
   };
 
   const getValidValues = (rows, key) =>
@@ -499,7 +574,13 @@ const BuildingDashboardPanel = ({ building }) => {
     return bands[bands.length - 1].endScore;
   };
 
-  const calculateIAQScore = ({ co2Values, pm25Values, vocValues }) => {
+  const calculateIAQScore = ({
+    co2Values,
+    pm25Values,
+    pm10Values = [],
+    vocValues,
+    hchoValues = [],
+  }) => {
     const co2Score = co2Values.length
       ? average(
           co2Values.map((value) =>
@@ -538,7 +619,31 @@ const BuildingDashboardPanel = ({ building }) => {
         )
       : null;
 
-    return averageScore([co2Score, pm25Score, vocScore]);
+    const pm10Score = pm10Values.length
+      ? average(
+          pm10Values.map((value) =>
+            linearScore(value, [
+              { min: 0, max: 15, startScore: 100, endScore: 100 },
+              { min: 15, max: 45, startScore: 100, endScore: 55 },
+              { min: 45, max: 100, startScore: 55, endScore: 0 },
+            ])
+          )
+        )
+      : null;
+
+    const hchoScore = hchoValues.length
+      ? average(
+          hchoValues.map((value) =>
+            linearScore(value, [
+              { min: 0, max: 9, startScore: 100, endScore: 100 },
+              { min: 9, max: 80, startScore: 100, endScore: 50 },
+              { min: 80, max: 200, startScore: 50, endScore: 0 },
+            ])
+          )
+        )
+      : null;
+
+    return averageScore([co2Score, pm25Score, pm10Score, vocScore, hchoScore]);
   };
 
   const calculateComfortScore = ({ internalTempValues }) => {
@@ -1048,16 +1153,11 @@ const BuildingDashboardPanel = ({ building }) => {
 
   const fetchIAQData = async () => {
     try {
-      const { data, error } = await applyBuildingScope(
-        supabase
-        .from("Readings")
-        .select("temperature_inside, humidity, co2, vocs, pm25, reading_type")
-        .or(
-          "temperature_inside.not.is.null,humidity.not.is.null,co2.not.is.null,vocs.not.is.null,pm25.not.is.null"
-        )
-        .order("timestamp", { ascending: false })
-        .limit(30)
-      );
+      const { data, error } = await fetchScopedIaqRows({
+        includeReadingType: true,
+        limit: 30,
+        orderDescending: true,
+      });
 
       if (error) throw error;
       if (!data || data.length === 0) return;
@@ -1083,6 +1183,8 @@ const BuildingDashboardPanel = ({ building }) => {
             co2: numericOrNull(row.co2),
             vocs: numericOrNull(row.vocs),
             pm25: numericOrNull(row.pm25),
+            pm10: numericOrNull(row.pm10),
+            hcho: numericOrNull(row.hcho),
           });
           return rooms;
         }, [])
@@ -1103,6 +1205,8 @@ const BuildingDashboardPanel = ({ building }) => {
               co2: averageNullableValues(roomRows.map((row) => row.co2)),
               vocs: averageNullableValues(roomRows.map((row) => row.vocs)),
               pm25: averageNullableValues(roomRows.map((row) => row.pm25)),
+              pm10: averageNullableValues(roomRows.map((row) => row.pm10)),
+              hcho: averageNullableValues(roomRows.map((row) => row.hcho)),
             }
           : null;
 
@@ -1117,6 +1221,8 @@ const BuildingDashboardPanel = ({ building }) => {
         co2: numericOrNull(combinedFromRooms?.co2 ?? sourceRow.co2),
         vocs: numericOrNull(combinedFromRooms?.vocs ?? sourceRow.vocs),
         pm25: numericOrNull(combinedFromRooms?.pm25 ?? sourceRow.pm25),
+        pm10: numericOrNull(combinedFromRooms?.pm10 ?? sourceRow.pm10),
+        hcho: numericOrNull(combinedFromRooms?.hcho ?? sourceRow.hcho),
       }));
     } catch (err) {
       console.error("Error fetching IAQ data:", err.message);
@@ -1125,13 +1231,9 @@ const BuildingDashboardPanel = ({ building }) => {
 
   const fetchLongTermBuildingPerformance = async () => {
     try {
-      const { data, error } = await applyBuildingScope(
-        supabase
-        .from("Readings")
-        .select(
-          "temperature_inside, temperature_outside, humidity, co2, vocs, pm25, timestamp"
-        )
-      );
+      const { data, error } = await fetchScopedIaqRows({
+        includeTimestamp: true,
+      });
 
       if (error) throw error;
       if (!data || data.length === 0) return;
@@ -1141,11 +1243,15 @@ const BuildingDashboardPanel = ({ building }) => {
       const co2Values = getValidValues(data, "co2");
       const vocValues = getValidValues(data, "vocs");
       const pm25Values = getValidValues(data, "pm25");
+      const pm10Values = getValidValues(data, "pm10");
+      const hchoValues = getValidValues(data, "hcho");
 
       const calculatedIAQScore = calculateIAQScore({
         co2Values,
         vocValues,
         pm25Values,
+        pm10Values,
+        hchoValues,
       });
 
       const calculatedComfortScore = calculateComfortScore({
@@ -1448,15 +1554,27 @@ const BuildingDashboardPanel = ({ building }) => {
                   <strong>Humidity:</strong>{" "}
                   {formatMeasurement(sensorData.humidity)}%
                 </p>
-                <p>
-                  <strong>CO2:</strong> {formatMeasurement(sensorData.co2)} ppm
-                </p>
+                {building.id !== "home" ? (
+                  <p>
+                    <strong>CO2:</strong> {formatMeasurement(sensorData.co2)} ppm
+                  </p>
+                ) : null}
                 <p>
                   <strong>VOCs:</strong> {formatMeasurement(sensorData.vocs)} ppb
                 </p>
                 <p>
                   <strong>PM2.5:</strong> {formatMeasurement(sensorData.pm25)} ug/m3
                 </p>
+                {Number.isFinite(sensorData.pm10) ? (
+                  <p>
+                    <strong>PM10:</strong> {formatMeasurement(sensorData.pm10)} ug/m3
+                  </p>
+                ) : null}
+                {Number.isFinite(sensorData.hcho) ? (
+                  <p>
+                    <strong>HCHO:</strong> {formatMeasurement(sensorData.hcho)} ppb
+                  </p>
+                ) : null}
                 {roomIaqData.length > 0 ? (
                   <div className="pt-1 mt-1 border-t border-gray-200 space-y-1">
                     {roomIaqData.map((room) => (
@@ -1472,6 +1590,14 @@ const BuildingDashboardPanel = ({ building }) => {
                           {" / "}
                           PM2.5 {formatMeasurement(room.pm25)} ug/m3
                         </p>
+                        {Number.isFinite(room.pm10) ||
+                        Number.isFinite(room.hcho) ? (
+                          <p>
+                            PM10 {formatMeasurement(room.pm10)} ug/m3
+                            {" / "}
+                            HCHO {formatMeasurement(room.hcho)} ppb
+                          </p>
+                        ) : null}
                       </div>
                     ))}
                   </div>
