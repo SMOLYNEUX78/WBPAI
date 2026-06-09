@@ -1479,6 +1479,7 @@ const BuildingDashboardPanel = ({ building }) => {
             </div>
           </div>
         </div>
+
       </div>
 
       <div className="bg-gray-100 p-4 rounded shadow">
@@ -1506,6 +1507,8 @@ const NewBuildingSetupPanel = () => {
     longitude: "",
     internalArea: "",
   });
+  const [energyConsent, setEnergyConsent] = useState(false);
+  const [historicalDataFileName, setHistoricalDataFileName] = useState("");
 
   const modelId = useMemo(() => extractMatterportModelId(modelInput), [modelInput]);
   const modelUrl = useMemo(() => normalizeMatterportUrl(modelInput), [modelInput]);
@@ -1515,6 +1518,32 @@ const NewBuildingSetupPanel = () => {
     manualData.latitude ||
     manualData.longitude ||
     manualData.internalArea;
+  const hasCompleteBuildingProfile = Boolean(
+    apiDetails ||
+      (manualData.address &&
+        manualData.latitude &&
+        manualData.longitude &&
+        manualData.internalArea)
+  );
+  const hasWeatherAndArea = Boolean(
+    apiDetails ||
+      (manualData.latitude && manualData.longitude && manualData.internalArea)
+  );
+  const baselineReadinessSteps = [
+    { label: "Building profile", complete: hasCompleteBuildingProfile },
+    { label: "Energy consent", complete: energyConsent },
+    { label: "13-month energy history", complete: Boolean(historicalDataFileName) },
+    { label: "Weather/GIA ready", complete: hasWeatherAndArea },
+    { label: "IAQ monitoring started", complete: false },
+    { label: "Baseline locked", complete: false },
+  ];
+  const baselineCompleteCount = baselineReadinessSteps.filter(
+    (step) => step.complete
+  ).length;
+  const baselineProgress = Math.round(
+    (baselineCompleteCount / baselineReadinessSteps.length) * 100
+  );
+  const nextBaselineStep = baselineReadinessSteps.find((step) => !step.complete);
 
   const handleManualChange = (field, value) => {
     setManualData((current) => ({
@@ -1767,7 +1796,12 @@ const NewBuildingSetupPanel = () => {
               </div>
 
               <label className="flex items-start gap-2 text-xs text-gray-700">
-                <input type="checkbox" className="mt-0.5" />
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={energyConsent}
+                  onChange={(event) => setEnergyConsent(event.target.checked)}
+                />
                 <span>
                   Customer has given consent for WBPAI to retrieve historical smart-meter
                   data for this building profile.
@@ -1788,7 +1822,15 @@ const NewBuildingSetupPanel = () => {
                 type="file"
                 accept=".csv,.xlsx,.xls,text/csv"
                 className="block w-full text-xs"
+                onChange={(event) =>
+                  setHistoricalDataFileName(event.target.files?.[0]?.name || "")
+                }
               />
+              {historicalDataFileName ? (
+                <p className="text-xs text-gray-700">
+                  Selected: {historicalDataFileName}
+                </p>
+              ) : null}
               <p className="text-xs text-gray-600">
                 Accepts supplier exports, Bright/Glow downloads or n3rgy-style
                 half-hourly consumption files.
@@ -1824,6 +1866,48 @@ const NewBuildingSetupPanel = () => {
                 Status: waiting for supported IAQ monitor integration
               </div>
             </div>
+          </div>
+        </div>
+
+        <div className="mt-4 bg-white rounded border p-4 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h3 className="font-semibold">Baseline Readiness</h3>
+              <p className="text-xs text-gray-600">
+                {nextBaselineStep
+                  ? `Next: ${nextBaselineStep.label}`
+                  : "Ready to lock baseline"}
+              </p>
+            </div>
+            <p className="text-sm font-semibold">
+              {baselineCompleteCount}/{baselineReadinessSteps.length} complete
+            </p>
+          </div>
+
+          <div className="h-3 rounded bg-gray-200 overflow-hidden">
+            <div
+              className="h-full bg-blue-600 transition-all"
+              style={{ width: `${baselineProgress}%` }}
+            />
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6 text-xs">
+            {baselineReadinessSteps.map((step) => (
+              <div
+                key={step.label}
+                className={`rounded border p-2 ${
+                  step.complete
+                    ? "border-blue-200 bg-blue-50 text-blue-900"
+                    : "border-gray-200 bg-gray-50 text-gray-600"
+                }`}
+              >
+                <span className="font-semibold">
+                  {step.complete ? "Complete" : "Pending"}
+                </span>
+                <br />
+                {step.label}
+              </div>
+            ))}
           </div>
         </div>
       </div>
