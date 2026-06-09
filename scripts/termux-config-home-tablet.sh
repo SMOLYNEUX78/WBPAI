@@ -24,9 +24,15 @@ if [ ! -f "$ENV_FILE" ]; then
 fi
 
 set_env "BUILDING_ID" "home"
+set_env "DYSON_BUILDING_ID" "home"
 set_env "COLLECTOR_INSTANCE" "home-tablet"
-set_env "COLLECTOR_PROCESSES" "glow-api"
+set_env "COLLECTOR_PROCESSES" "glow-api,dyson"
 set_env "GLOW_API_RESOURCES" "home:electricity:042517ae-601f-4928-b3d2-e49b1de0e695,home:gas:a2130979-fb09-48bf-89f9-5703c30037b8,museum:electricity:12e31e6d-11dc-4bc3-a70b-dab6f76fc73c"
+
+if ! grep -q "^DYSON_DEVICES=" "$ENV_FILE"; then
+  echo "Warning: DYSON_DEVICES is not set in backend/.env."
+  echo "Dyson IAQ will not run until the local Dyson device credentials are added."
+fi
 
 tmux kill-session -t wbpai 2>/dev/null || true
 "${REPO_DIR}/scripts/termux-start.sh"
