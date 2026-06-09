@@ -1210,6 +1210,35 @@ const BuildingDashboardPanel = ({ building }) => {
     heatLossSummary.weatherNormalisedEui,
   ]);
 
+  const hasConfirmedArea = matterportMetadata.internalArea !== "--";
+  const hasEnergyBaseline = Number.isFinite(historicalPerformance);
+  const hasWeatherNormalisedBaseline =
+    Number.isFinite(heatLossSummary.weatherNormalisedEui) ||
+    Number.isFinite(heatLossSummary.kwhPerHdd);
+  const hasLiveIaqFeed =
+    Number.isFinite(sensorData.internalTemp) ||
+    Number.isFinite(sensorData.humidity) ||
+    roomIaqData.length > 0;
+  const carbonEvidenceSteps = [
+    { label: "Energy baseline", complete: hasEnergyBaseline },
+    { label: "GIA confirmed", complete: hasConfirmedArea },
+    { label: "HDD normalised", complete: hasWeatherNormalisedBaseline },
+    { label: "Live IAQ active", complete: hasLiveIaqFeed },
+    { label: "Cold-season comfort", complete: heatLossSummary.htcSamples >= 30 },
+    { label: "Warm-season comfort", complete: false },
+    { label: "Post-improvement period", complete: false },
+    { label: "Credit evidence ready", complete: false },
+  ];
+  const carbonEvidenceCompleteCount = carbonEvidenceSteps.filter(
+    (step) => step.complete
+  ).length;
+  const carbonEvidenceProgress = Math.round(
+    (carbonEvidenceCompleteCount / carbonEvidenceSteps.length) * 100
+  );
+  const nextCarbonEvidenceStep = carbonEvidenceSteps.find(
+    (step) => !step.complete
+  );
+  const carbonTokenUnlocked = carbonEvidenceSteps.every((step) => step.complete);
   return (
     <div className="min-h-screen bg-white p-4 flex flex-col space-y-6">
       <div className="bg-gray-100 p-4 rounded shadow">
@@ -1480,18 +1509,90 @@ const BuildingDashboardPanel = ({ building }) => {
           </div>
         </div>
 
+        <div className="mt-4 bg-white rounded border p-4 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h3 className="font-semibold">Carbon Evidence Readiness</h3>
+              <p className="text-xs text-gray-600">
+                {nextCarbonEvidenceStep
+                  ? `Next: ${nextCarbonEvidenceStep.label}`
+                  : "Ready for token activation"}
+              </p>
+            </div>
+            <p className="text-sm font-semibold">
+              {carbonEvidenceCompleteCount}/{carbonEvidenceSteps.length} complete
+            </p>
+          </div>
+
+          <div className="h-3 rounded bg-gray-200 overflow-hidden">
+            <div
+              className="h-full bg-blue-600 transition-all"
+              style={{ width: `${carbonEvidenceProgress}%` }}
+            />
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 text-xs">
+            {carbonEvidenceSteps.map((step) => (
+              <div
+                key={step.label}
+                className={`rounded border p-2 ${
+                  step.complete
+                    ? "border-blue-200 bg-blue-50 text-blue-900"
+                    : "border-gray-200 bg-gray-50 text-gray-600"
+                }`}
+              >
+                <span className="font-semibold">
+                  {step.complete ? "Complete" : "Pending"}
+                </span>
+                <br />
+                {step.label}
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
       <div className="bg-gray-100 p-4 rounded shadow">
-        <h2 className="text-lg font-bold">Digital Carbon Credits</h2>
+        <h2 className="text-lg font-bold mb-3">WBPA Carbon Token</h2>
 
-        <p>
-          <strong>{carbonCredits}</strong> DCC
-        </p>
+        <div
+          className={`bg-white rounded border p-4 space-y-3 transition-opacity ${
+            carbonTokenUnlocked ? "opacity-100" : "opacity-45"
+          }`}
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p>
+              <strong>{carbonCredits}</strong> WBPA-C
+            </p>
+            <span
+              className={`rounded border px-2 py-1 text-xs font-semibold ${
+                carbonTokenUnlocked
+                  ? "border-green-300 bg-green-50 text-green-800"
+                  : "border-gray-300 bg-gray-50 text-gray-600"
+              }`}
+            >
+              {carbonTokenUnlocked ? "Unlocked" : "Locked"}
+            </span>
+          </div>
 
-        <button className="bg-red-500 text-white px-4 py-2 w-32 rounded">
-          SELL CREDITS
-        </button>
+          <p className="text-sm text-gray-600">
+            {carbonTokenUnlocked
+              ? "Credit-grade evidence is ready for token design and issuance rules."
+              : "Complete carbon evidence readiness before tokenised savings can become active."}
+          </p>
+
+          <button
+            type="button"
+            disabled={!carbonTokenUnlocked}
+            className={`px-4 py-2 w-36 rounded text-white ${
+              carbonTokenUnlocked
+                ? "bg-red-500"
+                : "bg-gray-400 cursor-not-allowed"
+            }`}
+          >
+            SELL CREDITS
+          </button>
+        </div>
       </div>
     </div>
   );
