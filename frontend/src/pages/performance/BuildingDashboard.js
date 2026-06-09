@@ -1317,12 +1317,9 @@ const BuildingDashboardPanel = ({ building }) => {
           </div>
 
           <div className="bg-white rounded border p-2.5 sm:p-4 min-w-0 overflow-hidden">
-            <h3 className="text-xs min-[390px]:text-sm sm:text-base font-semibold mb-1.5 sm:mb-3">
-              Energy
-            </h3>
-
             <div className="grid grid-cols-3 gap-2 sm:gap-5 text-[10px] min-[390px]:text-xs sm:text-sm leading-tight">
               <div className="space-y-2 sm:space-y-3 break-words min-w-0">
+                <h3 className="font-semibold mb-2 sm:mb-3">Energy</h3>
                 <p>
                   <strong>Annualised EUI</strong>
                   <br />
@@ -1366,7 +1363,7 @@ const BuildingDashboardPanel = ({ building }) => {
               </div>
 
               <div className="space-y-0.5 break-words min-w-0">
-                <h4 className="font-semibold">IAQ Data</h4>
+                <h3 className="font-semibold mb-2 sm:mb-3">IAQ Data</h3>
                 <p>
                   <strong>Internal Temp:</strong>{" "}
                   {formatMeasurement(sensorData.internalTemp)} deg C
@@ -1444,8 +1441,8 @@ const BuildingDashboardPanel = ({ building }) => {
               </div>
 
               <div className="space-y-2 sm:space-y-3 break-words min-w-0">
+                <h3 className="font-semibold mb-2 sm:mb-3">Heat Loss Analysis</h3>
                 <div className="space-y-0.5">
-                  <h4 className="font-semibold">Heat Loss Analysis</h4>
                   <p>
                     <strong>HDD Intensity:</strong>{" "}
                     {Number.isFinite(heatLossSummary.kwhPerHdd)
@@ -1841,17 +1838,4 @@ const BuildingDashboard = () => {
 };
 
 export default BuildingDashboard;
-
-
-
-
-
-
-
-
-
-
-
-
-
 
