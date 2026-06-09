@@ -1710,22 +1710,83 @@ const NewBuildingSetupPanel = () => {
 
       <div className="bg-gray-100 p-4 rounded shadow">
         <h2 className="text-lg font-bold mb-3">Performance</h2>
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="bg-white rounded border p-4">
-            <h3 className="font-semibold mb-2">Energy Data</h3>
-            <p className="text-sm text-gray-600">
-              Connect smart-meter/API data or upload historical energy CSVs to
-              calculate daily averages, annualised EUI, HDD intensity and future
-              regulated/unregulated splits.
-            </p>
+        <div className="grid gap-4 md:grid-cols-2 items-start">
+          <div className="bg-white rounded border p-4 space-y-4">
+            <div>
+              <h3 className="font-semibold mb-2">Energy Data</h3>
+              <p className="text-sm text-gray-600">
+                Import historical smart-meter data to set the carbon baseline,
+                calculate daily averages, annualised EUI, HDD intensity and future
+                regulated/unregulated splits.
+              </p>
+            </div>
+
+            <div className="border rounded p-3 bg-gray-50 space-y-2">
+              <h4 className="font-semibold text-sm">Historical Data Upload</h4>
+              <input
+                type="file"
+                accept=".csv,.xlsx,.xls,text/csv"
+                className="block w-full text-xs"
+              />
+              <p className="text-xs text-gray-600">
+                Accepts supplier exports, Bright/Glow downloads or n3rgy-style
+                half-hourly consumption files.
+              </p>
+            </div>
+
+            <div className="border rounded overflow-hidden text-xs">
+              <div className="bg-gray-100 px-3 py-2 font-semibold">
+                n3rgy import preview
+              </div>
+              <div className="grid grid-cols-4 bg-white border-t font-semibold">
+                <div className="p-2 border-r">Start</div>
+                <div className="p-2 border-r">Fuel</div>
+                <div className="p-2 border-r">kWh</div>
+                <div className="p-2">Source</div>
+              </div>
+              {[
+                ["2026-01-01 00:00", "electricity", "0.18", "n3rgy"],
+                ["2026-01-01 00:30", "electricity", "0.21", "n3rgy"],
+                ["2026-01-01 01:00", "gas", "0.52", "n3rgy"],
+              ].map((row) => (
+                <div key={row.join("-")} className="grid grid-cols-4 bg-white border-t">
+                  {row.map((cell) => (
+                    <div key={cell} className="p-2 border-r last:border-r-0 break-words">
+                      {cell}
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
           </div>
-          <div className="bg-white rounded border p-4">
-            <h3 className="font-semibold mb-2">Health Data</h3>
-            <p className="text-sm text-gray-600">
-              Connect IAQ/comfort data for health scoring, seasonal resilience
-              and HTC calculations once indoor and outdoor temperatures are
-              available.
-            </p>
+
+          <div className="bg-white rounded border p-4 space-y-4">
+            <div>
+              <h3 className="font-semibold mb-2">Health Data</h3>
+              <p className="text-sm text-gray-600">
+                Scan for a preferred IAQ monitor to connect comfort and air quality
+                readings for health scoring, seasonal resilience and HTC overlap.
+              </p>
+            </div>
+
+            <div className="border rounded p-3 bg-gray-50 space-y-3">
+              <div>
+                <h4 className="font-semibold text-sm">IAQ Monitor Scan</h4>
+                <p className="text-xs text-gray-600">
+                  Future setup step for supported CO2, PM2.5, VOC, temperature and
+                  humidity monitors.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="bg-blue-600 text-white px-4 py-2 rounded text-sm font-semibold"
+              >
+                Scan Now
+              </button>
+              <div className="text-xs border rounded bg-white p-2 text-gray-600">
+                Status: waiting for supported IAQ monitor integration
+              </div>
+            </div>
           </div>
         </div>
       </div>
