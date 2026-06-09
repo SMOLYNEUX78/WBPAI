@@ -2,7 +2,7 @@ const mqtt = require("mqtt");
 const supabase = require("./supabaseClient");
 require("dotenv").config();
 
-const BUILDING_ID = process.env.BUILDING_ID || "home";
+const BUILDING_ID = process.env.DYSON_BUILDING_ID || "home";
 const DYSON_POLL_INTERVAL_MS = Number(
   process.env.DYSON_POLL_INTERVAL_MS || 60000
 );
@@ -178,10 +178,6 @@ async function persistCombinedReading() {
     vocs: average(values.map((value) => value.vocs)),
     pm25: average(values.map((value) => value.pm25)),
     timestamp: new Date().toISOString(),
-    raw_payload: {
-      source: "dyson-local-mqtt",
-      devices: values,
-    },
   };
 
   const hasAnyValue = [
