@@ -781,18 +781,24 @@ const BuildingDashboardPanel = ({ building }) => {
     return Math.round((hotScore + coldScore) / 2);
   };
 
-  const calculateGlobalIeqEnergyIndex = ({ health, energy, resilience }) => {
-    if (!Number.isFinite(health) || !Number.isFinite(energy)) {
+  const calculateIeqPenaltyFactor = ({ iaq, comfort, humidity, resilience }) => {
+    const ieqComponentScores = [iaq, comfort, humidity, resilience].filter((score) =>
+      Number.isFinite(score)
+    );
+
+    if (ieqComponentScores.length === 0) {
       return null;
     }
 
-    const ieqScore = averageScore([health, resilience]);
+    return clampScore(Math.min(...ieqComponentScores)) / 100;
+  };
 
-    if (!Number.isFinite(ieqScore)) {
+  const calculateGlobalIeqEnergyIndex = ({ energy, ieqPenaltyFactor }) => {
+    if (!Number.isFinite(energy) || !Number.isFinite(ieqPenaltyFactor)) {
       return null;
     }
 
-    return Math.round(Math.min(energy, ieqScore));
+    return Math.round(clampScore(energy * ieqPenaltyFactor));
   };
 
   const calculateEnergyScore = (annualEui, targetEui, nationalAverageEui) => {
@@ -1310,21 +1316,16 @@ const BuildingDashboardPanel = ({ building }) => {
       });
 
       const humidityStabilityScore = calculateHumidityScore(humidityValues);
-      const blendedHealthScore = averageScore([
-        calculatedIAQScore,
-        calculatedComfortScore,
-        humidityStabilityScore,
-      ]);
-      const ieqComponentScores = [
-        calculatedIAQScore,
-        calculatedComfortScore,
-        humidityStabilityScore,
-      ].filter((score) => Number.isFinite(score));
-      const calculatedHealthScore =
-        ieqComponentScores.length > 0
-          ? Math.min(blendedHealthScore, ...ieqComponentScores)
-          : null;
       const resilienceScore = calculateSeasonalResilienceScore(ieqRows);
+      const ieqPenaltyFactor = calculateIeqPenaltyFactor({
+        iaq: calculatedIAQScore,
+        comfort: calculatedComfortScore,
+        humidity: humidityStabilityScore,
+        resilience: resilienceScore,
+      });
+      const calculatedHealthScore = Number.isFinite(ieqPenaltyFactor)
+        ? ieqPenaltyFactor * 100
+        : null;
 
       const estimatedArea =
         matterportMetadata.internalArea !== "--"
@@ -1354,9 +1355,8 @@ const BuildingDashboardPanel = ({ building }) => {
       ]);
 
       const buildingPerformanceIndex = calculateGlobalIeqEnergyIndex({
-        health: calculatedHealthScore,
         energy: calculatedEnergyScore,
-        resilience: resilienceScore,
+        ieqPenaltyFactor,
       });
 
       setPerformanceBreakdown({
