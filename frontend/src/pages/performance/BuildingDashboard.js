@@ -1971,6 +1971,104 @@ const NewBuildingSetupPanel = () => {
           </div>
         </div>
 
+        <div className="mt-4 bg-white rounded border p-4 space-y-4">
+          <div>
+            <h3 className="font-semibold mb-2">Carbon Context</h3>
+            <p className="text-sm text-gray-600">
+              Record the tariff, fuel and building systems context used to calculate
+              operational carbon and assess whether future savings are credit-grade.
+            </p>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-3">
+            <label className="space-y-1 text-xs text-gray-600">
+              Electricity tariff
+              <select
+                className="border rounded p-2 w-full text-xs"
+                defaultValue="unknown"
+              >
+                <option value="unknown">Unknown / not verified</option>
+                <option value="standard">Standard grid electricity</option>
+                <option value="renewable-unverified">Renewable tariff - unverified</option>
+                <option value="renewable-verified">Renewable tariff - evidence uploaded</option>
+              </select>
+            </label>
+
+            <label className="space-y-1 text-xs text-gray-600">
+              Gas / thermal fuel
+              <select
+                className="border rounded p-2 w-full text-xs"
+                defaultValue="unknown"
+              >
+                <option value="unknown">Unknown / not verified</option>
+                <option value="mains-gas">Mains gas</option>
+                <option value="green-gas-unverified">Green gas - unverified</option>
+                <option value="green-gas-verified">Green gas - evidence uploaded</option>
+                <option value="none">No gas supply</option>
+                <option value="other">Oil / LPG / solid fuel / other</option>
+              </select>
+            </label>
+
+            <label className="space-y-1 text-xs text-gray-600">
+              Main heating system
+              <select
+                className="border rounded p-2 w-full text-xs"
+                defaultValue="unknown"
+              >
+                <option value="unknown">Unknown</option>
+                <option value="gas-boiler">Gas boiler</option>
+                <option value="heat-pump">Heat pump</option>
+                <option value="direct-electric">Direct electric</option>
+                <option value="hybrid">Hybrid heating</option>
+                <option value="other">Other</option>
+              </select>
+            </label>
+
+            <label className="space-y-1 text-xs text-gray-600">
+              Solar PV
+              <select
+                className="border rounded p-2 w-full text-xs"
+                defaultValue="none"
+              >
+                <option value="none">No / unknown</option>
+                <option value="planned">Planned</option>
+                <option value="installed-unverified">Installed - unverified</option>
+                <option value="installed-verified">Installed - evidence uploaded</option>
+              </select>
+            </label>
+
+            <label className="space-y-1 text-xs text-gray-600">
+              Battery storage
+              <select
+                className="border rounded p-2 w-full text-xs"
+                defaultValue="none"
+              >
+                <option value="none">No / unknown</option>
+                <option value="planned">Planned</option>
+                <option value="installed-unverified">Installed - unverified</option>
+                <option value="installed-verified">Installed - evidence uploaded</option>
+              </select>
+            </label>
+
+            <label className="space-y-1 text-xs text-gray-600">
+              Carbon evidence status
+              <select
+                className="border rounded p-2 w-full text-xs"
+                defaultValue="unverified"
+              >
+                <option value="unverified">Unverified user declaration</option>
+                <option value="bill-uploaded">Bill/tariff evidence uploaded</option>
+                <option value="api-verified">API / supplier verified</option>
+                <option value="audit-ready">Audit-ready evidence pack</option>
+              </select>
+            </label>
+          </div>
+
+          <p className="text-xs text-gray-600">
+            Tariff and system details can reduce reported carbon intensity when verified,
+            but they do not bypass the measured energy, IAQ and seasonal evidence checks.
+          </p>
+        </div>
         <div className="mt-4 bg-white rounded border p-4 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
