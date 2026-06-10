@@ -1210,6 +1210,34 @@ const BuildingDashboardPanel = ({ building }) => {
     heatLossSummary.weatherNormalisedEui,
   ]);
 
+  const estimatedElectricityDailyKwh = Number.isFinite(
+    energySummary.electricityDailyAverage
+  )
+    ? energySummary.electricityDailyAverage
+    : 0;
+  const estimatedGasDailyKwh = Number.isFinite(energySummary.gasDailyAverage)
+    ? energySummary.gasDailyAverage
+    : 0;
+  const estimatedTotalDailyKwh = estimatedElectricityDailyKwh + estimatedGasDailyKwh;
+  const regulatedElectricFraction = energySummary.hasGasData ? 0.15 : 0.35;
+  const regulatedDailyKwh = estimatedTotalDailyKwh
+    ? Math.min(
+        estimatedTotalDailyKwh,
+        estimatedGasDailyKwh + estimatedElectricityDailyKwh * regulatedElectricFraction
+      )
+    : null;
+  const unregulatedDailyKwh = Number.isFinite(regulatedDailyKwh)
+    ? Math.max(0, estimatedTotalDailyKwh - regulatedDailyKwh)
+    : null;
+  const regulatedEnergyShare =
+    Number.isFinite(regulatedDailyKwh) && estimatedTotalDailyKwh > 0
+      ? (regulatedDailyKwh / estimatedTotalDailyKwh) * 100
+      : null;
+  const regulatedSplitConfidence = Number.isFinite(regulatedDailyKwh)
+    ? heatLossSummary.hddDays >= 30 || heatLossSummary.hddSource === "legacy"
+      ? "Medium - aggregate estimate"
+      : "Low - needs seasonal/submetered data"
+    : "Pending energy data";
   const hasConfirmedArea = matterportMetadata.internalArea !== "--";
   const hasEnergyBaseline = Number.isFinite(historicalPerformance);
   const hasWeatherNormalisedBaseline =
@@ -1389,6 +1417,31 @@ const BuildingDashboardPanel = ({ building }) => {
                     No Data
                   </p>
                 )}
+
+                <div className="border-t border-gray-200 pt-2 space-y-1">
+                  <p className="font-semibold">Regulated / Unregulated Estimate</p>
+                  <p>
+                    <strong>Regulated:</strong>{" "}
+                    {Number.isFinite(regulatedDailyKwh)
+                      ? `${formatNumber(regulatedDailyKwh)} kWh/day`
+                      : "No Data"}
+                  </p>
+                  <p>
+                    <strong>Unregulated:</strong>{" "}
+                    {Number.isFinite(unregulatedDailyKwh)
+                      ? `${formatNumber(unregulatedDailyKwh)} kWh/day`
+                      : "No Data"}
+                  </p>
+                  <p>
+                    <strong>Regulated Share:</strong>{" "}
+                    {Number.isFinite(regulatedEnergyShare)
+                      ? `${formatNumber(regulatedEnergyShare, 0)}%`
+                      : "No Data"}
+                  </p>
+                  <p className="text-gray-600">
+                    {regulatedSplitConfidence}
+                  </p>
+                </div>
               </div>
 
               <div className="space-y-0.5 break-words min-w-0">
