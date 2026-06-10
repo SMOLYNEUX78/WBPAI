@@ -18,6 +18,8 @@ const BUILDINGS = [
     targetEui: 35,
     nationalAverageEui: 150,
     legacyUnscopedData: false,
+    regulatedElectricFraction: 0.35,
+    showGas: true,
   },
   {
     id: "museum",
@@ -31,6 +33,9 @@ const BUILDINGS = [
     targetEui: 65,
     nationalAverageEui: 200,
     legacyUnscopedData: false,
+    heatingSystem: "none",
+    regulatedElectricFraction: 0.05,
+    showGas: false,
   },
   {
     id: "new",
@@ -44,6 +49,8 @@ const BUILDINGS = [
     targetEui: 65,
     nationalAverageEui: 200,
     legacyUnscopedData: false,
+    regulatedElectricFraction: 0.35,
+    showGas: true,
   },
 ];
 
@@ -1215,11 +1222,14 @@ const BuildingDashboardPanel = ({ building }) => {
   )
     ? energySummary.electricityDailyAverage
     : 0;
-  const estimatedGasDailyKwh = Number.isFinite(energySummary.gasDailyAverage)
-    ? energySummary.gasDailyAverage
-    : 0;
+  const shouldShowGas = building.showGas !== false;
+  const estimatedGasDailyKwh =
+    shouldShowGas && Number.isFinite(energySummary.gasDailyAverage)
+      ? energySummary.gasDailyAverage
+      : 0;
   const estimatedTotalDailyKwh = estimatedElectricityDailyKwh + estimatedGasDailyKwh;
-  const regulatedElectricFraction = energySummary.hasGasData ? 0.15 : 0.35;
+  const regulatedElectricFraction =
+    building.regulatedElectricFraction ?? (energySummary.hasGasData ? 0.15 : 0.35);
   const regulatedDailyKwh = estimatedTotalDailyKwh
     ? Math.min(
         estimatedTotalDailyKwh,
@@ -1234,7 +1244,9 @@ const BuildingDashboardPanel = ({ building }) => {
       ? (regulatedDailyKwh / estimatedTotalDailyKwh) * 100
       : null;
   const regulatedSplitConfidence = Number.isFinite(regulatedDailyKwh)
-    ? heatLossSummary.hddDays >= 30 || heatLossSummary.hddSource === "legacy"
+    ? building.heatingSystem === "none"
+      ? "Estimate / no heating system; needs submetered data"
+      : heatLossSummary.hddDays >= 30 || heatLossSummary.hddSource === "legacy"
       ? "Estimate"
       : "Estimate / needs seasonal/submetered data"
     : "Pending energy data";
@@ -1399,7 +1411,7 @@ const BuildingDashboardPanel = ({ building }) => {
                   kWh
                 </p>
 
-                {energySummary.hasGasData ? (
+                {shouldShowGas && energySummary.hasGasData ? (
                   <p>
                     <strong>Gas</strong>
                     <br />
@@ -1408,7 +1420,7 @@ const BuildingDashboardPanel = ({ building }) => {
                     {formatNumber(energySummary.gasDailyAverage)}{" "}
                     kWh
                   </p>
-                ) : (
+                ) : shouldShowGas ? (
                   <p>
                     <strong>Gas</strong>
                     <br />
@@ -1416,7 +1428,7 @@ const BuildingDashboardPanel = ({ building }) => {
                     <br />
                     No Data
                   </p>
-                )}
+                ) : null}
 
                 <div className="border-t border-gray-200 pt-2 space-y-1">
                   <p>
