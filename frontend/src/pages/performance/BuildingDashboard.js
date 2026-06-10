@@ -1235,8 +1235,8 @@ const BuildingDashboardPanel = ({ building }) => {
       : null;
   const regulatedSplitConfidence = Number.isFinite(regulatedDailyKwh)
     ? heatLossSummary.hddDays >= 30 || heatLossSummary.hddSource === "legacy"
-      ? "Medium - aggregate estimate"
-      : "Low - needs seasonal/submetered data"
+      ? "Estimate"
+      : "Estimate / needs seasonal/submetered data"
     : "Pending energy data";
   const hasConfirmedArea = matterportMetadata.internalArea !== "--";
   const hasEnergyBaseline = Number.isFinite(historicalPerformance);
@@ -1419,7 +1419,6 @@ const BuildingDashboardPanel = ({ building }) => {
                 )}
 
                 <div className="border-t border-gray-200 pt-2 space-y-1">
-                  <p className="font-semibold">Regulated / Unregulated Estimate</p>
                   <p>
                     <strong>Regulated:</strong>{" "}
                     {Number.isFinite(regulatedDailyKwh)
