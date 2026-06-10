@@ -1428,8 +1428,8 @@ const BuildingDashboardPanel = ({ building }) => {
                     <br />
                     No Data
                   </p>
-                ) : null}
 
+                ) : null}
                 <div className="border-t border-gray-200 pt-2 space-y-1">
                   <p>
                     <strong>Regulated:</strong>{" "}
@@ -1457,41 +1457,46 @@ const BuildingDashboardPanel = ({ building }) => {
 
               <div className="space-y-0.5 break-words min-w-0">
                 <h3 className="font-semibold mb-2 sm:mb-3">IAQ Data</h3>
-                <p>
-                  <strong>Internal Temp:</strong>{" "}
-                  {formatMeasurement(sensorData.internalTemp)} deg C
-                </p>
-                <p>
-                  <strong>External Temp:</strong>{" "}
-                  {formatMeasurement(sensorData.externalTemp)} deg C
-                </p>
-                <p>
-                  <strong>Humidity:</strong>{" "}
-                  {formatMeasurement(sensorData.humidity)}%
-                </p>
-                {building.id !== "home" ? (
+                <div className="space-y-0.5">
                   <p>
-                    <strong>CO2:</strong> {formatMeasurement(sensorData.co2)} ppm
+                    <strong>Internal Temp:</strong>{" "}
+                    {formatMeasurement(sensorData.internalTemp)} deg C
                   </p>
-                ) : null}
-                <p>
-                  <strong>VOCs:</strong> {formatMeasurement(sensorData.vocs)} ppb
-                </p>
-                <p>
-                  <strong>PM2.5:</strong> {formatMeasurement(sensorData.pm25)} ug/m3
-                </p>
-                {Number.isFinite(sensorData.pm10) ? (
                   <p>
-                    <strong>PM10:</strong> {formatMeasurement(sensorData.pm10)} ug/m3
+                    <strong>External Temp:</strong>{" "}
+                    {formatMeasurement(sensorData.externalTemp)} deg C
                   </p>
-                ) : null}
-                {Number.isFinite(sensorData.hcho) ? (
+                </div>
+
+                <div className="pt-2 mt-2 border-t border-gray-200 space-y-0.5">
                   <p>
-                    <strong>HCHO:</strong> {formatMeasurement(sensorData.hcho)} ppb
+                    <strong>Humidity:</strong>{" "}
+                    {formatMeasurement(sensorData.humidity)}%
                   </p>
-                ) : null}
+                  {building.id !== "home" ? (
+                    <p>
+                      <strong>CO2:</strong> {formatMeasurement(sensorData.co2)} ppm
+                    </p>
+                  ) : null}
+                  <p>
+                    <strong>VOCs:</strong> {formatMeasurement(sensorData.vocs)} ppb
+                  </p>
+                  <p>
+                    <strong>PM2.5:</strong> {formatMeasurement(sensorData.pm25)} ug/m3
+                  </p>
+                  {Number.isFinite(sensorData.pm10) ? (
+                    <p>
+                      <strong>PM10:</strong> {formatMeasurement(sensorData.pm10)} ug/m3
+                    </p>
+                  ) : null}
+                  {Number.isFinite(sensorData.hcho) ? (
+                    <p>
+                      <strong>HCHO:</strong> {formatMeasurement(sensorData.hcho)} ppb
+                    </p>
+                  ) : null}
+                </div>
                 {roomIaqData.length > 0 ? (
-                  <div className="pt-1 mt-1 border-t border-gray-200 space-y-1">
+                  <div className="pt-2 mt-2 border-t border-gray-200 space-y-1">
                     {roomIaqData.map((room) => {
                       const comfortOnlyRoom = room.label === "Downstairs";
                       const roomMetrics = [
@@ -1537,6 +1542,14 @@ const BuildingDashboardPanel = ({ building }) => {
                 <h3 className="font-semibold mb-2 sm:mb-3">Heat Loss Analysis</h3>
                 <div className="space-y-0.5">
                   <p>
+                    <strong>Weather-normalised EUI:</strong>{" "}
+                    {Number.isFinite(heatLossSummary.weatherNormalisedEui)
+                      ? `${formatNumber(
+                          heatLossSummary.weatherNormalisedEui
+                        )} kWh/m2/yr`
+                      : "Pending"}
+                  </p>
+                  <p>
                     <strong>HDD Intensity:</strong>{" "}
                     {Number.isFinite(heatLossSummary.kwhPerHdd)
                       ? `${formatNumber(heatLossSummary.kwhPerHdd, 3)} kWh/HDD`
@@ -1548,20 +1561,12 @@ const BuildingDashboardPanel = ({ building }) => {
                       ? `${formatNumber(heatLossSummary.htcEstimate, 1)} W/K`
                       : "Pending energy + indoor/outdoor temperature overlap"}
                   </p>
-                  <p>
+                  <p className="pt-2 mt-2 border-t border-gray-200">
                     <strong>HDD / HTC Days:</strong>{" "}
                     {heatLossSummary.hddDays || 0} /{" "}
                     {heatLossSummary.htcSamples || 0}
                   </p>
-                  <p>
-                    <strong>Weather-normalised EUI:</strong>{" "}
-                    {Number.isFinite(heatLossSummary.weatherNormalisedEui)
-                      ? `${formatNumber(
-                          heatLossSummary.weatherNormalisedEui
-                        )} kWh/m2/yr`
-                      : "Pending"}
-                  </p>
-                  <p>
+                  <p className="pt-2 mt-2 border-t border-gray-200">
                     <strong>HDD Source:</strong>{" "}
                     {heatLossSummary.hddSource === "legacy"
                       ? "Legacy museum daily totals"
