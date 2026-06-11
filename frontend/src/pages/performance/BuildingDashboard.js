@@ -1341,6 +1341,20 @@ const BuildingDashboardPanel = ({ building }) => {
     dashboardArea > 0
       ? heatLossSummary.htcEstimate / dashboardArea
       : null;
+  const annualHddEstimate =
+    Number.isFinite(heatLossSummary.weatherNormalisedEui) &&
+    Number.isFinite(hddIntensityPerM2) &&
+    hddIntensityPerM2 > 0
+      ? heatLossSummary.weatherNormalisedEui / hddIntensityPerM2
+      : null;
+  const targetHddIntensity =
+    Number.isFinite(annualHddEstimate) && annualHddEstimate > 0
+      ? building.targetEui / annualHddEstimate
+      : 0.0075;
+  const nationalAverageHddIntensity =
+    Number.isFinite(annualHddEstimate) && annualHddEstimate > 0
+      ? building.nationalAverageEui / annualHddEstimate
+      : 0.075;
   const heatLossStatusClass = (status) => {
     if (status === "good") return "text-emerald-700";
     if (status === "warning") return "text-amber-700";
@@ -1354,9 +1368,9 @@ const BuildingDashboardPanel = ({ building }) => {
     return "bg-gray-300";
   };
   const hddStatus = Number.isFinite(hddIntensityPerM2)
-    ? hddIntensityPerM2 <= 0.08
+    ? hddIntensityPerM2 <= targetHddIntensity
       ? "good"
-      : hddIntensityPerM2 <= 0.16
+      : hddIntensityPerM2 <= nationalAverageHddIntensity
       ? "warning"
       : "poor"
     : "pending";
