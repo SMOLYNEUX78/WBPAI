@@ -174,6 +174,10 @@ const BuildingDashboardPanel = ({ building }) => {
     totalDailyAverage: null,
     electricityPowerKw: 0,
     hasGasData: false,
+    gasBaseloadDaily: null,
+    gasHeatingDaily: null,
+    gasAnomalyDaily: null,
+    gasDecompositionConfidence: "Pending gas data",
   });
 
   const [performanceBreakdown, setPerformanceBreakdown] = useState({
@@ -772,6 +776,27 @@ const BuildingDashboardPanel = ({ building }) => {
           totals[key] = Math.max(totals[key] || 0, usageKwh);
           return totals;
         }, {});
+        const completedDailyTotalsByDay = completedRows.reduce((totals, row) => {
+          const usageKwh = Number(row.usage_kwh);
+          if (!Number.isFinite(usageKwh)) {
+            return totals;
+          }
+
+          const day = new Date(row.timestamp).toISOString().slice(0, 10);
+          const fuelType = row.fuel_type || "unknown";
+          totals[day] = totals[day] || { fuels: {}, hdd: null };
+          totals[day].fuels[fuelType] = Math.max(
+            totals[day].fuels[fuelType] || 0,
+            usageKwh
+          );
+
+          const hdd = Number(row.raw_payload?.hdd);
+          if (Number.isFinite(hdd)) {
+            totals[day].hdd = hdd;
+          }
+
+          return totals;
+        }, {});
 
         const todayDailyTotalsByFuel = todayRows.reduce((totals, row) => {
           const usageKwh = Number(row.usage_kwh);
@@ -814,6 +839,54 @@ const BuildingDashboardPanel = ({ building }) => {
         const electricityTodayKwh = latestDailyTotal("electricity");
         const gasTodayKwh = latestDailyTotal("gas");
         const hasGasData = rows.some((row) => row.fuel_type === "gas");
+        const gasDayRows = Object.values(completedDailyTotalsByDay)
+          .map((day) => ({
+            gas: Number(day.fuels.gas),
+            hdd: Number(day.hdd),
+          }))
+          .filter((day) => Number.isFinite(day.gas));
+        const gasValues = gasDayRows.map((day) => day.gas);
+        const sortedGasValues = [...gasValues].sort((a, b) => a - b);
+        const baseloadSampleSize = sortedGasValues.length
+          ? Math.max(1, Math.ceil(sortedGasValues.length * 0.3))
+          : 0;
+        const gasBaseloadDaily = baseloadSampleSize
+          ? average(sortedGasValues.slice(0, baseloadSampleSize))
+          : null;
+        const gasDaysWithHdd = gasDayRows.filter(
+          (day) => Number.isFinite(day.hdd) && day.hdd > 0.5
+        );
+        const hasWeatherGasSample = gasDaysWithHdd.length >= 7;
+        const gasHeatingDaily =
+          Number.isFinite(gasBaseloadDaily) && hasWeatherGasSample
+            ? average(
+                gasDayRows.map((day) =>
+                  Number.isFinite(day.hdd) && day.hdd > 0.5
+                    ? Math.max(0, day.gas - gasBaseloadDaily)
+                    : 0
+                )
+              )
+            : 0;
+        const gasAnomalyDaily = Number.isFinite(gasBaseloadDaily)
+          ? average(
+              gasDayRows.map((day) => {
+                const warmWeather =
+                  !Number.isFinite(day.hdd) || day.hdd <= 0.5;
+                const spikeThreshold = Math.max(
+                  gasBaseloadDaily * 2.5,
+                  gasBaseloadDaily + 3
+                );
+                return warmWeather && day.gas > spikeThreshold
+                  ? day.gas - gasBaseloadDaily
+                  : 0;
+              })
+            )
+          : null;
+        const gasDecompositionConfidence = hasGasData
+          ? hasWeatherGasSample
+            ? "Baseload + HDD decomposition"
+            : "Summer baseload estimate / needs winter HDD data"
+          : "No gas data";
 
         setEnergySummary({
           electricityDailyAverage,
@@ -825,6 +898,10 @@ const BuildingDashboardPanel = ({ building }) => {
             ? Number(latestElectricPower.power_kw)
             : 0,
           hasGasData,
+          gasBaseloadDaily,
+          gasHeatingDaily,
+          gasAnomalyDaily,
+          gasDecompositionConfidence,
         });
         setHistoricalPerformance(totalDailyAverage);
         return;
@@ -839,6 +916,10 @@ const BuildingDashboardPanel = ({ building }) => {
           totalDailyAverage: null,
           electricityPowerKw: 0,
           hasGasData: false,
+          gasBaseloadDaily: null,
+          gasHeatingDaily: null,
+          gasAnomalyDaily: null,
+          gasDecompositionConfidence: "Pending gas data",
         });
         setHistoricalPerformance(null);
         return;
@@ -872,6 +953,10 @@ const BuildingDashboardPanel = ({ building }) => {
           totalDailyAverage: electricityDailyAverage,
           electricityPowerKw: 0,
           hasGasData: false,
+          gasBaseloadDaily: null,
+          gasHeatingDaily: null,
+          gasAnomalyDaily: null,
+          gasDecompositionConfidence: "No gas data",
         });
         setHistoricalPerformance(electricityDailyAverage);
       }
@@ -1346,10 +1431,22 @@ const BuildingDashboardPanel = ({ building }) => {
   const estimatedTotalDailyKwh = estimatedElectricityDailyKwh + estimatedGasDailyKwh;
   const regulatedElectricFraction =
     building.regulatedElectricFraction ?? (energySummary.hasGasData ? 0.15 : 0.35);
+  const gasHeatingDailyKwh =
+    shouldShowGas && Number.isFinite(energySummary.gasHeatingDaily)
+      ? energySummary.gasHeatingDaily
+      : 0;
+  const gasBaseloadDailyKwh =
+    shouldShowGas && Number.isFinite(energySummary.gasBaseloadDaily)
+      ? energySummary.gasBaseloadDaily
+      : null;
+  const gasAnomalyDailyKwh =
+    shouldShowGas && Number.isFinite(energySummary.gasAnomalyDaily)
+      ? energySummary.gasAnomalyDaily
+      : null;
   const regulatedDailyKwh = estimatedTotalDailyKwh
     ? Math.min(
         estimatedTotalDailyKwh,
-        estimatedGasDailyKwh + estimatedElectricityDailyKwh * regulatedElectricFraction
+        gasHeatingDailyKwh + estimatedElectricityDailyKwh * regulatedElectricFraction
       )
     : null;
   const unregulatedDailyKwh = Number.isFinite(regulatedDailyKwh)
@@ -1362,8 +1459,10 @@ const BuildingDashboardPanel = ({ building }) => {
   const regulatedSplitConfidence = Number.isFinite(regulatedDailyKwh)
     ? building.heatingSystem === "none"
       ? "Estimate / no heating system; needs submetered data"
+      : energySummary.hasGasData
+      ? energySummary.gasDecompositionConfidence
       : heatLossSummary.hddDays >= 30 || heatLossSummary.hddSource === "legacy"
-      ? "Estimate"
+      ? "Electric estimate"
       : "Estimate / needs seasonal/submetered data"
     : "Pending energy data";
   const dashboardArea = Number(matterportMetadata.internalArea);
@@ -1662,6 +1761,29 @@ const BuildingDashboardPanel = ({ building }) => {
                   <p className="text-gray-600">
                     {regulatedSplitConfidence}
                   </p>
+                  {shouldShowGas && energySummary.hasGasData ? (
+                    <div className="pt-2 mt-2 border-t border-gray-200 space-y-1">
+                      <p>
+                        <strong>Gas Baseload:</strong>{" "}
+                        {Number.isFinite(gasBaseloadDailyKwh)
+                          ? `${formatNumber(gasBaseloadDailyKwh)} kWh/day`
+                          : "No Data"}
+                      </p>
+                      <p>
+                        <strong>Gas Heating:</strong>{" "}
+                        {Number.isFinite(gasHeatingDailyKwh)
+                          ? `${formatNumber(gasHeatingDailyKwh)} kWh/day`
+                          : "No Data"}
+                      </p>
+                      {Number.isFinite(gasAnomalyDailyKwh) &&
+                      gasAnomalyDailyKwh > 0 ? (
+                        <p>
+                          <strong>Gas Events:</strong>{" "}
+                          {formatNumber(gasAnomalyDailyKwh)} kWh/day
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
               </div>
 
