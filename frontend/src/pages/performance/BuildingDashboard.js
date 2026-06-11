@@ -1883,6 +1883,13 @@ const BuildingDashboardPanel = ({ building }) => {
         { value: 18, label: "18 min" },
         { value: 24, label: "24 max" },
       ],
+      healthBands: [
+        { min: 24, max: 30, color: "#fee2e2", label: "Warm risk" },
+        { min: 22, max: 24, color: "#dcfce7", label: "Healthy" },
+        { min: 18, max: 22, color: "#dcfce7", label: "Healthy" },
+        { min: 16, max: 18, color: "#fef3c7", label: "Cool" },
+        { min: 10, max: 16, color: "#fee2e2", label: "Cold risk" },
+      ],
     },
     {
       key: "externalTemp",
@@ -1901,6 +1908,13 @@ const BuildingDashboardPanel = ({ building }) => {
         { value: 40, label: "40 min" },
         { value: 60, label: "60 max" },
       ],
+      healthBands: [
+        { min: 70, max: 90, color: "#fee2e2", label: "High RH risk" },
+        { min: 60, max: 70, color: "#fef3c7", label: "High RH" },
+        { min: 40, max: 60, color: "#dcfce7", label: "Healthy" },
+        { min: 30, max: 40, color: "#fef3c7", label: "Low RH" },
+        { min: 20, max: 30, color: "#fee2e2", label: "Low RH risk" },
+      ],
     },
     {
       key: "pm25",
@@ -1909,6 +1923,11 @@ const BuildingDashboardPanel = ({ building }) => {
       color: "#ea580c",
       displayRange: { min: 0, max: 75 },
       healthyLimits: [{ value: 12, label: "PM2.5 norm" }],
+      healthBands: [
+        { min: 35, max: 75, color: "#fee2e2", label: "Unhealthy" },
+        { min: 12, max: 35, color: "#fef3c7", label: "Elevated" },
+        { min: 0, max: 12, color: "#dcfce7", label: "Healthy" },
+      ],
     },
     {
       key: "vocs",
@@ -1917,6 +1936,11 @@ const BuildingDashboardPanel = ({ building }) => {
       color: "#be123c",
       displayRange: { min: 0, max: 1000 },
       healthyLimits: [{ value: 200, label: "VOC norm" }],
+      healthBands: [
+        { min: 500, max: 1000, color: "#fee2e2", label: "Unhealthy" },
+        { min: 200, max: 500, color: "#fef3c7", label: "Elevated" },
+        { min: 0, max: 200, color: "#dcfce7", label: "Healthy" },
+      ],
     },
   ];
   const activeTrendMetrics = trendMetrics.filter((metric) =>
@@ -1933,6 +1957,10 @@ const BuildingDashboardPanel = ({ building }) => {
   const focusedTrendMetrics = selectedTrendMetricKeys.length
     ? visibleTrendMetrics.slice(0, 3)
     : [];
+  const backdropTrendMetric =
+    selectedTrendMetricKeys.length > 0
+      ? visibleTrendMetrics.find((metric) => metric.healthBands)
+      : null;
   const toggleTrendMetric = (metricKey) => {
     setSelectedTrendMetricKeys((currentKeys) => {
       const activeKeys = activeTrendMetrics.map((metric) => metric.key);
@@ -2483,6 +2511,39 @@ const BuildingDashboardPanel = ({ building }) => {
                   onPointerLeave={clearHoveredTrendSlot}
                   style={{ touchAction: "none" }}
                 >
+                  {backdropTrendMetric && metricRanges[backdropTrendMetric.key]
+                    ? backdropTrendMetric.healthBands.map((band) => {
+                        const range = metricRanges[backdropTrendMetric.key];
+                        const yTop = trendY(range, band.max);
+                        const yBottom = trendY(range, band.min);
+
+                        if (!Number.isFinite(yTop) || !Number.isFinite(yBottom)) {
+                          return null;
+                        }
+
+                        return (
+                          <g key={`band-${backdropTrendMetric.key}-${band.min}`}>
+                            <rect
+                              x={chartPadding.left}
+                              y={Math.min(yTop, yBottom)}
+                              width={plotWidth}
+                              height={Math.abs(yBottom - yTop)}
+                              fill={band.color}
+                              opacity="0.42"
+                            />
+                            <text
+                              x={chartPadding.left + 6}
+                              y={Math.min(yTop, yBottom) + 12}
+                              fontSize="8"
+                              fill="#374151"
+                              opacity="0.65"
+                            >
+                              {band.label}
+                            </text>
+                          </g>
+                        );
+                      })
+                    : null}
                   {[0, 0.25, 0.5, 0.75, 1].map((tick) => {
                     const y = chartPadding.top + tick * plotHeight;
                     return (
@@ -2830,6 +2891,17 @@ const BuildingDashboardPanel = ({ building }) => {
                   );
                 })}
               </div>
+              {backdropTrendMetric ? (
+                <p className="text-xs text-gray-600">
+                  Backdrop bands show {backdropTrendMetric.label} healthy,
+                  elevated and unhealthy ranges.
+                </p>
+              ) : (
+                <p className="text-xs text-gray-600">
+                  Select an IAQ metric to show healthy, elevated and unhealthy
+                  backdrop bands.
+                </p>
+              )}
             </>
           ) : (
             <div className="rounded border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
