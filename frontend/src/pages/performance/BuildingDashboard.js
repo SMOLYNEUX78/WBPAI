@@ -177,6 +177,9 @@ const BuildingDashboardPanel = ({ building }) => {
     gasBaseloadDaily: null,
     gasHeatingDaily: null,
     gasAnomalyDaily: null,
+    gasDhwDaily: null,
+    gasUnregulatedDaily: null,
+    gasDhwWindows: [],
     gasDecompositionConfidence: "Pending gas data",
   });
 
@@ -739,11 +742,30 @@ const BuildingDashboardPanel = ({ building }) => {
     return allRows;
   };
 
+  const fetchGasIntervalRows = async () => {
+    const { data, error } = await supabase
+      .from("EnergyReadings")
+      .select("timestamp, usage_kwh")
+      .eq("building_id", building.id)
+      .eq("fuel_type", "gas")
+      .eq("reading_type", "interval_30m")
+      .not("usage_kwh", "is", null)
+      .order("timestamp", { ascending: false })
+      .limit(3000);
+
+    if (error) {
+      throw error;
+    }
+
+    return data || [];
+  };
+
   const fetchLongTermAverage = async () => {
     try {
-      const [completedDailyData, todayDailyData] = await Promise.all([
+      const [completedDailyData, todayDailyData, gasIntervalData] = await Promise.all([
         fetchEnergyDailyTotals({ beforeToday: true }),
         fetchEnergyDailyTotals({ beforeToday: false }),
+        fetchGasIntervalRows(),
       ]);
 
       const { data: latestElectricPowerRows, error: powerError } =
@@ -846,6 +868,55 @@ const BuildingDashboardPanel = ({ building }) => {
           }))
           .filter((day) => Number.isFinite(day.gas));
         const gasValues = gasDayRows.map((day) => day.gas);
+        const gasIntervalRows = (gasIntervalData || [])
+          .map((row) => ({
+            timestamp: row.timestamp,
+            usage: Number(row.usage_kwh),
+          }))
+          .filter((row) => Number.isFinite(row.usage) && row.usage > 0);
+        const gasIntervalsByDay = gasIntervalRows.reduce((days, row) => {
+          const date = new Date(row.timestamp);
+          const dayKey = date.toISOString().slice(0, 10);
+          const slot = date.getUTCHours() * 2 + Math.floor(date.getUTCMinutes() / 30);
+          days[dayKey] = days[dayKey] || [];
+          days[dayKey].push({ ...row, slot });
+          return days;
+        }, {});
+        const gasIntervalDayCount = Object.keys(gasIntervalsByDay).length;
+        const morningEveningSlotStats = gasIntervalRows.reduce((slots, row) => {
+          const date = new Date(row.timestamp);
+          const hour = date.getUTCHours();
+          const minute = date.getUTCMinutes();
+          const slot = hour * 2 + Math.floor(minute / 30);
+          const inLikelyDhwWindow =
+            (hour >= 5 && hour <= 9) || (hour >= 16 && hour <= 21);
+
+          if (!inLikelyDhwWindow) {
+            return slots;
+          }
+
+          slots[slot] = slots[slot] || { total: 0, days: new Set(), hour, minute };
+          slots[slot].total += row.usage;
+          slots[slot].days.add(date.toISOString().slice(0, 10));
+          return slots;
+        }, {});
+        const recurringDhwSlots = Object.entries(morningEveningSlotStats)
+          .filter(([, slot]) => {
+            if (gasIntervalDayCount < 3) {
+              return false;
+            }
+            return slot.days.size / gasIntervalDayCount >= 0.25;
+          })
+          .map(([slotKey, slot]) => ({
+            slot: Number(slotKey),
+            averageDailyKwh: slot.total / Math.max(1, gasIntervalDayCount),
+            label: `${String(slot.hour).padStart(2, "0")}:${String(
+              slot.minute
+            ).padStart(2, "0")}`,
+          }));
+        const gasDhwDailyFromSchedule = recurringDhwSlots.length
+          ? recurringDhwSlots.reduce((sum, slot) => sum + slot.averageDailyKwh, 0)
+          : null;
         const sortedGasValues = [...gasValues].sort((a, b) => a - b);
         const baseloadSampleSize = sortedGasValues.length
           ? Math.max(1, Math.ceil(sortedGasValues.length * 0.3))
@@ -882,8 +953,22 @@ const BuildingDashboardPanel = ({ building }) => {
               })
             )
           : null;
+        const gasDhwDaily = Number.isFinite(gasDhwDailyFromSchedule)
+          ? Math.min(
+              gasDhwDailyFromSchedule,
+              Number.isFinite(gasBaseloadDaily)
+                ? gasBaseloadDaily + (gasAnomalyDaily || 0)
+                : gasDhwDailyFromSchedule
+            )
+          : gasBaseloadDaily;
+        const gasUnregulatedDaily =
+          Number.isFinite(gasDhwDaily) && Number.isFinite(gasBaseloadDaily)
+            ? Math.max(0, gasBaseloadDaily - gasDhwDaily)
+            : null;
         const gasDecompositionConfidence = hasGasData
-          ? hasWeatherGasSample
+          ? recurringDhwSlots.length
+            ? "DHW schedule + HDD decomposition"
+            : hasWeatherGasSample
             ? "Baseload + HDD decomposition"
             : "Summer baseload estimate / needs winter HDD data"
           : "No gas data";
@@ -901,6 +986,9 @@ const BuildingDashboardPanel = ({ building }) => {
           gasBaseloadDaily,
           gasHeatingDaily,
           gasAnomalyDaily,
+          gasDhwDaily,
+          gasUnregulatedDaily,
+          gasDhwWindows: recurringDhwSlots.map((slot) => slot.label),
           gasDecompositionConfidence,
         });
         setHistoricalPerformance(totalDailyAverage);
@@ -919,6 +1007,9 @@ const BuildingDashboardPanel = ({ building }) => {
           gasBaseloadDaily: null,
           gasHeatingDaily: null,
           gasAnomalyDaily: null,
+          gasDhwDaily: null,
+          gasUnregulatedDaily: null,
+          gasDhwWindows: [],
           gasDecompositionConfidence: "Pending gas data",
         });
         setHistoricalPerformance(null);
@@ -956,6 +1047,9 @@ const BuildingDashboardPanel = ({ building }) => {
           gasBaseloadDaily: null,
           gasHeatingDaily: null,
           gasAnomalyDaily: null,
+          gasDhwDaily: null,
+          gasUnregulatedDaily: null,
+          gasDhwWindows: [],
           gasDecompositionConfidence: "No gas data",
         });
         setHistoricalPerformance(electricityDailyAverage);
@@ -1435,9 +1529,17 @@ const BuildingDashboardPanel = ({ building }) => {
     shouldShowGas && Number.isFinite(energySummary.gasHeatingDaily)
       ? energySummary.gasHeatingDaily
       : 0;
+  const gasDhwDailyKwh =
+    shouldShowGas && Number.isFinite(energySummary.gasDhwDaily)
+      ? energySummary.gasDhwDaily
+      : 0;
   const gasBaseloadDailyKwh =
     shouldShowGas && Number.isFinite(energySummary.gasBaseloadDaily)
       ? energySummary.gasBaseloadDaily
+      : null;
+  const gasUnregulatedDailyKwh =
+    shouldShowGas && Number.isFinite(energySummary.gasUnregulatedDaily)
+      ? energySummary.gasUnregulatedDaily
       : null;
   const gasAnomalyDailyKwh =
     shouldShowGas && Number.isFinite(energySummary.gasAnomalyDaily)
@@ -1446,7 +1548,9 @@ const BuildingDashboardPanel = ({ building }) => {
   const regulatedDailyKwh = estimatedTotalDailyKwh
     ? Math.min(
         estimatedTotalDailyKwh,
-        gasHeatingDailyKwh + estimatedElectricityDailyKwh * regulatedElectricFraction
+        gasDhwDailyKwh +
+          gasHeatingDailyKwh +
+          estimatedElectricityDailyKwh * regulatedElectricFraction
       )
     : null;
   const unregulatedDailyKwh = Number.isFinite(regulatedDailyKwh)
@@ -1770,16 +1874,34 @@ const BuildingDashboardPanel = ({ building }) => {
                           : "No Data"}
                       </p>
                       <p>
+                        <strong>Gas DHW:</strong>{" "}
+                        {Number.isFinite(gasDhwDailyKwh)
+                          ? `${formatNumber(gasDhwDailyKwh)} kWh/day`
+                          : "No Data"}
+                      </p>
+                      <p>
                         <strong>Gas Heating:</strong>{" "}
                         {Number.isFinite(gasHeatingDailyKwh)
                           ? `${formatNumber(gasHeatingDailyKwh)} kWh/day`
                           : "No Data"}
                       </p>
+                      {Number.isFinite(gasUnregulatedDailyKwh) &&
+                      gasUnregulatedDailyKwh > 0 ? (
+                        <p>
+                          <strong>Gas Unregulated:</strong>{" "}
+                          {formatNumber(gasUnregulatedDailyKwh)} kWh/day
+                        </p>
+                      ) : null}
                       {Number.isFinite(gasAnomalyDailyKwh) &&
                       gasAnomalyDailyKwh > 0 ? (
                         <p>
                           <strong>Gas Events:</strong>{" "}
                           {formatNumber(gasAnomalyDailyKwh)} kWh/day
+                        </p>
+                      ) : null}
+                      {energySummary.gasDhwWindows?.length ? (
+                        <p className="text-gray-600">
+                          DHW windows: {energySummary.gasDhwWindows.join(", ")}
                         </p>
                       ) : null}
                     </div>
