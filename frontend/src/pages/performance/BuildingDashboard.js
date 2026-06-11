@@ -2167,7 +2167,7 @@ const BuildingDashboardPanel = ({ building }) => {
                   ) : null}
                 </div>
                 {roomIaqData.length > 0 ? (
-                  <div className="pt-3 mt-3 border-t border-gray-200 space-y-3">
+                  <div className="pt-3 mt-3 border-t border-gray-200 grid gap-2 sm:grid-cols-2">
                     {roomIaqData.map((room) => {
                       const comfortOnlyRoom = room.label === "Downstairs";
                       const roomMetrics = [
@@ -2191,20 +2191,22 @@ const BuildingDashboardPanel = ({ building }) => {
                       return (
                         <div
                           key={room.key}
-                          className="rounded border border-gray-200 bg-gray-50 p-2 space-y-2"
+                          className="min-w-0 rounded border border-gray-200 bg-gray-50 p-2 sm:p-2.5 space-y-1.5"
                         >
-                          <p className="font-semibold text-sm">{room.label}</p>
+                          <p className="truncate font-semibold text-[11px] leading-tight sm:text-sm">
+                            {room.label}
+                          </p>
                           {roomMetrics.length ? (
-                            <div className="grid grid-cols-1 gap-1">
+                            <div className="grid grid-cols-2 gap-1 sm:grid-cols-1">
                               {roomMetrics.map((metric) => (
                                 <div
                                   key={metric.label}
-                                  className="flex items-baseline justify-between gap-3 text-xs"
+                                  className="min-w-0 rounded bg-white px-1.5 py-1 text-[10px] leading-tight sm:flex sm:items-baseline sm:justify-between sm:gap-2 sm:bg-transparent sm:px-0 sm:py-0 sm:text-xs"
                                 >
-                                  <span className="font-semibold text-gray-700">
+                                  <span className="block truncate font-semibold text-gray-700">
                                     {metric.label}
                                   </span>
-                                  <span className="text-right">
+                                  <span className="block truncate text-gray-900 sm:text-right">
                                     {formatMeasurement(metric.value)} {metric.unit}
                                   </span>
                                 </div>
