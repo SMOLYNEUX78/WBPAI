@@ -1397,17 +1397,29 @@ const BuildingDashboardPanel = ({ building }) => {
     heatLossSummary.hddDays > 0
       ? heatLossSummary.comfortHddDays / heatLossSummary.hddDays
       : null;
-  const hddComfortQualified =
+  const hasMatureHddComfortSample =
+    heatLossSummary.hddDays >= 14 || heatLossSummary.hddSource === "legacy";
+  const liveComfortMaintained =
+    Number.isFinite(sensorData.internalTemp) &&
+    sensorData.internalTemp >= 18 &&
+    (!Number.isFinite(sensorData.externalTemp) ||
+      sensorData.externalTemp <= HDD_BASE_TEMP_C);
+  const historicHddComfortQualified =
     building.heatingSystem !== "none" &&
     Number.isFinite(hddComfortCoverage) &&
     hddComfortCoverage >= 0.7 &&
     Number.isFinite(heatLossSummary.averageInternalTemp) &&
     heatLossSummary.averageInternalTemp >= 18;
+  const hddComfortQualified =
+    historicHddComfortQualified ||
+    (!hasMatureHddComfortSample && liveComfortMaintained);
   const hddDataCaveat =
     building.heatingSystem === "none"
       ? "Low energy / unheated"
       : heatLossSummary.flatlineIndoorTemp
       ? "Check indoor sensor"
+      : !hasMatureHddComfortSample && liveComfortMaintained
+      ? "Early HDD sample / live comfort maintained"
       : Number.isFinite(hddComfortCoverage) && !hddComfortQualified
       ? "Comfort not maintained"
       : "";
