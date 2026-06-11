@@ -191,6 +191,9 @@ const BuildingDashboardPanel = ({ building }) => {
     hddDays: 0,
     htcSamples: 0,
     hddSource: "current",
+    averageInternalTemp: null,
+    comfortHddDays: 0,
+    flatlineIndoorTemp: false,
   });
 
   const matterportModelId = useMemo(
@@ -941,6 +944,9 @@ const BuildingDashboardPanel = ({ building }) => {
       let htcTotal = 0;
       let hddDays = 0;
       let htcSamples = 0;
+      let comfortHddDays = 0;
+      const hlaInsideAverages = [];
+      const hlaInsideReadings = [];
 
       let usesLegacyMuseumEnergy = false;
 
@@ -967,6 +973,13 @@ const BuildingDashboardPanel = ({ building }) => {
           hddTotal += hdd;
           hddEnergyTotal += totalKwh;
           hddDays += 1;
+
+          if (Number.isFinite(insideAverage)) {
+            hlaInsideAverages.push(insideAverage);
+            if (insideAverage >= 18) {
+              comfortHddDays += 1;
+            }
+          }
         }
 
         if (dayEnergy.usesLegacy) {
@@ -983,6 +996,9 @@ const BuildingDashboardPanel = ({ building }) => {
           htcTotal += averagePowerWatts / (insideAverage - outsideAverage);
           htcSamples += 1;
         }
+      });
+      Object.values(dailyTemperatures).forEach((temperatures) => {
+        hlaInsideReadings.push(...temperatures.inside);
       });
 
       const currentKwhPerHdd = hddTotal > 0 ? hddEnergyTotal / hddTotal : null;
@@ -1001,14 +1017,26 @@ const BuildingDashboardPanel = ({ building }) => {
         hddDays,
         hddSource: usesLegacyMuseumEnergy ? "legacy" : "current",
       };
+      const roundedInsideReadings = hlaInsideReadings.map((value) =>
+        Number(value.toFixed(1))
+      );
+      const uniqueInsideReadings = new Set(roundedInsideReadings);
+      const flatlineIndoorTemp =
+        hlaInsideReadings.length >= 24 && uniqueInsideReadings.size <= 2;
 
       setHeatLossSummary({
         kwhPerHdd: hddSummary.kwhPerHdd,
         weatherNormalisedEui: hddSummary.weatherNormalisedEui,
-        htcEstimate: htcSamples > 0 ? htcTotal / htcSamples : null,
+        htcEstimate:
+          htcSamples > 0 && !flatlineIndoorTemp ? htcTotal / htcSamples : null,
         hddDays: hddSummary.hddDays || 0,
-        htcSamples,
+        htcSamples: flatlineIndoorTemp ? 0 : htcSamples,
         hddSource: hddSummary.hddSource || "current",
+        averageInternalTemp: hlaInsideAverages.length
+          ? average(hlaInsideAverages)
+          : null,
+        comfortHddDays,
+        flatlineIndoorTemp,
       });
     } catch (err) {
       console.error("Error fetching heat loss summary:", err.message);
@@ -1019,6 +1047,9 @@ const BuildingDashboardPanel = ({ building }) => {
         hddDays: 0,
         htcSamples: 0,
         hddSource: "current",
+        averageInternalTemp: null,
+        comfortHddDays: 0,
+        flatlineIndoorTemp: false,
       });
     }
   };
@@ -1355,6 +1386,24 @@ const BuildingDashboardPanel = ({ building }) => {
     Number.isFinite(annualHddEstimate) && annualHddEstimate > 0
       ? building.nationalAverageEui / annualHddEstimate
       : 0.075;
+  const hddComfortCoverage =
+    heatLossSummary.hddDays > 0
+      ? heatLossSummary.comfortHddDays / heatLossSummary.hddDays
+      : null;
+  const hddComfortQualified =
+    building.heatingSystem !== "none" &&
+    Number.isFinite(hddComfortCoverage) &&
+    hddComfortCoverage >= 0.7 &&
+    Number.isFinite(heatLossSummary.averageInternalTemp) &&
+    heatLossSummary.averageInternalTemp >= 18;
+  const hddDataCaveat =
+    building.heatingSystem === "none"
+      ? "Low energy / unheated"
+      : heatLossSummary.flatlineIndoorTemp
+      ? "Check indoor sensor"
+      : Number.isFinite(hddComfortCoverage) && !hddComfortQualified
+      ? "Comfort not maintained"
+      : "";
   const heatLossStatusClass = (status) => {
     if (status === "good") return "text-emerald-700";
     if (status === "warning") return "text-amber-700";
@@ -1367,20 +1416,23 @@ const BuildingDashboardPanel = ({ building }) => {
     if (status === "poor") return "bg-red-500";
     return "bg-gray-300";
   };
-  const hddStatus = Number.isFinite(hddIntensityPerM2)
+  const rawHddStatus = Number.isFinite(hddIntensityPerM2)
     ? hddIntensityPerM2 <= targetHddIntensity
       ? "good"
       : hddIntensityPerM2 <= nationalAverageHddIntensity
       ? "warning"
       : "poor"
     : "pending";
-  const htcStatus = Number.isFinite(htcPerM2)
+  const hddStatus =
+    rawHddStatus === "good" && !hddComfortQualified ? "warning" : rawHddStatus;
+  const rawHtcStatus = Number.isFinite(htcPerM2)
     ? htcPerM2 <= 1.5
       ? "good"
       : htcPerM2 <= 3
       ? "warning"
       : "poor"
     : "pending";
+  const htcStatus = heatLossSummary.flatlineIndoorTemp ? "pending" : rawHtcStatus;
   const HeatLossStatusDot = ({ status }) => (
     <span
       className={`inline-block h-2.5 w-2.5 rounded-full ${heatLossStatusDotClass(
@@ -1700,6 +1752,7 @@ const BuildingDashboardPanel = ({ building }) => {
                     {Number.isFinite(heatLossSummary.kwhPerHdd)
                       ? `${formatNumber(heatLossSummary.kwhPerHdd, 3)} kWh/HDD`
                       : "Pending completed energy + HDD data"}
+                    {hddDataCaveat ? ` (${hddDataCaveat})` : ""}
                   </p>
                   <p className={heatLossStatusClass(htcStatus)}>
                     <HeatLossStatusDot status={htcStatus} />{" "}
@@ -1719,6 +1772,20 @@ const BuildingDashboardPanel = ({ building }) => {
                       ? "Legacy museum daily totals"
                       : "Current building data"}
                   </p>
+                  {Number.isFinite(heatLossSummary.averageInternalTemp) ||
+                  heatLossSummary.flatlineIndoorTemp ? (
+                    <p className="text-xs text-gray-600">
+                      HLA comfort check:{" "}
+                      {Number.isFinite(heatLossSummary.averageInternalTemp)
+                        ? `${formatMeasurement(
+                            heatLossSummary.averageInternalTemp
+                          )} deg C average internal temp`
+                        : "No valid internal temperature average"}
+                      {heatLossSummary.flatlineIndoorTemp
+                        ? " / possible stuck indoor sensor"
+                        : ""}
+                    </p>
+                  ) : null}
                 </div>
               </div>
             </div>
