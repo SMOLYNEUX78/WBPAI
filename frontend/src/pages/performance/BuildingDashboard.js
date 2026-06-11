@@ -1977,20 +1977,20 @@ const BuildingDashboardPanel = ({ building }) => {
                       ].filter((metric) => Number.isFinite(metric.value));
 
                       return (
-                        <div key={room.key} className="space-y-0.5">
+                        <div key={room.key} className="space-y-1">
                           <p className="font-semibold">{room.label}</p>
-                          <p>
-                            {roomMetrics.length
-                              ? roomMetrics
-                                  .map(
-                                    (metric) =>
-                                      `${metric.label} ${formatMeasurement(
-                                        metric.value
-                                      )} ${metric.unit}`
-                                  )
-                                  .join(" / ")
-                              : "No IAQ data"}
-                          </p>
+                          {roomMetrics.length ? (
+                            <div className="grid grid-cols-1 gap-0.5">
+                              {roomMetrics.map((metric) => (
+                                <p key={metric.label}>
+                                  <strong>{metric.label}:</strong>{" "}
+                                  {formatMeasurement(metric.value)} {metric.unit}
+                                </p>
+                              ))}
+                            </div>
+                          ) : (
+                            <p>No IAQ data</p>
+                          )}
                         </div>
                       );
                     })}
