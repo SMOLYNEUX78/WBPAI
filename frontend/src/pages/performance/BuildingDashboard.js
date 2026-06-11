@@ -1873,11 +1873,41 @@ const BuildingDashboardPanel = ({ building }) => {
   const trendMetrics = [
     { key: "electricity", label: "Electricity", unit: "kWh", color: "#2563eb" },
     { key: "gas", label: "Gas", unit: "kWh", color: "#dc2626" },
-    { key: "internalTemp", label: "Internal", unit: "deg C", color: "#059669" },
-    { key: "externalTemp", label: "External", unit: "deg C", color: "#0891b2" },
-    { key: "humidity", label: "Humidity", unit: "%", color: "#7c3aed" },
-    { key: "pm25", label: "PM2.5", unit: "ug/m3", color: "#ea580c" },
-    { key: "vocs", label: "VOCs", unit: "ppb", color: "#be123c" },
+    {
+      key: "internalTemp",
+      label: "Internal",
+      unit: "deg C",
+      color: "#059669",
+      displayRange: { min: 10, max: 30 },
+    },
+    {
+      key: "externalTemp",
+      label: "External",
+      unit: "deg C",
+      color: "#0891b2",
+      displayRange: { min: -5, max: 35 },
+    },
+    {
+      key: "humidity",
+      label: "Humidity",
+      unit: "%",
+      color: "#7c3aed",
+      displayRange: { min: 20, max: 90 },
+    },
+    {
+      key: "pm25",
+      label: "PM2.5",
+      unit: "ug/m3",
+      color: "#ea580c",
+      displayRange: { min: 0, max: 75 },
+    },
+    {
+      key: "vocs",
+      label: "VOCs",
+      unit: "ppb",
+      color: "#be123c",
+      displayRange: { min: 0, max: 1000 },
+    },
   ];
   const activeTrendMetrics = trendMetrics.filter((metric) =>
     weeklyTrendData.some((day) => Number.isFinite(day[metric.key]))
@@ -1890,6 +1920,9 @@ const BuildingDashboardPanel = ({ building }) => {
   const visibleTrendMetrics = selectedActiveTrendMetrics.length
     ? selectedActiveTrendMetrics
     : activeTrendMetrics;
+  const focusedTrendMetrics = selectedTrendMetricKeys.length
+    ? visibleTrendMetrics.slice(0, 3)
+    : [];
   const toggleTrendMetric = (metricKey) => {
     setSelectedTrendMetricKeys((currentKeys) => {
       const activeKeys = activeTrendMetrics.map((metric) => metric.key);
@@ -1910,7 +1943,12 @@ const BuildingDashboardPanel = ({ building }) => {
   };
   const chartWidth = 980;
   const chartHeight = 260;
-  const chartPadding = { top: 18, right: 18, bottom: 44, left: 36 };
+  const chartPadding = {
+    top: 18,
+    right: focusedTrendMetrics.length ? 132 : 18,
+    bottom: 44,
+    left: 36,
+  };
   const plotWidth = chartWidth - chartPadding.left - chartPadding.right;
   const plotHeight = chartHeight - chartPadding.top - chartPadding.bottom;
   const buildMetricRanges = (data, metrics) =>
@@ -1918,11 +1956,16 @@ const BuildingDashboardPanel = ({ building }) => {
       const values = data
         .map((point) => point[metric.key])
         .filter((value) => Number.isFinite(value));
+
+      if (metric.displayRange) {
+        ranges[metric.key] = metric.displayRange;
+        return ranges;
+      }
+
       const min = values.length ? Math.min(...values) : 0;
       const max = values.length ? Math.max(...values) : 1;
-      const paddedMax = max === min ? max + 1 : max;
-      const paddedMin = max === min ? Math.max(0, min - 1) : min;
-      ranges[metric.key] = { min: paddedMin, max: paddedMax };
+      const paddedMax = max === min ? max + 1 : max * 1.1;
+      ranges[metric.key] = { min: Math.min(0, min), max: paddedMax };
       return ranges;
     }, {});
   const metricRanges = buildMetricRanges(weeklyTrendData, visibleTrendMetrics);
@@ -2388,7 +2431,8 @@ const BuildingDashboardPanel = ({ building }) => {
               <div className="w-full overflow-x-auto">
                 <svg
                   viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-                  className="min-w-[760px] w-full h-auto"
+                  className="w-full h-auto"
+                  preserveAspectRatio="xMidYMid meet"
                   role="img"
                   aria-label="Historical weekly hourly performance trend chart"
                   onPointerMove={updateHoveredTrendSlot}
@@ -2481,6 +2525,51 @@ const BuildingDashboardPanel = ({ building }) => {
                       >
                         {point.hourLabel}
                       </text>
+                    );
+                  })}
+                  {focusedTrendMetrics.map((metric, index) => {
+                    const range = metricRanges[metric.key];
+                    const x = chartWidth - chartPadding.right + 16 + index * 38;
+
+                    if (!range) {
+                      return null;
+                    }
+
+                    return (
+                      <g key={`range-${metric.key}`} pointerEvents="none">
+                        <line
+                          x1={x}
+                          x2={x}
+                          y1={chartPadding.top}
+                          y2={chartPadding.top + plotHeight}
+                          stroke={metric.color}
+                          strokeWidth="2"
+                        />
+                        <text
+                          x={x + 4}
+                          y={chartPadding.top + 9}
+                          fontSize="9"
+                          fill={metric.color}
+                        >
+                          {formatMeasurement(range.max, 0)}
+                        </text>
+                        <text
+                          x={x + 4}
+                          y={chartPadding.top + plotHeight}
+                          fontSize="9"
+                          fill={metric.color}
+                        >
+                          {formatMeasurement(range.min, 0)}
+                        </text>
+                        <text
+                          x={x + 4}
+                          y={chartPadding.top + plotHeight + 12}
+                          fontSize="8"
+                          fill={metric.color}
+                        >
+                          {metric.unit}
+                        </text>
+                      </g>
                     );
                   })}
                   {visibleTrendMetrics.map((metric) => (
