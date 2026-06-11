@@ -204,6 +204,8 @@ const BuildingDashboardPanel = ({ building }) => {
     filteredInsideReadings: 0,
   });
   const [weeklyTrendData, setWeeklyTrendData] = useState([]);
+  const [selectedTrendMetricKeys, setSelectedTrendMetricKeys] = useState([]);
+  const [hoveredTrendSlot, setHoveredTrendSlot] = useState(null);
 
   const matterportModelId = useMemo(
     () => extractMatterportModelId(matterportInput),
@@ -1880,6 +1882,32 @@ const BuildingDashboardPanel = ({ building }) => {
   const activeTrendMetrics = trendMetrics.filter((metric) =>
     weeklyTrendData.some((day) => Number.isFinite(day[metric.key]))
   );
+  const selectedActiveTrendMetrics = selectedTrendMetricKeys.length
+    ? activeTrendMetrics.filter((metric) =>
+        selectedTrendMetricKeys.includes(metric.key)
+      )
+    : activeTrendMetrics;
+  const visibleTrendMetrics = selectedActiveTrendMetrics.length
+    ? selectedActiveTrendMetrics
+    : activeTrendMetrics;
+  const toggleTrendMetric = (metricKey) => {
+    setSelectedTrendMetricKeys((currentKeys) => {
+      const activeKeys = activeTrendMetrics.map((metric) => metric.key);
+      const cleanedKeys = currentKeys.filter((key) => activeKeys.includes(key));
+
+      if (cleanedKeys.length === 0) {
+        return [metricKey];
+      }
+
+      if (cleanedKeys.includes(metricKey)) {
+        return cleanedKeys.length === 1
+          ? []
+          : cleanedKeys.filter((key) => key !== metricKey);
+      }
+
+      return [...cleanedKeys, metricKey];
+    });
+  };
   const chartWidth = 980;
   const chartHeight = 260;
   const chartPadding = { top: 18, right: 18, bottom: 44, left: 36 };
@@ -1897,7 +1925,30 @@ const BuildingDashboardPanel = ({ building }) => {
       ranges[metric.key] = { min: paddedMin, max: paddedMax };
       return ranges;
     }, {});
-  const metricRanges = buildMetricRanges(weeklyTrendData, activeTrendMetrics);
+  const metricRanges = buildMetricRanges(weeklyTrendData, visibleTrendMetrics);
+  const hoveredTrendPoint = Number.isInteger(hoveredTrendSlot)
+    ? weeklyTrendData[hoveredTrendSlot]
+    : null;
+  const hoveredTrendX =
+    hoveredTrendPoint && weeklyTrendData.length > 1
+      ? chartPadding.left +
+        (hoveredTrendPoint.slot / (weeklyTrendData.length - 1)) * plotWidth
+      : null;
+  const updateHoveredTrendSlot = (event) => {
+    if (!weeklyTrendData.length) {
+      return;
+    }
+
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const svgX = ((event.clientX - bounds.left) / bounds.width) * chartWidth;
+    const plotX = Math.max(
+      0,
+      Math.min(plotWidth, svgX - chartPadding.left)
+    );
+    const nextSlot = Math.round((plotX / plotWidth) * (weeklyTrendData.length - 1));
+
+    setHoveredTrendSlot(nextSlot);
+  };
   const trendPoint = (data, ranges, pointData, metric, index) => {
     const value = pointData[metric.key];
     const range = ranges[metric.key];
@@ -2340,6 +2391,8 @@ const BuildingDashboardPanel = ({ building }) => {
                   className="min-w-[760px] w-full h-auto"
                   role="img"
                   aria-label="Historical weekly hourly performance trend chart"
+                  onPointerMove={updateHoveredTrendSlot}
+                  onPointerLeave={() => setHoveredTrendSlot(null)}
                 >
                   {[0, 0.25, 0.5, 0.75, 1].map((tick) => {
                     const y = chartPadding.top + tick * plotHeight;
@@ -2430,7 +2483,7 @@ const BuildingDashboardPanel = ({ building }) => {
                       </text>
                     );
                   })}
-                  {activeTrendMetrics.map((metric) => (
+                  {visibleTrendMetrics.map((metric) => (
                     <path
                       key={metric.key}
                       d={trendPath(weeklyTrendData, metricRanges, metric)}
@@ -2441,21 +2494,103 @@ const BuildingDashboardPanel = ({ building }) => {
                       strokeLinejoin="round"
                     />
                   ))}
+                  {hoveredTrendPoint && Number.isFinite(hoveredTrendX) ? (
+                    <g pointerEvents="none">
+                      <line
+                        x1={hoveredTrendX}
+                        x2={hoveredTrendX}
+                        y1={chartPadding.top}
+                        y2={chartPadding.top + plotHeight}
+                        stroke="#111827"
+                        strokeWidth="1.5"
+                        strokeDasharray="4 3"
+                      />
+                      <rect
+                        x={Math.min(
+                          chartWidth - chartPadding.right - 164,
+                          Math.max(chartPadding.left, hoveredTrendX + 8)
+                        )}
+                        y={chartPadding.top + 8}
+                        width="156"
+                        height={32 + visibleTrendMetrics.length * 16}
+                        rx="4"
+                        fill="white"
+                        stroke="#d1d5db"
+                      />
+                      <text
+                        x={Math.min(
+                          chartWidth - chartPadding.right - 154,
+                          Math.max(chartPadding.left + 10, hoveredTrendX + 18)
+                        )}
+                        y={chartPadding.top + 27}
+                        fontSize="11"
+                        fontWeight="600"
+                        fill="#111827"
+                      >
+                        {hoveredTrendPoint.label}
+                      </text>
+                      {visibleTrendMetrics.map((metric, index) => {
+                        const value = hoveredTrendPoint[metric.key];
+                        const y = chartPadding.top + 46 + index * 16;
+                        const x = Math.min(
+                          chartWidth - chartPadding.right - 154,
+                          Math.max(chartPadding.left + 10, hoveredTrendX + 18)
+                        );
+
+                        return (
+                          <g key={`hover-${metric.key}`}>
+                            <circle
+                              cx={x + 4}
+                              cy={y - 4}
+                              r="3"
+                              fill={metric.color}
+                            />
+                            <text x={x + 12} y={y} fontSize="10" fill="#374151">
+                              {metric.label}:{" "}
+                              {Number.isFinite(value)
+                                ? `${formatMeasurement(value)} ${metric.unit}`
+                                : "No Data"}
+                            </text>
+                          </g>
+                        );
+                      })}
+                    </g>
+                  ) : null}
+                  <rect
+                    x={chartPadding.left}
+                    y={chartPadding.top}
+                    width={plotWidth}
+                    height={plotHeight}
+                    fill="transparent"
+                  />
                 </svg>
               </div>
 
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 text-xs">
                 {activeTrendMetrics.map((metric) => {
                   const averageValue = averageMetricValue(weeklyTrendData, metric);
+                  const metricSelected =
+                    selectedTrendMetricKeys.length === 0 ||
+                    selectedTrendMetricKeys.includes(metric.key);
                   return (
-                    <div
+                    <button
+                      type="button"
                       key={metric.key}
-                      className="flex items-center justify-between gap-2 rounded border border-gray-200 bg-gray-50 px-2 py-1"
+                      onClick={() => toggleTrendMetric(metric.key)}
+                      className={`flex items-center justify-between gap-2 rounded border px-2 py-1 text-left transition ${
+                        metricSelected
+                          ? "border-gray-300 bg-white shadow-sm"
+                          : "border-gray-200 bg-gray-50 text-gray-400 opacity-70"
+                      }`}
                     >
                       <span className="flex items-center gap-1">
                         <span
                           className="inline-block h-2.5 w-2.5 rounded-full"
-                          style={{ backgroundColor: metric.color }}
+                          style={{
+                            backgroundColor: metricSelected
+                              ? metric.color
+                              : "#d1d5db",
+                          }}
                         />
                         {metric.label}
                       </span>
@@ -2464,7 +2599,7 @@ const BuildingDashboardPanel = ({ building }) => {
                           ? `${formatMeasurement(averageValue)} ${metric.unit}`
                           : "No Data"}
                       </span>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
