@@ -1955,7 +1955,7 @@ const BuildingDashboardPanel = ({ building }) => {
                   ) : null}
                 </div>
                 {roomIaqData.length > 0 ? (
-                  <div className="pt-2 mt-2 border-t border-gray-200 space-y-1">
+                  <div className="pt-3 mt-3 border-t border-gray-200 space-y-3">
                     {roomIaqData.map((room) => {
                       const comfortOnlyRoom = room.label === "Downstairs";
                       const roomMetrics = [
@@ -1977,15 +1977,25 @@ const BuildingDashboardPanel = ({ building }) => {
                       ].filter((metric) => Number.isFinite(metric.value));
 
                       return (
-                        <div key={room.key} className="space-y-1">
-                          <p className="font-semibold">{room.label}</p>
+                        <div
+                          key={room.key}
+                          className="rounded border border-gray-200 bg-gray-50 p-2 space-y-2"
+                        >
+                          <p className="font-semibold text-sm">{room.label}</p>
                           {roomMetrics.length ? (
-                            <div className="grid grid-cols-1 gap-0.5">
+                            <div className="grid grid-cols-1 gap-1">
                               {roomMetrics.map((metric) => (
-                                <p key={metric.label}>
-                                  <strong>{metric.label}:</strong>{" "}
-                                  {formatMeasurement(metric.value)} {metric.unit}
-                                </p>
+                                <div
+                                  key={metric.label}
+                                  className="flex items-baseline justify-between gap-3 text-xs"
+                                >
+                                  <span className="font-semibold text-gray-700">
+                                    {metric.label}
+                                  </span>
+                                  <span className="text-right">
+                                    {formatMeasurement(metric.value)} {metric.unit}
+                                  </span>
+                                </div>
                               ))}
                             </div>
                           ) : (
