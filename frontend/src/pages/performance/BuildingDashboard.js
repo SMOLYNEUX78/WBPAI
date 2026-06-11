@@ -2202,7 +2202,7 @@ const BuildingDashboardPanel = ({ building }) => {
           </div>
 
           <div className="bg-white rounded border p-2.5 sm:p-4 min-w-0 overflow-hidden">
-            <div className="grid grid-cols-3 gap-2 sm:gap-5 text-[10px] min-[390px]:text-xs sm:text-sm leading-tight">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 sm:gap-5 text-xs sm:text-sm leading-tight">
               <div className="space-y-2 sm:space-y-3 break-words min-w-0">
                 <h3 className="font-semibold mb-2 sm:mb-3">Energy</h3>
                 <p>
@@ -2382,17 +2382,17 @@ const BuildingDashboardPanel = ({ building }) => {
                       return (
                         <div
                           key={room.key}
-                          className="min-w-0 rounded border border-gray-200 bg-gray-50 p-2 sm:p-2.5 space-y-1.5"
+                          className="min-w-0 rounded border border-gray-200 bg-gray-50 p-2.5 space-y-2"
                         >
-                          <p className="truncate font-semibold text-[11px] leading-tight sm:text-sm">
+                          <p className="truncate font-semibold text-sm leading-tight">
                             {room.label}
                           </p>
                           {roomMetrics.length ? (
-                            <div className="grid grid-cols-2 gap-1 sm:grid-cols-1">
+                            <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-1">
                               {roomMetrics.map((metric) => (
                                 <div
                                   key={metric.label}
-                                  className="min-w-0 rounded bg-white px-1.5 py-1 text-[10px] leading-tight sm:flex sm:items-baseline sm:justify-between sm:gap-2 sm:bg-transparent sm:px-0 sm:py-0 sm:text-xs"
+                                  className="min-w-0 rounded bg-white px-2 py-1.5 text-xs leading-tight sm:flex sm:items-baseline sm:justify-between sm:gap-2 sm:bg-transparent sm:px-0 sm:py-0"
                                 >
                                   <span className="block truncate font-semibold text-gray-700">
                                     {metric.label}
