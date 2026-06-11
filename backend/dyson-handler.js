@@ -93,6 +93,7 @@ function mapEnvironmentalData(data) {
     pm10: firstFinite(data.pm10, data.p10r),
     vocs: firstFinite(data.vact, data.va10, data.tvoc, data.voc),
     hcho: firstFinite(data.hcho, data.hchr),
+    no2: firstFinite(data.no2, data.nox, data.noxl),
   };
 }
 
@@ -115,6 +116,7 @@ function applyDeviceCapabilities(device, values) {
       pm10: null,
       vocs: null,
       hcho: null,
+      no2: null,
     };
   }
 
@@ -199,6 +201,7 @@ function buildReadingRow(values, readingType) {
     pm25: average(values.map((value) => value.pm25)),
     pm10: average(values.map((value) => value.pm10)),
     hcho: average(values.map((value) => value.hcho)),
+    no2: average(values.map((value) => value.no2)),
     timestamp: new Date().toISOString(),
     reading_type: readingType,
   };
@@ -212,11 +215,12 @@ function hasAnyReadingValue(row) {
     row.pm25,
     row.pm10,
     row.hcho,
+    row.no2,
   ].some((value) => Number.isFinite(value));
 }
 
 function withoutExtendedIaqColumns(rows) {
-  return rows.map(({ pm10, hcho, ...row }) => row);
+  return rows.map(({ pm10, hcho, no2, ...row }) => row);
 }
 
 async function insertReadingRows(rows) {
@@ -227,8 +231,8 @@ async function insertReadingRows(rows) {
   }
 
   const missingExtendedColumn =
-    /pm10|hcho/i.test(error.message || "") ||
-    /pm10|hcho/i.test(error.details || "") ||
+    /pm10|hcho|no2/i.test(error.message || "") ||
+    /pm10|hcho|no2/i.test(error.details || "") ||
     error.code === "PGRST204";
 
   if (!missingExtendedColumn) {
@@ -236,7 +240,7 @@ async function insertReadingRows(rows) {
   }
 
   console.warn(
-    "[dyson] Readings table is missing pm10/hcho columns; retrying without extended IAQ fields"
+    "[dyson] Readings table is missing pm10/hcho/no2 columns; retrying without extended IAQ fields"
   );
 
   const retry = await supabase
