@@ -204,7 +204,6 @@ const BuildingDashboardPanel = ({ building }) => {
     filteredInsideReadings: 0,
   });
   const [weeklyTrendData, setWeeklyTrendData] = useState([]);
-  const [hourlyTrendData, setHourlyTrendData] = useState([]);
 
   const matterportModelId = useMemo(
     () => extractMatterportModelId(matterportInput),
@@ -575,7 +574,7 @@ const BuildingDashboardPanel = ({ building }) => {
       ]);
     };
 
-    return tailAwareScore(internalTempValues, scoreTemperature, 10, 0.5);
+    return tailAwareScore(internalTempValues, scoreTemperature, 10, 0.35);
   };
 
   const calculateHumidityScore = (humidityValues) => {
@@ -603,7 +602,7 @@ const BuildingDashboardPanel = ({ building }) => {
       ]);
     };
 
-    return tailAwareScore(humidityValues, scoreHumidity, 90, 0.55);
+    return tailAwareScore(humidityValues, scoreHumidity, 90, 0.35);
   };
 
   const calculateSeasonalResilienceScore = (rows) => {
@@ -661,7 +660,12 @@ const BuildingDashboardPanel = ({ building }) => {
       return null;
     }
 
-    return clampScore(Math.min(...ieqComponentScores)) / 100;
+    const weakestScore = Math.min(...ieqComponentScores);
+    const blendedScore = average(ieqComponentScores) * 0.7 + weakestScore * 0.3;
+    const guardedScore =
+      weakestScore < 35 ? Math.min(blendedScore, weakestScore + 25) : blendedScore;
+
+    return clampScore(guardedScore) / 100;
   };
 
   const calculateGlobalIeqEnergyIndex = ({ energy, ieqPenaltyFactor }) => {
@@ -1487,192 +1491,107 @@ const BuildingDashboardPanel = ({ building }) => {
 
   const fetchWeeklyPerformanceTrend = async () => {
     try {
-      const [
-        { data: energyRows, error: energyError },
-        { data: energyIntervalRows, error: energyIntervalError },
-        iaqResult,
-      ] =
-        await Promise.all([
-          supabase
-            .from("EnergyReadings")
-            .select("timestamp, fuel_type, usage_kwh")
-            .eq("building_id", building.id)
-            .eq("reading_type", "daily_total")
-            .order("timestamp", { ascending: false })
-            .limit(2000),
-          supabase
+      const fetchEnergyIntervalRows = async () => {
+        const pageSize = 1000;
+        const maxPages = 20;
+        const rows = [];
+
+        for (let page = 0; page < maxPages; page += 1) {
+          const from = page * pageSize;
+          const to = from + pageSize - 1;
+          const { data, error } = await supabase
             .from("EnergyReadings")
             .select("timestamp, fuel_type, usage_kwh")
             .eq("building_id", building.id)
             .eq("reading_type", "interval_30m")
             .not("usage_kwh", "is", null)
             .order("timestamp", { ascending: false })
-            .limit(5000),
-          fetchScopedIaqRows({
-            includeTimestamp: true,
-            includeReadingType: true,
-            limit: 5000,
-            orderDescending: true,
-          }),
-        ]);
+            .range(from, to);
 
-      if (energyError) throw energyError;
-      if (energyIntervalError) throw energyIntervalError;
+          if (error) throw error;
+
+          rows.push(...(data || []));
+
+          if (!data || data.length < pageSize) {
+            break;
+          }
+        }
+
+        return rows;
+      };
+
+      const [energyIntervalRows, iaqResult] = await Promise.all([
+        fetchEnergyIntervalRows(),
+        fetchScopedIaqRows({
+          includeTimestamp: true,
+          includeReadingType: true,
+          limit: 10000,
+          orderDescending: true,
+        }),
+      ]);
+
       if (iaqResult.error) throw iaqResult.error;
 
-      const availableTrendDates = [
-        ...(energyRows || []).map((row) => row.timestamp),
-        ...(iaqResult.data || []).map((row) => row.timestamp),
-      ]
-        .map((timestamp) => new Date(timestamp))
-        .filter((date) => !Number.isNaN(date.getTime()));
-
-      if (availableTrendDates.length === 0) {
-        setWeeklyTrendData([]);
-        return;
-      }
-
-      const latestTrendDate = new Date(
-        Math.max(...availableTrendDates.map((date) => date.getTime()))
-      );
-      latestTrendDate.setUTCHours(0, 0, 0, 0);
-      const start = new Date(latestTrendDate);
-      start.setUTCDate(latestTrendDate.getUTCDate() - 6);
-      const end = new Date(latestTrendDate);
-      end.setUTCHours(23, 59, 59, 999);
-      const dayKeys = Array.from({ length: 7 }, (_, index) => {
-        const day = new Date(start);
-        day.setUTCDate(start.getUTCDate() + index);
-        return day.toISOString().slice(0, 10);
-      });
-
-      const trendByDay = dayKeys.reduce((days, key) => {
-        days[key] = {
-          day: key,
-          label: new Date(`${key}T00:00:00Z`).toLocaleDateString("en-GB", {
-            weekday: "short",
-          }),
-          electricity: null,
-          gas: null,
-          internalTemp: null,
-          externalTemp: null,
-          humidity: null,
-          pm25: null,
-          vocs: null,
+      const weekdayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+      const weeklyBuckets = Array.from({ length: 168 }, (_, slot) => {
+        const dayIndex = Math.floor(slot / 24);
+        const hour = slot % 24;
+        return {
+          slot,
+          dayIndex,
+          hour,
+          label: `${weekdayLabels[dayIndex]} ${String(hour).padStart(2, "0")}:00`,
+          dayLabel: weekdayLabels[dayIndex],
+          hourLabel: `${String(hour).padStart(2, "0")}:00`,
+          electricity: [],
+          gas: [],
+          internalTemp: [],
+          externalTemp: [],
+          humidity: [],
+          pm25: [],
+          vocs: [],
         };
-        return days;
-      }, {});
-
-      (energyRows || []).forEach((row) => {
-        const rowDate = new Date(row.timestamp);
-        if (rowDate < start || rowDate > end) {
-          return;
-        }
-
-        const day = new Date(row.timestamp).toISOString().slice(0, 10);
-        const usageKwh = Number(row.usage_kwh);
-
-        if (!trendByDay[day] || !Number.isFinite(usageKwh)) {
-          return;
-        }
-
-        if (row.fuel_type === "electricity") {
-          trendByDay[day].electricity = Math.max(
-            trendByDay[day].electricity || 0,
-            usageKwh
-          );
-        }
-
-        if (row.fuel_type === "gas") {
-          trendByDay[day].gas = Math.max(trendByDay[day].gas || 0, usageKwh);
-        }
       });
 
-      const iaqBuckets = (iaqResult.data || [])
-        .filter((row) => {
-          const rowDate = new Date(row.timestamp);
-          return rowDate >= start && rowDate <= end;
-        })
-        .reduce((days, row) => {
-          const day = new Date(row.timestamp).toISOString().slice(0, 10);
+      const getWeeklySlot = (timestamp) => {
+        const date = new Date(timestamp);
 
-          if (!trendByDay[day]) {
-            return days;
-          }
+        if (Number.isNaN(date.getTime())) {
+          return null;
+        }
 
-          days[day] = days[day] || {
-            internalTemp: [],
-            externalTemp: [],
-            humidity: [],
-            pm25: [],
-            vocs: [],
-          };
-
-          const pushMetric = (key, value) => {
-            const numericValue = Number(value);
-            if (Number.isFinite(numericValue) && numericValue !== 0) {
-              days[day][key].push(numericValue);
-            }
-          };
-
-          pushMetric("internalTemp", row.temperature_inside);
-          pushMetric("externalTemp", row.temperature_outside);
-          pushMetric("humidity", row.humidity);
-          pushMetric("pm25", row.pm25);
-          pushMetric("vocs", row.vocs);
-          return days;
-        }, {});
-
-      Object.entries(iaqBuckets).forEach(([day, metrics]) => {
-        Object.entries(metrics).forEach(([key, values]) => {
-          trendByDay[day][key] = values.length ? average(values) : null;
-        });
-      });
-
-      setWeeklyTrendData(dayKeys.map((key) => trendByDay[key]));
-
-      const hourlyBuckets = Array.from({ length: 24 }, (_, hour) => ({
-        hour,
-        label: `${String(hour).padStart(2, "0")}:00`,
-        electricity: [],
-        gas: [],
-        internalTemp: [],
-        externalTemp: [],
-        humidity: [],
-        pm25: [],
-        vocs: [],
-      }));
+        const dayIndex = (date.getUTCDay() + 6) % 7;
+        return dayIndex * 24 + date.getUTCHours();
+      };
 
       (energyIntervalRows || []).forEach((row) => {
-        const date = new Date(row.timestamp);
-        const hour = date.getUTCHours();
+        const slot = getWeeklySlot(row.timestamp);
         const usageKwh = Number(row.usage_kwh);
 
-        if (!hourlyBuckets[hour] || !Number.isFinite(usageKwh)) {
+        if (slot === null || !weeklyBuckets[slot] || !Number.isFinite(usageKwh)) {
           return;
         }
 
         if (row.fuel_type === "electricity") {
-          hourlyBuckets[hour].electricity.push(usageKwh);
+          weeklyBuckets[slot].electricity.push(usageKwh);
         }
 
         if (row.fuel_type === "gas") {
-          hourlyBuckets[hour].gas.push(usageKwh);
+          weeklyBuckets[slot].gas.push(usageKwh);
         }
       });
 
       (iaqResult.data || []).forEach((row) => {
-        const date = new Date(row.timestamp);
-        const hour = date.getUTCHours();
+        const slot = getWeeklySlot(row.timestamp);
 
-        if (!hourlyBuckets[hour]) {
+        if (slot === null || !weeklyBuckets[slot]) {
           return;
         }
 
         const pushMetric = (key, value) => {
           const numericValue = Number(value);
           if (Number.isFinite(numericValue) && numericValue !== 0) {
-            hourlyBuckets[hour][key].push(numericValue);
+            weeklyBuckets[slot][key].push(numericValue);
           }
         };
 
@@ -1683,29 +1602,32 @@ const BuildingDashboardPanel = ({ building }) => {
         pushMetric("vocs", row.vocs);
       });
 
-      setHourlyTrendData(
-        hourlyBuckets.map((bucket) => ({
-          hour: bucket.hour,
-          label: bucket.label,
-          electricity: bucket.electricity.length
-            ? average(bucket.electricity) * 2
-            : null,
-          gas: bucket.gas.length ? average(bucket.gas) * 2 : null,
-          internalTemp: bucket.internalTemp.length
-            ? average(bucket.internalTemp)
-            : null,
-          externalTemp: bucket.externalTemp.length
-            ? average(bucket.externalTemp)
-            : null,
-          humidity: bucket.humidity.length ? average(bucket.humidity) : null,
-          pm25: bucket.pm25.length ? average(bucket.pm25) : null,
-          vocs: bucket.vocs.length ? average(bucket.vocs) : null,
-        }))
-      );
+      const averagedWeeklyTrend = weeklyBuckets.map((bucket) => ({
+        slot: bucket.slot,
+        dayIndex: bucket.dayIndex,
+        hour: bucket.hour,
+        label: bucket.label,
+        dayLabel: bucket.dayLabel,
+        hourLabel: bucket.hourLabel,
+        electricity: bucket.electricity.length
+          ? average(bucket.electricity) * 2
+          : null,
+        gas: bucket.gas.length ? average(bucket.gas) * 2 : null,
+        internalTemp: bucket.internalTemp.length
+          ? average(bucket.internalTemp)
+          : null,
+        externalTemp: bucket.externalTemp.length
+          ? average(bucket.externalTemp)
+          : null,
+        humidity: bucket.humidity.length ? average(bucket.humidity) : null,
+        pm25: bucket.pm25.length ? average(bucket.pm25) : null,
+        vocs: bucket.vocs.length ? average(bucket.vocs) : null,
+      }));
+
+      setWeeklyTrendData(averagedWeeklyTrend);
     } catch (err) {
       console.error("Error fetching weekly performance trend:", err.message);
       setWeeklyTrendData([]);
-      setHourlyTrendData([]);
     }
   };
 
@@ -1932,12 +1854,9 @@ const BuildingDashboardPanel = ({ building }) => {
   const activeTrendMetrics = trendMetrics.filter((metric) =>
     weeklyTrendData.some((day) => Number.isFinite(day[metric.key]))
   );
-  const activeHourlyTrendMetrics = trendMetrics.filter((metric) =>
-    hourlyTrendData.some((hour) => Number.isFinite(hour[metric.key]))
-  );
-  const chartWidth = 700;
-  const chartHeight = 220;
-  const chartPadding = { top: 18, right: 18, bottom: 36, left: 36 };
+  const chartWidth = 980;
+  const chartHeight = 260;
+  const chartPadding = { top: 18, right: 18, bottom: 44, left: 36 };
   const plotWidth = chartWidth - chartPadding.left - chartPadding.right;
   const plotHeight = chartHeight - chartPadding.top - chartPadding.bottom;
   const buildMetricRanges = (data, metrics) =>
@@ -1953,10 +1872,6 @@ const BuildingDashboardPanel = ({ building }) => {
       return ranges;
     }, {});
   const metricRanges = buildMetricRanges(weeklyTrendData, activeTrendMetrics);
-  const hourlyMetricRanges = buildMetricRanges(
-    hourlyTrendData,
-    activeHourlyTrendMetrics
-  );
   const trendPoint = (data, ranges, pointData, metric, index) => {
     const value = pointData[metric.key];
     const range = ranges[metric.key];
@@ -1983,11 +1898,12 @@ const BuildingDashboardPanel = ({ building }) => {
       )
       .join(" ");
   };
-  const latestMetricValue = (data, metric) =>
-    [...data]
-      .reverse()
+  const averageMetricValue = (data, metric) => {
+    const values = data
       .map((day) => day[metric.key])
-      .find((value) => Number.isFinite(value));
+      .filter((value) => Number.isFinite(value));
+    return values.length ? average(values) : null;
+  };
   return (
     <div className="min-h-screen bg-white p-4 flex flex-col space-y-6">
       <div className="bg-gray-100 p-4 rounded shadow">
@@ -2369,7 +2285,7 @@ const BuildingDashboardPanel = ({ building }) => {
             <div>
               <h3 className="font-semibold">Seasonal Performance Trends</h3>
               <p className="text-xs text-gray-600">
-                Summer chart: seven-day daily average pattern
+                Summer chart: historical weekly hourly averages, Monday to Sunday
               </p>
             </div>
             <div className="flex flex-wrap gap-1 text-xs">
@@ -2393,9 +2309,9 @@ const BuildingDashboardPanel = ({ building }) => {
               <div className="w-full overflow-x-auto">
                 <svg
                   viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-                  className="min-w-[560px] w-full h-auto"
+                  className="min-w-[760px] w-full h-auto"
                   role="img"
-                  aria-label="Seven day seasonal performance trend chart"
+                  aria-label="Historical weekly hourly performance trend chart"
                 >
                   {[0, 0.25, 0.5, 0.75, 1].map((tick) => {
                     const y = chartPadding.top + tick * plotHeight;
@@ -2411,15 +2327,33 @@ const BuildingDashboardPanel = ({ building }) => {
                       />
                     );
                   })}
-                  {weeklyTrendData.map((day, index) => {
-                    const x =
-                      chartPadding.left +
-                      (weeklyTrendData.length > 1
-                        ? (index / (weeklyTrendData.length - 1)) * plotWidth
-                        : plotWidth / 2);
-                    return (
-                      <g key={day.day}>
+                  {weeklyTrendData
+                    .filter((point) => point.hour === 0)
+                    .map((point) => {
+                      const x =
+                        chartPadding.left +
+                        (point.slot / (weeklyTrendData.length - 1)) * plotWidth;
+                      return (
                         <line
+                          key={`day-line-${point.dayLabel}`}
+                          x1={x}
+                          x2={x}
+                          y1={chartPadding.top}
+                          y2={chartPadding.top + plotHeight}
+                          stroke="#d1d5db"
+                          strokeWidth="1"
+                        />
+                      );
+                    })}
+                  {weeklyTrendData
+                    .filter((point) => point.hour % 6 === 0)
+                    .map((point) => {
+                      const x =
+                        chartPadding.left +
+                        (point.slot / (weeklyTrendData.length - 1)) * plotWidth;
+                      return (
+                        <line
+                          key={`hour-line-${point.slot}`}
                           x1={x}
                           x2={x}
                           y1={chartPadding.top}
@@ -2427,16 +2361,45 @@ const BuildingDashboardPanel = ({ building }) => {
                           stroke="#f3f4f6"
                           strokeWidth="1"
                         />
+                      );
+                    })}
+                  {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(
+                    (dayLabel, dayIndex) => {
+                      const midpointSlot = dayIndex * 24 + 11.5;
+                      const x =
+                        chartPadding.left +
+                        (midpointSlot / (weeklyTrendData.length - 1)) * plotWidth;
+                      return (
                         <text
+                          key={dayLabel}
                           x={x}
-                          y={chartHeight - 12}
+                          y={chartHeight - 14}
                           textAnchor="middle"
                           fontSize="11"
                           fill="#4b5563"
                         >
-                          {day.label}
+                          {dayLabel}
                         </text>
-                      </g>
+                      );
+                    }
+                  )}
+                  {weeklyTrendData
+                    .filter((point) => point.dayIndex === 0 && point.hour % 6 === 0)
+                    .map((point) => {
+                    const x =
+                      chartPadding.left +
+                      (point.slot / (weeklyTrendData.length - 1)) * plotWidth;
+                    return (
+                      <text
+                        key={`hour-label-${point.hour}`}
+                        x={x}
+                        y={chartHeight - 28}
+                        textAnchor="middle"
+                        fontSize="9"
+                        fill="#9ca3af"
+                      >
+                        {point.hourLabel}
+                      </text>
                     );
                   })}
                   {activeTrendMetrics.map((metric) => (
@@ -2450,35 +2413,12 @@ const BuildingDashboardPanel = ({ building }) => {
                       strokeLinejoin="round"
                     />
                   ))}
-                  {activeTrendMetrics.flatMap((metric) =>
-                    weeklyTrendData
-                      .map((day, index) => {
-                        const point = trendPoint(
-                          weeklyTrendData,
-                          metricRanges,
-                          day,
-                          metric,
-                          index
-                        );
-                        return point ? { ...point, metric } : null;
-                      })
-                      .filter(Boolean)
-                      .map((point) => (
-                        <circle
-                          key={`${point.metric.key}-${point.x}-${point.y}`}
-                          cx={point.x}
-                          cy={point.y}
-                          r="3"
-                          fill={point.metric.color}
-                        />
-                      ))
-                  )}
                 </svg>
               </div>
 
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 text-xs">
                 {activeTrendMetrics.map((metric) => {
-                  const latestValue = latestMetricValue(weeklyTrendData, metric);
+                  const averageValue = averageMetricValue(weeklyTrendData, metric);
                   return (
                     <div
                       key={metric.key}
@@ -2492,143 +2432,14 @@ const BuildingDashboardPanel = ({ building }) => {
                         {metric.label}
                       </span>
                       <span className="font-semibold">
-                        {Number.isFinite(latestValue)
-                          ? `${formatMeasurement(latestValue)} ${metric.unit}`
+                        {Number.isFinite(averageValue)
+                          ? `${formatMeasurement(averageValue)} ${metric.unit}`
                           : "No Data"}
                       </span>
                     </div>
                   );
                 })}
               </div>
-
-              {activeHourlyTrendMetrics.length > 0 ? (
-                <div className="pt-3 mt-3 border-t border-gray-200 space-y-3">
-                  <div>
-                    <h4 className="font-semibold text-sm">
-                      Hourly Average Profile
-                    </h4>
-                    <p className="text-xs text-gray-600">
-                      Average hour-by-hour pattern from the available interval
-                      and IAQ readings so far
-                    </p>
-                  </div>
-
-                  <div className="w-full overflow-x-auto">
-                    <svg
-                      viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-                      className="min-w-[560px] w-full h-auto"
-                      role="img"
-                      aria-label="Hourly average performance profile"
-                    >
-                      {[0, 0.25, 0.5, 0.75, 1].map((tick) => {
-                        const y = chartPadding.top + tick * plotHeight;
-                        return (
-                          <line
-                            key={tick}
-                            x1={chartPadding.left}
-                            x2={chartWidth - chartPadding.right}
-                            y1={y}
-                            y2={y}
-                            stroke="#e5e7eb"
-                            strokeWidth="1"
-                          />
-                        );
-                      })}
-                      {hourlyTrendData
-                        .filter((_, index) => index % 3 === 0)
-                        .map((hour, index) => {
-                          const sourceIndex = index * 3;
-                          const x =
-                            chartPadding.left +
-                            (hourlyTrendData.length > 1
-                              ? (sourceIndex / (hourlyTrendData.length - 1)) *
-                                plotWidth
-                              : plotWidth / 2);
-                          return (
-                            <g key={hour.label}>
-                              <line
-                                x1={x}
-                                x2={x}
-                                y1={chartPadding.top}
-                                y2={chartPadding.top + plotHeight}
-                                stroke="#f3f4f6"
-                                strokeWidth="1"
-                              />
-                              <text
-                                x={x}
-                                y={chartHeight - 12}
-                                textAnchor="middle"
-                                fontSize="11"
-                                fill="#4b5563"
-                              >
-                                {hour.label}
-                              </text>
-                            </g>
-                          );
-                        })}
-                      {activeHourlyTrendMetrics.map((metric) => (
-                        <path
-                          key={metric.key}
-                          d={trendPath(hourlyTrendData, hourlyMetricRanges, metric)}
-                          fill="none"
-                          stroke={metric.color}
-                          strokeWidth="2.5"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      ))}
-                      {activeHourlyTrendMetrics.flatMap((metric) =>
-                        hourlyTrendData
-                          .map((hour, index) => {
-                            const point = trendPoint(
-                              hourlyTrendData,
-                              hourlyMetricRanges,
-                              hour,
-                              metric,
-                              index
-                            );
-                            return point ? { ...point, metric } : null;
-                          })
-                          .filter(Boolean)
-                          .map((point) => (
-                            <circle
-                              key={`hourly-${point.metric.key}-${point.x}-${point.y}`}
-                              cx={point.x}
-                              cy={point.y}
-                              r="2.5"
-                              fill={point.metric.color}
-                            />
-                          ))
-                      )}
-                    </svg>
-                  </div>
-
-                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 text-xs">
-                    {activeHourlyTrendMetrics.map((metric) => {
-                      const latestValue = latestMetricValue(hourlyTrendData, metric);
-                      return (
-                        <div
-                          key={metric.key}
-                          className="flex items-center justify-between gap-2 rounded border border-gray-200 bg-gray-50 px-2 py-1"
-                        >
-                          <span className="flex items-center gap-1">
-                            <span
-                              className="inline-block h-2.5 w-2.5 rounded-full"
-                              style={{ backgroundColor: metric.color }}
-                            />
-                            {metric.label}
-                          </span>
-                          <span className="font-semibold">
-                            {Number.isFinite(latestValue)
-                              ? `${formatMeasurement(latestValue)} ${metric.unit}`
-                              : "No Data"}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ) : null}
             </>
           ) : (
             <div className="rounded border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
