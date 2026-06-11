@@ -280,6 +280,8 @@ const BuildingDashboardPanel = ({ building }) => {
     limit,
     orderDescending = false,
     readingTypes,
+    rangeFrom,
+    rangeTo,
   } = {}) => {
     const runQuery = async (includeExtended) => {
       const valueColumns = [
@@ -315,6 +317,10 @@ const BuildingDashboardPanel = ({ building }) => {
 
       if (limit) {
         query = query.limit(limit);
+      }
+
+      if (Number.isInteger(rangeFrom) && Number.isInteger(rangeTo)) {
+        query = query.range(rangeFrom, rangeTo);
       }
 
       return query;
@@ -1491,12 +1497,13 @@ const BuildingDashboardPanel = ({ building }) => {
 
   const fetchWeeklyPerformanceTrend = async () => {
     try {
+      const pageSize = 1000;
+      const maxTrendPages = 100;
+
       const fetchEnergyIntervalRows = async () => {
-        const pageSize = 1000;
-        const maxPages = 20;
         const rows = [];
 
-        for (let page = 0; page < maxPages; page += 1) {
+        for (let page = 0; page < maxTrendPages; page += 1) {
           const from = page * pageSize;
           const to = from + pageSize - 1;
           const { data, error } = await supabase
@@ -1520,17 +1527,36 @@ const BuildingDashboardPanel = ({ building }) => {
         return rows;
       };
 
-      const [energyIntervalRows, iaqResult] = await Promise.all([
-        fetchEnergyIntervalRows(),
-        fetchScopedIaqRows({
-          includeTimestamp: true,
-          includeReadingType: true,
-          limit: 10000,
-          orderDescending: true,
-        }),
-      ]);
+      const fetchIaqTrendRows = async () => {
+        const rows = [];
 
-      if (iaqResult.error) throw iaqResult.error;
+        for (let page = 0; page < maxTrendPages; page += 1) {
+          const from = page * pageSize;
+          const to = from + pageSize - 1;
+          const result = await fetchScopedIaqRows({
+            includeTimestamp: true,
+            includeReadingType: true,
+            orderDescending: true,
+            rangeFrom: from,
+            rangeTo: to,
+          });
+
+          if (result.error) throw result.error;
+
+          rows.push(...(result.data || []));
+
+          if (!result.data || result.data.length < pageSize) {
+            break;
+          }
+        }
+
+        return rows;
+      };
+
+      const [energyIntervalRows, iaqTrendRows] = await Promise.all([
+        fetchEnergyIntervalRows(),
+        fetchIaqTrendRows(),
+      ]);
 
       const weekdayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
       const weeklyBuckets = Array.from({ length: 168 }, (_, slot) => {
@@ -1581,7 +1607,7 @@ const BuildingDashboardPanel = ({ building }) => {
         }
       });
 
-      (iaqResult.data || []).forEach((row) => {
+      iaqTrendRows.forEach((row) => {
         const slot = getWeeklySlot(row.timestamp);
 
         if (slot === null || !weeklyBuckets[slot]) {
