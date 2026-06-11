@@ -2167,7 +2167,7 @@ const BuildingDashboardPanel = ({ building }) => {
                   ) : null}
                 </div>
                 {roomIaqData.length > 0 ? (
-                  <div className="pt-3 mt-3 border-t border-gray-200 grid gap-2 sm:grid-cols-2">
+                  <div className="pt-3 mt-3 border-t border-gray-200 grid gap-2">
                     {roomIaqData.map((room) => {
                       const comfortOnlyRoom = room.label === "Downstairs";
                       const roomMetrics = [
