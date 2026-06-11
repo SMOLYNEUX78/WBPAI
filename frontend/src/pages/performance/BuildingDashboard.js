@@ -1954,13 +1954,6 @@ const BuildingDashboardPanel = ({ building }) => {
   const visibleTrendMetrics = selectedActiveTrendMetrics.length
     ? selectedActiveTrendMetrics
     : activeTrendMetrics;
-  const focusedTrendMetrics = selectedTrendMetricKeys.length
-    ? visibleTrendMetrics.slice(0, 3)
-    : [];
-  const backdropTrendMetric =
-    selectedTrendMetricKeys.length > 0
-      ? visibleTrendMetrics.find((metric) => metric.healthBands)
-      : null;
   const toggleTrendMetric = (metricKey) => {
     setSelectedTrendMetricKeys((currentKeys) => {
       const activeKeys = activeTrendMetrics.map((metric) => metric.key);
@@ -1983,30 +1976,27 @@ const BuildingDashboardPanel = ({ building }) => {
   const chartHeight = 260;
   const chartPadding = {
     top: 18,
-    right: focusedTrendMetrics.length ? 132 : 18,
+    right: 18,
     bottom: 44,
-    left: focusedTrendMetrics.length ? 54 : 36,
+    left: 54,
   };
   const plotWidth = chartWidth - chartPadding.left - chartPadding.right;
   const plotHeight = chartHeight - chartPadding.top - chartPadding.bottom;
-  const buildMetricRanges = (data, metrics) =>
+  const buildMetricRanges = (_data, metrics) =>
     metrics.reduce((ranges, metric) => {
-      const values = data
-        .map((point) => point[metric.key])
-        .filter((value) => Number.isFinite(value));
-
-      if (metric.displayRange) {
-        ranges[metric.key] = metric.displayRange;
-        return ranges;
-      }
-
-      const min = values.length ? Math.min(...values) : 0;
-      const max = values.length ? Math.max(...values) : 1;
-      const paddedMax = max === min ? max + 1 : max * 1.1;
-      ranges[metric.key] = { min: Math.min(0, min), max: paddedMax };
+      ranges[metric.key] = { min: 0, max: 100 };
       return ranges;
     }, {});
   const metricRanges = buildMetricRanges(weeklyTrendData, visibleTrendMetrics);
+  const rawMetricRanges = activeTrendMetrics.reduce((ranges, metric) => {
+    const values = weeklyTrendData
+      .map((point) => point[metric.key])
+      .filter((value) => Number.isFinite(value));
+    const min = values.length ? Math.min(...values) : 0;
+    const max = values.length ? Math.max(...values) : 1;
+    ranges[metric.key] = { min, max: max === min ? max + 1 : max };
+    return ranges;
+  }, {});
   const hoveredTrendPoint = Number.isInteger(hoveredTrendSlot)
     ? weeklyTrendData[hoveredTrendSlot]
     : null;
@@ -2022,6 +2012,77 @@ const BuildingDashboardPanel = ({ building }) => {
 
     const normalised = (value - range.min) / (range.max - range.min);
     return chartPadding.top + (1 - normalised) * plotHeight;
+  };
+  const trendHealthScore = (metric, value) => {
+    if (!Number.isFinite(value)) {
+      return null;
+    }
+
+    if (metric.key === "internalTemp") {
+      if (value >= 18 && value <= 24) return 100;
+      if (value < 18) {
+        return linearScore(value, [
+          { min: 10, max: 16, startScore: 0, endScore: 40 },
+          { min: 16, max: 18, startScore: 40, endScore: 70 },
+        ]);
+      }
+      return linearScore(value, [
+        { min: 24, max: 26, startScore: 100, endScore: 70 },
+        { min: 26, max: 30, startScore: 70, endScore: 0 },
+      ]);
+    }
+
+    if (metric.key === "externalTemp") {
+      if (value >= 10 && value <= 24) return 100;
+      if (value < 10) {
+        return linearScore(value, [
+          { min: -5, max: 4, startScore: 0, endScore: 40 },
+          { min: 4, max: 10, startScore: 40, endScore: 100 },
+        ]);
+      }
+      return linearScore(value, [
+        { min: 24, max: 28, startScore: 100, endScore: 70 },
+        { min: 28, max: 35, startScore: 70, endScore: 0 },
+      ]);
+    }
+
+    if (metric.key === "humidity") {
+      if (value >= 40 && value <= 60) return 100;
+      if (value < 40) {
+        return linearScore(value, [
+          { min: 20, max: 30, startScore: 0, endScore: 40 },
+          { min: 30, max: 40, startScore: 40, endScore: 100 },
+        ]);
+      }
+      return linearScore(value, [
+        { min: 60, max: 70, startScore: 100, endScore: 40 },
+        { min: 70, max: 90, startScore: 40, endScore: 0 },
+      ]);
+    }
+
+    if (metric.key === "pm25") {
+      return linearScore(value, [
+        { min: 0, max: 12, startScore: 100, endScore: 100 },
+        { min: 12, max: 35, startScore: 100, endScore: 40 },
+        { min: 35, max: 75, startScore: 40, endScore: 0 },
+      ]);
+    }
+
+    if (metric.key === "vocs") {
+      return linearScore(value, [
+        { min: 0, max: 200, startScore: 100, endScore: 100 },
+        { min: 200, max: 500, startScore: 100, endScore: 40 },
+        { min: 500, max: 1000, startScore: 40, endScore: 0 },
+      ]);
+    }
+
+    const range = rawMetricRanges[metric.key];
+    if (!range) {
+      return null;
+    }
+
+    const normalised = (value - range.min) / (range.max - range.min);
+    return clampScore(100 - normalised * 100);
   };
   const updateHoveredTrendSlot = (event) => {
     if (!weeklyTrendData.length) {
@@ -2048,7 +2109,8 @@ const BuildingDashboardPanel = ({ building }) => {
     }
   };
   const trendPoint = (data, ranges, pointData, metric, index) => {
-    const value = pointData[metric.key];
+    const rawValue = pointData[metric.key];
+    const value = trendHealthScore(metric, rawValue);
     const range = ranges[metric.key];
 
     if (!Number.isFinite(value) || !range) {
@@ -2092,7 +2154,10 @@ const BuildingDashboardPanel = ({ building }) => {
     hoveredTrendMetric && hoveredTrendPoint
       ? trendY(
           metricRanges[hoveredTrendMetric.key],
-          hoveredTrendPoint[hoveredTrendMetric.key]
+          trendHealthScore(
+            hoveredTrendMetric,
+            hoveredTrendPoint[hoveredTrendMetric.key]
+          )
         )
       : null;
   return (
@@ -2511,39 +2576,36 @@ const BuildingDashboardPanel = ({ building }) => {
                   onPointerLeave={clearHoveredTrendSlot}
                   style={{ touchAction: "none" }}
                 >
-                  {backdropTrendMetric && metricRanges[backdropTrendMetric.key]
-                    ? backdropTrendMetric.healthBands.map((band) => {
-                        const range = metricRanges[backdropTrendMetric.key];
-                        const yTop = trendY(range, band.max);
-                        const yBottom = trendY(range, band.min);
+                  {[
+                    { min: 70, max: 100, color: "#dcfce7", label: "Healthy" },
+                    { min: 40, max: 70, color: "#fef3c7", label: "Elevated" },
+                    { min: 0, max: 40, color: "#fee2e2", label: "Unhealthy" },
+                  ].map((band) => {
+                    const yTop = trendY({ min: 0, max: 100 }, band.max);
+                    const yBottom = trendY({ min: 0, max: 100 }, band.min);
 
-                        if (!Number.isFinite(yTop) || !Number.isFinite(yBottom)) {
-                          return null;
-                        }
-
-                        return (
-                          <g key={`band-${backdropTrendMetric.key}-${band.min}`}>
-                            <rect
-                              x={chartPadding.left}
-                              y={Math.min(yTop, yBottom)}
-                              width={plotWidth}
-                              height={Math.abs(yBottom - yTop)}
-                              fill={band.color}
-                              opacity="0.42"
-                            />
-                            <text
-                              x={chartPadding.left + 6}
-                              y={Math.min(yTop, yBottom) + 12}
-                              fontSize="8"
-                              fill="#374151"
-                              opacity="0.65"
-                            >
-                              {band.label}
-                            </text>
-                          </g>
-                        );
-                      })
-                    : null}
+                    return (
+                      <g key={band.label}>
+                        <rect
+                          x={chartPadding.left}
+                          y={Math.min(yTop, yBottom)}
+                          width={plotWidth}
+                          height={Math.abs(yBottom - yTop)}
+                          fill={band.color}
+                          opacity="0.5"
+                        />
+                        <text
+                          x={chartPadding.left + 6}
+                          y={Math.min(yTop, yBottom) + 12}
+                          fontSize="8"
+                          fill="#374151"
+                          opacity="0.65"
+                        >
+                          {band.label}
+                        </text>
+                      </g>
+                    );
+                  })}
                   {[0, 0.25, 0.5, 0.75, 1].map((tick) => {
                     const y = chartPadding.top + tick * plotHeight;
                     return (
@@ -2633,11 +2695,8 @@ const BuildingDashboardPanel = ({ building }) => {
                       </text>
                     );
                   })}
-                  {focusedTrendMetrics[0] && metricRanges[focusedTrendMetrics[0].key] ? (
-                    [0, 0.5, 1].map((tick) => {
-                      const metric = focusedTrendMetrics[0];
-                      const range = metricRanges[metric.key];
-                      const value = range.max - (range.max - range.min) * tick;
+                  {[0, 0.3, 0.6, 1].map((tick) => {
+                      const value = 100 - 100 * tick;
                       const y = chartPadding.top + tick * plotHeight;
 
                       return (
@@ -2647,102 +2706,12 @@ const BuildingDashboardPanel = ({ building }) => {
                           y={y + 3}
                           textAnchor="end"
                           fontSize="9"
-                          fill={metric.color}
+                          fill="#374151"
                         >
                           {formatMeasurement(value, 0)}
                         </text>
                       );
-                    })
-                  ) : null}
-                  {focusedTrendMetrics.map((metric, index) => {
-                    const range = metricRanges[metric.key];
-                    const x = chartWidth - chartPadding.right + 16 + index * 38;
-
-                    if (!range) {
-                      return null;
-                    }
-
-                    return (
-                      <g key={`range-${metric.key}`} pointerEvents="none">
-                        <line
-                          x1={x}
-                          x2={x}
-                          y1={chartPadding.top}
-                          y2={chartPadding.top + plotHeight}
-                          stroke={metric.color}
-                          strokeWidth="2"
-                        />
-                        <text
-                          x={x + 4}
-                          y={chartPadding.top + 9}
-                          fontSize="9"
-                          fill={metric.color}
-                        >
-                          {formatMeasurement(range.max, 0)}
-                        </text>
-                        <text
-                          x={x + 4}
-                          y={chartPadding.top + plotHeight}
-                          fontSize="9"
-                          fill={metric.color}
-                        >
-                          {formatMeasurement(range.min, 0)}
-                        </text>
-                        <text
-                          x={x + 4}
-                          y={chartPadding.top + plotHeight + 12}
-                          fontSize="8"
-                          fill={metric.color}
-                        >
-                          {metric.unit}
-                        </text>
-                      </g>
-                    );
-                  })}
-                  {focusedTrendMetrics.flatMap((metric) => {
-                    const range = metricRanges[metric.key];
-
-                    if (!range || !metric.healthyLimits) {
-                      return [];
-                    }
-
-                    return metric.healthyLimits
-                      .map((limit) => {
-                        const y = trendY(range, limit.value);
-
-                        if (
-                          !Number.isFinite(y) ||
-                          y < chartPadding.top ||
-                          y > chartPadding.top + plotHeight
-                        ) {
-                          return null;
-                        }
-
-                        return (
-                          <g key={`healthy-${metric.key}-${limit.value}`}>
-                            <line
-                              x1={chartPadding.left}
-                              x2={chartWidth - chartPadding.right}
-                              y1={y}
-                              y2={y}
-                              stroke={metric.color}
-                              strokeWidth="1.2"
-                              strokeDasharray="2 3"
-                              opacity="0.55"
-                            />
-                            <text
-                              x={chartPadding.left + 4}
-                              y={y - 3}
-                              fontSize="9"
-                              fill={metric.color}
-                            >
-                              {limit.label}
-                            </text>
-                          </g>
-                        );
-                      })
-                      .filter(Boolean);
-                  })}
+                    })}
                   {visibleTrendMetrics.map((metric) => (
                     <path
                       key={metric.key}
@@ -2787,7 +2756,11 @@ const BuildingDashboardPanel = ({ building }) => {
                             {hoveredTrendMetric &&
                             Number.isFinite(hoveredTrendPoint?.[hoveredTrendMetric.key])
                               ? formatMeasurement(
-                                  hoveredTrendPoint[hoveredTrendMetric.key]
+                                  trendHealthScore(
+                                    hoveredTrendMetric,
+                                    hoveredTrendPoint[hoveredTrendMetric.key]
+                                  ),
+                                  0
                                 )
                               : ""}
                           </text>
@@ -2891,17 +2864,11 @@ const BuildingDashboardPanel = ({ building }) => {
                   );
                 })}
               </div>
-              {backdropTrendMetric ? (
-                <p className="text-xs text-gray-600">
-                  Backdrop bands show {backdropTrendMetric.label} healthy,
-                  elevated and unhealthy ranges.
-                </p>
-              ) : (
-                <p className="text-xs text-gray-600">
-                  Select an IAQ metric to show healthy, elevated and unhealthy
-                  backdrop bands.
-                </p>
-              )}
+              <p className="text-xs text-gray-600">
+                Lines are plotted on a shared 0-100 status scale against the
+                green, amber and red backdrop. Hover values still show the
+                original units.
+              </p>
             </>
           ) : (
             <div className="rounded border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
