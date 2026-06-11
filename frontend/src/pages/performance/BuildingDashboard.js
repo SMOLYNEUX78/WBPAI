@@ -1354,9 +1354,9 @@ const BuildingDashboardPanel = ({ building }) => {
     return "bg-gray-300";
   };
   const hddStatus = Number.isFinite(hddIntensityPerM2)
-    ? hddIntensityPerM2 <= 0.04
+    ? hddIntensityPerM2 <= 0.08
       ? "good"
-      : hddIntensityPerM2 <= 0.08
+      : hddIntensityPerM2 <= 0.16
       ? "warning"
       : "poor"
     : "pending";
