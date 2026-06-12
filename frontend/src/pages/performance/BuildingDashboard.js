@@ -2230,7 +2230,7 @@ const BuildingDashboardPanel = ({ building }) => {
               </h3>
 
               {matterportShareUrl ? (
-                <div className="flex flex-wrap justify-end gap-x-2 gap-y-1 text-right">
+                <div className="flex justify-end text-right">
                   <a
                     className="text-blue-700 text-[10px] min-[390px]:text-xs sm:text-sm underline leading-tight"
                     href={matterportShareUrl}
@@ -2238,14 +2238,6 @@ const BuildingDashboardPanel = ({ building }) => {
                     rel="noreferrer"
                   >
                     Open
-                  </a>
-                  <a
-                    className="text-blue-700 text-[10px] min-[390px]:text-xs sm:text-sm underline leading-tight"
-                    href={matterportEmbedUrl || matterportShareUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Full model
                   </a>
                 </div>
               ) : null}
@@ -2255,12 +2247,12 @@ const BuildingDashboardPanel = ({ building }) => {
               <iframe
                 title="Matterport model"
                 src={matterportEmbedUrl}
-                className="w-full h-[70vh] min-h-[420px] max-h-[620px] sm:h-[420px] border rounded bg-white"
+                className="w-full h-[220px] min-[390px]:h-[250px] sm:h-[280px] border rounded bg-white"
                 allow="autoplay; fullscreen; xr-spatial-tracking; accelerometer; gyroscope; vr"
                 allowFullScreen
               />
             ) : (
-              <div className="w-full h-[70vh] min-h-[420px] max-h-[620px] sm:h-[420px] border rounded bg-white flex items-center justify-center text-gray-500 text-[10px] min-[390px]:text-xs sm:text-sm p-2 sm:p-6 text-center">
+              <div className="w-full h-[220px] min-[390px]:h-[250px] sm:h-[280px] border rounded bg-white flex items-center justify-center text-gray-500 text-[10px] min-[390px]:text-xs sm:text-sm p-2 sm:p-6 text-center">
                 3D model pending.
               </div>
             )}
@@ -3234,12 +3226,12 @@ const NewBuildingSetupPanel = () => {
                 <iframe
                   title="New Matterport model"
                   src={embedUrl}
-                  className="w-full h-[70vh] min-h-[420px] max-h-[620px] sm:h-[420px] border rounded bg-white"
+                  className="w-full h-[220px] min-[390px]:h-[250px] sm:h-[280px] border rounded bg-white"
                   allow="autoplay; fullscreen; xr-spatial-tracking; accelerometer; gyroscope; vr"
                   allowFullScreen
                 />
               ) : (
-                <div className="w-full h-[70vh] min-h-[420px] max-h-[620px] sm:h-[420px] border rounded bg-white flex items-center justify-center text-gray-500 text-sm p-4 text-center">
+                <div className="w-full h-[220px] min-[390px]:h-[250px] sm:h-[280px] border rounded bg-white flex items-center justify-center text-gray-500 text-sm p-4 text-center">
                   Enter a model URL or model number to preview it here.
                 </div>
               )}
