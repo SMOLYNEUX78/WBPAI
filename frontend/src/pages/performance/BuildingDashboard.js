@@ -1985,7 +1985,7 @@ const BuildingDashboardPanel = ({ building }) => {
     });
   };
   const chartWidth = 980;
-  const chartHeight = 260;
+  const chartHeight = 340;
   const chartPadding = {
     top: 18,
     right: 18,
@@ -2031,60 +2031,72 @@ const BuildingDashboardPanel = ({ building }) => {
     }
 
     if (metric.key === "internalTemp") {
-      if (value >= 18 && value <= 24) return 50;
+      if (value >= 18 && value <= 24) {
+        return linearScore(value, [
+          { min: 18, max: 24, startScore: 30, endScore: 70 },
+        ]);
+      }
       if (value < 18) {
         return linearScore(value, [
-          { min: 10, max: 16, startScore: 0, endScore: 25 },
-          { min: 16, max: 18, startScore: 25, endScore: 40 },
+          { min: 10, max: 16, startScore: 0, endScore: 15 },
+          { min: 16, max: 18, startScore: 15, endScore: 30 },
         ]);
       }
       return linearScore(value, [
-        { min: 24, max: 26, startScore: 60, endScore: 75 },
-        { min: 26, max: 30, startScore: 75, endScore: 100 },
+        { min: 24, max: 26, startScore: 70, endScore: 85 },
+        { min: 26, max: 30, startScore: 85, endScore: 100 },
       ]);
     }
 
     if (metric.key === "externalTemp") {
-      if (value >= 10 && value <= 24) return 50;
+      if (value >= 10 && value <= 24) {
+        return linearScore(value, [
+          { min: 10, max: 24, startScore: 30, endScore: 70 },
+        ]);
+      }
       if (value < 10) {
         return linearScore(value, [
-          { min: -5, max: 4, startScore: 0, endScore: 25 },
-          { min: 4, max: 10, startScore: 25, endScore: 40 },
+          { min: -5, max: 4, startScore: 0, endScore: 15 },
+          { min: 4, max: 10, startScore: 15, endScore: 30 },
         ]);
       }
       return linearScore(value, [
-        { min: 24, max: 28, startScore: 60, endScore: 75 },
-        { min: 28, max: 35, startScore: 75, endScore: 100 },
+        { min: 24, max: 28, startScore: 70, endScore: 85 },
+        { min: 28, max: 35, startScore: 85, endScore: 100 },
       ]);
     }
 
     if (metric.key === "humidity") {
-      if (value >= 40 && value <= 60) return 50;
+      if (value >= 40 && value <= 60) {
+        return linearScore(value, [
+          { min: 40, max: 60, startScore: 30, endScore: 70 },
+        ]);
+      }
       if (value < 40) {
         return linearScore(value, [
-          { min: 20, max: 30, startScore: 0, endScore: 25 },
-          { min: 30, max: 40, startScore: 25, endScore: 40 },
+          { min: 20, max: 30, startScore: 0, endScore: 15 },
+          { min: 30, max: 40, startScore: 15, endScore: 30 },
         ]);
       }
       return linearScore(value, [
-        { min: 60, max: 70, startScore: 60, endScore: 75 },
-        { min: 70, max: 90, startScore: 75, endScore: 100 },
+        { min: 60, max: 70, startScore: 70, endScore: 85 },
+        { min: 70, max: 90, startScore: 85, endScore: 100 },
       ]);
     }
 
     if (metric.key === "pm25") {
       return linearScore(value, [
-        { min: 0, max: 12, startScore: 50, endScore: 50 },
-        { min: 12, max: 35, startScore: 60, endScore: 75 },
-        { min: 35, max: 75, startScore: 75, endScore: 100 },
+        { min: 0, max: 12, startScore: 30, endScore: 70 },
+        { min: 12, max: 35, startScore: 70, endScore: 85 },
+        { min: 35, max: 75, startScore: 85, endScore: 100 },
       ]);
     }
 
     if (metric.key === "vocs") {
       return linearScore(value, [
-        { min: 0, max: 200, startScore: 50, endScore: 50 },
-        { min: 200, max: 500, startScore: 60, endScore: 75 },
-        { min: 500, max: 1000, startScore: 75, endScore: 100 },
+        { min: 0, max: 200, startScore: 30, endScore: 70 },
+        { min: 200, max: 500, startScore: 70, endScore: 85 },
+        { min: 500, max: 1000, startScore: 85, endScore: 100 },
       ]);
     }
 
@@ -2096,9 +2108,9 @@ const BuildingDashboardPanel = ({ building }) => {
     const normalised = (value - range.min) / (range.max - range.min);
     if (metric.energyStatus) {
       return linearScore(normalised, [
-        { min: 0, max: 0.35, startScore: 50, endScore: 50 },
-        { min: 0.35, max: 0.7, startScore: 60, endScore: 75 },
-        { min: 0.7, max: 1, startScore: 75, endScore: 100 },
+        { min: 0, max: 0.35, startScore: 30, endScore: 70 },
+        { min: 0.35, max: 0.7, startScore: 70, endScore: 85 },
+        { min: 0.7, max: 1, startScore: 85, endScore: 100 },
       ]);
     }
 
@@ -2597,11 +2609,11 @@ const BuildingDashboardPanel = ({ building }) => {
                   style={{ touchAction: "none" }}
                 >
                   {[
-                    { min: 80, max: 100, color: "#fecaca", label: "HIGH BAD" },
-                    { min: 60, max: 80, color: "#fde68a", label: "HIGH" },
-                    { min: 40, max: 60, color: "#bbf7d0", label: "GOOD" },
-                    { min: 20, max: 40, color: "#fde68a", label: "LOW" },
-                    { min: 0, max: 20, color: "#fecaca", label: "LOW BAD" },
+                    { min: 85, max: 100, color: "#fecaca", label: "HIGH BAD" },
+                    { min: 70, max: 85, color: "#fde68a", label: "HIGH" },
+                    { min: 30, max: 70, color: "#bbf7d0", label: "GOOD" },
+                    { min: 15, max: 30, color: "#fde68a", label: "LOW" },
+                    { min: 0, max: 15, color: "#fecaca", label: "LOW BAD" },
                   ].map((band) => {
                     const yTop = trendY({ min: 0, max: 100 }, band.max);
                     const yBottom = trendY({ min: 0, max: 100 }, band.min);
@@ -2728,7 +2740,7 @@ const BuildingDashboardPanel = ({ building }) => {
                       </text>
                     );
                   })}
-                  {[0, 0.3, 0.6, 1].map((tick) => {
+                  {[0, 0.15, 0.3, 0.5, 0.7, 0.85, 1].map((tick) => {
                       const value = 100 - 100 * tick;
                       const y = chartPadding.top + tick * plotHeight;
 
