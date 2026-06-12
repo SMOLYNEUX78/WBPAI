@@ -1871,8 +1871,20 @@ const BuildingDashboardPanel = ({ building }) => {
   );
   const carbonTokenUnlocked = carbonEvidenceSteps.every((step) => step.complete);
   const trendMetrics = [
-    { key: "electricity", label: "Electricity", unit: "kWh", color: "#2563eb" },
-    { key: "gas", label: "Gas", unit: "kWh", color: "#dc2626" },
+    {
+      key: "electricity",
+      label: "Electricity",
+      unit: "kWh",
+      color: "#2563eb",
+      energyStatus: true,
+    },
+    {
+      key: "gas",
+      label: "Gas",
+      unit: "kWh",
+      color: "#dc2626",
+      energyStatus: true,
+    },
     {
       key: "internalTemp",
       label: "Internal",
@@ -2082,6 +2094,14 @@ const BuildingDashboardPanel = ({ building }) => {
     }
 
     const normalised = (value - range.min) / (range.max - range.min);
+    if (metric.energyStatus) {
+      return linearScore(normalised, [
+        { min: 0, max: 0.35, startScore: 100, endScore: 100 },
+        { min: 0.35, max: 0.7, startScore: 100, endScore: 55 },
+        { min: 0.7, max: 1, startScore: 55, endScore: 10 },
+      ]);
+    }
+
     return clampScore(100 - normalised * 100);
   };
   const updateHoveredTrendSlot = (event) => {
@@ -2577,9 +2597,9 @@ const BuildingDashboardPanel = ({ building }) => {
                   style={{ touchAction: "none" }}
                 >
                   {[
-                    { min: 70, max: 100, color: "#dcfce7", label: "Healthy" },
-                    { min: 40, max: 70, color: "#fef3c7", label: "Elevated" },
-                    { min: 0, max: 40, color: "#fee2e2", label: "Unhealthy" },
+                    { min: 70, max: 100, color: "#86efac", label: "GOOD" },
+                    { min: 40, max: 70, color: "#fcd34d", label: "MEDIUM" },
+                    { min: 0, max: 40, color: "#fca5a5", label: "BAD" },
                   ].map((band) => {
                     const yTop = trendY({ min: 0, max: 100 }, band.max);
                     const yBottom = trendY({ min: 0, max: 100 }, band.min);
@@ -2592,14 +2612,25 @@ const BuildingDashboardPanel = ({ building }) => {
                           width={plotWidth}
                           height={Math.abs(yBottom - yTop)}
                           fill={band.color}
-                          opacity="0.5"
+                          opacity="0.62"
+                        />
+                        <rect
+                          x={chartPadding.left}
+                          y={Math.min(yTop, yBottom)}
+                          width={plotWidth}
+                          height={Math.abs(yBottom - yTop)}
+                          fill="none"
+                          stroke="#ffffff"
+                          strokeWidth="1.5"
+                          opacity="0.75"
                         />
                         <text
-                          x={chartPadding.left + 6}
-                          y={Math.min(yTop, yBottom) + 12}
-                          fontSize="8"
-                          fill="#374151"
-                          opacity="0.65"
+                          x={chartPadding.left + 8}
+                          y={Math.min(yTop, yBottom) + 17}
+                          fontSize="12"
+                          fontWeight="700"
+                          fill="#111827"
+                          opacity="0.58"
                         >
                           {band.label}
                         </text>
