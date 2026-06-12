@@ -2185,7 +2185,7 @@ const BuildingDashboardPanel = ({ building }) => {
       <div className="bg-gray-100 p-4 rounded shadow">
         <h2 className="text-lg font-bold mb-3">Building Input</h2>
 
-        <div className="grid gap-3 sm:gap-5 items-start">
+        <div className="grid grid-cols-2 gap-3 sm:gap-5 items-start">
           <div className="min-w-0">
             <div className="grid grid-cols-3 gap-2 sm:gap-3">
               <div className="bg-white rounded border p-2 sm:p-3 min-w-0">
