@@ -2127,6 +2127,35 @@ const BuildingDashboardPanel = ({ building }) => {
   const activeTrendMetrics = trendMetrics.filter((metric) =>
     weeklyTrendData.some((day) => Number.isFinite(day[metric.key]))
   );
+  const trendMetricGroups = [
+    {
+      key: "energy",
+      label: "Energy",
+      metricKeys: ["electricity", "gas"],
+    },
+    {
+      key: "health",
+      label: "Health",
+      metricKeys: ["internalTemp", "externalTemp", "humidity", "pm25", "vocs"],
+    },
+  ];
+  const activeTrendMetricKeys = activeTrendMetrics.map((metric) => metric.key);
+  const activeTrendMetricGroups = trendMetricGroups
+    .map((group) => ({
+      ...group,
+      metricKeys: group.metricKeys.filter((key) =>
+        activeTrendMetricKeys.includes(key)
+      ),
+    }))
+    .filter((group) => group.metricKeys.length > 0);
+  const selectedTrendMetricGroupKey =
+    selectedTrendMetricKeys.length > 0
+      ? activeTrendMetricGroups.find(
+          (group) =>
+            group.metricKeys.length === selectedTrendMetricKeys.length &&
+            group.metricKeys.every((key) => selectedTrendMetricKeys.includes(key))
+        )?.key
+      : "";
   const selectedActiveTrendMetrics = selectedTrendMetricKeys.length
     ? activeTrendMetrics.filter((metric) =>
         selectedTrendMetricKeys.includes(metric.key)
@@ -2152,6 +2181,11 @@ const BuildingDashboardPanel = ({ building }) => {
 
       return [...cleanedKeys, metricKey];
     });
+  };
+  const selectTrendMetricGroup = (metricKeys) => {
+    setSelectedTrendMetricKeys(
+      metricKeys.filter((key) => activeTrendMetricKeys.includes(key))
+    );
   };
   const chartWidth = 980;
   const chartHeight = 340;
@@ -2774,6 +2808,27 @@ const BuildingDashboardPanel = ({ building }) => {
 
           {activeTrendMetrics.length > 0 ? (
             <>
+              <div className="flex flex-wrap gap-2 text-xs">
+                {activeTrendMetricGroups.map((group) => {
+                  const groupSelected = selectedTrendMetricGroupKey === group.key;
+
+                  return (
+                    <button
+                      type="button"
+                      key={group.key}
+                      onClick={() => selectTrendMetricGroup(group.metricKeys)}
+                      className={`rounded border px-3 py-1.5 font-semibold transition ${
+                        groupSelected
+                          ? "border-blue-600 bg-blue-600 text-white"
+                          : "border-gray-300 bg-white text-gray-700"
+                      }`}
+                    >
+                      {group.label}
+                    </button>
+                  );
+                })}
+              </div>
+
               <div className="w-full overflow-x-auto">
                 <svg
                   viewBox={`0 0 ${chartWidth} ${chartHeight}`}
