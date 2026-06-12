@@ -1699,37 +1699,50 @@ const BuildingDashboardPanel = ({ building }) => {
             new Date(b.created_at || b.timestamp)
         );
         let derivedIntervals = 0;
+        const rowsByHour = sortedRows.reduce((groups, row) => {
+          const slot = getWeeklySlot(row.created_at || row.timestamp);
 
-        for (let index = 1; index < sortedRows.length; index += 1) {
-          const previousRow = sortedRows[index - 1];
-          const currentRow = sortedRows[index];
-          const previousValue = Number(previousRow.usage_kwh);
-          const currentValue = Number(currentRow.usage_kwh);
-          const previousTime = new Date(
-            previousRow.created_at || previousRow.timestamp
-          );
-          const currentTime = new Date(currentRow.created_at || currentRow.timestamp);
+          if (slot === null) {
+            return groups;
+          }
+
+          groups[slot] = groups[slot] || [];
+          groups[slot].push(row);
+          return groups;
+        }, {});
+
+        Object.entries(rowsByHour).forEach(([slotKey, hourRows]) => {
+          if (hourRows.length < 2) {
+            return;
+          }
+
+          const firstRow = hourRows[0];
+          const lastRow = hourRows[hourRows.length - 1];
+          const firstValue = Number(firstRow.usage_kwh);
+          const lastValue = Number(lastRow.usage_kwh);
+          const firstTime = new Date(firstRow.created_at || firstRow.timestamp);
+          const lastTime = new Date(lastRow.created_at || lastRow.timestamp);
           const elapsedHours =
-            (currentTime.getTime() - previousTime.getTime()) / (1000 * 60 * 60);
-          const deltaKwh = currentValue - previousValue;
+            (lastTime.getTime() - firstTime.getTime()) / (1000 * 60 * 60);
+          const deltaKwh = lastValue - firstValue;
 
           if (
             !Number.isFinite(deltaKwh) ||
             !Number.isFinite(elapsedHours) ||
-            elapsedHours <= 0 ||
+            elapsedHours < 0.25 ||
             deltaKwh < 0
           ) {
-            continue;
+            return;
           }
 
           const hourlyKwh = deltaKwh / elapsedHours;
           pushEnergyUsage(
-            getWeeklySlot(currentRow.created_at || currentRow.timestamp),
-            currentRow.fuel_type,
+            Number(slotKey),
+            lastRow.fuel_type,
             hourlyKwh / 2
           );
           derivedIntervals += 1;
-        }
+        });
 
         if (derivedIntervals > 0) {
           return;
