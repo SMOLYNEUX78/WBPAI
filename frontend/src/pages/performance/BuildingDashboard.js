@@ -2035,38 +2035,10 @@ const BuildingDashboardPanel = ({ building }) => {
       energyStatus: true,
     },
     {
-      key: "electricityRegulated",
-      label: "Elec Reg",
-      unit: "kWh",
-      color: "#1d4ed8",
-      energyStatus: true,
-    },
-    {
-      key: "electricityUnregulated",
-      label: "Elec Unreg",
-      unit: "kWh",
-      color: "#60a5fa",
-      energyStatus: true,
-    },
-    {
       key: "gas",
       label: "Gas",
       unit: "kWh",
       color: "#dc2626",
-      energyStatus: true,
-    },
-    {
-      key: "gasRegulated",
-      label: "Gas Reg",
-      unit: "kWh",
-      color: "#991b1b",
-      energyStatus: true,
-    },
-    {
-      key: "gasUnregulated",
-      label: "Gas Unreg",
-      unit: "kWh",
-      color: "#f87171",
       energyStatus: true,
     },
     {
