@@ -2443,75 +2443,51 @@ const BuildingDashboardPanel = ({ building }) => {
                   ) : null}
                 </div>
                 {roomIaqData.length > 0 ? (
-                  <div className="pt-3 mt-3 border-t border-gray-200 grid gap-2">
-                    {roomIaqData.map((room) => {
+                  <div className="pt-3 mt-3 border-t border-gray-200 space-y-2">
+                    {roomIaqData.map((room, roomIndex) => {
                       const comfortOnlyRoom = room.label === "Downstairs";
-                      const comfortMetrics = [
+                      const roomMetrics = [
                         {
-                          label: "Temperature",
+                          label: "Temp",
                           value: room.internalTemp,
                           unit: "deg C",
                         },
-                        { label: "Humidity", value: room.humidity, unit: "%" },
+                        { label: "RH", value: room.humidity, unit: "%" },
+                        ...(comfortOnlyRoom
+                          ? []
+                          : [
+                              { label: "VOC", value: room.vocs, unit: "ppb" },
+                              { label: "PM2.5", value: room.pm25, unit: "ug/m3" },
+                              { label: "PM10", value: room.pm10, unit: "ug/m3" },
+                              { label: "HCHO", value: room.hcho, unit: "ppb" },
+                              { label: "NO2", value: room.no2, unit: "ppb" },
+                            ]),
                       ].filter((metric) => Number.isFinite(metric.value));
-                      const pollutantMetrics = comfortOnlyRoom
-                        ? []
-                        : [
-                            { label: "VOC", value: room.vocs, unit: "ppb" },
-                            { label: "PM2.5", value: room.pm25, unit: "ug/m3" },
-                            { label: "PM10", value: room.pm10, unit: "ug/m3" },
-                            { label: "HCHO", value: room.hcho, unit: "ppb" },
-                            { label: "NO2", value: room.no2, unit: "ppb" },
-                          ].filter((metric) => Number.isFinite(metric.value));
 
                       return (
                         <div
                           key={room.key}
-                          className="min-w-0 rounded border border-gray-200 bg-gray-50 p-3 space-y-3"
+                          className={`min-w-0 ${
+                            roomIndex > 0 ? "border-t border-gray-200 pt-2" : ""
+                          }`}
                         >
-                          <div className="flex items-center justify-between gap-2">
-                            <p className="font-semibold text-base leading-tight">
-                              {room.label}
-                            </p>
-                          </div>
+                          <p className="font-semibold text-gray-800">{room.label}</p>
 
-                          {comfortMetrics.length ? (
-                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-1">
-                              {comfortMetrics.map((metric) => (
-                                <div
-                                  key={metric.label}
-                                  className="min-w-0 rounded bg-white px-3 py-2 sm:flex sm:items-baseline sm:justify-between sm:gap-2 sm:bg-transparent sm:px-0 sm:py-0"
-                                >
-                                  <span className="block text-[11px] font-semibold uppercase text-gray-500 sm:text-xs sm:normal-case sm:text-gray-700">
+                          {roomMetrics.length ? (
+                            <div className="mt-1 space-y-0.5">
+                              {roomMetrics.map((metric) => (
+                                <p key={metric.label}>
+                                  <strong>
                                     {metric.label}
-                                  </span>
-                                  <span className="block text-sm font-semibold text-gray-900 sm:text-right sm:text-xs">
-                                    {formatMeasurement(metric.value)} {metric.unit}
-                                  </span>
-                                </div>
+                                    :
+                                  </strong>{" "}
+                                  {formatMeasurement(metric.value)} {metric.unit}
+                                </p>
                               ))}
                             </div>
                           ) : (
-                            <p className="text-xs text-gray-600">No comfort data</p>
+                            <p className="text-xs text-gray-600">No IAQ data</p>
                           )}
-
-                          {pollutantMetrics.length ? (
-                            <div className="space-y-1 border-t border-gray-200 pt-2">
-                              {pollutantMetrics.map((metric) => (
-                                <div
-                                  key={metric.label}
-                                  className="flex items-baseline justify-between gap-3 rounded bg-white px-3 py-1.5 text-xs sm:bg-transparent sm:px-0"
-                                >
-                                  <span className="font-semibold text-gray-700">
-                                    {metric.label}
-                                  </span>
-                                  <span className="text-right text-gray-900">
-                                    {formatMeasurement(metric.value)} {metric.unit}
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
-                          ) : null}
                         </div>
                       );
                     })}
