@@ -1510,11 +1510,12 @@ const BuildingDashboardPanel = ({ building }) => {
           const to = from + pageSize - 1;
           const { data, error } = await supabase
             .from("EnergyReadings")
-            .select("timestamp, fuel_type, reading_type, usage_kwh")
+            .select("timestamp, created_at, fuel_type, reading_type, usage_kwh")
             .eq("building_id", building.id)
             .in("reading_type", ["interval_30m", "daily_total"])
             .not("usage_kwh", "is", null)
             .order("timestamp", { ascending: false })
+            .order("created_at", { ascending: false })
             .range(from, to);
 
           if (error) throw error;
@@ -1658,7 +1659,9 @@ const BuildingDashboardPanel = ({ building }) => {
         }
       };
 
-      (energyIntervalRows || []).forEach((row) => {
+      (energyIntervalRows || [])
+        .filter((row) => row.reading_type === "interval_30m")
+        .forEach((row) => {
         const slot = getWeeklySlot(row.timestamp);
         const usageKwh = Number(row.usage_kwh);
 
@@ -1666,31 +1669,88 @@ const BuildingDashboardPanel = ({ building }) => {
           return;
         }
 
-        if (row.reading_type === "daily_total") {
+        pushEnergyUsage(slot, row.fuel_type, usageKwh);
+      });
+
+      const dailyTotalsByFuelDay = (energyIntervalRows || [])
+        .filter((row) => row.reading_type === "daily_total")
+        .reduce((groups, row) => {
           const date = new Date(row.timestamp);
-          const dayKey = Number.isNaN(date.getTime())
-            ? null
-            : `${row.fuel_type}:${date.toISOString().slice(0, 10)}`;
 
-          if (dayKey && intervalEnergyDays.has(dayKey)) {
-            return;
+          if (Number.isNaN(date.getTime())) {
+            return groups;
           }
 
-          const dayStartSlot = getWeeklyDayStartSlot(row.timestamp);
-          const halfHourlyEquivalentKwh = usageKwh / 48;
+          const dayKey = `${row.fuel_type}:${date.toISOString().slice(0, 10)}`;
 
-          for (let hourOffset = 0; hourOffset < 24; hourOffset += 1) {
-            pushEnergyUsage(
-              dayStartSlot === null ? null : dayStartSlot + hourOffset,
-              row.fuel_type,
-              halfHourlyEquivalentKwh
-            );
+          if (intervalEnergyDays.has(dayKey)) {
+            return groups;
           }
 
+          groups[dayKey] = groups[dayKey] || [];
+          groups[dayKey].push(row);
+          return groups;
+        }, {});
+
+      Object.values(dailyTotalsByFuelDay).forEach((rows) => {
+        const sortedRows = [...rows].sort(
+          (a, b) =>
+            new Date(a.created_at || a.timestamp) -
+            new Date(b.created_at || b.timestamp)
+        );
+        let derivedIntervals = 0;
+
+        for (let index = 1; index < sortedRows.length; index += 1) {
+          const previousRow = sortedRows[index - 1];
+          const currentRow = sortedRows[index];
+          const previousValue = Number(previousRow.usage_kwh);
+          const currentValue = Number(currentRow.usage_kwh);
+          const previousTime = new Date(
+            previousRow.created_at || previousRow.timestamp
+          );
+          const currentTime = new Date(currentRow.created_at || currentRow.timestamp);
+          const elapsedHours =
+            (currentTime.getTime() - previousTime.getTime()) / (1000 * 60 * 60);
+          const deltaKwh = currentValue - previousValue;
+
+          if (
+            !Number.isFinite(deltaKwh) ||
+            !Number.isFinite(elapsedHours) ||
+            elapsedHours <= 0 ||
+            deltaKwh < 0
+          ) {
+            continue;
+          }
+
+          const hourlyKwh = deltaKwh / elapsedHours;
+          pushEnergyUsage(
+            getWeeklySlot(currentRow.created_at || currentRow.timestamp),
+            currentRow.fuel_type,
+            hourlyKwh / 2
+          );
+          derivedIntervals += 1;
+        }
+
+        if (derivedIntervals > 0) {
           return;
         }
 
-        pushEnergyUsage(slot, row.fuel_type, usageKwh);
+        const latestRow = sortedRows[sortedRows.length - 1];
+        const usageKwh = Number(latestRow?.usage_kwh);
+        const dayStartSlot = getWeeklyDayStartSlot(latestRow?.timestamp);
+        const halfHourlyEquivalentKwh = usageKwh / 48;
+
+        if (!Number.isFinite(halfHourlyEquivalentKwh)) {
+          return;
+        }
+
+        for (let hourOffset = 0; hourOffset < 24; hourOffset += 1) {
+          pushEnergyUsage(
+            dayStartSlot === null ? null : dayStartSlot + hourOffset,
+            latestRow.fuel_type,
+            halfHourlyEquivalentKwh
+          );
+        }
       });
 
       iaqTrendRows.forEach((row) => {
