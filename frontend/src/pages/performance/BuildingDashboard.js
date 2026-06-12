@@ -2185,37 +2185,37 @@ const BuildingDashboardPanel = ({ building }) => {
       <div className="bg-gray-100 p-4 rounded shadow">
         <h2 className="text-lg font-bold mb-3">Building Input</h2>
 
-        <div className="grid gap-3 grid-cols-2 sm:gap-5 items-start">
-          <div className="space-y-3 sm:space-y-4 min-w-0">
-            <div className="grid gap-3 md:grid-cols-3">
-              <div className="bg-white rounded border p-3">
+        <div className="grid gap-3 sm:gap-5 items-start">
+          <div className="min-w-0">
+            <div className="grid grid-cols-3 gap-2 sm:gap-3">
+              <div className="bg-white rounded border p-2 sm:p-3 min-w-0">
                 <p className="text-xs uppercase tracking-wide text-gray-500">
                   Address
                 </p>
-                <p className="font-semibold text-sm mt-1">
+                <p className="font-semibold text-[11px] sm:text-sm mt-1 leading-snug break-words">
                   {matterportMetadata.address}
                 </p>
               </div>
 
-              <div className="bg-white rounded border p-3">
+              <div className="bg-white rounded border p-2 sm:p-3 min-w-0">
                 <p className="text-xs uppercase tracking-wide text-gray-500">
                   Coordinates
                 </p>
-                <p className="font-semibold text-sm mt-1">
+                <p className="font-semibold text-[11px] sm:text-sm mt-1 leading-snug break-words">
                   {matterportMetadata.latitude}, {matterportMetadata.longitude}
                 </p>
               </div>
 
-              <div className="bg-white rounded border p-3">
+              <div className="bg-white rounded border p-2 sm:p-3 min-w-0">
                 <p className="text-xs uppercase tracking-wide text-gray-500">
                   Internal Area
                 </p>
-                <p className="font-semibold text-sm mt-1">
+                <p className="font-semibold text-[11px] sm:text-sm mt-1 leading-snug">
                   {matterportMetadata.internalArea !== "--"
                     ? `${matterportMetadata.internalArea} m2`
                     : "Pending"}
                 </p>
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-[10px] sm:text-xs text-gray-500 mt-1 leading-snug">
                   Temporary estimate from embedded model
                 </p>
               </div>
