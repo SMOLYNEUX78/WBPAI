@@ -2287,7 +2287,7 @@ const BuildingDashboardPanel = ({ building }) => {
           </div>
 
           <div className="bg-white rounded border p-2.5 sm:p-4 min-w-0 overflow-hidden">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 sm:gap-5 text-xs sm:text-sm leading-tight">
+            <div className="grid grid-cols-3 gap-2 sm:gap-5 text-[10px] min-[390px]:text-xs sm:text-sm leading-tight">
               <div className="space-y-2 sm:space-y-3 break-words min-w-0">
                 <h3 className="font-semibold mb-2 sm:mb-3">Energy</h3>
                 <p>
