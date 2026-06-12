@@ -90,7 +90,7 @@ const buildMatterportEmbedUrl = (value) => {
     return "";
   }
 
-  return `https://my.matterport.com/show/?m=${modelId}&play=1&qs=1&brand=0&mls=2`;
+  return `https://my.matterport.com/show/?m=${modelId}&play=1&brand=0&mls=2`;
 };
 
 const createEmptyMatterportMetadata = (statusText, building = {}) => ({
@@ -2230,14 +2230,24 @@ const BuildingDashboardPanel = ({ building }) => {
               </h3>
 
               {matterportShareUrl ? (
-                <a
-                  className="text-blue-700 text-[10px] min-[390px]:text-xs sm:text-sm underline text-right leading-tight"
-                  href={matterportShareUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Open in Matterport
-                </a>
+                <div className="flex flex-wrap justify-end gap-x-2 gap-y-1 text-right">
+                  <a
+                    className="text-blue-700 text-[10px] min-[390px]:text-xs sm:text-sm underline leading-tight"
+                    href={matterportShareUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Open
+                  </a>
+                  <a
+                    className="text-blue-700 text-[10px] min-[390px]:text-xs sm:text-sm underline leading-tight"
+                    href={matterportEmbedUrl || matterportShareUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Full model
+                  </a>
+                </div>
               ) : null}
             </div>
 
@@ -2245,11 +2255,11 @@ const BuildingDashboardPanel = ({ building }) => {
               <iframe
                 title="Matterport model"
                 src={matterportEmbedUrl}
-                className="w-full h-[150px] min-[390px]:h-[180px] sm:h-[280px] border rounded bg-white"
+                className="w-full h-[220px] min-[390px]:h-[250px] sm:h-[280px] border rounded bg-white"
                 allow="fullscreen; xr-spatial-tracking; vr"
               />
             ) : (
-              <div className="w-full h-[150px] min-[390px]:h-[180px] sm:h-[280px] border rounded bg-white flex items-center justify-center text-gray-500 text-[10px] min-[390px]:text-xs sm:text-sm p-2 sm:p-6 text-center">
+              <div className="w-full h-[220px] min-[390px]:h-[250px] sm:h-[280px] border rounded bg-white flex items-center justify-center text-gray-500 text-[10px] min-[390px]:text-xs sm:text-sm p-2 sm:p-6 text-center">
                 3D model pending.
               </div>
             )}
