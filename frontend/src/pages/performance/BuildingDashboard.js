@@ -1510,9 +1510,9 @@ const BuildingDashboardPanel = ({ building }) => {
           const to = from + pageSize - 1;
           const { data, error } = await supabase
             .from("EnergyReadings")
-            .select("timestamp, fuel_type, usage_kwh")
+            .select("timestamp, fuel_type, reading_type, usage_kwh")
             .eq("building_id", building.id)
-            .eq("reading_type", "interval_30m")
+            .in("reading_type", ["interval_30m", "daily_total"])
             .not("usage_kwh", "is", null)
             .order("timestamp", { ascending: false })
             .range(from, to);
@@ -1595,6 +1595,16 @@ const BuildingDashboardPanel = ({ building }) => {
         const dayIndex = (date.getUTCDay() + 6) % 7;
         return dayIndex * 24 + date.getUTCHours();
       };
+      const getWeeklyDayStartSlot = (timestamp) => {
+        const date = new Date(timestamp);
+
+        if (Number.isNaN(date.getTime())) {
+          return null;
+        }
+
+        const dayIndex = (date.getUTCDay() + 6) % 7;
+        return dayIndex * 24;
+      };
 
       const electricRegulatedFractionForTrend =
         building.regulatedElectricFraction ?? (energySummary.hasGasData ? 0.15 : 0.35);
@@ -1609,15 +1619,25 @@ const BuildingDashboardPanel = ({ building }) => {
           ? clampScore((gasRegulatedDailyForTrend / gasDailyAverageForTrend) * 100) / 100
           : 1;
 
-      (energyIntervalRows || []).forEach((row) => {
-        const slot = getWeeklySlot(row.timestamp);
-        const usageKwh = Number(row.usage_kwh);
+      const intervalEnergyDays = new Set(
+        (energyIntervalRows || [])
+          .filter((row) => row.reading_type === "interval_30m")
+          .map((row) => {
+            const date = new Date(row.timestamp);
+            if (Number.isNaN(date.getTime())) {
+              return null;
+            }
 
+            return `${row.fuel_type}:${date.toISOString().slice(0, 10)}`;
+          })
+          .filter(Boolean)
+      );
+      const pushEnergyUsage = (slot, fuelType, usageKwh) => {
         if (slot === null || !weeklyBuckets[slot] || !Number.isFinite(usageKwh)) {
           return;
         }
 
-        if (row.fuel_type === "electricity") {
+        if (fuelType === "electricity") {
           weeklyBuckets[slot].electricity.push(usageKwh);
           weeklyBuckets[slot].electricityRegulated.push(
             usageKwh * electricRegulatedFractionForTrend
@@ -1627,7 +1647,7 @@ const BuildingDashboardPanel = ({ building }) => {
           );
         }
 
-        if (row.fuel_type === "gas") {
+        if (fuelType === "gas") {
           weeklyBuckets[slot].gas.push(usageKwh);
           weeklyBuckets[slot].gasRegulated.push(
             usageKwh * gasRegulatedFractionForTrend
@@ -1636,6 +1656,41 @@ const BuildingDashboardPanel = ({ building }) => {
             usageKwh * (1 - gasRegulatedFractionForTrend)
           );
         }
+      };
+
+      (energyIntervalRows || []).forEach((row) => {
+        const slot = getWeeklySlot(row.timestamp);
+        const usageKwh = Number(row.usage_kwh);
+
+        if (slot === null || !weeklyBuckets[slot] || !Number.isFinite(usageKwh)) {
+          return;
+        }
+
+        if (row.reading_type === "daily_total") {
+          const date = new Date(row.timestamp);
+          const dayKey = Number.isNaN(date.getTime())
+            ? null
+            : `${row.fuel_type}:${date.toISOString().slice(0, 10)}`;
+
+          if (dayKey && intervalEnergyDays.has(dayKey)) {
+            return;
+          }
+
+          const dayStartSlot = getWeeklyDayStartSlot(row.timestamp);
+          const halfHourlyEquivalentKwh = usageKwh / 48;
+
+          for (let hourOffset = 0; hourOffset < 24; hourOffset += 1) {
+            pushEnergyUsage(
+              dayStartSlot === null ? null : dayStartSlot + hourOffset,
+              row.fuel_type,
+              halfHourlyEquivalentKwh
+            );
+          }
+
+          return;
+        }
+
+        pushEnergyUsage(slot, row.fuel_type, usageKwh);
       });
 
       iaqTrendRows.forEach((row) => {
@@ -2110,7 +2165,8 @@ const BuildingDashboardPanel = ({ building }) => {
     if (metric.key === "internalTemp") {
       if (value >= 18 && value <= 24) {
         return linearScore(value, [
-          { min: 18, max: 24, startScore: 30, endScore: 70 },
+          { min: 18, max: 20, startScore: 30, endScore: 50 },
+          { min: 20, max: 24, startScore: 50, endScore: 70 },
         ]);
       }
       if (value < 18) {
