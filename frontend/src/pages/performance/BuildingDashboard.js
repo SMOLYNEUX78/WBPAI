@@ -2185,10 +2185,10 @@ const BuildingDashboardPanel = ({ building }) => {
       <div className="bg-gray-100 p-4 rounded shadow">
         <h2 className="text-lg font-bold mb-3">Building Input</h2>
 
-        <div className="grid gap-3 sm:gap-5 md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] md:items-stretch">
-          <div className="min-w-0 md:h-full">
-            <div className="grid grid-cols-3 md:grid-cols-1 md:grid-rows-3 gap-2 sm:gap-3 md:h-full">
-              <div className="bg-white rounded border p-2 sm:p-3 min-w-0 md:flex md:flex-col md:justify-center">
+        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-3 sm:gap-5 items-stretch">
+          <div className="min-w-0 h-full">
+            <div className="grid grid-cols-1 grid-rows-3 gap-2 sm:gap-3 h-full">
+              <div className="bg-white rounded border p-2 sm:p-3 min-w-0 flex flex-col justify-center">
                 <p className="text-xs uppercase tracking-wide text-gray-500">
                   Address
                 </p>
@@ -2197,7 +2197,7 @@ const BuildingDashboardPanel = ({ building }) => {
                 </p>
               </div>
 
-              <div className="bg-white rounded border p-2 sm:p-3 min-w-0 md:flex md:flex-col md:justify-center">
+              <div className="bg-white rounded border p-2 sm:p-3 min-w-0 flex flex-col justify-center">
                 <p className="text-xs uppercase tracking-wide text-gray-500">
                   Coordinates
                 </p>
@@ -2206,7 +2206,7 @@ const BuildingDashboardPanel = ({ building }) => {
                 </p>
               </div>
 
-              <div className="bg-white rounded border p-2 sm:p-3 min-w-0 md:flex md:flex-col md:justify-center">
+              <div className="bg-white rounded border p-2 sm:p-3 min-w-0 flex flex-col justify-center">
                 <p className="text-xs uppercase tracking-wide text-gray-500">
                   Internal Area
                 </p>
@@ -2223,7 +2223,7 @@ const BuildingDashboardPanel = ({ building }) => {
 
           </div>
 
-          <div className="space-y-2 min-w-0 bg-white rounded border p-2.5 sm:p-3 md:h-full">
+          <div className="space-y-2 min-w-0 bg-white rounded border p-2.5 sm:p-3 h-full">
             <div className="flex items-center justify-between gap-2">
               <h3 className="font-semibold text-xs min-[390px]:text-sm sm:text-base">
                 3D Model
