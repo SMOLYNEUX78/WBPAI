@@ -1572,7 +1572,11 @@ const BuildingDashboardPanel = ({ building }) => {
           dayLabel: weekdayLabels[dayIndex],
           hourLabel: `${String(hour).padStart(2, "0")}:00`,
           electricity: [],
+          electricityRegulated: [],
+          electricityUnregulated: [],
           gas: [],
+          gasRegulated: [],
+          gasUnregulated: [],
           internalTemp: [],
           externalTemp: [],
           humidity: [],
@@ -1592,6 +1596,19 @@ const BuildingDashboardPanel = ({ building }) => {
         return dayIndex * 24 + date.getUTCHours();
       };
 
+      const electricRegulatedFractionForTrend =
+        building.regulatedElectricFraction ?? (energySummary.hasGasData ? 0.15 : 0.35);
+      const gasDailyAverageForTrend = Number(energySummary.gasDailyAverage);
+      const gasRegulatedDailyForTrend =
+        (Number.isFinite(energySummary.gasHeatingDaily)
+          ? energySummary.gasHeatingDaily
+          : 0) +
+        (Number.isFinite(energySummary.gasDhwDaily) ? energySummary.gasDhwDaily : 0);
+      const gasRegulatedFractionForTrend =
+        Number.isFinite(gasDailyAverageForTrend) && gasDailyAverageForTrend > 0
+          ? clampScore((gasRegulatedDailyForTrend / gasDailyAverageForTrend) * 100) / 100
+          : 1;
+
       (energyIntervalRows || []).forEach((row) => {
         const slot = getWeeklySlot(row.timestamp);
         const usageKwh = Number(row.usage_kwh);
@@ -1602,10 +1619,22 @@ const BuildingDashboardPanel = ({ building }) => {
 
         if (row.fuel_type === "electricity") {
           weeklyBuckets[slot].electricity.push(usageKwh);
+          weeklyBuckets[slot].electricityRegulated.push(
+            usageKwh * electricRegulatedFractionForTrend
+          );
+          weeklyBuckets[slot].electricityUnregulated.push(
+            usageKwh * (1 - electricRegulatedFractionForTrend)
+          );
         }
 
         if (row.fuel_type === "gas") {
           weeklyBuckets[slot].gas.push(usageKwh);
+          weeklyBuckets[slot].gasRegulated.push(
+            usageKwh * gasRegulatedFractionForTrend
+          );
+          weeklyBuckets[slot].gasUnregulated.push(
+            usageKwh * (1 - gasRegulatedFractionForTrend)
+          );
         }
       });
 
@@ -1640,7 +1669,19 @@ const BuildingDashboardPanel = ({ building }) => {
         electricity: bucket.electricity.length
           ? average(bucket.electricity) * 2
           : null,
+        electricityRegulated: bucket.electricityRegulated.length
+          ? average(bucket.electricityRegulated) * 2
+          : null,
+        electricityUnregulated: bucket.electricityUnregulated.length
+          ? average(bucket.electricityUnregulated) * 2
+          : null,
         gas: bucket.gas.length ? average(bucket.gas) * 2 : null,
+        gasRegulated: bucket.gasRegulated.length
+          ? average(bucket.gasRegulated) * 2
+          : null,
+        gasUnregulated: bucket.gasUnregulated.length
+          ? average(bucket.gasUnregulated) * 2
+          : null,
         internalTemp: bucket.internalTemp.length
           ? average(bucket.internalTemp)
           : null,
@@ -1879,10 +1920,38 @@ const BuildingDashboardPanel = ({ building }) => {
       energyStatus: true,
     },
     {
+      key: "electricityRegulated",
+      label: "Elec Reg",
+      unit: "kWh",
+      color: "#1d4ed8",
+      energyStatus: true,
+    },
+    {
+      key: "electricityUnregulated",
+      label: "Elec Unreg",
+      unit: "kWh",
+      color: "#60a5fa",
+      energyStatus: true,
+    },
+    {
       key: "gas",
       label: "Gas",
       unit: "kWh",
       color: "#dc2626",
+      energyStatus: true,
+    },
+    {
+      key: "gasRegulated",
+      label: "Gas Reg",
+      unit: "kWh",
+      color: "#991b1b",
+      energyStatus: true,
+    },
+    {
+      key: "gasUnregulated",
+      label: "Gas Unreg",
+      unit: "kWh",
+      color: "#f87171",
       energyStatus: true,
     },
     {
