@@ -2094,6 +2094,14 @@ const BuildingDashboardPanel = ({ building }) => {
     const normalised = (value - range.min) / (range.max - range.min);
     return chartPadding.top + (1 - normalised) * plotHeight;
   };
+  const formatDeviationScore = (score) => {
+    if (!Number.isFinite(score)) {
+      return "";
+    }
+
+    const deviation = Math.round(score - 50);
+    return deviation > 0 ? `+${deviation}` : `${deviation}`;
+  };
   const trendHealthScore = (metric, value) => {
     if (!Number.isFinite(value)) {
       return null;
@@ -2154,16 +2162,16 @@ const BuildingDashboardPanel = ({ building }) => {
     }
 
     if (metric.key === "pm25") {
+      if (value <= 12) return 50;
       return linearScore(value, [
-        { min: 0, max: 12, startScore: 30, endScore: 70 },
         { min: 12, max: 35, startScore: 70, endScore: 85 },
         { min: 35, max: 75, startScore: 85, endScore: 100 },
       ]);
     }
 
     if (metric.key === "vocs") {
+      if (value <= 200) return 50;
       return linearScore(value, [
-        { min: 0, max: 200, startScore: 30, endScore: 70 },
         { min: 200, max: 500, startScore: 70, endScore: 85 },
         { min: 500, max: 1000, startScore: 85, endScore: 100 },
       ]);
@@ -2678,11 +2686,11 @@ const BuildingDashboardPanel = ({ building }) => {
                   style={{ touchAction: "none" }}
                 >
                   {[
-                    { min: 85, max: 100, color: "#fecaca", label: "HIGH BAD" },
-                    { min: 70, max: 85, color: "#fde68a", label: "HIGH" },
-                    { min: 30, max: 70, color: "#bbf7d0", label: "GOOD" },
-                    { min: 15, max: 30, color: "#fde68a", label: "LOW" },
-                    { min: 0, max: 15, color: "#fecaca", label: "LOW BAD" },
+                    { min: 85, max: 100, color: "#fecaca", label: "+ BAD" },
+                    { min: 70, max: 85, color: "#fde68a", label: "+ RISK" },
+                    { min: 30, max: 70, color: "#bbf7d0", label: "0 OK" },
+                    { min: 15, max: 30, color: "#fde68a", label: "- RISK" },
+                    { min: 0, max: 15, color: "#fecaca", label: "- BAD" },
                   ].map((band) => {
                     const yTop = trendY({ min: 0, max: 100 }, band.max);
                     const yBottom = trendY({ min: 0, max: 100 }, band.min);
@@ -2822,7 +2830,7 @@ const BuildingDashboardPanel = ({ building }) => {
                           fontSize="9"
                           fill="#374151"
                         >
-                          {formatMeasurement(value, 0)}
+                          {formatDeviationScore(value)}
                         </text>
                       );
                     })}
@@ -2869,12 +2877,11 @@ const BuildingDashboardPanel = ({ building }) => {
                           >
                             {hoveredTrendMetric &&
                             Number.isFinite(hoveredTrendPoint?.[hoveredTrendMetric.key])
-                              ? formatMeasurement(
+                              ? formatDeviationScore(
                                   trendHealthScore(
                                     hoveredTrendMetric,
                                     hoveredTrendPoint[hoveredTrendMetric.key]
-                                  ),
-                                  0
+                                  )
                                 )
                               : ""}
                           </text>
@@ -2979,9 +2986,9 @@ const BuildingDashboardPanel = ({ building }) => {
                 })}
               </div>
               <p className="text-xs text-gray-600">
-                Lines are plotted on a shared deviation scale: green is the
-                normal zone, amber/red show values drifting low or high. Hover
-                values still show the original units.
+                Lines are plotted on a shared deviation scale: 0 is good/fine,
+                positive values are drifting high, and negative values are
+                drifting low. Hover values still show the original units.
               </p>
             </>
           ) : (
