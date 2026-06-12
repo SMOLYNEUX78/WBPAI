@@ -2410,8 +2410,8 @@ const BuildingDashboardPanel = ({ building }) => {
         <h2 className="text-lg font-bold mb-3">Building Input</h2>
 
         <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-3 sm:gap-5 items-stretch">
-          <div className="min-w-0 h-full">
-            <div className="grid grid-cols-1 grid-rows-3 gap-2 sm:gap-3 h-full">
+          <div className="min-w-0">
+            <div className="grid grid-cols-1 grid-rows-3 gap-2 sm:gap-3 h-[220px] min-[390px]:h-[250px] sm:h-[280px]">
               <div className="bg-white rounded border p-2 sm:p-3 min-w-0 flex flex-col justify-center">
                 <p className="text-xs uppercase tracking-wide text-gray-500">
                   Address
