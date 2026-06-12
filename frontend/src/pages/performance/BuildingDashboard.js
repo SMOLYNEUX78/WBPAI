@@ -2031,60 +2031,60 @@ const BuildingDashboardPanel = ({ building }) => {
     }
 
     if (metric.key === "internalTemp") {
-      if (value >= 18 && value <= 24) return 100;
+      if (value >= 18 && value <= 24) return 50;
       if (value < 18) {
         return linearScore(value, [
-          { min: 10, max: 16, startScore: 0, endScore: 40 },
-          { min: 16, max: 18, startScore: 40, endScore: 70 },
+          { min: 10, max: 16, startScore: 0, endScore: 25 },
+          { min: 16, max: 18, startScore: 25, endScore: 40 },
         ]);
       }
       return linearScore(value, [
-        { min: 24, max: 26, startScore: 100, endScore: 70 },
-        { min: 26, max: 30, startScore: 70, endScore: 0 },
+        { min: 24, max: 26, startScore: 60, endScore: 75 },
+        { min: 26, max: 30, startScore: 75, endScore: 100 },
       ]);
     }
 
     if (metric.key === "externalTemp") {
-      if (value >= 10 && value <= 24) return 100;
+      if (value >= 10 && value <= 24) return 50;
       if (value < 10) {
         return linearScore(value, [
-          { min: -5, max: 4, startScore: 0, endScore: 40 },
-          { min: 4, max: 10, startScore: 40, endScore: 100 },
+          { min: -5, max: 4, startScore: 0, endScore: 25 },
+          { min: 4, max: 10, startScore: 25, endScore: 40 },
         ]);
       }
       return linearScore(value, [
-        { min: 24, max: 28, startScore: 100, endScore: 70 },
-        { min: 28, max: 35, startScore: 70, endScore: 0 },
+        { min: 24, max: 28, startScore: 60, endScore: 75 },
+        { min: 28, max: 35, startScore: 75, endScore: 100 },
       ]);
     }
 
     if (metric.key === "humidity") {
-      if (value >= 40 && value <= 60) return 100;
+      if (value >= 40 && value <= 60) return 50;
       if (value < 40) {
         return linearScore(value, [
-          { min: 20, max: 30, startScore: 0, endScore: 40 },
-          { min: 30, max: 40, startScore: 40, endScore: 100 },
+          { min: 20, max: 30, startScore: 0, endScore: 25 },
+          { min: 30, max: 40, startScore: 25, endScore: 40 },
         ]);
       }
       return linearScore(value, [
-        { min: 60, max: 70, startScore: 100, endScore: 40 },
-        { min: 70, max: 90, startScore: 40, endScore: 0 },
+        { min: 60, max: 70, startScore: 60, endScore: 75 },
+        { min: 70, max: 90, startScore: 75, endScore: 100 },
       ]);
     }
 
     if (metric.key === "pm25") {
       return linearScore(value, [
-        { min: 0, max: 12, startScore: 100, endScore: 100 },
-        { min: 12, max: 35, startScore: 100, endScore: 40 },
-        { min: 35, max: 75, startScore: 40, endScore: 0 },
+        { min: 0, max: 12, startScore: 50, endScore: 50 },
+        { min: 12, max: 35, startScore: 60, endScore: 75 },
+        { min: 35, max: 75, startScore: 75, endScore: 100 },
       ]);
     }
 
     if (metric.key === "vocs") {
       return linearScore(value, [
-        { min: 0, max: 200, startScore: 100, endScore: 100 },
-        { min: 200, max: 500, startScore: 100, endScore: 40 },
-        { min: 500, max: 1000, startScore: 40, endScore: 0 },
+        { min: 0, max: 200, startScore: 50, endScore: 50 },
+        { min: 200, max: 500, startScore: 60, endScore: 75 },
+        { min: 500, max: 1000, startScore: 75, endScore: 100 },
       ]);
     }
 
@@ -2096,9 +2096,9 @@ const BuildingDashboardPanel = ({ building }) => {
     const normalised = (value - range.min) / (range.max - range.min);
     if (metric.energyStatus) {
       return linearScore(normalised, [
-        { min: 0, max: 0.35, startScore: 100, endScore: 100 },
-        { min: 0.35, max: 0.7, startScore: 100, endScore: 55 },
-        { min: 0.7, max: 1, startScore: 55, endScore: 10 },
+        { min: 0, max: 0.35, startScore: 50, endScore: 50 },
+        { min: 0.35, max: 0.7, startScore: 60, endScore: 75 },
+        { min: 0.7, max: 1, startScore: 75, endScore: 100 },
       ]);
     }
 
@@ -2597,9 +2597,11 @@ const BuildingDashboardPanel = ({ building }) => {
                   style={{ touchAction: "none" }}
                 >
                   {[
-                    { min: 70, max: 100, color: "#86efac", label: "GOOD" },
-                    { min: 40, max: 70, color: "#fcd34d", label: "MEDIUM" },
-                    { min: 0, max: 40, color: "#fca5a5", label: "BAD" },
+                    { min: 80, max: 100, color: "#fecaca", label: "HIGH BAD" },
+                    { min: 60, max: 80, color: "#fde68a", label: "HIGH" },
+                    { min: 40, max: 60, color: "#bbf7d0", label: "GOOD" },
+                    { min: 20, max: 40, color: "#fde68a", label: "LOW" },
+                    { min: 0, max: 20, color: "#fecaca", label: "LOW BAD" },
                   ].map((band) => {
                     const yTop = trendY({ min: 0, max: 100 }, band.max);
                     const yBottom = trendY({ min: 0, max: 100 }, band.min);
@@ -2612,7 +2614,7 @@ const BuildingDashboardPanel = ({ building }) => {
                           width={plotWidth}
                           height={Math.abs(yBottom - yTop)}
                           fill={band.color}
-                          opacity="0.62"
+                          opacity="0.34"
                         />
                         <rect
                           x={chartPadding.left}
@@ -2622,15 +2624,15 @@ const BuildingDashboardPanel = ({ building }) => {
                           fill="none"
                           stroke="#ffffff"
                           strokeWidth="1.5"
-                          opacity="0.75"
+                          opacity="0.62"
                         />
                         <text
                           x={chartPadding.left + 8}
                           y={Math.min(yTop, yBottom) + 17}
-                          fontSize="12"
+                          fontSize="10"
                           fontWeight="700"
                           fill="#111827"
-                          opacity="0.58"
+                          opacity="0.4"
                         >
                           {band.label}
                         </text>
@@ -2896,9 +2898,9 @@ const BuildingDashboardPanel = ({ building }) => {
                 })}
               </div>
               <p className="text-xs text-gray-600">
-                Lines are plotted on a shared 0-100 status scale against the
-                green, amber and red backdrop. Hover values still show the
-                original units.
+                Lines are plotted on a shared deviation scale: green is the
+                normal zone, amber/red show values drifting low or high. Hover
+                values still show the original units.
               </p>
             </>
           ) : (
