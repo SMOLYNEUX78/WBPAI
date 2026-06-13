@@ -24,13 +24,6 @@ const HOME_BUILDING = {
 const BUILDINGS = [
   HOME_BUILDING,
   {
-    ...HOME_BUILDING,
-    id: "cc",
-    name: "CC",
-    subtitle: "Carbon credit token workspace",
-    dataSourceId: "home",
-  },
-  {
     id: "museum",
     name: "Museum",
     subtitle: "CAD monitor, smart meter and IAQ tablet collector",
@@ -45,6 +38,13 @@ const BUILDINGS = [
     heatingSystem: "none",
     regulatedElectricFraction: 0.05,
     showGas: false,
+  },
+  {
+    ...HOME_BUILDING,
+    id: "cc",
+    name: "CC",
+    subtitle: "Carbon credit token workspace",
+    dataSourceId: "home",
   },
   {
     id: "new",
@@ -2491,12 +2491,12 @@ const BuildingDashboardPanel = ({ building }) => {
               <iframe
                 title="Matterport model"
                 src={matterportEmbedUrl}
-                className="w-full h-[220px] min-[390px]:h-[250px] sm:h-[280px] border rounded bg-white"
+                className="w-full h-[190px] min-[390px]:h-[220px] sm:h-[250px] border rounded bg-white"
                 allow="autoplay; fullscreen; xr-spatial-tracking; accelerometer; gyroscope; vr"
                 allowFullScreen
               />
             ) : (
-              <div className="w-full h-[220px] min-[390px]:h-[250px] sm:h-[280px] border rounded bg-white flex items-center justify-center text-gray-500 text-[10px] min-[390px]:text-xs sm:text-sm p-2 sm:p-6 text-center">
+              <div className="w-full h-[190px] min-[390px]:h-[220px] sm:h-[250px] border rounded bg-white flex items-center justify-center text-gray-500 text-[10px] min-[390px]:text-xs sm:text-sm p-2 sm:p-6 text-center">
                 3D model pending.
               </div>
             )}
@@ -3506,12 +3506,12 @@ const NewBuildingSetupPanel = () => {
                 <iframe
                   title="New Matterport model"
                   src={embedUrl}
-                  className="w-full h-[220px] min-[390px]:h-[250px] sm:h-[280px] border rounded bg-white"
+                  className="w-full h-[190px] min-[390px]:h-[220px] sm:h-[250px] border rounded bg-white"
                   allow="autoplay; fullscreen; xr-spatial-tracking; accelerometer; gyroscope; vr"
                   allowFullScreen
                 />
               ) : (
-                <div className="w-full h-[220px] min-[390px]:h-[250px] sm:h-[280px] border rounded bg-white flex items-center justify-center text-gray-500 text-sm p-4 text-center">
+                <div className="w-full h-[190px] min-[390px]:h-[220px] sm:h-[250px] border rounded bg-white flex items-center justify-center text-gray-500 text-sm p-4 text-center">
                   Enter a model URL or model number to preview it here.
                 </div>
               )}
