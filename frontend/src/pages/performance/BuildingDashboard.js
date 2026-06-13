@@ -2859,8 +2859,8 @@ const BuildingDashboardPanel = ({ building }) => {
           : "bg-white"
       }`}
     >
-      <div className="mb-2 flex items-center justify-between gap-2">
-        {title ? (
+      {title ? (
+        <div className="mb-2 flex items-center justify-between gap-2">
           <h3
             className={`text-[10px] font-semibold uppercase tracking-wide sm:text-xs ${
               tone === "primary" ? "text-emerald-800" : "text-gray-500"
@@ -2868,20 +2868,15 @@ const BuildingDashboardPanel = ({ building }) => {
           >
             {title}
           </h3>
-        ) : null}
-        {statusLabel ? (
-          <span
-            className={`whitespace-nowrap rounded border px-2 py-0.5 text-[8px] font-semibold uppercase tracking-wide ${
-              tone === "primary"
-                ? "border-emerald-300 bg-white text-emerald-800"
-                : "border-gray-300 bg-white text-gray-600"
-            }`}
-          >
-            {statusLabel}
-          </span>
-        ) : null}
-      </div>
-      <div className="flex min-h-0 flex-1 flex-col">
+        </div>
+      ) : null}
+      <div
+        className={
+          showStandardDeepDiveToggle
+            ? "grid min-h-0 flex-1 grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] items-start gap-2 sm:gap-4"
+            : "flex min-h-0 flex-1 flex-col"
+        }
+      >
         <div
           className={`space-y-1 leading-tight ${
             compact
@@ -2899,7 +2894,9 @@ const BuildingDashboardPanel = ({ building }) => {
 
         <div
           className={`flex min-w-0 flex-1 ${
-            compact
+            showStandardDeepDiveToggle
+              ? "min-h-[92px] items-start justify-end pt-0 sm:min-h-[120px]"
+              : compact
               ? "min-h-[118px] items-center justify-center pt-2 sm:min-h-[142px]"
               : "min-h-[160px] items-start justify-end pt-2 pr-0 sm:min-h-[220px] sm:pr-6"
           }`}
@@ -2909,7 +2906,9 @@ const BuildingDashboardPanel = ({ building }) => {
             historicalValue={historicalPerformance}
             activeBandOnly={activeBandOnly}
             className={
-              compact
+              showStandardDeepDiveToggle
+                ? "h-auto w-[180px] max-w-full min-[390px]:w-[210px] sm:w-[275px]"
+                : compact
                 ? "h-auto w-[150px] max-w-full min-[390px]:w-[170px] sm:w-[200px]"
                 : "h-auto w-[220px] max-w-full min-[390px]:w-[255px] sm:w-[320px]"
             }
@@ -2917,7 +2916,18 @@ const BuildingDashboardPanel = ({ building }) => {
         </div>
       </div>
       {isCarbonCreditTab && diveKey ? (
-        <div className="mt-3 flex justify-start border-t border-gray-100 pt-2">
+        <div className="mt-3 flex flex-col items-start gap-2 border-t border-gray-100 pt-2">
+          {statusLabel ? (
+            <span
+              className={`whitespace-nowrap rounded border px-2 py-0.5 text-[8px] font-semibold uppercase tracking-wide ${
+                tone === "primary"
+                  ? "border-emerald-300 bg-white text-emerald-800"
+                  : "border-gray-300 bg-white text-gray-600"
+              }`}
+            >
+              {statusLabel}
+            </span>
+          ) : null}
           <button
             type="button"
             onClick={() => toggleDeepDivePanel(diveKey)}
