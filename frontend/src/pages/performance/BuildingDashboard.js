@@ -2427,6 +2427,85 @@ const BuildingDashboardPanel = ({ building }) => {
     energy: 98,
     value: 97,
   };
+  const isNewPerformanceDeepDive =
+    isCarbonCreditTab && deepDivePanel === "new";
+  const projectedPerformanceDeepDive = {
+    annualEui: 15,
+    electricityDailyAverage: 4.1,
+    gasDailyAverage: 0,
+    regulatedDailyKwh: 2.6,
+    unregulatedDailyKwh: 1.5,
+    regulatedEnergyShare: 63,
+    splitConfidence: "Projected all-electric net zero ready profile",
+    internalTemp: 20.5,
+    externalTemp: sensorData.externalTemp,
+    humidity: 45,
+    vocs: 80,
+    pm25: 4,
+    pm10: 8,
+    hcho: 5,
+    no2: 8,
+    weatherNormalisedEui: 15,
+    kwhPerHdd: 1.8,
+    htcEstimate: 88,
+    hddDays: 365,
+    htcSamples: 90,
+    hddSource: "Projected PHPP / retrofit model",
+    comfortNote: "20.5 deg C target internal temp / continuous comfort assumed",
+  };
+  const displayedAnnualEui = isNewPerformanceDeepDive
+    ? projectedPerformanceDeepDive.annualEui
+    : Number.isFinite(historicalPerformance) &&
+      matterportMetadata.internalArea !== "--"
+    ? (historicalPerformance * 365) / Number(matterportMetadata.internalArea)
+    : null;
+  const displayedElectricityDailyAverage = isNewPerformanceDeepDive
+    ? projectedPerformanceDeepDive.electricityDailyAverage
+    : energySummary.electricityDailyAverage;
+  const displayedGasDailyAverage = isNewPerformanceDeepDive
+    ? projectedPerformanceDeepDive.gasDailyAverage
+    : energySummary.gasDailyAverage;
+  const displayedRegulatedDailyKwh = isNewPerformanceDeepDive
+    ? projectedPerformanceDeepDive.regulatedDailyKwh
+    : regulatedDailyKwh;
+  const displayedUnregulatedDailyKwh = isNewPerformanceDeepDive
+    ? projectedPerformanceDeepDive.unregulatedDailyKwh
+    : unregulatedDailyKwh;
+  const displayedRegulatedEnergyShare = isNewPerformanceDeepDive
+    ? projectedPerformanceDeepDive.regulatedEnergyShare
+    : regulatedEnergyShare;
+  const displayedSplitConfidence = isNewPerformanceDeepDive
+    ? projectedPerformanceDeepDive.splitConfidence
+    : regulatedSplitConfidence;
+  const displayedSensorData = isNewPerformanceDeepDive
+    ? {
+        ...sensorData,
+        internalTemp: projectedPerformanceDeepDive.internalTemp,
+        externalTemp: projectedPerformanceDeepDive.externalTemp,
+        humidity: projectedPerformanceDeepDive.humidity,
+        vocs: projectedPerformanceDeepDive.vocs,
+        pm25: projectedPerformanceDeepDive.pm25,
+        pm10: projectedPerformanceDeepDive.pm10,
+        hcho: projectedPerformanceDeepDive.hcho,
+        no2: projectedPerformanceDeepDive.no2,
+      }
+    : sensorData;
+  const displayedHeatLossSummary = isNewPerformanceDeepDive
+    ? {
+        ...heatLossSummary,
+        weatherNormalisedEui: projectedPerformanceDeepDive.weatherNormalisedEui,
+        kwhPerHdd: projectedPerformanceDeepDive.kwhPerHdd,
+        htcEstimate: projectedPerformanceDeepDive.htcEstimate,
+        hddDays: projectedPerformanceDeepDive.hddDays,
+        htcSamples: projectedPerformanceDeepDive.htcSamples,
+        hddSource: "projected",
+        averageInternalTemp: projectedPerformanceDeepDive.internalTemp,
+        flatlineIndoorTemp: false,
+        filteredInsideReadings: 0,
+      }
+    : heatLossSummary;
+  const displayedHddStatus = isNewPerformanceDeepDive ? "good" : hddStatus;
+  const displayedHtcStatus = isNewPerformanceDeepDive ? "good" : htcStatus;
   const toggleDeepDivePanel = (panelKey) => {
     setDeepDivePanel((currentPanel) =>
       currentPanel === panelKey ? null : panelKey
@@ -2657,12 +2736,8 @@ const BuildingDashboardPanel = ({ building }) => {
                 <p>
                   <strong>Annualised EUI</strong>
                   <br />
-                  {Number.isFinite(historicalPerformance) &&
-                  matterportMetadata.internalArea !== "--"
-                    ? (
-                        (historicalPerformance * 365) /
-                        Number(matterportMetadata.internalArea)
-                      ).toFixed(4)
+                  {Number.isFinite(displayedAnnualEui)
+                    ? displayedAnnualEui.toFixed(4)
                     : "No Data"}
                   <br />
                   kWh/m2/yr
@@ -2672,11 +2747,19 @@ const BuildingDashboardPanel = ({ building }) => {
                   <br />
                   Daily Average
                   <br />
-                  {formatNumber(energySummary.electricityDailyAverage)}{" "}
+                  {formatNumber(displayedElectricityDailyAverage)}{" "}
                   kWh
                 </p>
 
-                {shouldShowGas && energySummary.hasGasData ? (
+                {isNewPerformanceDeepDive ? (
+                  <p>
+                    <strong>Gas</strong>
+                    <br />
+                    Daily Average
+                    <br />
+                    {formatNumber(displayedGasDailyAverage)} kWh
+                  </p>
+                ) : shouldShowGas && energySummary.hasGasData ? (
                   <p>
                     <strong>Gas</strong>
                     <br />
@@ -2698,26 +2781,38 @@ const BuildingDashboardPanel = ({ building }) => {
                 <div className="border-t border-gray-200 pt-2 space-y-1">
                   <p>
                     <strong>Regulated:</strong>{" "}
-                    {Number.isFinite(regulatedDailyKwh)
-                      ? `${formatNumber(regulatedDailyKwh)} kWh/day`
+                    {Number.isFinite(displayedRegulatedDailyKwh)
+                      ? `${formatNumber(displayedRegulatedDailyKwh)} kWh/day`
                       : "No Data"}
                   </p>
                   <p>
                     <strong>Unregulated:</strong>{" "}
-                    {Number.isFinite(unregulatedDailyKwh)
-                      ? `${formatNumber(unregulatedDailyKwh)} kWh/day`
+                    {Number.isFinite(displayedUnregulatedDailyKwh)
+                      ? `${formatNumber(displayedUnregulatedDailyKwh)} kWh/day`
                       : "No Data"}
                   </p>
                   <p>
                     <strong>Regulated Share:</strong>{" "}
-                    {Number.isFinite(regulatedEnergyShare)
-                      ? `${formatNumber(regulatedEnergyShare, 0)}%`
+                    {Number.isFinite(displayedRegulatedEnergyShare)
+                      ? `${formatNumber(displayedRegulatedEnergyShare, 0)}%`
                       : "No Data"}
                   </p>
                   <p className="text-gray-600">
-                    {regulatedSplitConfidence}
+                    {displayedSplitConfidence}
                   </p>
-                  {shouldShowGas && energySummary.hasGasData ? (
+                  {isNewPerformanceDeepDive ? (
+                    <div className="pt-2 mt-2 border-t border-gray-200 space-y-1">
+                      <p>
+                        <strong>Fabric:</strong> Passivhaus-style retrofit envelope
+                      </p>
+                      <p>
+                        <strong>Heat Source:</strong> Heat pump + solar-ready electric load
+                      </p>
+                      <p>
+                        <strong>Gas Heating:</strong> 0.0000 kWh/day
+                      </p>
+                    </div>
+                  ) : shouldShowGas && energySummary.hasGasData ? (
                     <div className="pt-2 mt-2 border-t border-gray-200 space-y-1">
                       <p>
                         <strong>Gas Baseload:</strong>{" "}
@@ -2766,47 +2861,59 @@ const BuildingDashboardPanel = ({ building }) => {
                 <div className="space-y-0.5">
                   <p>
                     <strong>Internal Temp:</strong>{" "}
-                    {formatMeasurement(sensorData.internalTemp)} deg C
+                    {formatMeasurement(displayedSensorData.internalTemp)} deg C
                   </p>
                   <p>
                     <strong>External Temp:</strong>{" "}
-                    {formatMeasurement(sensorData.externalTemp)} deg C
+                    {formatMeasurement(displayedSensorData.externalTemp)} deg C
                   </p>
                 </div>
 
                 <div className="pt-2 mt-2 border-t border-gray-200 space-y-0.5">
                   <p>
                     <strong>Humidity:</strong>{" "}
-                    {formatMeasurement(sensorData.humidity)}%
+                    {formatMeasurement(displayedSensorData.humidity)}%
                   </p>
                   {dataSourceBuildingId !== "home" ? (
                     <p>
-                      <strong>CO2:</strong> {formatMeasurement(sensorData.co2)} ppm
+                      <strong>CO2:</strong> {formatMeasurement(displayedSensorData.co2)} ppm
                     </p>
                   ) : null}
                   <p>
-                    <strong>VOCs:</strong> {formatMeasurement(sensorData.vocs)} ppb
+                    <strong>VOCs:</strong> {formatMeasurement(displayedSensorData.vocs)} ppb
                   </p>
                   <p>
-                    <strong>PM2.5:</strong> {formatMeasurement(sensorData.pm25)} ug/m3
+                    <strong>PM2.5:</strong> {formatMeasurement(displayedSensorData.pm25)} ug/m3
                   </p>
-                  {Number.isFinite(sensorData.pm10) ? (
+                  {Number.isFinite(displayedSensorData.pm10) ? (
                     <p>
-                      <strong>PM10:</strong> {formatMeasurement(sensorData.pm10)} ug/m3
+                      <strong>PM10:</strong> {formatMeasurement(displayedSensorData.pm10)} ug/m3
                     </p>
                   ) : null}
-                  {Number.isFinite(sensorData.hcho) ? (
+                  {Number.isFinite(displayedSensorData.hcho) ? (
                     <p>
-                      <strong>HCHO:</strong> {formatMeasurement(sensorData.hcho)} ppb
+                      <strong>HCHO:</strong> {formatMeasurement(displayedSensorData.hcho)} ppb
                     </p>
                   ) : null}
-                  {Number.isFinite(sensorData.no2) ? (
+                  {Number.isFinite(displayedSensorData.no2) ? (
                     <p>
-                      <strong>NO2:</strong> {formatMeasurement(sensorData.no2)} ppb
+                      <strong>NO2:</strong> {formatMeasurement(displayedSensorData.no2)} ppb
                     </p>
                   ) : null}
                 </div>
-                {roomIaqData.length > 0 ? (
+                {isNewPerformanceDeepDive ? (
+                  <div className="pt-3 mt-3 border-t border-gray-200 space-y-0.5">
+                    <p>
+                      <strong>Ventilation:</strong> MVHR with filtered supply
+                    </p>
+                    <p>
+                      <strong>Overheating:</strong> Summer bypass + shading assumed
+                    </p>
+                    <p>
+                      <strong>IAQ:</strong> Low-emission finishes and continuous extract
+                    </p>
+                  </div>
+                ) : roomIaqData.length > 0 ? (
                   <div className="pt-3 mt-3 border-t border-gray-200 space-y-2">
                     {roomIaqData.map((room, roomIndex) => {
                       const comfortOnlyRoom = room.label === "Downstairs";
@@ -2864,39 +2971,47 @@ const BuildingDashboardPanel = ({ building }) => {
                 <div className="space-y-0.5">
                   <p>
                     <strong>Weather-normalised EUI:</strong>{" "}
-                    {Number.isFinite(heatLossSummary.weatherNormalisedEui)
+                    {Number.isFinite(displayedHeatLossSummary.weatherNormalisedEui)
                       ? `${formatNumber(
-                          heatLossSummary.weatherNormalisedEui
+                          displayedHeatLossSummary.weatherNormalisedEui
                         )} kWh/m2/yr`
                       : "Pending"}
                   </p>
-                  <p className={heatLossStatusClass(hddStatus)}>
-                    <HeatLossStatusDot status={hddStatus} />{" "}
+                  <p className={heatLossStatusClass(displayedHddStatus)}>
+                    <HeatLossStatusDot status={displayedHddStatus} />{" "}
                     <strong>HDD Intensity:</strong>{" "}
-                    {Number.isFinite(heatLossSummary.kwhPerHdd)
-                      ? `${formatNumber(heatLossSummary.kwhPerHdd, 3)} kWh/HDD`
+                    {Number.isFinite(displayedHeatLossSummary.kwhPerHdd)
+                      ? `${formatNumber(displayedHeatLossSummary.kwhPerHdd, 3)} kWh/HDD`
                       : "Pending completed energy + HDD data"}
-                    {hddDataCaveat ? ` (${hddDataCaveat})` : ""}
+                    {!isNewPerformanceDeepDive && hddDataCaveat
+                      ? ` (${hddDataCaveat})`
+                      : ""}
                   </p>
-                  <p className={heatLossStatusClass(htcStatus)}>
-                    <HeatLossStatusDot status={htcStatus} />{" "}
+                  <p className={heatLossStatusClass(displayedHtcStatus)}>
+                    <HeatLossStatusDot status={displayedHtcStatus} />{" "}
                     <strong>HTC Estimate:</strong>{" "}
-                    {Number.isFinite(heatLossSummary.htcEstimate)
-                      ? `${formatNumber(heatLossSummary.htcEstimate, 1)} W/K`
+                    {Number.isFinite(displayedHeatLossSummary.htcEstimate)
+                      ? `${formatNumber(displayedHeatLossSummary.htcEstimate, 1)} W/K`
                       : "Pending energy + indoor/outdoor temperature overlap"}
                   </p>
                   <p className="pt-2 mt-2 border-t border-gray-200">
                     <strong>HDD / HTC Days:</strong>{" "}
-                    {heatLossSummary.hddDays || 0} /{" "}
-                    {heatLossSummary.htcSamples || 0}
+                    {displayedHeatLossSummary.hddDays || 0} /{" "}
+                    {displayedHeatLossSummary.htcSamples || 0}
                   </p>
                   <p className="pt-2 mt-2 border-t border-gray-200">
                     <strong>HDD Source:</strong>{" "}
-                    {heatLossSummary.hddSource === "legacy"
+                    {isNewPerformanceDeepDive
+                      ? projectedPerformanceDeepDive.hddSource
+                      : heatLossSummary.hddSource === "legacy"
                       ? "Legacy museum daily totals"
                       : "Current building data"}
                   </p>
-                  {Number.isFinite(heatLossSummary.averageInternalTemp) ||
+                  {isNewPerformanceDeepDive ? (
+                    <p className="text-xs text-gray-600">
+                      HLA comfort check: {projectedPerformanceDeepDive.comfortNote}
+                    </p>
+                  ) : Number.isFinite(heatLossSummary.averageInternalTemp) ||
                   heatLossSummary.flatlineIndoorTemp ? (
                     <p className="text-xs text-gray-600">
                       HLA comfort check:{" "}
