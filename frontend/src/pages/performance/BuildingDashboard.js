@@ -122,7 +122,14 @@ const BuildingDashboardPanel = ({ building }) => {
   const dataSourceBuildingId = building.dataSourceId || building.id;
   const isCarbonCreditTab = building.id === "cc";
   const [deepDivePanel, setDeepDivePanel] = useState(null);
+  const [standardDeepDiveOpen, setStandardDeepDiveOpen] = useState(true);
   const deepDiveOpen = Boolean(deepDivePanel);
+
+  useEffect(() => {
+    if (!isCarbonCreditTab) {
+      setStandardDeepDiveOpen(true);
+    }
+  }, [building.id, isCarbonCreditTab]);
   const matterportInput = useMemo(() => {
     return (
       localStorage.getItem(`${dataSourceBuildingId}:matterportModelInput`) ||
@@ -2672,6 +2679,9 @@ const BuildingDashboardPanel = ({ building }) => {
     : heatLossSummary;
   const displayedHddStatus = isNewPerformanceDeepDive ? "good" : hddStatus;
   const displayedHtcStatus = isNewPerformanceDeepDive ? "good" : htcStatus;
+  const shouldShowDeepDive = isCarbonCreditTab
+    ? deepDiveOpen
+    : standardDeepDiveOpen;
   const toggleDeepDivePanel = (panelKey) => {
     setDeepDivePanel((currentPanel) =>
       currentPanel === panelKey ? null : panelKey
@@ -2687,6 +2697,7 @@ const BuildingDashboardPanel = ({ building }) => {
     tone = "default",
     statusLabel,
     activeBandOnly = false,
+    showStandardDeepDiveToggle = false,
   }) => (
     <div
       className={`flex min-w-0 flex-col rounded border p-2.5 sm:p-4 ${
@@ -2765,6 +2776,17 @@ const BuildingDashboardPanel = ({ building }) => {
             aria-expanded={deepDivePanel === diveKey}
           >
             {deepDivePanel === diveKey ? "Hide deep dive" : "Deep Dive"}
+          </button>
+        </div>
+      ) : showStandardDeepDiveToggle ? (
+        <div className="mt-3 flex justify-start border-t border-gray-100 pt-2">
+          <button
+            type="button"
+            onClick={() => setStandardDeepDiveOpen((isOpen) => !isOpen)}
+            className="text-left text-[10px] font-semibold text-gray-700 underline decoration-gray-300 underline-offset-2 transition hover:text-black sm:text-xs"
+            aria-expanded={standardDeepDiveOpen}
+          >
+            {standardDeepDiveOpen ? "Hide deep dive" : "Deep Dive"}
           </button>
         </div>
       ) : null}
@@ -2882,10 +2904,11 @@ const BuildingDashboardPanel = ({ building }) => {
               healthScore: performanceBreakdown.health,
               energyScore: performanceBreakdown.energy,
               gaugeValue: performanceValue,
+              showStandardDeepDiveToggle: true,
             })
           )}
 
-          {isCarbonCreditTab && !deepDiveOpen ? null : (
+          {!shouldShowDeepDive ? null : (
           <div className="bg-white rounded border p-2.5 sm:p-4 min-w-0 overflow-hidden">
             {isCarbonCreditTab ? (
               <div className="mb-3 border-b border-gray-100 pb-2 text-xs text-gray-600">
@@ -3206,7 +3229,7 @@ const BuildingDashboardPanel = ({ building }) => {
           )}
         </div>
 
-        {isCarbonCreditTab && !deepDiveOpen ? null : (
+        {!shouldShowDeepDive ? null : (
         <div className="mt-4 bg-white rounded border p-3 sm:p-4 space-y-3 overflow-hidden">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
@@ -3580,7 +3603,7 @@ const BuildingDashboardPanel = ({ building }) => {
         </div>
         )}
 
-        {isCarbonCreditTab && !deepDiveOpen ? null : (
+        {!shouldShowDeepDive ? null : (
         <div className="mt-4 bg-white rounded border p-4 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
