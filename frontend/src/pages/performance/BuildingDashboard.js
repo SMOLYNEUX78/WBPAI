@@ -2895,7 +2895,7 @@ const BuildingDashboardPanel = ({ building }) => {
         <div
           className={`flex min-w-0 flex-1 ${
             showStandardDeepDiveToggle
-              ? "min-h-[130px] items-start justify-center pt-0 sm:min-h-[185px]"
+              ? "items-start justify-center pt-0"
               : compact
               ? "min-h-[118px] items-center justify-center pt-2 sm:min-h-[142px]"
               : "min-h-[160px] items-start justify-end pt-2 pr-0 sm:min-h-[220px] sm:pr-6"
@@ -2938,7 +2938,7 @@ const BuildingDashboardPanel = ({ building }) => {
           </button>
         </div>
       ) : showStandardDeepDiveToggle ? (
-        <div className="mt-3 flex justify-start border-t border-gray-100 pt-2">
+        <div className="mt-1.5 flex justify-start border-t border-gray-100 pt-1.5 sm:mt-3 sm:pt-2">
           <button
             type="button"
             onClick={() => setStandardDeepDiveOpen((isOpen) => !isOpen)}
@@ -3017,12 +3017,12 @@ const BuildingDashboardPanel = ({ building }) => {
               <iframe
                 title="Matterport model"
                 src={matterportEmbedUrl}
-                className="w-full h-[190px] min-[390px]:h-[220px] sm:h-[250px] border rounded bg-white"
+                className="w-full h-[155px] min-[390px]:h-[175px] sm:h-[250px] border rounded bg-white"
                 allow="autoplay; fullscreen; xr-spatial-tracking; accelerometer; gyroscope; vr"
                 allowFullScreen
               />
             ) : (
-              <div className="w-full h-[190px] min-[390px]:h-[220px] sm:h-[250px] border rounded bg-white flex items-center justify-center text-gray-500 text-[10px] min-[390px]:text-xs sm:text-sm p-2 sm:p-6 text-center">
+              <div className="w-full h-[155px] min-[390px]:h-[175px] sm:h-[250px] border rounded bg-white flex items-center justify-center text-gray-500 text-[10px] min-[390px]:text-xs sm:text-sm p-2 sm:p-6 text-center">
                 3D model pending.
               </div>
             )}
