@@ -2605,9 +2605,9 @@ const BuildingDashboardPanel = ({ building }) => {
 
         <div className="space-y-3 sm:space-y-5">
           {isCarbonCreditTab ? (
-            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+            <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-3">
               {renderPerformanceCard({
-                title: "Baseline Performance",
+                title: "Baseline",
                 healthScore: performanceBreakdown.health,
                 energyScore: performanceBreakdown.energy,
                 gaugeValue: performanceValue,
