@@ -4,6 +4,7 @@ import supabase from "../../supabaseClient";
 
 const DEFAULT_MATTERPORT_URL = "https://my.matterport.com/show/?m=zHm8SwWeHiN";
 const HDD_BASE_TEMP_C = 15.5;
+const FALLBACK_CARBON_PRICE_GBP_PER_TONNE = 65;
 
 const HOME_BUILDING = {
   id: "home",
@@ -190,6 +191,12 @@ const BuildingDashboardPanel = ({ building }) => {
     latestDate: null,
     latestSavedKgCo2e: null,
     totalSavedKgCo2e: null,
+  });
+  const [carbonMarketPrice, setCarbonMarketPrice] = useState({
+    gbpPerTonne: FALLBACK_CARBON_PRICE_GBP_PER_TONNE,
+    source: "Estimated UK/EU carbon allowance price",
+    updatedAt: null,
+    live: false,
   });
   const [energySummary, setEnergySummary] = useState({
     electricityDailyAverage: null,
@@ -379,6 +386,15 @@ const BuildingDashboardPanel = ({ building }) => {
 
   const formatNumber = (value, digits = 4) =>
     Number.isFinite(value) ? value.toFixed(digits) : "No Data";
+
+  const formatCurrency = (value, currency = "GBP") =>
+    Number.isFinite(value)
+      ? new Intl.NumberFormat("en-GB", {
+          style: "currency",
+          currency,
+          maximumFractionDigits: value >= 10 ? 2 : 4,
+        }).format(value)
+      : "Pending";
 
   const formatScore = (value) =>
     Number.isFinite(value) ? `${value.toFixed(0)}/100` : "Pending";
@@ -2012,6 +2028,129 @@ const BuildingDashboardPanel = ({ building }) => {
     }
   };
 
+  const fetchCarbonMarketPrice = async () => {
+    if (!isCarbonCreditTab) {
+      return;
+    }
+
+    const carbonPriceUrls = [
+      "https://api.tradingeconomics.com/markets/commodity/carbon?c=guest:guest",
+      `https://api.allorigins.win/raw?url=${encodeURIComponent(
+        "https://api.tradingeconomics.com/markets/commodity/carbon?c=guest:guest"
+      )}`,
+    ];
+
+    const fetchJsonWithTimeout = async (url) => {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 8000);
+
+      try {
+        const response = await fetch(url, {
+          signal: controller.signal,
+          headers: { Accept: "application/json" },
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        return await response.json();
+      } finally {
+        clearTimeout(timeout);
+      }
+    };
+
+    const extractCarbonPrice = (payload) => {
+      const records = Array.isArray(payload) ? payload : [payload];
+      const record =
+        records.find((item) =>
+          /carbon|emission|eua|allowance/i.test(
+            `${item?.Symbol || ""} ${item?.Name || ""} ${item?.Commodity || ""}`
+          )
+        ) || records[0];
+
+      if (!record || typeof record !== "object") {
+        return null;
+      }
+
+      const value = [
+        record.Last,
+        record.Price,
+        record.Close,
+        record.close,
+        record.last,
+        record.value,
+      ]
+        .map((candidate) => Number(candidate))
+        .find((candidate) => Number.isFinite(candidate) && candidate > 0);
+
+      if (!Number.isFinite(value)) {
+        return null;
+      }
+
+      return {
+        value,
+        currency: String(record.Currency || record.currency || "EUR").toUpperCase(),
+        updatedAt:
+          record.Date ||
+          record.LastUpdate ||
+          record.LastUpdateDate ||
+          new Date().toISOString(),
+      };
+    };
+
+    const convertToGbp = async ({ value, currency }) => {
+      if (currency === "GBP") {
+        return value;
+      }
+
+      const fxPayload = await fetchJsonWithTimeout(
+        `https://open.er-api.com/v6/latest/${currency}`
+      );
+      const gbpRate = Number(fxPayload?.rates?.GBP);
+
+      if (!Number.isFinite(gbpRate) || gbpRate <= 0) {
+        throw new Error(`No GBP exchange rate for ${currency}`);
+      }
+
+      return value * gbpRate;
+    };
+
+    for (const url of carbonPriceUrls) {
+      try {
+        const payload = await fetchJsonWithTimeout(url);
+        const price = extractCarbonPrice(payload);
+
+        if (!price) {
+          throw new Error("No carbon price in response");
+        }
+
+        const gbpPerTonne = await convertToGbp(price);
+
+        setCarbonMarketPrice({
+          gbpPerTonne,
+          source: "Trading Economics carbon allowances",
+          updatedAt: price.updatedAt,
+          live: true,
+        });
+        return;
+      } catch (err) {
+        console.warn("Carbon market price feed unavailable:", err.message);
+      }
+    }
+
+    setCarbonMarketPrice((currentPrice) => ({
+      ...currentPrice,
+      gbpPerTonne:
+        Number.isFinite(currentPrice.gbpPerTonne) && currentPrice.gbpPerTonne > 0
+          ? currentPrice.gbpPerTonne
+          : FALLBACK_CARBON_PRICE_GBP_PER_TONNE,
+      live: false,
+      source: "Estimated UK/EU carbon allowance price",
+      updatedAt: currentPrice.updatedAt || new Date().toISOString(),
+    }));
+  };
+
   useEffect(() => {
     fetchLongTermAverage();
     fetchHeatLossSummary();
@@ -2019,6 +2158,7 @@ const BuildingDashboardPanel = ({ building }) => {
     fetchIAQData();
     fetchWeeklyPerformanceTrend();
     fetchCarbonSavingsSummary();
+    fetchCarbonMarketPrice();
     // Building switch refresh only; polling effect below handles continuing updates.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataSourceBuildingId]);
@@ -2033,6 +2173,7 @@ const BuildingDashboardPanel = ({ building }) => {
       fetchLongTermBuildingPerformance();
       fetchWeeklyPerformanceTrend();
       fetchCarbonSavingsSummary();
+      fetchCarbonMarketPrice();
     }, 60000);
 
     return () => clearInterval(interval);
@@ -2230,6 +2371,16 @@ const BuildingDashboardPanel = ({ building }) => {
   );
   const carbonTokenUnlocked =
     isCarbonCreditTab || carbonEvidenceSteps.every((step) => step.complete);
+  const carbonSavedTonnes = Number.isFinite(
+    carbonSavingsSummary.totalSavedKgCo2e
+  )
+    ? carbonSavingsSummary.totalSavedKgCo2e / 1000
+    : null;
+  const carbonMarketValue =
+    Number.isFinite(carbonSavedTonnes) &&
+    Number.isFinite(carbonMarketPrice.gbpPerTonne)
+      ? carbonSavedTonnes * carbonMarketPrice.gbpPerTonne
+      : null;
   const trendMetrics = [
     {
       key: "electricity",
@@ -3680,6 +3831,23 @@ const BuildingDashboardPanel = ({ building }) => {
               {Number.isFinite(carbonSavingsSummary.totalSavedKgCo2e)
                 ? `${formatNumber(carbonSavingsSummary.totalSavedKgCo2e, 2)} kgCO2e`
                 : "Pending calculation"}
+            </p>
+            <p>
+              <strong>Estimated value:</strong>{" "}
+              {Number.isFinite(carbonMarketValue)
+                ? formatCurrency(carbonMarketValue)
+                : "Pending price"}
+            </p>
+            <p>
+              <strong>Carbon price:</strong>{" "}
+              {Number.isFinite(carbonMarketPrice.gbpPerTonne)
+                ? `${formatCurrency(carbonMarketPrice.gbpPerTonne)}/tCO2e`
+                : "Pending"}
+              <br />
+              <span className="text-[10px] text-gray-500">
+                {carbonMarketPrice.live ? "Live" : "Fallback"} -{" "}
+                {carbonMarketPrice.source}
+              </span>
             </p>
             <p>
               <strong>Latest day:</strong>{" "}
