@@ -2458,16 +2458,12 @@ const BuildingDashboardPanel = ({ building }) => {
                     ? `${matterportMetadata.internalArea} m2`
                     : "Pending"}
                 </p>
-                <p className="text-[clamp(7px,2.1vw,9px)] sm:text-xs text-gray-500 mt-0.5 sm:mt-1 leading-tight max-h-full overflow-hidden">
-                  <span className="sm:hidden">Model estimate</span>
-                  <span className="hidden sm:inline">Temporary estimate from embedded model</span>
-                </p>
               </div>
             </div>
 
           </div>
 
-          <div className="space-y-2 min-w-0 bg-white rounded border p-2.5 sm:p-3 h-full">
+          <div className="space-y-1.5 min-w-0 bg-white rounded border p-1.5 sm:p-2 h-full">
             <div className="flex items-center justify-between gap-2">
               <h3 className="font-semibold text-xs min-[390px]:text-sm sm:text-base">
                 3D Model
