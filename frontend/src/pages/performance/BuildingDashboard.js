@@ -425,6 +425,24 @@ const BuildingDashboardPanel = ({ building }) => {
     return Number.isFinite(numericValue) ? numericValue : null;
   };
 
+  const dysonAppDisplayValue = (readingType, metric, value) => {
+    const numericValue = numericOrNull(value);
+
+    if (!String(readingType || "").startsWith("dyson:") || numericValue === null) {
+      return numericValue;
+    }
+
+    if (metric === "vocs" && numericValue <= 10) {
+      return 0;
+    }
+
+    if (metric === "no2" && numericValue <= 2) {
+      return 0;
+    }
+
+    return numericValue;
+  };
+
   const averageNullableValues = (values) => {
     const finiteValues = values.filter((value) => Number.isFinite(value));
 
@@ -1366,11 +1384,11 @@ const BuildingDashboardPanel = ({ building }) => {
             internalTemp: numericOrNull(row.temperature_inside),
             humidity: numericOrNull(row.humidity),
             co2: numericOrNull(row.co2),
-            vocs: numericOrNull(row.vocs),
+            vocs: dysonAppDisplayValue(row.reading_type, "vocs", row.vocs),
             pm25: numericOrNull(row.pm25),
             pm10: numericOrNull(row.pm10),
             hcho: numericOrNull(row.hcho),
-            no2: numericOrNull(row.no2),
+            no2: dysonAppDisplayValue(row.reading_type, "no2", row.no2),
           });
           return rooms;
         }, [])
@@ -1408,11 +1426,15 @@ const BuildingDashboardPanel = ({ building }) => {
           ),
           humidity: numericOrNull(combinedFromRooms?.humidity ?? sourceRow.humidity),
           co2: numericOrNull(combinedFromRooms?.co2 ?? sourceRow.co2),
-          vocs: numericOrNull(combinedFromRooms?.vocs ?? sourceRow.vocs),
+          vocs:
+            combinedFromRooms?.vocs ??
+            dysonAppDisplayValue(sourceRow.reading_type, "vocs", sourceRow.vocs),
           pm25: numericOrNull(combinedFromRooms?.pm25 ?? sourceRow.pm25),
           pm10: numericOrNull(combinedFromRooms?.pm10 ?? sourceRow.pm10),
           hcho: numericOrNull(combinedFromRooms?.hcho ?? sourceRow.hcho),
-          no2: numericOrNull(combinedFromRooms?.no2 ?? sourceRow.no2),
+          no2:
+            combinedFromRooms?.no2 ??
+            dysonAppDisplayValue(sourceRow.reading_type, "no2", sourceRow.no2),
         };
         localStorage.setItem(
           `${dataSourceBuildingId}:latestIaq`,

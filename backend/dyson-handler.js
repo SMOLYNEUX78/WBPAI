@@ -66,6 +66,22 @@ function firstFinite(...values) {
   return null;
 }
 
+function dysonAppDisplayValue(metric, value) {
+  if (!Number.isFinite(value)) {
+    return value;
+  }
+
+  if (metric === "vocs" && value <= 10) {
+    return 0;
+  }
+
+  if (metric === "no2" && value <= 2) {
+    return 0;
+  }
+
+  return value;
+}
+
 function average(values) {
   const finiteValues = values.filter((value) => Number.isFinite(value));
 
@@ -85,15 +101,18 @@ function slug(value) {
 }
 
 function mapEnvironmentalData(data) {
+  const vocs = firstFinite(data.vact, data.va10, data.tvoc, data.voc);
+  const no2 = firstFinite(data.no2, data.nox, data.noxl);
+
   return {
     temperature_inside: celsiusFromKelvinTimesTen(data.tact || data.temperature),
     humidity: firstFinite(data.hact, data.humidity),
     // Dyson local payloads vary by model/firmware. Keep these deliberately broad.
     pm25: firstFinite(data.pm25, data.pm2_5, data.p25r, data.pact),
     pm10: firstFinite(data.pm10, data.p10r),
-    vocs: firstFinite(data.vact, data.va10, data.tvoc, data.voc),
+    vocs: dysonAppDisplayValue("vocs", vocs),
     hcho: firstFinite(data.hcho, data.hchr),
-    no2: firstFinite(data.no2, data.nox, data.noxl),
+    no2: dysonAppDisplayValue("no2", no2),
   };
 }
 
