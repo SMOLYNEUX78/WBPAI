@@ -2606,11 +2606,11 @@ const BuildingDashboardPanel = ({ building }) => {
     internalTemp: 20.5,
     externalTemp: sensorData.externalTemp,
     humidity: 45,
-    vocs: 80,
-    pm25: 4,
-    pm10: 8,
-    hcho: 5,
-    no2: 8,
+    vocs: 20,
+    pm25: 1,
+    pm10: 3,
+    hcho: 2,
+    no2: 4,
     weatherNormalisedEui: 15,
     kwhPerHdd: 1.8,
     htcEstimate: 88,
@@ -2689,7 +2689,7 @@ const BuildingDashboardPanel = ({ building }) => {
     activeBandOnly = false,
   }) => (
     <div
-      className={`rounded border p-2.5 sm:p-4 min-w-0 ${
+      className={`flex min-w-0 flex-col rounded border p-2.5 sm:p-4 ${
         tone === "primary"
           ? "border-emerald-200 bg-emerald-50/60"
           : tone === "locked"
@@ -2719,35 +2719,40 @@ const BuildingDashboardPanel = ({ building }) => {
           </span>
         ) : null}
       </div>
-      <div
-        className={`grid gap-3 sm:gap-5 items-start ${
-          compact
-            ? "grid-cols-[minmax(0,78px)_minmax(0,1fr)] gap-1.5 sm:gap-2"
-            : "grid-cols-[minmax(0,140px)_minmax(0,1fr)]"
-        }`}
-      >
-        <div className="space-y-3 text-[10px] min-[390px]:text-xs sm:text-sm leading-tight">
-          <div className="space-y-0.5 sm:space-y-1">
-            <p>
-              <strong>Health:</strong> {formatScore(healthScore)}
-            </p>
-            <p>
-              <strong>Energy:</strong> {formatScore(energyScore)}
-            </p>
-          </div>
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div
+          className={`space-y-1 leading-tight ${
+            compact
+              ? "text-[10px] min-[390px]:text-xs sm:text-sm"
+              : "text-xs sm:text-sm"
+          }`}
+        >
+          <p className="flex items-baseline justify-between gap-2">
+            <strong>Health</strong>
+            <span>{formatScore(healthScore)}</span>
+          </p>
+          <p className="flex items-baseline justify-between gap-2">
+            <strong>Energy</strong>
+            <span>{formatScore(energyScore)}</span>
+          </p>
         </div>
 
         <div
-          className={`flex justify-center min-w-0 origin-top ${
+          className={`flex min-w-0 flex-1 items-end justify-center ${
             compact
-              ? "scale-[0.72] min-[390px]:scale-[0.78] sm:scale-[0.84]"
-              : "scale-110 sm:scale-125"
+              ? "min-h-[128px] pt-5 sm:min-h-[160px] sm:pt-7"
+              : "min-h-[180px] pt-4 sm:min-h-[245px]"
           }`}
         >
           <AnalogGauge
             value={gaugeValue}
             historicalValue={historicalPerformance}
             activeBandOnly={activeBandOnly}
+            className={
+              compact
+                ? "h-auto w-[170px] max-w-full min-[390px]:w-[190px] sm:w-[220px]"
+                : "h-auto w-[245px] max-w-full min-[390px]:w-[285px] sm:w-[360px]"
+            }
           />
         </div>
       </div>

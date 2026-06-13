@@ -20,7 +20,7 @@ const describeArc = (x, y, radius, startAngle, endAngle) => {
   return d;
 };
 
-const AnalogGauge = ({ value, activeBandOnly = false }) => {
+const AnalogGauge = ({ value, activeBandOnly = false, className = "" }) => {
   // Gauge settings: center and radius.
   const cx = 100;
   const cy = 100;
@@ -52,7 +52,12 @@ const AnalogGauge = ({ value, activeBandOnly = false }) => {
   const needleEnd = polarToCartesian(cx, cy, needleLength, angle);
   
   return (
-    <svg width="200" height="120" viewBox="0 0 200 120">
+    <svg
+      className={className}
+      width="200"
+      height="120"
+      viewBox="0 0 200 120"
+    >
       {/* Draw arcs */}
       <path d={redArc} stroke={bandStroke("red", "#f87171")} strokeWidth="10" fill="none" />
       <path d={amberArc} stroke={bandStroke("amber", "#facc15")} strokeWidth="10" fill="none" />
