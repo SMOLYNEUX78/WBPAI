@@ -2439,13 +2439,40 @@ const BuildingDashboardPanel = ({ building }) => {
     gaugeValue,
     diveKey,
     compact = false,
+    tone = "default",
+    statusLabel,
   }) => (
-    <div className="bg-white rounded border p-2.5 sm:p-4 min-w-0">
-      {title ? (
-        <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-500 sm:text-xs">
-          {title}
-        </h3>
-      ) : null}
+    <div
+      className={`rounded border p-2.5 sm:p-4 min-w-0 ${
+        tone === "primary"
+          ? "border-emerald-200 bg-emerald-50/60"
+          : tone === "locked"
+          ? "border-gray-200 bg-gray-50"
+          : "bg-white"
+      }`}
+    >
+      <div className="mb-2 flex items-center justify-between gap-2">
+        {title ? (
+          <h3
+            className={`text-[10px] font-semibold uppercase tracking-wide sm:text-xs ${
+              tone === "primary" ? "text-emerald-800" : "text-gray-500"
+            }`}
+          >
+            {title}
+          </h3>
+        ) : null}
+        {statusLabel ? (
+          <span
+            className={`rounded border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${
+              tone === "primary"
+                ? "border-emerald-300 bg-white text-emerald-800"
+                : "border-gray-300 bg-white text-gray-600"
+            }`}
+          >
+            {statusLabel}
+          </span>
+        ) : null}
+      </div>
       <div className="grid grid-cols-[minmax(0,140px)_minmax(0,1fr)] gap-3 sm:gap-5 items-start">
         <div className="space-y-3 text-[10px] min-[390px]:text-xs sm:text-sm leading-tight">
           <div className="space-y-0.5 sm:space-y-1">
@@ -2461,7 +2488,7 @@ const BuildingDashboardPanel = ({ building }) => {
         <div
           className={`flex justify-center min-w-0 origin-top ${
             compact
-              ? "scale-90 min-[390px]:scale-100 sm:scale-105"
+              ? "scale-[0.85] min-[390px]:scale-90 sm:scale-95"
               : "scale-110 sm:scale-125"
           }`}
         >
@@ -2567,7 +2594,7 @@ const BuildingDashboardPanel = ({ building }) => {
 
         <div className="space-y-3 sm:space-y-5">
           {isCarbonCreditTab ? (
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
               {renderPerformanceCard({
                 title: "Baseline Performance",
                 healthScore: performanceBreakdown.health,
@@ -2575,6 +2602,8 @@ const BuildingDashboardPanel = ({ building }) => {
                 gaugeValue: performanceValue,
                 diveKey: "baseline",
                 compact: true,
+                tone: "locked",
+                statusLabel: "Locked in",
               })}
               {renderPerformanceCard({
                 title: "New Performance",
@@ -2582,7 +2611,8 @@ const BuildingDashboardPanel = ({ building }) => {
                 energyScore: passivhausPerformance.energy,
                 gaugeValue: passivhausPerformance.value,
                 diveKey: "new",
-                compact: true,
+                tone: "primary",
+                statusLabel: "Passivhaus style",
               })}
             </div>
           ) : (
