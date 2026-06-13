@@ -2473,7 +2473,11 @@ const BuildingDashboardPanel = ({ building }) => {
           </span>
         ) : null}
       </div>
-      <div className="grid grid-cols-[minmax(0,140px)_minmax(0,1fr)] gap-3 sm:gap-5 items-start">
+      <div
+        className={`grid gap-3 sm:gap-5 items-start ${
+          compact ? "grid-cols-1" : "grid-cols-[minmax(0,140px)_minmax(0,1fr)]"
+        }`}
+      >
         <div className="space-y-3 text-[10px] min-[390px]:text-xs sm:text-sm leading-tight">
           <div className="space-y-0.5 sm:space-y-1">
             <p>
@@ -2488,7 +2492,7 @@ const BuildingDashboardPanel = ({ building }) => {
         <div
           className={`flex justify-center min-w-0 origin-top ${
             compact
-              ? "scale-[0.85] min-[390px]:scale-90 sm:scale-95"
+              ? "scale-100 min-[390px]:scale-110 sm:scale-115"
               : "scale-110 sm:scale-125"
           }`}
         >
