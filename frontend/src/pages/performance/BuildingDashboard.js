@@ -2873,7 +2873,7 @@ const BuildingDashboardPanel = ({ building }) => {
       <div
         className={
           showStandardDeepDiveToggle
-            ? "grid min-h-0 flex-1 grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] items-start gap-2 sm:gap-4"
+            ? "grid min-h-0 flex-1 grid-cols-[minmax(112px,0.95fr)_minmax(0,1.65fr)] items-start gap-2 sm:gap-5"
             : "flex min-h-0 flex-1 flex-col"
         }
       >
@@ -2895,7 +2895,7 @@ const BuildingDashboardPanel = ({ building }) => {
         <div
           className={`flex min-w-0 flex-1 ${
             showStandardDeepDiveToggle
-              ? "min-h-[92px] items-start justify-end pt-0 sm:min-h-[120px]"
+              ? "min-h-[130px] items-start justify-center pt-0 sm:min-h-[185px]"
               : compact
               ? "min-h-[118px] items-center justify-center pt-2 sm:min-h-[142px]"
               : "min-h-[160px] items-start justify-end pt-2 pr-0 sm:min-h-[220px] sm:pr-6"
@@ -2907,7 +2907,7 @@ const BuildingDashboardPanel = ({ building }) => {
             activeBandOnly={activeBandOnly}
             className={
               showStandardDeepDiveToggle
-                ? "h-auto w-[180px] max-w-full min-[390px]:w-[210px] sm:w-[275px]"
+                ? "h-auto w-[250px] max-w-full min-[390px]:w-[285px] sm:w-[420px] lg:w-[500px]"
                 : compact
                 ? "h-auto w-[150px] max-w-full min-[390px]:w-[170px] sm:w-[200px]"
                 : "h-auto w-[220px] max-w-full min-[390px]:w-[255px] sm:w-[320px]"
