@@ -20,7 +20,7 @@ const describeArc = (x, y, radius, startAngle, endAngle) => {
   return d;
 };
 
-const AnalogGauge = ({ value }) => {
+const AnalogGauge = ({ value, activeBandOnly = false }) => {
   // Gauge settings: center and radius.
   const cx = 100;
   const cy = 100;
@@ -37,6 +37,15 @@ const AnalogGauge = ({ value }) => {
   const redArc = describeArc(cx, cy, radius, -90, -30.6);
   const amberArc = describeArc(cx, cy, radius, -30.6, 28.8);
   const greenArc = describeArc(cx, cy, radius, 28.8, 90);
+  const activeBand = !hasValue
+    ? null
+    : value < 33
+    ? "red"
+    : value < 66
+    ? "amber"
+    : "green";
+  const bandStroke = (band, color) =>
+    !activeBandOnly || activeBand === band ? color : "#d1d5db";
   
   // Needle: draw a line from the center to the circumference at the computed angle.
   const needleLength = radius - 10;
@@ -45,9 +54,9 @@ const AnalogGauge = ({ value }) => {
   return (
     <svg width="200" height="120" viewBox="0 0 200 120">
       {/* Draw arcs */}
-      <path d={redArc} stroke="#f87171" strokeWidth="10" fill="none" />
-      <path d={amberArc} stroke="#facc15" strokeWidth="10" fill="none" />
-      <path d={greenArc} stroke="#4ade80" strokeWidth="10" fill="none" />
+      <path d={redArc} stroke={bandStroke("red", "#f87171")} strokeWidth="10" fill="none" />
+      <path d={amberArc} stroke={bandStroke("amber", "#facc15")} strokeWidth="10" fill="none" />
+      <path d={greenArc} stroke={bandStroke("green", "#4ade80")} strokeWidth="10" fill="none" />
       
       {hasValue ? (
         <>

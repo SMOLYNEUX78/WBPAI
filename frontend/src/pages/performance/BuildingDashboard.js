@@ -2441,6 +2441,7 @@ const BuildingDashboardPanel = ({ building }) => {
     compact = false,
     tone = "default",
     statusLabel,
+    activeBandOnly = false,
   }) => (
     <div
       className={`rounded border p-2.5 sm:p-4 min-w-0 ${
@@ -2463,7 +2464,7 @@ const BuildingDashboardPanel = ({ building }) => {
         ) : null}
         {statusLabel ? (
           <span
-            className={`rounded border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${
+            className={`whitespace-nowrap rounded border px-2 py-0.5 text-[8px] font-semibold uppercase tracking-wide ${
               tone === "primary"
                 ? "border-emerald-300 bg-white text-emerald-800"
                 : "border-gray-300 bg-white text-gray-600"
@@ -2475,7 +2476,9 @@ const BuildingDashboardPanel = ({ building }) => {
       </div>
       <div
         className={`grid gap-3 sm:gap-5 items-start ${
-          compact ? "grid-cols-1" : "grid-cols-[minmax(0,140px)_minmax(0,1fr)]"
+          compact
+            ? "grid-cols-[minmax(0,78px)_minmax(0,1fr)] gap-1.5 sm:gap-2"
+            : "grid-cols-[minmax(0,140px)_minmax(0,1fr)]"
         }`}
       >
         <div className="space-y-3 text-[10px] min-[390px]:text-xs sm:text-sm leading-tight">
@@ -2492,11 +2495,15 @@ const BuildingDashboardPanel = ({ building }) => {
         <div
           className={`flex justify-center min-w-0 origin-top ${
             compact
-              ? "scale-100 min-[390px]:scale-110 sm:scale-115"
+              ? "scale-[0.72] min-[390px]:scale-[0.78] sm:scale-[0.84]"
               : "scale-110 sm:scale-125"
           }`}
         >
-          <AnalogGauge value={gaugeValue} historicalValue={historicalPerformance} />
+          <AnalogGauge
+            value={gaugeValue}
+            historicalValue={historicalPerformance}
+            activeBandOnly={activeBandOnly}
+          />
         </div>
       </div>
       {isCarbonCreditTab && diveKey ? (
@@ -2608,6 +2615,7 @@ const BuildingDashboardPanel = ({ building }) => {
                 compact: true,
                 tone: "locked",
                 statusLabel: "Locked in",
+                activeBandOnly: true,
               })}
               {renderPerformanceCard({
                 title: "New Performance",
