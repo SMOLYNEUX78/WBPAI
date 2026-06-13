@@ -22,6 +22,13 @@ const HOME_BUILDING = {
 };
 
 const BUILDINGS = [
+  {
+    ...HOME_BUILDING,
+    id: "cc",
+    name: "CC",
+    subtitle: "Carbon credit token workspace",
+    dataSourceId: "home",
+  },
   HOME_BUILDING,
   {
     id: "museum",
@@ -38,13 +45,6 @@ const BUILDINGS = [
     heatingSystem: "none",
     regulatedElectricFraction: 0.05,
     showGas: false,
-  },
-  {
-    ...HOME_BUILDING,
-    id: "cc",
-    name: "CC",
-    subtitle: "Carbon credit token workspace",
-    dataSourceId: "home",
   },
   {
     id: "new",
@@ -4019,8 +4019,8 @@ const NewBuildingSetupPanel = () => {
 };
 
 const BuildingDashboard = () => {
-  const homeIndex = BUILDINGS.findIndex((building) => building.id === "home");
-  const [activeIndex, setActiveIndex] = useState(homeIndex >= 0 ? homeIndex : 0);
+  const defaultIndex = BUILDINGS.findIndex((building) => building.id === "cc");
+  const [activeIndex, setActiveIndex] = useState(defaultIndex >= 0 ? defaultIndex : 0);
   const touchStartX = useRef(null);
   const [dragOffset, setDragOffset] = useState(0);
 
