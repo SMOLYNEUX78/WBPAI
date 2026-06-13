@@ -121,7 +121,8 @@ const getEstimatedInternalArea = (modelId, building) => {
 const BuildingDashboardPanel = ({ building }) => {
   const dataSourceBuildingId = building.dataSourceId || building.id;
   const isCarbonCreditTab = building.id === "cc";
-  const [deepDiveOpen, setDeepDiveOpen] = useState(false);
+  const [deepDivePanel, setDeepDivePanel] = useState(null);
+  const deepDiveOpen = Boolean(deepDivePanel);
   const matterportInput = useMemo(() => {
     return (
       localStorage.getItem(`${dataSourceBuildingId}:matterportModelInput`) ||
@@ -2421,6 +2422,66 @@ const BuildingDashboardPanel = ({ building }) => {
           )
         )
       : null;
+  const passivhausPerformance = {
+    health: 96,
+    energy: 98,
+    value: 97,
+  };
+  const toggleDeepDivePanel = (panelKey) => {
+    setDeepDivePanel((currentPanel) =>
+      currentPanel === panelKey ? null : panelKey
+    );
+  };
+  const renderPerformanceCard = ({
+    title,
+    healthScore,
+    energyScore,
+    gaugeValue,
+    diveKey,
+    compact = false,
+  }) => (
+    <div className="bg-white rounded border p-2.5 sm:p-4 min-w-0">
+      {title ? (
+        <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-500 sm:text-xs">
+          {title}
+        </h3>
+      ) : null}
+      <div className="grid grid-cols-[minmax(0,140px)_minmax(0,1fr)] gap-3 sm:gap-5 items-start">
+        <div className="space-y-3 text-[10px] min-[390px]:text-xs sm:text-sm leading-tight">
+          <div className="space-y-0.5 sm:space-y-1">
+            <p>
+              <strong>Health:</strong> {formatScore(healthScore)}
+            </p>
+            <p>
+              <strong>Energy:</strong> {formatScore(energyScore)}
+            </p>
+          </div>
+        </div>
+
+        <div
+          className={`flex justify-center min-w-0 origin-top ${
+            compact
+              ? "scale-90 min-[390px]:scale-100 sm:scale-105"
+              : "scale-110 sm:scale-125"
+          }`}
+        >
+          <AnalogGauge value={gaugeValue} historicalValue={historicalPerformance} />
+        </div>
+      </div>
+      {isCarbonCreditTab && diveKey ? (
+        <div className="mt-3 flex justify-start border-t border-gray-100 pt-2">
+          <button
+            type="button"
+            onClick={() => toggleDeepDivePanel(diveKey)}
+            className="text-left text-[10px] font-semibold text-gray-700 underline decoration-gray-300 underline-offset-2 transition hover:text-black sm:text-xs"
+            aria-expanded={deepDivePanel === diveKey}
+          >
+            {deepDivePanel === diveKey ? "Hide deep dive" : "Deep Dive"}
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
   return (
     <div className="min-h-screen bg-white p-4 flex flex-col space-y-6">
       <div className="bg-gray-100 p-4 rounded shadow">
@@ -2505,44 +2566,49 @@ const BuildingDashboardPanel = ({ building }) => {
         <h2 className="text-lg font-bold mb-3">Performance</h2>
 
         <div className="space-y-3 sm:space-y-5">
-          <div className="bg-white rounded border p-2.5 sm:p-4 min-w-0">
-            <div className="grid grid-cols-[minmax(0,150px)_minmax(0,1fr)] gap-3 sm:gap-6 items-start">
-              <div className="space-y-4 sm:space-y-6 text-[10px] min-[390px]:text-xs sm:text-sm leading-tight">
-                <div className="space-y-0.5 sm:space-y-1">
-                  <p>
-                    <strong>Health:</strong>{" "}
-                    {formatScore(performanceBreakdown.health)}
-                  </p>
-                  <p>
-                    <strong>Energy:</strong>{" "}
-                    {formatScore(performanceBreakdown.energy)}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex justify-center min-w-0 scale-110 sm:scale-125 origin-top">
-                <AnalogGauge
-                  value={performanceValue}
-                  historicalValue={historicalPerformance}
-                />
-              </div>
+          {isCarbonCreditTab ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {renderPerformanceCard({
+                title: "Baseline Performance",
+                healthScore: performanceBreakdown.health,
+                energyScore: performanceBreakdown.energy,
+                gaugeValue: performanceValue,
+                diveKey: "baseline",
+                compact: true,
+              })}
+              {renderPerformanceCard({
+                title: "New Performance",
+                healthScore: passivhausPerformance.health,
+                energyScore: passivhausPerformance.energy,
+                gaugeValue: passivhausPerformance.value,
+                diveKey: "new",
+                compact: true,
+              })}
             </div>
-            {isCarbonCreditTab ? (
-              <div className="mt-3 flex justify-start border-t border-gray-100 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setDeepDiveOpen((open) => !open)}
-                  className="text-left text-[10px] font-semibold text-gray-700 underline decoration-gray-300 underline-offset-2 transition hover:text-black sm:text-xs"
-                  aria-expanded={deepDiveOpen}
-                >
-                  {deepDiveOpen ? "Hide deep dive" : "Deep Dive"}
-                </button>
-              </div>
-            ) : null}
-          </div>
+          ) : (
+            renderPerformanceCard({
+              healthScore: performanceBreakdown.health,
+              energyScore: performanceBreakdown.energy,
+              gaugeValue: performanceValue,
+            })
+          )}
 
           {isCarbonCreditTab && !deepDiveOpen ? null : (
           <div className="bg-white rounded border p-2.5 sm:p-4 min-w-0 overflow-hidden">
+            {isCarbonCreditTab ? (
+              <div className="mb-3 border-b border-gray-100 pb-2 text-xs text-gray-600">
+                <h3 className="font-semibold text-gray-900">
+                  {deepDivePanel === "new"
+                    ? "New Passivhaus Performance Deep Dive"
+                    : "Baseline Performance Deep Dive"}
+                </h3>
+                <p>
+                  {deepDivePanel === "new"
+                    ? "Projected post-upgrade view using passivhaus-style comfort and energy performance."
+                    : "Measured current building view from the live Home data baseline."}
+                </p>
+              </div>
+            ) : null}
             <div className="grid grid-cols-3 gap-2 sm:gap-5 text-[10px] min-[390px]:text-xs sm:text-sm leading-tight">
               <div className="space-y-2 sm:space-y-3 break-words min-w-0">
                 <h3 className="font-semibold mb-2 sm:mb-3">Energy</h3>
