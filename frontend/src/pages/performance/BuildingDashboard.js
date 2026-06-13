@@ -178,7 +178,12 @@ const BuildingDashboardPanel = ({ building }) => {
 
   const [performanceValue, setPerformanceValue] = useState(null);
   const [historicalPerformance, setHistoricalPerformance] = useState(null);
-  const [carbonCredits] = useState(0);
+  const [carbonCredits, setCarbonCredits] = useState(0);
+  const [carbonSavingsSummary, setCarbonSavingsSummary] = useState({
+    latestDate: null,
+    latestSavedKgCo2e: null,
+    totalSavedKgCo2e: null,
+  });
   const [energySummary, setEnergySummary] = useState({
     electricityDailyAverage: null,
     electricityTodayKwh: 0,
@@ -1841,12 +1846,53 @@ const BuildingDashboardPanel = ({ building }) => {
     }
   };
 
+  const fetchCarbonSavingsSummary = async () => {
+    if (!isCarbonCreditTab) {
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from("CarbonSavingsDaily")
+        .select("saving_date, saved_kgco2e, carbon_credits")
+        .eq("building_id", dataSourceBuildingId)
+        .eq("scenario", "passivhaus-net-zero")
+        .order("saving_date", { ascending: false })
+        .limit(365);
+
+      if (error) {
+        throw error;
+      }
+
+      const rows = data || [];
+      const totalSavedKgCo2e = rows.reduce(
+        (sum, row) => sum + (Number(row.saved_kgco2e) || 0),
+        0
+      );
+      const totalCredits = rows.reduce(
+        (sum, row) => sum + (Number(row.carbon_credits) || 0),
+        0
+      );
+      const latest = rows[0] || null;
+
+      setCarbonCredits(totalCredits);
+      setCarbonSavingsSummary({
+        latestDate: latest?.saving_date || null,
+        latestSavedKgCo2e: latest ? Number(latest.saved_kgco2e) : null,
+        totalSavedKgCo2e,
+      });
+    } catch (err) {
+      console.warn("Carbon savings summary unavailable:", err.message);
+    }
+  };
+
   useEffect(() => {
     fetchLongTermAverage();
     fetchHeatLossSummary();
     fetchExternalTemp();
     fetchIAQData();
     fetchWeeklyPerformanceTrend();
+    fetchCarbonSavingsSummary();
     // Building switch refresh only; polling effect below handles continuing updates.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataSourceBuildingId]);
@@ -1860,6 +1906,7 @@ const BuildingDashboardPanel = ({ building }) => {
       fetchExternalTemp();
       fetchLongTermBuildingPerformance();
       fetchWeeklyPerformanceTrend();
+      fetchCarbonSavingsSummary();
     }, 60000);
 
     return () => clearInterval(interval);
@@ -3464,7 +3511,7 @@ const BuildingDashboardPanel = ({ building }) => {
         >
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p>
-              <strong>{carbonCredits}</strong> WBPA-C
+              <strong>{formatNumber(carbonCredits, 4)}</strong> WBPA-C
             </p>
             <span
               className={`rounded border px-2 py-1 text-xs font-semibold ${
@@ -3482,6 +3529,24 @@ const BuildingDashboardPanel = ({ building }) => {
               ? "Credit-grade evidence is ready for token design and issuance rules."
               : "Complete carbon evidence readiness before tokenised savings can become active."}
           </p>
+          <div className="grid gap-2 text-xs text-gray-600 sm:grid-cols-2">
+            <p>
+              <strong>Total saved:</strong>{" "}
+              {Number.isFinite(carbonSavingsSummary.totalSavedKgCo2e)
+                ? `${formatNumber(carbonSavingsSummary.totalSavedKgCo2e, 2)} kgCO2e`
+                : "Pending calculation"}
+            </p>
+            <p>
+              <strong>Latest day:</strong>{" "}
+              {carbonSavingsSummary.latestDate &&
+              Number.isFinite(carbonSavingsSummary.latestSavedKgCo2e)
+                ? `${carbonSavingsSummary.latestDate}: ${formatNumber(
+                    carbonSavingsSummary.latestSavedKgCo2e,
+                    2
+                  )} kgCO2e`
+                : "Pending calculation"}
+            </p>
+          </div>
 
           <button
             type="button"
