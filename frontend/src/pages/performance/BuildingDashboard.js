@@ -1851,6 +1851,104 @@ const BuildingDashboardPanel = ({ building }) => {
       return;
     }
 
+    const buildCarbonSavingsFromEnergyRows = async () => {
+      const pageSize = 1000;
+      const maxPages = 100;
+      const energyRows = [];
+
+      for (let page = 0; page < maxPages; page += 1) {
+        const { data, error } = await supabase
+          .from("EnergyReadings")
+          .select("timestamp, created_at, fuel_type, reading_type, usage_kwh")
+          .eq("building_id", dataSourceBuildingId)
+          .in("reading_type", ["daily_total", "interval_30m"])
+          .not("usage_kwh", "is", null)
+          .gte("timestamp", "2020-01-01")
+          .lte("timestamp", new Date().toISOString())
+          .order("timestamp", { ascending: true })
+          .order("created_at", { ascending: true })
+          .range(page * pageSize, (page + 1) * pageSize - 1);
+
+        if (error) {
+          throw error;
+        }
+
+        energyRows.push(...(data || []));
+
+        if (!data || data.length < pageSize) {
+          break;
+        }
+      }
+
+      const intervalDays = new Set();
+      const dailyEnergy = {};
+      const dayKey = (timestamp) => new Date(timestamp).toISOString().slice(0, 10);
+
+      energyRows
+        .filter((row) => row.reading_type === "interval_30m")
+        .forEach((row) => {
+          const day = dayKey(row.timestamp);
+          const fuelType = row.fuel_type || "unknown";
+          const usageKwh = Number(row.usage_kwh);
+
+          if (!Number.isFinite(usageKwh)) {
+            return;
+          }
+
+          intervalDays.add(`${fuelType}:${day}`);
+          dailyEnergy[day] = dailyEnergy[day] || {};
+          dailyEnergy[day][fuelType] = (dailyEnergy[day][fuelType] || 0) + usageKwh;
+        });
+
+      energyRows
+        .filter((row) => row.reading_type === "daily_total")
+        .forEach((row) => {
+          const day = dayKey(row.timestamp);
+          const fuelType = row.fuel_type || "unknown";
+          const usageKwh = Number(row.usage_kwh);
+
+          if (!Number.isFinite(usageKwh) || intervalDays.has(`${fuelType}:${day}`)) {
+            return;
+          }
+
+          dailyEnergy[day] = dailyEnergy[day] || {};
+          dailyEnergy[day][fuelType] = Math.max(
+            dailyEnergy[day][fuelType] || 0,
+            usageKwh
+          );
+        });
+
+      const electricityKgCo2ePerKwh = 0.20705;
+      const gasKgCo2ePerKwh = 0.18254;
+      const area = Number(matterportMetadata.internalArea);
+      const improvedDailyElectricityKwh =
+        ((Number.isFinite(area) && area > 0
+          ? area
+          : building.estimatedInternalArea || 99.2) *
+          projectedPerformanceDeepDive.annualEui) /
+        365;
+      const improvedDailyKgCo2e =
+        improvedDailyElectricityKwh * electricityKgCo2ePerKwh;
+
+      const rows = Object.entries(dailyEnergy)
+        .map(([savingDate, fuels]) => {
+          const electricityKwh = Number(fuels.electricity || 0);
+          const gasKwh = Number(fuels.gas || 0);
+          const baselineKgCo2e =
+            electricityKwh * electricityKgCo2ePerKwh + gasKwh * gasKgCo2ePerKwh;
+          const savedKgCo2e = Math.max(0, baselineKgCo2e - improvedDailyKgCo2e);
+
+          return {
+            saving_date: savingDate,
+            saved_kgco2e: savedKgCo2e,
+            carbon_credits: savedKgCo2e / 1000,
+          };
+        })
+        .sort((a, b) => b.saving_date.localeCompare(a.saving_date));
+
+      return rows;
+    };
+
     try {
       const { data, error } = await supabase
         .from("CarbonSavingsDaily")
@@ -1882,7 +1980,28 @@ const BuildingDashboardPanel = ({ building }) => {
         totalSavedKgCo2e,
       });
     } catch (err) {
-      console.warn("Carbon savings summary unavailable:", err.message);
+      console.warn("Carbon savings table unavailable; calculating from EnergyReadings:", err.message);
+      try {
+        const rows = await buildCarbonSavingsFromEnergyRows();
+        const totalSavedKgCo2e = rows.reduce(
+          (sum, row) => sum + (Number(row.saved_kgco2e) || 0),
+          0
+        );
+        const totalCredits = rows.reduce(
+          (sum, row) => sum + (Number(row.carbon_credits) || 0),
+          0
+        );
+        const latest = rows[0] || null;
+
+        setCarbonCredits(totalCredits);
+        setCarbonSavingsSummary({
+          latestDate: latest?.saving_date || null,
+          latestSavedKgCo2e: latest ? Number(latest.saved_kgco2e) : null,
+          totalSavedKgCo2e,
+        });
+      } catch (fallbackErr) {
+        console.warn("Carbon savings fallback unavailable:", fallbackErr.message);
+      }
     }
   };
 
