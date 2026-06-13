@@ -2522,23 +2522,23 @@ const BuildingDashboardPanel = ({ building }) => {
                     {formatScore(performanceBreakdown.energy)}
                   </p>
                 </div>
-              </div>
-
-              <div className="flex flex-col items-center justify-center gap-3 min-w-0 scale-110 sm:scale-125 origin-top">
-                <AnalogGauge
-                  value={performanceValue}
-                  historicalValue={historicalPerformance}
-                />
                 {isCarbonCreditTab ? (
                   <button
                     type="button"
                     onClick={() => setDeepDiveOpen((open) => !open)}
-                    className="rounded border border-gray-900 bg-black px-3 py-1.5 text-[10px] font-semibold text-white shadow-sm sm:text-xs"
+                    className="text-left text-[10px] font-semibold text-gray-700 underline decoration-gray-300 underline-offset-2 transition hover:text-black sm:text-xs"
                     aria-expanded={deepDiveOpen}
                   >
-                    Deep Dive
+                    {deepDiveOpen ? "Hide deep dive" : "Deep Dive"}
                   </button>
                 ) : null}
+              </div>
+
+              <div className="flex justify-center min-w-0 scale-110 sm:scale-125 origin-top">
+                <AnalogGauge
+                  value={performanceValue}
+                  historicalValue={historicalPerformance}
+                />
               </div>
             </div>
           </div>
@@ -3188,6 +3188,7 @@ const BuildingDashboardPanel = ({ building }) => {
         </div>
         )}
 
+        {isCarbonCreditTab && !deepDiveOpen ? null : (
         <div className="mt-4 bg-white rounded border p-4 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
@@ -3229,6 +3230,7 @@ const BuildingDashboardPanel = ({ building }) => {
             ))}
           </div>
         </div>
+        )}
       </div>
 
       <div className="bg-gray-100 p-4 rounded shadow">
