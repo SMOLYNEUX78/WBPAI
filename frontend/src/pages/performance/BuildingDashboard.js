@@ -2410,13 +2410,13 @@ const BuildingDashboardPanel = ({ building }) => {
         <h2 className="text-lg font-bold mb-3">Building Input</h2>
 
         <div className="grid grid-cols-[minmax(112px,0.95fr)_minmax(0,1.65fr)] sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-2 sm:gap-5 items-stretch">
-          <div className="min-w-0">
-            <div className="grid grid-cols-1 grid-rows-3 gap-1.5 sm:gap-3 h-[220px] min-[390px]:h-[250px] sm:h-[280px]">
+          <div className="min-w-0 self-stretch">
+            <div className="grid grid-cols-1 grid-rows-3 gap-1.5 sm:gap-3 h-full">
               <div className="bg-white rounded border p-1.5 min-[390px]:p-2 sm:p-3 min-w-0 overflow-hidden flex flex-col justify-center">
                 <p className="text-[8px] min-[390px]:text-[9px] sm:text-xs uppercase tracking-normal sm:tracking-wide text-gray-500 leading-none">
                   Address
                 </p>
-                <p className="font-semibold text-[9px] min-[390px]:text-[10px] sm:text-sm mt-1 leading-tight break-words">
+                <p className="font-semibold text-[clamp(8px,2.4vw,10px)] sm:text-sm mt-1 leading-tight break-words max-h-full overflow-hidden">
                   {matterportMetadata.address}
                 </p>
               </div>
@@ -2426,7 +2426,7 @@ const BuildingDashboardPanel = ({ building }) => {
                   <span className="sm:hidden">Coords</span>
                   <span className="hidden sm:inline">Coordinates</span>
                 </p>
-                <p className="font-semibold text-[9px] min-[390px]:text-[10px] sm:text-sm mt-1 leading-tight break-words">
+                <p className="font-semibold text-[clamp(8px,2.4vw,10px)] sm:text-sm mt-1 leading-tight break-words max-h-full overflow-hidden">
                   {matterportMetadata.latitude}, {matterportMetadata.longitude}
                 </p>
               </div>
@@ -2436,12 +2436,12 @@ const BuildingDashboardPanel = ({ building }) => {
                   <span className="sm:hidden">Area</span>
                   <span className="hidden sm:inline">Internal Area</span>
                 </p>
-                <p className="font-semibold text-[9px] min-[390px]:text-[10px] sm:text-sm mt-1 leading-tight">
+                <p className="font-semibold text-[clamp(8px,2.4vw,10px)] sm:text-sm mt-1 leading-tight">
                   {matterportMetadata.internalArea !== "--"
                     ? `${matterportMetadata.internalArea} m2`
                     : "Pending"}
                 </p>
-                <p className="text-[8px] min-[390px]:text-[9px] sm:text-xs text-gray-500 mt-0.5 sm:mt-1 leading-tight">
+                <p className="text-[clamp(7px,2.1vw,9px)] sm:text-xs text-gray-500 mt-0.5 sm:mt-1 leading-tight max-h-full overflow-hidden">
                   <span className="sm:hidden">Model estimate</span>
                   <span className="hidden sm:inline">Temporary estimate from embedded model</span>
                 </p>
