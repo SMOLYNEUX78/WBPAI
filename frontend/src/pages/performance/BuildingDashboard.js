@@ -2738,21 +2738,19 @@ const BuildingDashboardPanel = ({ building }) => {
               : "text-xs sm:text-sm"
           }`}
         >
-          <p className="flex items-baseline justify-between gap-2">
-            <strong>Health</strong>
-            <span>{formatScore(healthScore)}</span>
+          <p>
+            <strong>Health:</strong> {formatScore(healthScore)}
           </p>
-          <p className="flex items-baseline justify-between gap-2">
-            <strong>Energy</strong>
-            <span>{formatScore(energyScore)}</span>
+          <p>
+            <strong>Energy:</strong> {formatScore(energyScore)}
           </p>
         </div>
 
         <div
-          className={`flex min-w-0 flex-1 items-end justify-center ${
+          className={`flex min-w-0 flex-1 ${
             compact
-              ? "min-h-[128px] pt-5 sm:min-h-[160px] sm:pt-7"
-              : "min-h-[180px] pt-4 sm:min-h-[245px]"
+              ? "min-h-[118px] items-center justify-center pt-2 sm:min-h-[142px]"
+              : "min-h-[160px] items-start justify-end pt-2 pr-0 sm:min-h-[220px] sm:pr-6"
           }`}
         >
           <AnalogGauge
@@ -2761,8 +2759,8 @@ const BuildingDashboardPanel = ({ building }) => {
             activeBandOnly={activeBandOnly}
             className={
               compact
-                ? "h-auto w-[170px] max-w-full min-[390px]:w-[190px] sm:w-[220px]"
-                : "h-auto w-[245px] max-w-full min-[390px]:w-[285px] sm:w-[360px]"
+                ? "h-auto w-[150px] max-w-full min-[390px]:w-[170px] sm:w-[200px]"
+                : "h-auto w-[220px] max-w-full min-[390px]:w-[255px] sm:w-[320px]"
             }
           />
         </div>
