@@ -2409,38 +2409,41 @@ const BuildingDashboardPanel = ({ building }) => {
       <div className="bg-gray-100 p-4 rounded shadow">
         <h2 className="text-lg font-bold mb-3">Building Input</h2>
 
-        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-3 sm:gap-5 items-stretch">
+        <div className="grid grid-cols-[minmax(112px,0.95fr)_minmax(0,1.65fr)] sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-2 sm:gap-5 items-stretch">
           <div className="min-w-0">
-            <div className="grid grid-cols-1 grid-rows-3 gap-2 sm:gap-3 h-[220px] min-[390px]:h-[250px] sm:h-[280px]">
-              <div className="bg-white rounded border p-2 sm:p-3 min-w-0 flex flex-col justify-center">
-                <p className="text-xs uppercase tracking-wide text-gray-500">
+            <div className="grid grid-cols-1 grid-rows-3 gap-1.5 sm:gap-3 h-[220px] min-[390px]:h-[250px] sm:h-[280px]">
+              <div className="bg-white rounded border p-1.5 min-[390px]:p-2 sm:p-3 min-w-0 overflow-hidden flex flex-col justify-center">
+                <p className="text-[8px] min-[390px]:text-[9px] sm:text-xs uppercase tracking-normal sm:tracking-wide text-gray-500 leading-none">
                   Address
                 </p>
-                <p className="font-semibold text-[11px] sm:text-sm mt-1 leading-snug break-words">
+                <p className="font-semibold text-[9px] min-[390px]:text-[10px] sm:text-sm mt-1 leading-tight break-words">
                   {matterportMetadata.address}
                 </p>
               </div>
 
-              <div className="bg-white rounded border p-2 sm:p-3 min-w-0 flex flex-col justify-center">
-                <p className="text-xs uppercase tracking-wide text-gray-500">
-                  Coordinates
+              <div className="bg-white rounded border p-1.5 min-[390px]:p-2 sm:p-3 min-w-0 overflow-hidden flex flex-col justify-center">
+                <p className="text-[8px] min-[390px]:text-[9px] sm:text-xs uppercase tracking-normal sm:tracking-wide text-gray-500 leading-none">
+                  <span className="sm:hidden">Coords</span>
+                  <span className="hidden sm:inline">Coordinates</span>
                 </p>
-                <p className="font-semibold text-[11px] sm:text-sm mt-1 leading-snug break-words">
+                <p className="font-semibold text-[9px] min-[390px]:text-[10px] sm:text-sm mt-1 leading-tight break-words">
                   {matterportMetadata.latitude}, {matterportMetadata.longitude}
                 </p>
               </div>
 
-              <div className="bg-white rounded border p-2 sm:p-3 min-w-0 flex flex-col justify-center">
-                <p className="text-xs uppercase tracking-wide text-gray-500">
-                  Internal Area
+              <div className="bg-white rounded border p-1.5 min-[390px]:p-2 sm:p-3 min-w-0 overflow-hidden flex flex-col justify-center">
+                <p className="text-[8px] min-[390px]:text-[9px] sm:text-xs uppercase tracking-normal sm:tracking-wide text-gray-500 leading-none">
+                  <span className="sm:hidden">Area</span>
+                  <span className="hidden sm:inline">Internal Area</span>
                 </p>
-                <p className="font-semibold text-[11px] sm:text-sm mt-1 leading-snug">
+                <p className="font-semibold text-[9px] min-[390px]:text-[10px] sm:text-sm mt-1 leading-tight">
                   {matterportMetadata.internalArea !== "--"
                     ? `${matterportMetadata.internalArea} m2`
                     : "Pending"}
                 </p>
-                <p className="text-[10px] sm:text-xs text-gray-500 mt-1 leading-snug">
-                  Temporary estimate from embedded model
+                <p className="text-[8px] min-[390px]:text-[9px] sm:text-xs text-gray-500 mt-0.5 sm:mt-1 leading-tight">
+                  <span className="sm:hidden">Model estimate</span>
+                  <span className="hidden sm:inline">Temporary estimate from embedded model</span>
                 </p>
               </div>
             </div>
