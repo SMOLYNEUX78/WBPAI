@@ -3830,11 +3830,6 @@ const BuildingDashboardPanel = ({ building }) => {
             </span>
           </div>
 
-          <p className="text-sm text-gray-600">
-            {carbonTokenUnlocked
-              ? "Credit-grade evidence is ready for token design and issuance rules."
-              : "Complete carbon evidence readiness before tokenised savings can become active."}
-          </p>
           <div className="grid gap-2 text-xs text-gray-600 sm:grid-cols-2">
             <p>
               <strong>Total saved:</strong>{" "}
