@@ -2522,16 +2522,6 @@ const BuildingDashboardPanel = ({ building }) => {
                     {formatScore(performanceBreakdown.energy)}
                   </p>
                 </div>
-                {isCarbonCreditTab ? (
-                  <button
-                    type="button"
-                    onClick={() => setDeepDiveOpen((open) => !open)}
-                    className="text-left text-[10px] font-semibold text-gray-700 underline decoration-gray-300 underline-offset-2 transition hover:text-black sm:text-xs"
-                    aria-expanded={deepDiveOpen}
-                  >
-                    {deepDiveOpen ? "Hide deep dive" : "Deep Dive"}
-                  </button>
-                ) : null}
               </div>
 
               <div className="flex justify-center min-w-0 scale-110 sm:scale-125 origin-top">
@@ -2541,6 +2531,18 @@ const BuildingDashboardPanel = ({ building }) => {
                 />
               </div>
             </div>
+            {isCarbonCreditTab ? (
+              <div className="mt-3 flex justify-start border-t border-gray-100 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setDeepDiveOpen((open) => !open)}
+                  className="text-left text-[10px] font-semibold text-gray-700 underline decoration-gray-300 underline-offset-2 transition hover:text-black sm:text-xs"
+                  aria-expanded={deepDiveOpen}
+                >
+                  {deepDiveOpen ? "Hide deep dive" : "Deep Dive"}
+                </button>
+              </div>
+            ) : null}
           </div>
 
           {isCarbonCreditTab && !deepDiveOpen ? null : (
