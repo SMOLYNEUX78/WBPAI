@@ -5,21 +5,30 @@ import supabase from "../../supabaseClient";
 const DEFAULT_MATTERPORT_URL = "https://my.matterport.com/show/?m=zHm8SwWeHiN";
 const HDD_BASE_TEMP_C = 15.5;
 
+const HOME_BUILDING = {
+  id: "home",
+  name: "Home",
+  subtitle: "Home smart meter, CAD and MQTT collector",
+  address: "14 Bridgewood Rd, Woodbridge, Suffolk IP12 4HA",
+  defaultMatterportUrl: "https://my.matterport.com/show/?m=8A48K5upwWN",
+  latitude: 52.0945,
+  longitude: 1.30488,
+  estimatedInternalArea: 99.2,
+  targetEui: 35,
+  nationalAverageEui: 150,
+  legacyUnscopedData: false,
+  regulatedElectricFraction: 0.35,
+  showGas: true,
+};
+
 const BUILDINGS = [
+  HOME_BUILDING,
   {
-    id: "home",
-    name: "Home",
-    subtitle: "Home smart meter, CAD and MQTT collector",
-    address: "14 Bridgewood Rd, Woodbridge, Suffolk IP12 4HA",
-    defaultMatterportUrl: "https://my.matterport.com/show/?m=8A48K5upwWN",
-    latitude: 52.0945,
-    longitude: 1.30488,
-    estimatedInternalArea: 99.2,
-    targetEui: 35,
-    nationalAverageEui: 150,
-    legacyUnscopedData: false,
-    regulatedElectricFraction: 0.35,
-    showGas: true,
+    ...HOME_BUILDING,
+    id: "cc",
+    name: "CC",
+    subtitle: "Carbon credit token workspace",
+    dataSourceId: "home",
   },
   {
     id: "museum",
@@ -110,14 +119,17 @@ const getEstimatedInternalArea = (modelId, building) => {
 };
 
 const BuildingDashboardPanel = ({ building }) => {
+  const dataSourceBuildingId = building.dataSourceId || building.id;
+  const isCarbonCreditTab = building.id === "cc";
+  const [deepDiveOpen, setDeepDiveOpen] = useState(false);
   const matterportInput = useMemo(() => {
     return (
-      localStorage.getItem(`${building.id}:matterportModelInput`) ||
+      localStorage.getItem(`${dataSourceBuildingId}:matterportModelInput`) ||
       building.defaultMatterportUrl
     );
-  }, [building.id, building.defaultMatterportUrl]);
+  }, [dataSourceBuildingId, building.defaultMatterportUrl]);
   const manualMatterportData = useMemo(() => {
-    const savedData = localStorage.getItem(`${building.id}:matterportManualData`);
+    const savedData = localStorage.getItem(`${dataSourceBuildingId}:matterportManualData`);
 
     if (savedData) {
       try {
@@ -128,7 +140,7 @@ const BuildingDashboardPanel = ({ building }) => {
     }
 
     return {};
-  }, [building.id]);
+  }, [dataSourceBuildingId]);
   const [matterportMetadata, setMatterportMetadata] = useState(() =>
     createEmptyMatterportMetadata(
       "Connect Matterport SDK / API to load geodata",
@@ -156,10 +168,10 @@ const BuildingDashboardPanel = ({ building }) => {
     }
   };
   const [sensorData, setSensorData] = useState(() =>
-    readCachedDashboardState(`${building.id}:latestIaq`, defaultSensorData)
+    readCachedDashboardState(`${dataSourceBuildingId}:latestIaq`, defaultSensorData)
   );
   const [roomIaqData, setRoomIaqData] = useState(() =>
-    readCachedDashboardState(`${building.id}:roomIaq`, [])
+    readCachedDashboardState(`${dataSourceBuildingId}:roomIaq`, [])
   );
   const supportsExtendedIaqColumns = useRef(true);
 
@@ -248,7 +260,7 @@ const BuildingDashboardPanel = ({ building }) => {
       return query;
     }
 
-    return query.eq("building_id", building.id);
+    return query.eq("building_id", dataSourceBuildingId);
   };
 
   const buildIaqSelect = ({ includeTimestamp = false, includeReadingType = false, includeExtended = true } = {}) => {
@@ -726,7 +738,7 @@ const BuildingDashboardPanel = ({ building }) => {
       let query = supabase
         .from("EnergyReadings")
         .select("timestamp, fuel_type, usage_kwh, raw_payload, source")
-        .eq("building_id", building.id)
+        .eq("building_id", dataSourceBuildingId)
         .eq("reading_type", "daily_total")
         .order("timestamp", { ascending: false })
         .order("created_at", { ascending: false })
@@ -760,7 +772,7 @@ const BuildingDashboardPanel = ({ building }) => {
     const { data, error } = await supabase
       .from("EnergyReadings")
       .select("timestamp, usage_kwh")
-      .eq("building_id", building.id)
+      .eq("building_id", dataSourceBuildingId)
       .eq("fuel_type", "gas")
       .eq("reading_type", "interval_30m")
       .not("usage_kwh", "is", null)
@@ -786,7 +798,7 @@ const BuildingDashboardPanel = ({ building }) => {
         await supabase
           .from("EnergyReadings")
           .select("power_kw")
-          .eq("building_id", building.id)
+          .eq("building_id", dataSourceBuildingId)
           .eq("fuel_type", "electricity")
           .eq("reading_type", "instant_power")
           .not("power_kw", "is", null)
@@ -1123,7 +1135,7 @@ const BuildingDashboardPanel = ({ building }) => {
         const outside = Number(row.temperature_outside);
 
         const isKnownStuckMuseumInsideReading =
-          building.id === "museum" && Math.abs(inside - 17.6) < 0.05;
+          dataSourceBuildingId === "museum" && Math.abs(inside - 17.6) < 0.05;
 
         if (
           Number.isFinite(inside) &&
@@ -1198,7 +1210,7 @@ const BuildingDashboardPanel = ({ building }) => {
           htcSamples += 1;
         }
       });
-      if (building.id === "museum") {
+      if (dataSourceBuildingId === "museum") {
         filteredInsideReadings = (temperatureRows || []).filter((row) => {
           const inside = Number(row.temperature_inside);
           return Number.isFinite(inside) && Math.abs(inside - 17.6) < 0.05;
@@ -1275,7 +1287,7 @@ const BuildingDashboardPanel = ({ building }) => {
             : null,
         };
         localStorage.setItem(
-          `${building.id}:latestIaq`,
+          `${dataSourceBuildingId}:latestIaq`,
           JSON.stringify(nextSensorData)
         );
         return nextSensorData;
@@ -1288,7 +1300,7 @@ const BuildingDashboardPanel = ({ building }) => {
   const fetchIAQData = async () => {
     try {
       const dysonReadingTypes =
-        building.id === "home"
+        dataSourceBuildingId === "home"
           ? [
               "dyson:whole_home",
               "dyson:upstairs",
@@ -1298,7 +1310,7 @@ const BuildingDashboardPanel = ({ building }) => {
           : null;
       const { data, error } = await fetchScopedIaqRows({
         includeReadingType: true,
-        limit: building.id === "home" ? 60 : 30,
+        limit: dataSourceBuildingId === "home" ? 60 : 30,
         orderDescending: true,
         readingTypes: dysonReadingTypes,
       });
@@ -1357,7 +1369,7 @@ const BuildingDashboardPanel = ({ building }) => {
           : null;
 
       setRoomIaqData(roomRows);
-      localStorage.setItem(`${building.id}:roomIaq`, JSON.stringify(roomRows));
+      localStorage.setItem(`${dataSourceBuildingId}:roomIaq`, JSON.stringify(roomRows));
 
       setSensorData((prev) => {
         const nextSensorData = {
@@ -1374,7 +1386,7 @@ const BuildingDashboardPanel = ({ building }) => {
           no2: numericOrNull(combinedFromRooms?.no2 ?? sourceRow.no2),
         };
         localStorage.setItem(
-          `${building.id}:latestIaq`,
+          `${dataSourceBuildingId}:latestIaq`,
           JSON.stringify(nextSensorData)
         );
         return nextSensorData;
@@ -1396,7 +1408,7 @@ const BuildingDashboardPanel = ({ building }) => {
 
       const ieqRows = data.map((row) => {
         if (
-          building.id === "home" &&
+          dataSourceBuildingId === "home" &&
           row.reading_type === "dyson:living_room"
         ) {
           return {
@@ -1511,7 +1523,7 @@ const BuildingDashboardPanel = ({ building }) => {
           const { data, error } = await supabase
             .from("EnergyReadings")
             .select("timestamp, created_at, fuel_type, reading_type, usage_kwh")
-            .eq("building_id", building.id)
+            .eq("building_id", dataSourceBuildingId)
             .in("reading_type", ["interval_30m", "daily_total"])
             .not("usage_kwh", "is", null)
             .order("timestamp", { ascending: false })
@@ -1836,7 +1848,7 @@ const BuildingDashboardPanel = ({ building }) => {
     fetchWeeklyPerformanceTrend();
     // Building switch refresh only; polling effect below handles continuing updates.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [building.id]);
+  }, [dataSourceBuildingId]);
 
   useEffect(() => {
     fetchLongTermBuildingPerformance();
@@ -1853,7 +1865,7 @@ const BuildingDashboardPanel = ({ building }) => {
     // The interval should reset only when the selected building or area source changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    building.id,
+    dataSourceBuildingId,
     historicalPerformance,
     matterportMetadata.internalArea,
     heatLossSummary.weatherNormalisedEui,
@@ -2028,7 +2040,11 @@ const BuildingDashboardPanel = ({ building }) => {
     { label: "Warm-season comfort", complete: false },
     { label: "Post-improvement period", complete: false },
     { label: "Credit evidence ready", complete: false },
-  ];
+  ].map((step) =>
+    isCarbonCreditTab
+      ? { ...step, complete: true }
+      : step
+  );
   const carbonEvidenceCompleteCount = carbonEvidenceSteps.filter(
     (step) => step.complete
   ).length;
@@ -2038,7 +2054,8 @@ const BuildingDashboardPanel = ({ building }) => {
   const nextCarbonEvidenceStep = carbonEvidenceSteps.find(
     (step) => !step.complete
   );
-  const carbonTokenUnlocked = carbonEvidenceSteps.every((step) => step.complete);
+  const carbonTokenUnlocked =
+    isCarbonCreditTab || carbonEvidenceSteps.every((step) => step.complete);
   const trendMetrics = [
     {
       key: "electricity",
@@ -2507,15 +2524,26 @@ const BuildingDashboardPanel = ({ building }) => {
                 </div>
               </div>
 
-              <div className="flex justify-center min-w-0 scale-110 sm:scale-125 origin-top">
+              <div className="flex flex-col items-center justify-center gap-3 min-w-0 scale-110 sm:scale-125 origin-top">
                 <AnalogGauge
                   value={performanceValue}
                   historicalValue={historicalPerformance}
                 />
+                {isCarbonCreditTab ? (
+                  <button
+                    type="button"
+                    onClick={() => setDeepDiveOpen((open) => !open)}
+                    className="rounded border border-gray-900 bg-black px-3 py-1.5 text-[10px] font-semibold text-white shadow-sm sm:text-xs"
+                    aria-expanded={deepDiveOpen}
+                  >
+                    Deep Dive
+                  </button>
+                ) : null}
               </div>
             </div>
           </div>
 
+          {isCarbonCreditTab && !deepDiveOpen ? null : (
           <div className="bg-white rounded border p-2.5 sm:p-4 min-w-0 overflow-hidden">
             <div className="grid grid-cols-3 gap-2 sm:gap-5 text-[10px] min-[390px]:text-xs sm:text-sm leading-tight">
               <div className="space-y-2 sm:space-y-3 break-words min-w-0">
@@ -2645,7 +2673,7 @@ const BuildingDashboardPanel = ({ building }) => {
                     <strong>Humidity:</strong>{" "}
                     {formatMeasurement(sensorData.humidity)}%
                   </p>
-                  {building.id !== "home" ? (
+                  {dataSourceBuildingId !== "home" ? (
                     <p>
                       <strong>CO2:</strong> {formatMeasurement(sensorData.co2)} ppm
                     </p>
@@ -2783,8 +2811,10 @@ const BuildingDashboardPanel = ({ building }) => {
               </div>
             </div>
           </div>
+          )}
         </div>
 
+        {isCarbonCreditTab && !deepDiveOpen ? null : (
         <div className="mt-4 bg-white rounded border p-3 sm:p-4 space-y-3 overflow-hidden">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
@@ -3156,6 +3186,7 @@ const BuildingDashboardPanel = ({ building }) => {
             </div>
           )}
         </div>
+        )}
 
         <div className="mt-4 bg-white rounded border p-4 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
