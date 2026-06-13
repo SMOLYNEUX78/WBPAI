@@ -1977,7 +1977,7 @@ const BuildingDashboardPanel = ({ building }) => {
         .from("CarbonSavingsDaily")
         .select("saving_date, saved_kgco2e, carbon_credits")
         .eq("building_id", dataSourceBuildingId)
-        .eq("scenario", "passivhaus-net-zero")
+        .eq("scenario", "enerphit-certified")
         .order("saving_date", { ascending: false })
         .limit(365);
 
@@ -2746,36 +2746,36 @@ const BuildingDashboardPanel = ({ building }) => {
           )
         )
       : null;
-  const passivhausPerformance = {
-    health: 96,
-    energy: 98,
-    value: 97,
+  const enerphitPerformance = {
+    health: 94,
+    energy: 92,
+    value: 93,
   };
   const isNewPerformanceDeepDive =
     isCarbonCreditTab && deepDivePanel === "new";
   const projectedPerformanceDeepDive = {
-    annualEui: 15,
-    electricityDailyAverage: 4.1,
+    annualEui: 25,
+    electricityDailyAverage: 6.8,
     gasDailyAverage: 0,
-    regulatedDailyKwh: 2.6,
-    unregulatedDailyKwh: 1.5,
-    regulatedEnergyShare: 63,
-    splitConfidence: "Projected all-electric net zero ready profile",
+    regulatedDailyKwh: 4.2,
+    unregulatedDailyKwh: 2.6,
+    regulatedEnergyShare: 62,
+    splitConfidence: "Projected EnerPHit certified all-electric retrofit profile",
     internalTemp: 20.5,
     externalTemp: sensorData.externalTemp,
     humidity: 45,
-    vocs: 20,
-    pm25: 1,
-    pm10: 3,
-    hcho: 2,
-    no2: 4,
-    weatherNormalisedEui: 15,
-    kwhPerHdd: 1.8,
-    htcEstimate: 88,
+    vocs: 25,
+    pm25: 2,
+    pm10: 5,
+    hcho: 3,
+    no2: 5,
+    weatherNormalisedEui: 25,
+    kwhPerHdd: 2.6,
+    htcEstimate: 125,
     hddDays: 365,
     htcSamples: 90,
-    hddSource: "Projected PHPP / retrofit model",
-    comfortNote: "20.5 deg C target internal temp / continuous comfort assumed",
+    hddSource: "Projected PHPP / EnerPHit retrofit model",
+    comfortNote: "20.5 deg C target internal temp / EnerPHit comfort assumed",
   };
   const displayedAnnualEui = isNewPerformanceDeepDive
     ? projectedPerformanceDeepDive.annualEui
@@ -2916,7 +2916,7 @@ const BuildingDashboardPanel = ({ building }) => {
         </div>
       </div>
       {isCarbonCreditTab && diveKey ? (
-        <div className="mt-3 flex flex-col items-start gap-2 border-t border-gray-100 pt-2">
+        <div className="mt-1.5 flex flex-col items-start gap-1.5 border-t border-gray-100 pt-1.5 sm:mt-3 sm:gap-2 sm:pt-2">
           {statusLabel ? (
             <span
               className={`whitespace-nowrap rounded border px-2 py-0.5 text-[8px] font-semibold uppercase tracking-wide ${
@@ -3050,12 +3050,12 @@ const BuildingDashboardPanel = ({ building }) => {
               })}
               {renderPerformanceCard({
                 title: "New Performance",
-                healthScore: passivhausPerformance.health,
-                energyScore: passivhausPerformance.energy,
-                gaugeValue: passivhausPerformance.value,
+                healthScore: enerphitPerformance.health,
+                energyScore: enerphitPerformance.energy,
+                gaugeValue: enerphitPerformance.value,
                 diveKey: "new",
                 tone: "primary",
-                statusLabel: "Passivhaus style",
+                statusLabel: "Enerphit Certified",
               })}
             </div>
           ) : (
@@ -3073,12 +3073,12 @@ const BuildingDashboardPanel = ({ building }) => {
               <div className="mb-3 border-b border-gray-100 pb-2 text-xs text-gray-600">
                 <h3 className="font-semibold text-gray-900">
                   {deepDivePanel === "new"
-                    ? "New Passivhaus Performance Deep Dive"
+                    ? "New EnerPHit Certified Performance Deep Dive"
                     : "Baseline Performance Deep Dive"}
                 </h3>
                 <p>
                   {deepDivePanel === "new"
-                    ? "Projected post-upgrade view using passivhaus-style comfort and energy performance."
+                    ? "Projected post-upgrade view using EnerPHit certified retrofit comfort and energy performance."
                     : "Measured current building view from the live Home data baseline."}
                 </p>
               </div>
@@ -3156,7 +3156,7 @@ const BuildingDashboardPanel = ({ building }) => {
                   {isNewPerformanceDeepDive ? (
                     <div className="pt-2 mt-2 border-t border-gray-200 space-y-1">
                       <p>
-                        <strong>Fabric:</strong> Passivhaus-style retrofit envelope
+                        <strong>Fabric:</strong> EnerPHit certified retrofit envelope
                       </p>
                       <p>
                         <strong>Heat Source:</strong> Heat pump + solar-ready electric load

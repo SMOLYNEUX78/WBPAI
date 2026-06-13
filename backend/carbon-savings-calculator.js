@@ -7,14 +7,16 @@ const SUPABASE_KEY = process.env.SUPABASE_KEY;
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const BUILDING_ID = process.env.CARBON_SAVINGS_BUILDING_ID || "home";
-const SCENARIO = process.env.CARBON_SAVINGS_SCENARIO || "passivhaus-net-zero";
+const SCENARIO = process.env.CARBON_SAVINGS_SCENARIO || "enerphit-certified";
 const INTERNAL_AREA_M2 = Number(process.env.CARBON_SAVINGS_AREA_M2 || 99.2);
-const PASSIVHAUS_EUI_KWH_M2_YEAR = Number(
-  process.env.PASSIVHAUS_EUI_KWH_M2_YEAR || 15
+const ENERPHIT_EUI_KWH_M2_YEAR = Number(
+  process.env.ENERPHIT_EUI_KWH_M2_YEAR ||
+    process.env.PASSIVHAUS_EUI_KWH_M2_YEAR ||
+    25
 );
 const IMPROVED_DAILY_ELECTRICITY_KWH = Number(
   process.env.IMPROVED_DAILY_ELECTRICITY_KWH ||
-    (INTERNAL_AREA_M2 * PASSIVHAUS_EUI_KWH_M2_YEAR) / 365
+    (INTERNAL_AREA_M2 * ENERPHIT_EUI_KWH_M2_YEAR) / 365
 );
 const ELECTRICITY_KGCO2E_PER_KWH = Number(
   process.env.ELECTRICITY_KGCO2E_PER_KWH || 0.20705
@@ -169,15 +171,15 @@ function buildCarbonSavingRows(dailyEnergy) {
         saved_kgco2e: savedKgCo2e,
         carbon_credits: savedKgCo2e / 1000,
         source: "carbon-savings-calculator",
-        calculation_version: "passivhaus-net-zero-v1",
+        calculation_version: "enerphit-certified-v1",
         raw_payload: {
           electricityKgCo2ePerKwh: ELECTRICITY_KGCO2E_PER_KWH,
           gasKgCo2ePerKwh: GAS_KGCO2E_PER_KWH,
           internalAreaM2: INTERNAL_AREA_M2,
-          passivhausEuiKwhM2Year: PASSIVHAUS_EUI_KWH_M2_YEAR,
+          enerphitEuiKwhM2Year: ENERPHIT_EUI_KWH_M2_YEAR,
           improvedDailyElectricityKwh: IMPROVED_DAILY_ELECTRICITY_KWH,
           note:
-            "Daily saving = measured baseline operational emissions - projected passivhaus/net-zero operational emissions.",
+            "Daily saving = measured baseline operational emissions - projected EnerPHit certified operational emissions.",
         },
       };
     })
