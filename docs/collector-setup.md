@@ -73,6 +73,30 @@ cd ~/WBPAI
 ./scripts/termux-start.sh
 ```
 
+## Termux:Boot restart after tablet reboot
+
+Install the separate `Termux:Boot` app from the same source as Termux, then
+open the Termux:Boot app once so Android grants it boot-start permission.
+
+After that, install the WBPAI boot launcher from Termux:
+
+```sh
+cd ~/WBPAI
+git pull origin main
+sh scripts/termux-install-boot.sh
+```
+
+Reboot the tablet, wait a minute, then check:
+
+```sh
+tmux ls
+tail -n 80 ~/WBPAI/logs/boot.log
+tail -n 80 ~/WBPAI/logs/collectors.log
+```
+
+The `wbpai` tmux session should exist and the collectors should resume without
+opening Termux manually.
+
 To configure the house tablet after the repo is already cloned and `backend/.env`
 already contains Supabase and Glow credentials:
 
