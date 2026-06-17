@@ -2548,6 +2548,147 @@ const BuildingDashboardPanel = ({ building }) => {
   );
   const carbonTokenUnlocked =
     isCarbonCreditTab || carbonEvidenceSteps.every((step) => step.complete);
+  const interventionDate = null;
+  const baselineStartDate =
+    weeklyTrendData
+      .map((point) => point?.timestamp)
+      .filter(Boolean)
+      .sort()[0] || null;
+  const evidencePackChecks = [
+    {
+      label: "Building identity",
+      detail: `${building.address || "Address pending"} / ${
+        building.latitude || "--"
+      }, ${building.longitude || "--"}`,
+      complete: Boolean(building.address && building.latitude && building.longitude),
+    },
+    {
+      label: "Internal area",
+      detail: hasConfirmedArea
+        ? `${matterportMetadata.internalArea} m2`
+        : "Matterport or measured GIA pending",
+      complete: hasConfirmedArea,
+    },
+    {
+      label: "Smart meter baseline",
+      detail: hasEnergyBaseline
+        ? `${formatNumber(historicalPerformance, 2)} kWh/day average`
+        : "Needs metered baseline period",
+      complete: hasEnergyBaseline,
+    },
+    {
+      label: "Weather normalisation",
+      detail: hasWeatherNormalisedBaseline
+        ? `${heatLossSummary.hddSource || "HDD"} calculation available`
+        : "Needs locked HDD method/source",
+      complete: hasWeatherNormalisedBaseline,
+    },
+    {
+      label: "Live IAQ evidence",
+      detail: hasLiveIaqFeed
+        ? `${roomIaqData.length || 1} active feed(s)`
+        : "Needs active IAQ feed",
+      complete: hasLiveIaqFeed,
+    },
+    {
+      label: "Collector provenance",
+      detail: "Collector instance and source columns captured in Supabase",
+      complete: true,
+    },
+    {
+      label: "Calculation version",
+      detail: "enerphit-certified-v1 / dashboard carbon v1",
+      complete: true,
+    },
+    {
+      label: "Baseline lock",
+      detail: baselineStartDate
+        ? `Candidate baseline data present`
+        : "Needs formal locked baseline dates",
+      complete: false,
+    },
+    {
+      label: "Intervention completion",
+      detail: interventionDate || "Needs retrofit completion date and evidence",
+      complete: Boolean(interventionDate),
+    },
+    {
+      label: "Ownership and consent",
+      detail: "Needs credit assignment and no-double-counting declaration",
+      complete: false,
+    },
+    {
+      label: "Verifier approval",
+      detail: "Needs validation/verification body review",
+      complete: false,
+    },
+  ];
+  const evidencePackCompleteCount = evidencePackChecks.filter(
+    (check) => check.complete
+  ).length;
+  const evidencePackScore = Math.round(
+    (evidencePackCompleteCount / evidencePackChecks.length) * 100
+  );
+  const missingEvidenceItems = evidencePackChecks.filter(
+    (check) => !check.complete
+  );
+  const auditReference = `WBP-${dataSourceBuildingId.toUpperCase()}-${new Date()
+    .toISOString()
+    .slice(0, 10)
+    .replaceAll("-", "")}-${evidencePackScore}`;
+  const exportEvidencePack = () => {
+    const evidencePack = {
+      auditReference,
+      exportedAt: new Date().toISOString(),
+      status: "candidate-mrv-evidence-pack",
+      building: {
+        id: building.id,
+        dataSourceId: dataSourceBuildingId,
+        name: building.name,
+        address: building.address,
+        latitude: building.latitude,
+        longitude: building.longitude,
+        internalAreaM2: matterportMetadata.internalArea,
+        matterportModelId,
+      },
+      baseline: {
+        historicalPerformanceKwhPerDay: historicalPerformance,
+        weatherNormalisedEui: heatLossSummary.weatherNormalisedEui,
+        kwhPerHdd: heatLossSummary.kwhPerHdd,
+        htcEstimate: heatLossSummary.htcEstimate,
+        hddSource: heatLossSummary.hddSource,
+      },
+      projectedPerformance: {
+        standard: "EnerPHit certified candidate scenario",
+        annualEui: projectedPerformanceDeepDive.annualEui,
+        electricityDailyAverage:
+          projectedPerformanceDeepDive.electricityDailyAverage,
+        gasDailyAverage: projectedPerformanceDeepDive.gasDailyAverage,
+      },
+      carbon: {
+        candidateCredits: carbonCredits,
+        savedKgCo2e: carbonIntervalSavingsSummary.totalSavedKgCo2e,
+        carbonValueGbp: intervalCarbonMarketValue,
+        carbonPriceGbpPerTonne: carbonMarketPrice.gbpPerTonne,
+        carbonPriceSource: carbonMarketPrice.source,
+      },
+      energy: {
+        savedKwh: carbonIntervalSavingsSummary.totalSavedKwh,
+        energyValueGbp: carbonIntervalSavingsSummary.energyCostSavedGbp,
+      },
+      checks: evidencePackChecks,
+      missingEvidence: missingEvidenceItems.map((item) => item.label),
+    };
+    const blob = new Blob([JSON.stringify(evidencePack, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${auditReference.toLowerCase()}-evidence-pack.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
   const intervalCarbonSavedTonnes = Number.isFinite(
     carbonIntervalSavingsSummary.totalSavedKgCo2e
   )
@@ -4089,6 +4230,103 @@ const BuildingDashboardPanel = ({ building }) => {
           </div>
         </div>
         )}
+
+        {isCarbonCreditTab ? (
+          <div className="mt-4 bg-white rounded border p-4 space-y-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 className="font-semibold">Audit Evidence Pack</h3>
+                <p className="text-xs text-gray-600">
+                  MRV rail readiness for verifier review and portfolio batching.
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-2xl font-bold">{evidencePackScore}%</p>
+                <p className="text-[10px] uppercase text-gray-500">
+                  Audit ready
+                </p>
+              </div>
+            </div>
+
+            <div className="h-3 overflow-hidden rounded bg-gray-200">
+              <div
+                className={`h-full transition-all ${
+                  evidencePackScore >= 80
+                    ? "bg-emerald-500"
+                    : evidencePackScore >= 50
+                    ? "bg-amber-500"
+                    : "bg-red-500"
+                }`}
+                style={{ width: `${evidencePackScore}%` }}
+              />
+            </div>
+
+            <div className="grid gap-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
+              <div className="rounded border border-gray-200 bg-gray-50 p-3">
+                <p className="uppercase text-gray-500">Audit ID</p>
+                <p className="mt-1 font-semibold text-gray-900">
+                  {auditReference}
+                </p>
+              </div>
+              <div className="rounded border border-gray-200 bg-gray-50 p-3">
+                <p className="uppercase text-gray-500">Baseline</p>
+                <p className="mt-1 font-semibold text-gray-900">
+                  {hasEnergyBaseline ? "Candidate data present" : "Pending"}
+                </p>
+              </div>
+              <div className="rounded border border-gray-200 bg-gray-50 p-3">
+                <p className="uppercase text-gray-500">Intervention</p>
+                <p className="mt-1 font-semibold text-gray-900">
+                  {interventionDate || "Not locked"}
+                </p>
+              </div>
+              <div className="rounded border border-gray-200 bg-gray-50 p-3">
+                <p className="uppercase text-gray-500">Verifier status</p>
+                <p className="mt-1 font-semibold text-gray-900">
+                  Pre-verification
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-2 text-xs sm:grid-cols-2 lg:grid-cols-3">
+              {evidencePackChecks.map((check) => (
+                <div
+                  key={check.label}
+                  className={`rounded border p-2 ${
+                    check.complete
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+                      : "border-amber-200 bg-amber-50 text-amber-900"
+                  }`}
+                >
+                  <p className="font-semibold">
+                    {check.complete ? "Ready" : "Needed"}: {check.label}
+                  </p>
+                  <p className="mt-1 text-[11px]">{check.detail}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex flex-wrap items-start justify-between gap-3 border-t pt-3">
+              <div className="text-xs text-gray-600">
+                <p className="font-semibold text-gray-800">
+                  Missing evidence
+                </p>
+                <p>
+                  {missingEvidenceItems.length
+                    ? missingEvidenceItems.map((item) => item.label).join(", ")
+                    : "No missing evidence flagged"}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="rounded border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-800 shadow-sm"
+                onClick={exportEvidencePack}
+              >
+                Export Evidence Pack
+              </button>
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <div className="bg-gray-100 p-4 rounded shadow">
