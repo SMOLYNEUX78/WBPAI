@@ -132,6 +132,7 @@ const BuildingDashboardPanel = ({ building }) => {
     useState(false);
   const [auditEvidenceDeepDiveOpen, setAuditEvidenceDeepDiveOpen] =
     useState(false);
+  const [activeMrvEvidenceField, setActiveMrvEvidenceField] = useState(null);
   const deepDiveOpen = Boolean(deepDivePanel);
 
   useEffect(() => {
@@ -252,7 +253,6 @@ const BuildingDashboardPanel = ({ building }) => {
     readCachedDashboardState(`${dataSourceBuildingId}:roomIaq`, [])
   );
   const supportsExtendedIaqColumns = useRef(true);
-  const mrvFormRefs = useRef({});
 
   const [performanceValue, setPerformanceValue] = useState(null);
   const [historicalPerformance, setHistoricalPerformance] = useState(() => {
@@ -2590,22 +2590,13 @@ const BuildingDashboardPanel = ({ building }) => {
   const verifierApprovalComplete =
     mrvEvidence.verifierStatus === "approved" &&
     Boolean(mrvEvidence.verifierName?.trim());
-  const focusMrvEvidenceField = (fieldKey) => {
+  const openMrvEvidenceModal = (fieldKey) => {
     if (!fieldKey) {
       return;
     }
 
     setAuditEvidenceDeepDiveOpen(true);
-    window.setTimeout(() => {
-      const target = mrvFormRefs.current[fieldKey];
-      if (!target) {
-        return;
-      }
-
-      target.scrollIntoView({ behavior: "smooth", block: "center" });
-      const focusTarget = target.querySelector("input, textarea, select");
-      focusTarget?.focus();
-    }, 0);
+    setActiveMrvEvidenceField(fieldKey);
   };
   const evidencePackChecks = [
     {
@@ -4464,7 +4455,7 @@ const BuildingDashboardPanel = ({ building }) => {
                       type={canCompleteInApp ? "button" : undefined}
                       onClick={
                         canCompleteInApp
-                          ? () => focusMrvEvidenceField(check.fieldKey)
+                          ? () => openMrvEvidenceModal(check.fieldKey)
                           : undefined
                       }
                       className={`rounded border p-2 text-left ${
@@ -4485,150 +4476,6 @@ const BuildingDashboardPanel = ({ building }) => {
                     </TileElement>
                     );
                   })}
-                </div>
-
-                <div className="grid gap-3 text-xs sm:grid-cols-2">
-                  <label
-                    className="space-y-1"
-                    ref={(element) => {
-                      mrvFormRefs.current.baseline = element;
-                    }}
-                  >
-                    <span className="font-semibold text-gray-700">
-                      Baseline start
-                    </span>
-                    <input
-                      type="date"
-                      value={mrvEvidence.baselineStartDate}
-                      onChange={(event) =>
-                        updateMrvEvidence({
-                          baselineStartDate: event.target.value,
-                        })
-                      }
-                      className="w-full rounded border border-gray-300 px-2 py-2"
-                    />
-                  </label>
-                  <label className="space-y-1">
-                    <span className="font-semibold text-gray-700">
-                      Baseline end
-                    </span>
-                    <input
-                      type="date"
-                      value={mrvEvidence.baselineEndDate}
-                      onChange={(event) =>
-                        updateMrvEvidence({
-                          baselineEndDate: event.target.value,
-                        })
-                      }
-                      className="w-full rounded border border-gray-300 px-2 py-2"
-                    />
-                  </label>
-                  <label className="flex items-center gap-2 rounded border border-gray-200 bg-white p-2 sm:col-span-2">
-                    <input
-                      type="checkbox"
-                      checked={mrvEvidence.baselineLocked}
-                      onChange={(event) =>
-                        updateMrvEvidence({
-                          baselineLocked: event.target.checked,
-                        })
-                      }
-                    />
-                    <span className="font-semibold text-gray-700">
-                      Lock this baseline period for crediting
-                    </span>
-                  </label>
-                  <label
-                    className="space-y-1"
-                    ref={(element) => {
-                      mrvFormRefs.current.intervention = element;
-                    }}
-                  >
-                    <span className="font-semibold text-gray-700">
-                      Intervention completion date
-                    </span>
-                    <input
-                      type="date"
-                      value={mrvEvidence.interventionDate}
-                      onChange={(event) =>
-                        updateMrvEvidence({
-                          interventionDate: event.target.value,
-                        })
-                      }
-                      className="w-full rounded border border-gray-300 px-2 py-2"
-                    />
-                  </label>
-                  <label
-                    className="space-y-1"
-                    ref={(element) => {
-                      mrvFormRefs.current.verifier = element;
-                    }}
-                  >
-                    <span className="font-semibold text-gray-700">
-                      Verifier
-                    </span>
-                    <input
-                      type="text"
-                      value={mrvEvidence.verifierName}
-                      onChange={(event) =>
-                        updateMrvEvidence({ verifierName: event.target.value })
-                      }
-                      placeholder="e.g. DNV, TÜV, Bureau Veritas"
-                      className="w-full rounded border border-gray-300 px-2 py-2"
-                    />
-                  </label>
-                  <label className="space-y-1 sm:col-span-2">
-                    <span className="font-semibold text-gray-700">
-                      Intervention evidence
-                    </span>
-                    <textarea
-                      value={mrvEvidence.interventionEvidence}
-                      onChange={(event) =>
-                        updateMrvEvidence({
-                          interventionEvidence: event.target.value,
-                        })
-                      }
-                      placeholder="Installer, measures completed, certificate or invoice reference"
-                      className="min-h-20 w-full rounded border border-gray-300 px-2 py-2"
-                    />
-                  </label>
-                  <label className="space-y-1">
-                    <span className="font-semibold text-gray-700">
-                      Verifier status
-                    </span>
-                    <select
-                      value={mrvEvidence.verifierStatus}
-                      onChange={(event) =>
-                        updateMrvEvidence({
-                          verifierStatus: event.target.value,
-                        })
-                      }
-                      className="w-full rounded border border-gray-300 px-2 py-2"
-                    >
-                      <option value="pre-verification">Pre-verification</option>
-                      <option value="pre-assessment">Pre-assessment</option>
-                      <option value="submitted">Submitted</option>
-                      <option value="approved">Approved</option>
-                    </select>
-                  </label>
-                  <label
-                    className="flex items-center gap-2 rounded border border-gray-200 bg-white p-2"
-                    ref={(element) => {
-                      mrvFormRefs.current.ownership = element;
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={mrvEvidence.ownershipConsent}
-                      onChange={(event) =>
-                        updateMrvEvidence({
-                          ownershipConsent: event.target.checked,
-                        })
-                      }
-                    />
-                    <span className="font-semibold text-gray-700">
-                      Credit assignment and no-double-counting declaration
-                    </span>
-                  </label>
                 </div>
 
                 <div className="flex flex-wrap items-start justify-between gap-3 border-t pt-3">
@@ -4792,6 +4639,194 @@ const BuildingDashboardPanel = ({ building }) => {
           ) : null}
         </div>
       </div>
+
+      {activeMrvEvidenceField ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded bg-white p-5 shadow-xl">
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-bold">
+                  {activeMrvEvidenceField === "baseline"
+                    ? "Complete Baseline Lock"
+                    : activeMrvEvidenceField === "intervention"
+                    ? "Complete Intervention Evidence"
+                    : activeMrvEvidenceField === "ownership"
+                    ? "Complete Ownership Declaration"
+                    : "Complete Verifier Approval"}
+                </h3>
+                <p className="text-sm text-gray-600">
+                  This evidence is saved to this building's MRV pack.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="rounded border border-gray-300 px-2 py-1 text-sm font-semibold"
+                onClick={() => setActiveMrvEvidenceField(null)}
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="space-y-4 text-sm">
+              {activeMrvEvidenceField === "baseline" ? (
+                <>
+                  <label className="block space-y-1">
+                    <span className="font-semibold text-gray-700">
+                      Baseline start
+                    </span>
+                    <input
+                      type="date"
+                      value={mrvEvidence.baselineStartDate}
+                      onChange={(event) =>
+                        updateMrvEvidence({
+                          baselineStartDate: event.target.value,
+                        })
+                      }
+                      className="w-full rounded border border-gray-300 px-3 py-2"
+                    />
+                  </label>
+                  <label className="block space-y-1">
+                    <span className="font-semibold text-gray-700">
+                      Baseline end
+                    </span>
+                    <input
+                      type="date"
+                      value={mrvEvidence.baselineEndDate}
+                      onChange={(event) =>
+                        updateMrvEvidence({
+                          baselineEndDate: event.target.value,
+                        })
+                      }
+                      className="w-full rounded border border-gray-300 px-3 py-2"
+                    />
+                  </label>
+                  <label className="flex items-center gap-2 rounded border border-gray-200 bg-gray-50 p-3">
+                    <input
+                      type="checkbox"
+                      checked={mrvEvidence.baselineLocked}
+                      onChange={(event) =>
+                        updateMrvEvidence({
+                          baselineLocked: event.target.checked,
+                        })
+                      }
+                    />
+                    <span className="font-semibold text-gray-700">
+                      Lock this baseline period for crediting
+                    </span>
+                  </label>
+                </>
+              ) : null}
+
+              {activeMrvEvidenceField === "intervention" ? (
+                <>
+                  <label className="block space-y-1">
+                    <span className="font-semibold text-gray-700">
+                      Intervention completion date
+                    </span>
+                    <input
+                      type="date"
+                      value={mrvEvidence.interventionDate}
+                      onChange={(event) =>
+                        updateMrvEvidence({
+                          interventionDate: event.target.value,
+                        })
+                      }
+                      className="w-full rounded border border-gray-300 px-3 py-2"
+                    />
+                  </label>
+                  <label className="block space-y-1">
+                    <span className="font-semibold text-gray-700">
+                      Intervention evidence
+                    </span>
+                    <textarea
+                      value={mrvEvidence.interventionEvidence}
+                      onChange={(event) =>
+                        updateMrvEvidence({
+                          interventionEvidence: event.target.value,
+                        })
+                      }
+                      placeholder="Installer, measures completed, certificate or invoice reference"
+                      className="min-h-28 w-full rounded border border-gray-300 px-3 py-2"
+                    />
+                  </label>
+                </>
+              ) : null}
+
+              {activeMrvEvidenceField === "ownership" ? (
+                <label className="flex items-start gap-2 rounded border border-gray-200 bg-gray-50 p-3">
+                  <input
+                    type="checkbox"
+                    checked={mrvEvidence.ownershipConsent}
+                    onChange={(event) =>
+                      updateMrvEvidence({
+                        ownershipConsent: event.target.checked,
+                      })
+                    }
+                    className="mt-1"
+                  />
+                  <span>
+                    <span className="block font-semibold text-gray-700">
+                      Credit assignment and no-double-counting declaration
+                    </span>
+                    <span className="text-xs text-gray-600">
+                      Confirms the carbon saving claim will not be sold or
+                      assigned through another registry or programme.
+                    </span>
+                  </span>
+                </label>
+              ) : null}
+
+              {activeMrvEvidenceField === "verifier" ? (
+                <>
+                  <label className="block space-y-1">
+                    <span className="font-semibold text-gray-700">
+                      Verifier
+                    </span>
+                    <input
+                      type="text"
+                      value={mrvEvidence.verifierName}
+                      onChange={(event) =>
+                        updateMrvEvidence({ verifierName: event.target.value })
+                      }
+                      placeholder="e.g. DNV, TUV, Bureau Veritas"
+                      className="w-full rounded border border-gray-300 px-3 py-2"
+                    />
+                  </label>
+                  <label className="block space-y-1">
+                    <span className="font-semibold text-gray-700">
+                      Verifier status
+                    </span>
+                    <select
+                      value={mrvEvidence.verifierStatus}
+                      onChange={(event) =>
+                        updateMrvEvidence({
+                          verifierStatus: event.target.value,
+                        })
+                      }
+                      className="w-full rounded border border-gray-300 px-3 py-2"
+                    >
+                      <option value="pre-verification">Pre-verification</option>
+                      <option value="pre-assessment">Pre-assessment</option>
+                      <option value="submitted">Submitted</option>
+                      <option value="approved">Approved</option>
+                    </select>
+                  </label>
+                </>
+              ) : null}
+            </div>
+
+            <div className="mt-5 flex justify-end">
+              <button
+                type="button"
+                className="rounded bg-black px-4 py-2 text-sm font-semibold text-white"
+                onClick={() => setActiveMrvEvidenceField(null)}
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 };
