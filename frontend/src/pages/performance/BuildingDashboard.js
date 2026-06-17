@@ -128,6 +128,8 @@ const BuildingDashboardPanel = ({ building }) => {
   const isCarbonCreditTab = building.id === "cc";
   const [deepDivePanel, setDeepDivePanel] = useState(null);
   const [standardDeepDiveOpen, setStandardDeepDiveOpen] = useState(true);
+  const [carbonCreditDeepDiveOpen, setCarbonCreditDeepDiveOpen] =
+    useState(false);
   const deepDiveOpen = Boolean(deepDivePanel);
 
   useEffect(() => {
@@ -2546,16 +2548,6 @@ const BuildingDashboardPanel = ({ building }) => {
   );
   const carbonTokenUnlocked =
     isCarbonCreditTab || carbonEvidenceSteps.every((step) => step.complete);
-  const carbonSavedTonnes = Number.isFinite(
-    carbonSavingsSummary.totalSavedKgCo2e
-  )
-    ? carbonSavingsSummary.totalSavedKgCo2e / 1000
-    : null;
-  const carbonMarketValue =
-    Number.isFinite(carbonSavedTonnes) &&
-    Number.isFinite(carbonMarketPrice.gbpPerTonne)
-      ? carbonSavedTonnes * carbonMarketPrice.gbpPerTonne
-      : null;
   const intervalCarbonSavedTonnes = Number.isFinite(
     carbonIntervalSavingsSummary.totalSavedKgCo2e
   )
@@ -2962,6 +2954,113 @@ const BuildingDashboardPanel = ({ building }) => {
     hddSource: "Projected PHPP / EnerPHit retrofit model",
     comfortNote: "20.5 deg C target internal temp / EnerPHit comfort assumed",
   };
+  const carbonProjectionMonths = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+  ];
+  const baselineMonthlyFactors = [
+    1.42,
+    1.28,
+    1.12,
+    0.92,
+    0.78,
+    0.68,
+    0.64,
+    0.66,
+    0.78,
+    0.96,
+    1.16,
+    1.4,
+  ];
+  const enerphitMonthlyFactors = [
+    1.12,
+    1.08,
+    1.03,
+    0.98,
+    0.94,
+    0.9,
+    0.88,
+    0.9,
+    0.94,
+    0.99,
+    1.05,
+    1.11,
+  ];
+  const baselineDailyKwhForCarbonProjection = Number.isFinite(
+    energySummary.totalDailyAverage
+  )
+    ? energySummary.totalDailyAverage
+    : Number.isFinite(historicalPerformance)
+    ? historicalPerformance
+    : null;
+  const enerphitDailyKwhForCarbonProjection =
+    projectedPerformanceDeepDive.electricityDailyAverage +
+    projectedPerformanceDeepDive.gasDailyAverage;
+  const carbonProjectionData = carbonProjectionMonths.map((month, index) => ({
+    month,
+    baseline: Number.isFinite(baselineDailyKwhForCarbonProjection)
+      ? baselineDailyKwhForCarbonProjection * 30.4 * baselineMonthlyFactors[index]
+      : null,
+    newPerformance:
+      enerphitDailyKwhForCarbonProjection *
+      30.4 *
+      enerphitMonthlyFactors[index],
+  }));
+  const carbonProjectionValues = carbonProjectionData
+    .flatMap((point) => [point.baseline, point.newPerformance])
+    .filter((value) => Number.isFinite(value));
+  const carbonProjectionChart = {
+    width: 640,
+    height: 210,
+    padding: { top: 18, right: 18, bottom: 34, left: 44 },
+  };
+  carbonProjectionChart.plotWidth =
+    carbonProjectionChart.width -
+    carbonProjectionChart.padding.left -
+    carbonProjectionChart.padding.right;
+  carbonProjectionChart.plotHeight =
+    carbonProjectionChart.height -
+    carbonProjectionChart.padding.top -
+    carbonProjectionChart.padding.bottom;
+  const carbonProjectionMax = carbonProjectionValues.length
+    ? Math.max(...carbonProjectionValues) * 1.12
+    : 1;
+  const carbonProjectionPoint = (value, index) => {
+    if (!Number.isFinite(value)) {
+      return null;
+    }
+
+    const x =
+      carbonProjectionChart.padding.left +
+      (index / (carbonProjectionData.length - 1)) *
+        carbonProjectionChart.plotWidth;
+    const y =
+      carbonProjectionChart.padding.top +
+      (1 - value / carbonProjectionMax) *
+        carbonProjectionChart.plotHeight;
+    return { x, y };
+  };
+  const carbonProjectionPath = (key) =>
+    carbonProjectionData
+      .map((point, index) => carbonProjectionPoint(point[key], index))
+      .filter(Boolean)
+      .map(
+        (point, index) =>
+          `${index === 0 ? "M" : "L"} ${point.x.toFixed(1)} ${point.y.toFixed(
+            1
+          )}`
+      )
+      .join(" ");
   const displayedAnnualEui = isNewPerformanceDeepDive
     ? projectedPerformanceDeepDive.annualEui
     : Number.isFinite(historicalPerformance) &&
@@ -3996,14 +4095,11 @@ const BuildingDashboardPanel = ({ building }) => {
         <h2 className="text-lg font-bold mb-3">WBP Carbon Credit</h2>
 
         <div
-          className={`bg-white rounded border p-4 space-y-3 transition-opacity ${
+          className={`bg-white rounded border p-4 space-y-4 transition-opacity ${
             carbonTokenUnlocked ? "opacity-100" : "opacity-45"
           }`}
         >
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <p>
-              <strong>{formatNumber(carbonCredits, 4)}</strong> WBP-C
-            </p>
             <span
               className={`rounded border px-2 py-1 text-xs font-semibold ${
                 carbonTokenUnlocked
@@ -4013,102 +4109,190 @@ const BuildingDashboardPanel = ({ building }) => {
             >
               {carbonTokenUnlocked ? "Unlocked" : "Locked"}
             </span>
+            <button
+              type="button"
+              className="text-sm font-semibold underline text-gray-700"
+              onClick={() =>
+                setCarbonCreditDeepDiveOpen((isOpen) => !isOpen)
+              }
+            >
+              {carbonCreditDeepDiveOpen ? "Hide deep dive" : "Deep Dive"}
+            </button>
           </div>
 
-          <div className="grid gap-2 text-xs text-gray-600 sm:grid-cols-2">
-            <p>
-              <strong>Half-hour awarded:</strong>{" "}
-              {Number.isFinite(carbonIntervalSavingsSummary.totalSavedKgCo2e)
-                ? `${formatNumber(
-                    carbonIntervalSavingsSummary.totalSavedKgCo2e,
-                    2
-                  )} kgCO2e`
-                : "Pending calculation"}
-            </p>
-            <p>
-              <strong>Carbon value:</strong>{" "}
-              {Number.isFinite(intervalCarbonMarketValue)
-                ? formatCurrency(intervalCarbonMarketValue)
-                : "Pending price"}
-            </p>
-            <p>
-              <strong>Energy saved:</strong>{" "}
-              {Number.isFinite(carbonIntervalSavingsSummary.totalSavedKwh)
-                ? `${formatNumber(
-                    carbonIntervalSavingsSummary.totalSavedKwh,
-                    2
-                  )} kWh`
-                : "Pending calculation"}
-            </p>
-            <p>
-              <strong>Energy value:</strong>{" "}
-              {Number.isFinite(carbonIntervalSavingsSummary.energyCostSavedGbp)
-                ? formatCurrency(carbonIntervalSavingsSummary.energyCostSavedGbp)
-                : "Pending calculation"}
-            </p>
-            <p>
-              <strong>Daily model saved:</strong>{" "}
-              {Number.isFinite(carbonSavingsSummary.totalSavedKgCo2e)
-                ? `${formatNumber(carbonSavingsSummary.totalSavedKgCo2e, 2)} kgCO2e`
-                : "Pending calculation"}
-            </p>
-            <p>
-              <strong>Daily model value:</strong>{" "}
-              {Number.isFinite(carbonMarketValue)
-                ? formatCurrency(carbonMarketValue)
-                : "Pending price"}
-            </p>
-            <p>
-              <strong>Carbon price:</strong>{" "}
-              {Number.isFinite(carbonMarketPrice.gbpPerTonne)
-                ? `${formatCurrency(carbonMarketPrice.gbpPerTonne)}/tCO2e`
-                : "Pending"}
-              <br />
-              <span className="text-[10px] text-gray-500">
-                {carbonMarketPrice.live ? "Live" : "Fallback"} -{" "}
-                {carbonMarketPrice.source}
-              </span>
-            </p>
-            <p>
-              <strong>Latest half-hour:</strong>{" "}
-              {carbonIntervalSavingsSummary.latestTimestamp &&
-              Number.isFinite(carbonIntervalSavingsSummary.latestSavedKgCo2e)
-                ? `${new Date(
-                    carbonIntervalSavingsSummary.latestTimestamp
-                  ).toLocaleString("en-GB", {
-                    day: "2-digit",
-                    month: "short",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}: ${formatNumber(
-                    carbonIntervalSavingsSummary.latestSavedKgCo2e,
-                    3
-                  )} kgCO2e`
-                : "Pending calculation"}
-            </p>
-            <p>
-              <strong>Latest day:</strong>{" "}
-              {carbonSavingsSummary.latestDate &&
-              Number.isFinite(carbonSavingsSummary.latestSavedKgCo2e)
-                ? `${carbonSavingsSummary.latestDate}: ${formatNumber(
-                    carbonSavingsSummary.latestSavedKgCo2e,
-                    2
-                  )} kgCO2e`
-                : "Pending calculation"}
-            </p>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <p className="text-xs uppercase text-gray-500">Credits</p>
+              <p className="text-3xl font-bold leading-tight">
+                {formatNumber(carbonCredits, 4)}
+              </p>
+              <p className="text-sm font-semibold text-gray-700">WBP-C</p>
+              <p className="mt-2 text-sm text-gray-600">
+                <strong>Value:</strong>{" "}
+                {Number.isFinite(intervalCarbonMarketValue)
+                  ? formatCurrency(intervalCarbonMarketValue)
+                  : "Pending price"}
+              </p>
+            </div>
+
+            <div className="border-l pl-4">
+              <p className="text-xs uppercase text-gray-500">Energy saved</p>
+              <p className="text-2xl font-bold leading-tight">
+                {Number.isFinite(carbonIntervalSavingsSummary.totalSavedKwh)
+                  ? formatNumber(
+                      carbonIntervalSavingsSummary.totalSavedKwh,
+                      1
+                    )
+                  : "--"}
+              </p>
+              <p className="text-sm font-semibold text-gray-700">kWh</p>
+              <p className="mt-2 text-sm text-gray-600">
+                <strong>Value:</strong>{" "}
+                {Number.isFinite(
+                  carbonIntervalSavingsSummary.energyCostSavedGbp
+                )
+                  ? formatCurrency(
+                      carbonIntervalSavingsSummary.energyCostSavedGbp
+                    )
+                  : "Pending calculation"}
+              </p>
+            </div>
           </div>
 
-          <button
-            type="button"
-            disabled={!carbonTokenUnlocked}
-            className={`px-4 py-2 w-36 rounded text-white ${
-              carbonTokenUnlocked
-                ? "bg-red-500"
-                : "bg-gray-400 cursor-not-allowed"
-            }`}
-          >
-            SELL CREDITS
-          </button>
+          {carbonCreditDeepDiveOpen ? (
+            <div className="space-y-4 border-t pt-4">
+              <div className="grid gap-2 text-xs text-gray-600 sm:grid-cols-2">
+                <p>
+                  <strong>Carbon price:</strong>{" "}
+                  {Number.isFinite(carbonMarketPrice.gbpPerTonne)
+                    ? `${formatCurrency(carbonMarketPrice.gbpPerTonne)}/tCO2e`
+                    : "Pending"}
+                  <br />
+                  <span className="text-[10px] text-gray-500">
+                    {carbonMarketPrice.live ? "Live" : "Fallback"} -{" "}
+                    {carbonMarketPrice.source}
+                  </span>
+                </p>
+                <p>
+                  <strong>Carbon saved:</strong>{" "}
+                  {Number.isFinite(
+                    carbonIntervalSavingsSummary.totalSavedKgCo2e
+                  )
+                    ? `${formatNumber(
+                        carbonIntervalSavingsSummary.totalSavedKgCo2e,
+                        2
+                      )} kgCO2e`
+                    : "Pending calculation"}
+                </p>
+                <p>
+                  <strong>Daily evidence model:</strong>{" "}
+                  {Number.isFinite(carbonSavingsSummary.totalSavedKgCo2e)
+                    ? `${formatNumber(
+                        carbonSavingsSummary.totalSavedKgCo2e,
+                        2
+                      )} kgCO2e`
+                    : "Pending calculation"}
+                </p>
+                <p>
+                  <strong>Latest half-hour:</strong>{" "}
+                  {carbonIntervalSavingsSummary.latestTimestamp &&
+                  Number.isFinite(
+                    carbonIntervalSavingsSummary.latestSavedKgCo2e
+                  )
+                    ? `${new Date(
+                        carbonIntervalSavingsSummary.latestTimestamp
+                      ).toLocaleString("en-GB", {
+                        day: "2-digit",
+                        month: "short",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}: ${formatNumber(
+                        carbonIntervalSavingsSummary.latestSavedKgCo2e,
+                        3
+                      )} kgCO2e`
+                    : "Pending calculation"}
+                </p>
+              </div>
+
+              <div>
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="text-sm font-semibold">
+                    Yearly Performance Projection
+                  </h3>
+                  <div className="flex gap-3 text-xs text-gray-600">
+                    <span>
+                      <span className="inline-block h-2 w-4 rounded bg-gray-300 align-middle" />{" "}
+                      Baseline
+                    </span>
+                    <span>
+                      <span className="inline-block h-2 w-4 rounded bg-emerald-500 align-middle" />{" "}
+                      EnerPHit
+                    </span>
+                  </div>
+                </div>
+                <svg
+                  viewBox={`0 0 ${carbonProjectionChart.width} ${carbonProjectionChart.height}`}
+                  className="h-52 w-full"
+                  role="img"
+                  aria-label="Baseline and EnerPHit yearly performance projection"
+                >
+                  {[0, 0.5, 1].map((tick) => {
+                    const y =
+                      carbonProjectionChart.padding.top +
+                      tick * carbonProjectionChart.plotHeight;
+                    return (
+                      <line
+                        key={tick}
+                        x1={carbonProjectionChart.padding.left}
+                        x2={
+                          carbonProjectionChart.width -
+                          carbonProjectionChart.padding.right
+                        }
+                        y1={y}
+                        y2={y}
+                        stroke="#e5e7eb"
+                      />
+                    );
+                  })}
+                  <path
+                    d={carbonProjectionPath("baseline")}
+                    fill="none"
+                    stroke="#9ca3af"
+                    strokeWidth="4"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    opacity="0.45"
+                  />
+                  <path
+                    d={carbonProjectionPath("newPerformance")}
+                    fill="none"
+                    stroke="#10b981"
+                    strokeWidth="4"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  {carbonProjectionData.map((point, index) => {
+                    const x =
+                      carbonProjectionChart.padding.left +
+                      (index / (carbonProjectionData.length - 1)) *
+                        carbonProjectionChart.plotWidth;
+                    return (
+                      <text
+                        key={point.month}
+                        x={x}
+                        y={carbonProjectionChart.height - 10}
+                        textAnchor="middle"
+                        fontSize="11"
+                        fill="#6b7280"
+                      >
+                        {point.month}
+                      </text>
+                    );
+                  })}
+                </svg>
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
     </div>
