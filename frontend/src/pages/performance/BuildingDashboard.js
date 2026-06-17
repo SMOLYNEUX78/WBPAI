@@ -130,6 +130,8 @@ const BuildingDashboardPanel = ({ building }) => {
   const [standardDeepDiveOpen, setStandardDeepDiveOpen] = useState(true);
   const [carbonCreditDeepDiveOpen, setCarbonCreditDeepDiveOpen] =
     useState(false);
+  const [auditEvidenceDeepDiveOpen, setAuditEvidenceDeepDiveOpen] =
+    useState(false);
   const deepDiveOpen = Boolean(deepDivePanel);
 
   useEffect(() => {
@@ -211,6 +213,16 @@ const BuildingDashboardPanel = ({ building }) => {
     energyCostSavedGbp: null,
     carbonCredits: null,
   };
+  const defaultMrvEvidence = {
+    baselineStartDate: "",
+    baselineEndDate: "",
+    baselineLocked: false,
+    interventionDate: "",
+    interventionEvidence: "",
+    ownershipConsent: false,
+    verifierName: "",
+    verifierStatus: "pre-verification",
+  };
   const readCachedEnergySummary = () =>
     readCachedDashboardState(
       `${dataSourceBuildingId}:energySummary`,
@@ -228,6 +240,11 @@ const BuildingDashboardPanel = ({ building }) => {
     );
   const readCachedWeeklyTrendData = () =>
     readCachedDashboardState(`${dataSourceBuildingId}:weeklyTrendData`, []);
+  const readCachedMrvEvidence = () =>
+    readCachedDashboardState(
+      `${dataSourceBuildingId}:mrvEvidence`,
+      defaultMrvEvidence
+    );
   const [sensorData, setSensorData] = useState(() =>
     readCachedDashboardState(`${dataSourceBuildingId}:latestIaq`, defaultSensorData)
   );
@@ -261,6 +278,7 @@ const BuildingDashboardPanel = ({ building }) => {
     updatedAt: null,
     live: false,
   });
+  const [mrvEvidence, setMrvEvidence] = useState(readCachedMrvEvidence);
   const [energySummary, setEnergySummary] = useState(readCachedEnergySummary);
 
   const [performanceBreakdown, setPerformanceBreakdown] = useState({
@@ -911,6 +929,16 @@ const BuildingDashboardPanel = ({ building }) => {
       `${dataSourceBuildingId}:weeklyTrendData`,
       JSON.stringify(nextWeeklyTrendData)
     );
+  };
+  const updateMrvEvidence = (updates) => {
+    setMrvEvidence((currentEvidence) => {
+      const nextEvidence = { ...currentEvidence, ...updates };
+      localStorage.setItem(
+        `${dataSourceBuildingId}:mrvEvidence`,
+        JSON.stringify(nextEvidence)
+      );
+      return nextEvidence;
+    });
   };
 
   const fetchLongTermAverage = async () => {
@@ -2329,6 +2357,7 @@ const BuildingDashboardPanel = ({ building }) => {
         : 0
     );
     setWeeklyTrendData(readCachedWeeklyTrendData());
+    setMrvEvidence(readCachedMrvEvidence());
     fetchLongTermAverage();
     fetchHeatLossSummary();
     fetchExternalTemp();
@@ -2548,12 +2577,18 @@ const BuildingDashboardPanel = ({ building }) => {
   );
   const carbonTokenUnlocked =
     isCarbonCreditTab || carbonEvidenceSteps.every((step) => step.complete);
-  const interventionDate = null;
-  const baselineStartDate =
-    weeklyTrendData
-      .map((point) => point?.timestamp)
-      .filter(Boolean)
-      .sort()[0] || null;
+  const baselineLockComplete = Boolean(
+    mrvEvidence.baselineLocked &&
+      mrvEvidence.baselineStartDate &&
+      mrvEvidence.baselineEndDate
+  );
+  const interventionComplete = Boolean(
+    mrvEvidence.interventionDate && mrvEvidence.interventionEvidence?.trim()
+  );
+  const ownershipConsentComplete = Boolean(mrvEvidence.ownershipConsent);
+  const verifierApprovalComplete =
+    mrvEvidence.verifierStatus === "approved" &&
+    Boolean(mrvEvidence.verifierName?.trim());
   const evidencePackChecks = [
     {
       label: "Building identity",
@@ -2602,25 +2637,31 @@ const BuildingDashboardPanel = ({ building }) => {
     },
     {
       label: "Baseline lock",
-      detail: baselineStartDate
-        ? `Candidate baseline data present`
+      detail: baselineLockComplete
+        ? `${mrvEvidence.baselineStartDate} to ${mrvEvidence.baselineEndDate}`
         : "Needs formal locked baseline dates",
-      complete: false,
+      complete: baselineLockComplete,
     },
     {
       label: "Intervention completion",
-      detail: interventionDate || "Needs retrofit completion date and evidence",
-      complete: Boolean(interventionDate),
+      detail: interventionComplete
+        ? `${mrvEvidence.interventionDate}: ${mrvEvidence.interventionEvidence}`
+        : "Needs retrofit completion date and evidence",
+      complete: interventionComplete,
     },
     {
       label: "Ownership and consent",
-      detail: "Needs credit assignment and no-double-counting declaration",
-      complete: false,
+      detail: ownershipConsentComplete
+        ? "Credit assignment and no-double-counting declaration captured"
+        : "Needs credit assignment and no-double-counting declaration",
+      complete: ownershipConsentComplete,
     },
     {
       label: "Verifier approval",
-      detail: "Needs validation/verification body review",
-      complete: false,
+      detail: verifierApprovalComplete
+        ? `${mrvEvidence.verifierName} approved`
+        : "Needs validation/verification body review",
+      complete: verifierApprovalComplete,
     },
   ];
   const evidencePackCompleteCount = evidencePackChecks.filter(
@@ -2652,6 +2693,9 @@ const BuildingDashboardPanel = ({ building }) => {
         matterportModelId,
       },
       baseline: {
+        locked: baselineLockComplete,
+        startDate: mrvEvidence.baselineStartDate,
+        endDate: mrvEvidence.baselineEndDate,
         historicalPerformanceKwhPerDay: historicalPerformance,
         weatherNormalisedEui: heatLossSummary.weatherNormalisedEui,
         kwhPerHdd: heatLossSummary.kwhPerHdd,
@@ -2664,6 +2708,18 @@ const BuildingDashboardPanel = ({ building }) => {
         electricityDailyAverage:
           projectedPerformanceDeepDive.electricityDailyAverage,
         gasDailyAverage: projectedPerformanceDeepDive.gasDailyAverage,
+      },
+      intervention: {
+        completionDate: mrvEvidence.interventionDate,
+        evidence: mrvEvidence.interventionEvidence,
+      },
+      declarations: {
+        ownershipConsent: mrvEvidence.ownershipConsent,
+        noDoubleCounting: mrvEvidence.ownershipConsent,
+      },
+      verifier: {
+        name: mrvEvidence.verifierName,
+        status: mrvEvidence.verifierStatus,
       },
       carbon: {
         candidateCredits: carbonCredits,
@@ -3813,7 +3869,7 @@ const BuildingDashboardPanel = ({ building }) => {
           )}
         </div>
 
-        {!shouldShowDeepDive ? null : (
+        {!shouldShowDeepDive || isCarbonCreditTab ? null : (
         <div className="mt-4 bg-white rounded border p-3 sm:p-4 space-y-3 overflow-hidden">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
@@ -4230,103 +4286,6 @@ const BuildingDashboardPanel = ({ building }) => {
           </div>
         </div>
         )}
-
-        {isCarbonCreditTab ? (
-          <div className="mt-4 bg-white rounded border p-4 space-y-4">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h3 className="font-semibold">Audit Evidence Pack</h3>
-                <p className="text-xs text-gray-600">
-                  MRV rail readiness for verifier review and portfolio batching.
-                </p>
-              </div>
-              <div className="text-right">
-                <p className="text-2xl font-bold">{evidencePackScore}%</p>
-                <p className="text-[10px] uppercase text-gray-500">
-                  Audit ready
-                </p>
-              </div>
-            </div>
-
-            <div className="h-3 overflow-hidden rounded bg-gray-200">
-              <div
-                className={`h-full transition-all ${
-                  evidencePackScore >= 80
-                    ? "bg-emerald-500"
-                    : evidencePackScore >= 50
-                    ? "bg-amber-500"
-                    : "bg-red-500"
-                }`}
-                style={{ width: `${evidencePackScore}%` }}
-              />
-            </div>
-
-            <div className="grid gap-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
-              <div className="rounded border border-gray-200 bg-gray-50 p-3">
-                <p className="uppercase text-gray-500">Audit ID</p>
-                <p className="mt-1 font-semibold text-gray-900">
-                  {auditReference}
-                </p>
-              </div>
-              <div className="rounded border border-gray-200 bg-gray-50 p-3">
-                <p className="uppercase text-gray-500">Baseline</p>
-                <p className="mt-1 font-semibold text-gray-900">
-                  {hasEnergyBaseline ? "Candidate data present" : "Pending"}
-                </p>
-              </div>
-              <div className="rounded border border-gray-200 bg-gray-50 p-3">
-                <p className="uppercase text-gray-500">Intervention</p>
-                <p className="mt-1 font-semibold text-gray-900">
-                  {interventionDate || "Not locked"}
-                </p>
-              </div>
-              <div className="rounded border border-gray-200 bg-gray-50 p-3">
-                <p className="uppercase text-gray-500">Verifier status</p>
-                <p className="mt-1 font-semibold text-gray-900">
-                  Pre-verification
-                </p>
-              </div>
-            </div>
-
-            <div className="grid gap-2 text-xs sm:grid-cols-2 lg:grid-cols-3">
-              {evidencePackChecks.map((check) => (
-                <div
-                  key={check.label}
-                  className={`rounded border p-2 ${
-                    check.complete
-                      ? "border-emerald-200 bg-emerald-50 text-emerald-900"
-                      : "border-amber-200 bg-amber-50 text-amber-900"
-                  }`}
-                >
-                  <p className="font-semibold">
-                    {check.complete ? "Ready" : "Needed"}: {check.label}
-                  </p>
-                  <p className="mt-1 text-[11px]">{check.detail}</p>
-                </div>
-              ))}
-            </div>
-
-            <div className="flex flex-wrap items-start justify-between gap-3 border-t pt-3">
-              <div className="text-xs text-gray-600">
-                <p className="font-semibold text-gray-800">
-                  Missing evidence
-                </p>
-                <p>
-                  {missingEvidenceItems.length
-                    ? missingEvidenceItems.map((item) => item.label).join(", ")
-                    : "No missing evidence flagged"}
-                </p>
-              </div>
-              <button
-                type="button"
-                className="rounded border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-800 shadow-sm"
-                onClick={exportEvidencePack}
-              >
-                Export Evidence Pack
-              </button>
-            </div>
-          </div>
-        ) : null}
       </div>
 
       <div className="bg-gray-100 p-4 rounded shadow">
@@ -4337,18 +4296,6 @@ const BuildingDashboardPanel = ({ building }) => {
             carbonTokenUnlocked ? "opacity-100" : "opacity-45"
           }`}
         >
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <span
-              className={`rounded border px-2 py-1 text-xs font-semibold ${
-                carbonTokenUnlocked
-                  ? "border-green-300 bg-green-50 text-green-800"
-                  : "border-gray-300 bg-gray-50 text-gray-600"
-              }`}
-            >
-              {carbonTokenUnlocked ? "Unlocked" : "Locked"}
-            </span>
-          </div>
-
           <div className="grid grid-cols-2 gap-4">
             <div>
               <p className="text-xs uppercase text-gray-500">Credits</p>
@@ -4409,6 +4356,247 @@ const BuildingDashboardPanel = ({ building }) => {
             >
               {carbonCreditDeepDiveOpen ? "Hide deep dive" : "Deep Dive"}
             </button>
+          </div>
+
+          <div className="rounded border border-gray-200 bg-gray-50 p-4 space-y-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 className="font-semibold">Audit Evidence Pack</h3>
+                <p className="text-xs text-gray-600">
+                  MRV rail readiness for verifier review and portfolio batching.
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-2xl font-bold">{evidencePackScore}%</p>
+                <p className="text-[10px] uppercase text-gray-500">
+                  Audit ready
+                </p>
+              </div>
+            </div>
+
+            <div className="h-3 overflow-hidden rounded bg-gray-200">
+              <div
+                className={`h-full transition-all ${
+                  evidencePackScore >= 80
+                    ? "bg-emerald-500"
+                    : evidencePackScore >= 50
+                    ? "bg-amber-500"
+                    : "bg-red-500"
+                }`}
+                style={{ width: `${evidencePackScore}%` }}
+              />
+            </div>
+
+            <button
+              type="button"
+              className="text-sm font-semibold underline text-gray-700"
+              onClick={() =>
+                setAuditEvidenceDeepDiveOpen((isOpen) => !isOpen)
+              }
+            >
+              {auditEvidenceDeepDiveOpen
+                ? "Hide evidence deep dive"
+                : "Evidence Deep Dive"}
+            </button>
+
+            {auditEvidenceDeepDiveOpen ? (
+              <div className="space-y-4 border-t pt-4">
+                <div className="grid gap-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="rounded border border-gray-200 bg-white p-3">
+                    <p className="uppercase text-gray-500">Audit ID</p>
+                    <p className="mt-1 font-semibold text-gray-900">
+                      {auditReference}
+                    </p>
+                  </div>
+                  <div className="rounded border border-gray-200 bg-white p-3">
+                    <p className="uppercase text-gray-500">Baseline</p>
+                    <p className="mt-1 font-semibold text-gray-900">
+                      {baselineLockComplete
+                        ? "Locked"
+                        : hasEnergyBaseline
+                        ? "Candidate data present"
+                        : "Pending"}
+                    </p>
+                  </div>
+                  <div className="rounded border border-gray-200 bg-white p-3">
+                    <p className="uppercase text-gray-500">Intervention</p>
+                    <p className="mt-1 font-semibold text-gray-900">
+                      {mrvEvidence.interventionDate || "Not locked"}
+                    </p>
+                  </div>
+                  <div className="rounded border border-gray-200 bg-white p-3">
+                    <p className="uppercase text-gray-500">Verifier status</p>
+                    <p className="mt-1 font-semibold text-gray-900">
+                      {mrvEvidence.verifierStatus}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid gap-2 text-xs sm:grid-cols-2 lg:grid-cols-3">
+                  {evidencePackChecks.map((check) => (
+                    <div
+                      key={check.label}
+                      className={`rounded border p-2 ${
+                        check.complete
+                          ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+                          : "border-amber-200 bg-amber-50 text-amber-900"
+                      }`}
+                    >
+                      <p className="font-semibold">
+                        {check.complete ? "Ready" : "Needed"}: {check.label}
+                      </p>
+                      <p className="mt-1 text-[11px]">{check.detail}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="grid gap-3 text-xs sm:grid-cols-2">
+                  <label className="space-y-1">
+                    <span className="font-semibold text-gray-700">
+                      Baseline start
+                    </span>
+                    <input
+                      type="date"
+                      value={mrvEvidence.baselineStartDate}
+                      onChange={(event) =>
+                        updateMrvEvidence({
+                          baselineStartDate: event.target.value,
+                        })
+                      }
+                      className="w-full rounded border border-gray-300 px-2 py-2"
+                    />
+                  </label>
+                  <label className="space-y-1">
+                    <span className="font-semibold text-gray-700">
+                      Baseline end
+                    </span>
+                    <input
+                      type="date"
+                      value={mrvEvidence.baselineEndDate}
+                      onChange={(event) =>
+                        updateMrvEvidence({
+                          baselineEndDate: event.target.value,
+                        })
+                      }
+                      className="w-full rounded border border-gray-300 px-2 py-2"
+                    />
+                  </label>
+                  <label className="flex items-center gap-2 rounded border border-gray-200 bg-white p-2 sm:col-span-2">
+                    <input
+                      type="checkbox"
+                      checked={mrvEvidence.baselineLocked}
+                      onChange={(event) =>
+                        updateMrvEvidence({
+                          baselineLocked: event.target.checked,
+                        })
+                      }
+                    />
+                    <span className="font-semibold text-gray-700">
+                      Lock this baseline period for crediting
+                    </span>
+                  </label>
+                  <label className="space-y-1">
+                    <span className="font-semibold text-gray-700">
+                      Intervention completion date
+                    </span>
+                    <input
+                      type="date"
+                      value={mrvEvidence.interventionDate}
+                      onChange={(event) =>
+                        updateMrvEvidence({
+                          interventionDate: event.target.value,
+                        })
+                      }
+                      className="w-full rounded border border-gray-300 px-2 py-2"
+                    />
+                  </label>
+                  <label className="space-y-1">
+                    <span className="font-semibold text-gray-700">
+                      Verifier
+                    </span>
+                    <input
+                      type="text"
+                      value={mrvEvidence.verifierName}
+                      onChange={(event) =>
+                        updateMrvEvidence({ verifierName: event.target.value })
+                      }
+                      placeholder="e.g. DNV, TÜV, Bureau Veritas"
+                      className="w-full rounded border border-gray-300 px-2 py-2"
+                    />
+                  </label>
+                  <label className="space-y-1 sm:col-span-2">
+                    <span className="font-semibold text-gray-700">
+                      Intervention evidence
+                    </span>
+                    <textarea
+                      value={mrvEvidence.interventionEvidence}
+                      onChange={(event) =>
+                        updateMrvEvidence({
+                          interventionEvidence: event.target.value,
+                        })
+                      }
+                      placeholder="Installer, measures completed, certificate or invoice reference"
+                      className="min-h-20 w-full rounded border border-gray-300 px-2 py-2"
+                    />
+                  </label>
+                  <label className="space-y-1">
+                    <span className="font-semibold text-gray-700">
+                      Verifier status
+                    </span>
+                    <select
+                      value={mrvEvidence.verifierStatus}
+                      onChange={(event) =>
+                        updateMrvEvidence({
+                          verifierStatus: event.target.value,
+                        })
+                      }
+                      className="w-full rounded border border-gray-300 px-2 py-2"
+                    >
+                      <option value="pre-verification">Pre-verification</option>
+                      <option value="pre-assessment">Pre-assessment</option>
+                      <option value="submitted">Submitted</option>
+                      <option value="approved">Approved</option>
+                    </select>
+                  </label>
+                  <label className="flex items-center gap-2 rounded border border-gray-200 bg-white p-2">
+                    <input
+                      type="checkbox"
+                      checked={mrvEvidence.ownershipConsent}
+                      onChange={(event) =>
+                        updateMrvEvidence({
+                          ownershipConsent: event.target.checked,
+                        })
+                      }
+                    />
+                    <span className="font-semibold text-gray-700">
+                      Credit assignment and no-double-counting declaration
+                    </span>
+                  </label>
+                </div>
+
+                <div className="flex flex-wrap items-start justify-between gap-3 border-t pt-3">
+                  <div className="text-xs text-gray-600">
+                    <p className="font-semibold text-gray-800">
+                      Missing evidence
+                    </p>
+                    <p>
+                      {missingEvidenceItems.length
+                        ? missingEvidenceItems
+                            .map((item) => item.label)
+                            .join(", ")
+                        : "No missing evidence flagged"}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="rounded border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-800 shadow-sm"
+                    onClick={exportEvidencePack}
+                  >
+                    Export Evidence Pack
+                  </button>
+                </div>
+              </div>
+            ) : null}
           </div>
 
           {carbonCreditDeepDiveOpen ? (
