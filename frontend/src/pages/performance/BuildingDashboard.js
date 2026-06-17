@@ -3262,7 +3262,7 @@ const BuildingDashboardPanel = ({ building }) => {
     showStandardDeepDiveToggle = false,
   }) => (
     <div
-      className={`flex min-w-0 flex-col rounded border p-2.5 sm:p-4 ${
+      className={`flex min-w-0 flex-col rounded border p-2.5 sm:p-3 ${
         tone === "primary"
           ? "border-emerald-200 bg-emerald-50/60"
           : tone === "locked"
@@ -3271,7 +3271,7 @@ const BuildingDashboardPanel = ({ building }) => {
       }`}
     >
       {title ? (
-        <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="mb-1.5 flex items-center justify-between gap-2">
           <h3
             className={`text-[10px] font-semibold uppercase tracking-wide sm:text-xs ${
               tone === "primary" ? "text-emerald-800" : "text-gray-500"
@@ -3319,8 +3319,8 @@ const BuildingDashboardPanel = ({ building }) => {
             showStandardDeepDiveToggle
               ? "items-start justify-center pt-0"
               : compact
-              ? "min-h-[118px] items-center justify-center pt-2 sm:min-h-[142px]"
-              : "min-h-[160px] items-start justify-end pt-2 pr-0 sm:min-h-[220px] sm:pr-6"
+              ? "min-h-[96px] items-center justify-center pt-1 sm:min-h-[118px]"
+              : "min-h-[122px] items-start justify-end pt-1 pr-0 sm:min-h-[168px] sm:pr-4"
           }`}
         >
           <AnalogGauge
@@ -3329,16 +3329,16 @@ const BuildingDashboardPanel = ({ building }) => {
             activeBandOnly={activeBandOnly}
             className={
               showStandardDeepDiveToggle
-                ? "h-auto w-[250px] max-w-full min-[390px]:w-[285px] sm:w-[420px] lg:w-[500px]"
+                ? "h-auto w-[210px] max-w-full min-[390px]:w-[240px] sm:w-[340px] lg:w-[410px]"
                 : compact
-                ? "h-auto w-[150px] max-w-full min-[390px]:w-[170px] sm:w-[200px]"
-                : "h-auto w-[220px] max-w-full min-[390px]:w-[255px] sm:w-[320px]"
+                ? "h-auto w-[130px] max-w-full min-[390px]:w-[145px] sm:w-[170px]"
+                : "h-auto w-[185px] max-w-full min-[390px]:w-[215px] sm:w-[265px]"
             }
           />
         </div>
       </div>
       {isCarbonCreditTab && diveKey ? (
-        <div className="mt-1.5 flex flex-col items-start gap-1.5 border-t border-gray-100 pt-1.5 sm:mt-3 sm:gap-2 sm:pt-2">
+        <div className="mt-1 flex flex-col items-start gap-1.5 border-t border-gray-100 pt-1.5 sm:mt-2 sm:gap-2">
           <button
             type="button"
             onClick={() => toggleDeepDivePanel(diveKey)}
@@ -3349,7 +3349,7 @@ const BuildingDashboardPanel = ({ building }) => {
           </button>
         </div>
       ) : showStandardDeepDiveToggle ? (
-        <div className="mt-1.5 flex justify-start border-t border-gray-100 pt-1.5 sm:mt-3 sm:pt-2">
+        <div className="mt-1 flex justify-start border-t border-gray-100 pt-1.5 sm:mt-2">
           <button
             type="button"
             onClick={() => setStandardDeepDiveOpen((isOpen) => !isOpen)}
@@ -3442,10 +3442,10 @@ const BuildingDashboardPanel = ({ building }) => {
         </div>
       </div>
 
-      <div className="bg-gray-100 p-4 rounded shadow">
-        <h2 className="text-lg font-bold mb-3">Performance</h2>
+      <div className="bg-gray-100 p-3 sm:p-4 rounded shadow">
+        <h2 className="mb-2 text-lg font-bold">Performance</h2>
 
-        <div className="space-y-3 sm:space-y-5">
+        <div className="space-y-2.5 sm:space-y-4">
           {isCarbonCreditTab ? (
             <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-3">
               {renderPerformanceCard({
