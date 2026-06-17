@@ -11,6 +11,7 @@ const GAS_PRICE_GBP_PER_KWH = 0.06;
 const ELECTRICITY_KGCO2E_PER_KWH = 0.20705;
 const GAS_KGCO2E_PER_KWH = 0.18254;
 const MIN_BASELINE_METERED_DAYS = 7;
+const MIN_BASELINE_HDD_DAYS = 14;
 
 const HOME_BUILDING = {
   id: "home",
@@ -2563,11 +2564,18 @@ const BuildingDashboardPanel = ({ building }) => {
     energySummary.baselineStartDate && energySummary.baselineEndDate
       ? `${energySummary.baselineStartDate} to ${energySummary.baselineEndDate}`
       : null;
-  const autoBaselineAchieved =
+  const candidateMeteredBaseline =
     hasEnergyBaseline && baselineMeteredDays >= MIN_BASELINE_METERED_DAYS;
   const hasWeatherNormalisedBaseline =
     Number.isFinite(heatLossSummary.weatherNormalisedEui) ||
     Number.isFinite(heatLossSummary.kwhPerHdd);
+  const hasMatureHddBaseline =
+    heatLossSummary.hddSource === "legacy" ||
+    heatLossSummary.hddDays >= MIN_BASELINE_HDD_DAYS;
+  const autoBaselineAchieved =
+    candidateMeteredBaseline &&
+    hasWeatherNormalisedBaseline &&
+    hasMatureHddBaseline;
   const hasLiveIaqFeed =
     Number.isFinite(sensorData.internalTemp) ||
     Number.isFinite(sensorData.humidity) ||
@@ -2612,9 +2620,11 @@ const BuildingDashboardPanel = ({ building }) => {
     {
       label: "Weather normalisation",
       detail: hasWeatherNormalisedBaseline
-        ? `${heatLossSummary.hddSource || "HDD"} calculation available`
+        ? `${heatLossSummary.hddSource || "HDD"} calculation available across ${
+            heatLossSummary.hddDays || 0
+          } HDD day(s)`
         : "Needs locked HDD method/source",
-      complete: hasWeatherNormalisedBaseline,
+      complete: hasWeatherNormalisedBaseline && hasMatureHddBaseline,
     },
     {
       label: "Live IAQ evidence",
@@ -2639,7 +2649,11 @@ const BuildingDashboardPanel = ({ building }) => {
       detail: baselineLockComplete
         ? `${mrvEvidence.baselineStartDate} to ${mrvEvidence.baselineEndDate}`
         : autoBaselineAchieved
-        ? `Auto-ready from ${baselineDateRange || "metered readings"}`
+        ? `HDD-normalised baseline ready from ${
+            baselineDateRange || "metered readings"
+          }`
+        : candidateMeteredBaseline
+        ? `Metered candidate present; needs ${MIN_BASELINE_HDD_DAYS} HDD day(s)`
         : `Needs ${MIN_BASELINE_METERED_DAYS} completed metered days`,
       complete: baselineEvidenceComplete,
     },
@@ -2700,8 +2714,15 @@ const BuildingDashboardPanel = ({ building }) => {
       },
       baseline: {
         locked: baselineEvidenceComplete,
-        lockSource: baselineLockComplete ? "manual" : "auto-detected",
+        lockSource: baselineLockComplete
+          ? "manual"
+          : autoBaselineAchieved
+          ? "hdd-normalised-auto-detected"
+          : "candidate-only",
         meteredDays: baselineMeteredDays,
+        hddDays: heatLossSummary.hddDays || 0,
+        minimumMeteredDays: MIN_BASELINE_METERED_DAYS,
+        minimumHddDays: MIN_BASELINE_HDD_DAYS,
         startDate: mrvEvidence.baselineStartDate || energySummary.baselineStartDate,
         endDate: mrvEvidence.baselineEndDate || energySummary.baselineEndDate,
         historicalPerformanceKwhPerDay: historicalPerformance,
@@ -4310,7 +4331,9 @@ const BuildingDashboardPanel = ({ building }) => {
                         {baselineEvidenceComplete
                           ? baselineLockComplete
                             ? "Locked"
-                            : "Auto-ready"
+                            : "HDD-ready"
+                          : candidateMeteredBaseline
+                          ? "Candidate"
                           : "Collecting"}
                       </p>
                       <p className="mt-1 text-[11px] text-gray-600">
@@ -4323,7 +4346,7 @@ const BuildingDashboardPanel = ({ building }) => {
                         {baselineMeteredDays}
                       </p>
                       <p className="mt-1 text-[11px] text-gray-600">
-                        {MIN_BASELINE_METERED_DAYS} needed for auto-ready
+                        {MIN_BASELINE_METERED_DAYS} metered / {MIN_BASELINE_HDD_DAYS} HDD needed
                       </p>
                     </div>
                   </div>
@@ -4413,14 +4436,22 @@ const BuildingDashboardPanel = ({ building }) => {
                   >
                     <p className="font-semibold">
                       {autoBaselineAchieved
-                        ? "Candidate baseline achieved automatically"
+                        ? "HDD-normalised baseline achieved automatically"
+                        : candidateMeteredBaseline
+                        ? "Metered baseline candidate found"
                         : "Candidate baseline still collecting"}
                     </p>
                     <p className="mt-1 text-xs">
                       {autoBaselineAchieved
-                        ? `${baselineMeteredDays} completed metered day(s) available${
+                        ? `${baselineMeteredDays} completed metered day(s) and ${
+                            heatLossSummary.hddDays || 0
+                          } HDD day(s) available${
                             baselineDateRange ? `: ${baselineDateRange}` : ""
                           }.`
+                        : candidateMeteredBaseline
+                        ? `${baselineMeteredDays} completed metered day(s) available, but only ${
+                            heatLossSummary.hddDays || 0
+                          }/${MIN_BASELINE_HDD_DAYS} HDD day(s) for weather-normalised readiness.`
                         : `${baselineMeteredDays}/${MIN_BASELINE_METERED_DAYS} completed metered day(s) available.`}
                     </p>
                     <button
@@ -4443,7 +4474,7 @@ const BuildingDashboardPanel = ({ building }) => {
                         })
                       }
                     >
-                      Use detected baseline dates
+                      Lock HDD-normalised baseline dates
                     </button>
                   </div>
                   <label className="block space-y-1">
