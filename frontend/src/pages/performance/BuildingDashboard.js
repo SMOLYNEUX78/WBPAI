@@ -176,29 +176,7 @@ const BuildingDashboardPanel = ({ building }) => {
       return fallback;
     }
   };
-  const [sensorData, setSensorData] = useState(() =>
-    readCachedDashboardState(`${dataSourceBuildingId}:latestIaq`, defaultSensorData)
-  );
-  const [roomIaqData, setRoomIaqData] = useState(() =>
-    readCachedDashboardState(`${dataSourceBuildingId}:roomIaq`, [])
-  );
-  const supportsExtendedIaqColumns = useRef(true);
-
-  const [performanceValue, setPerformanceValue] = useState(null);
-  const [historicalPerformance, setHistoricalPerformance] = useState(null);
-  const [carbonCredits, setCarbonCredits] = useState(0);
-  const [carbonSavingsSummary, setCarbonSavingsSummary] = useState({
-    latestDate: null,
-    latestSavedKgCo2e: null,
-    totalSavedKgCo2e: null,
-  });
-  const [carbonMarketPrice, setCarbonMarketPrice] = useState({
-    gbpPerTonne: FALLBACK_CARBON_PRICE_GBP_PER_TONNE,
-    source: "Estimated UK/EU carbon allowance price",
-    updatedAt: null,
-    live: false,
-  });
-  const [energySummary, setEnergySummary] = useState({
+  const defaultEnergySummary = {
     electricityDailyAverage: null,
     electricityTodayKwh: 0,
     gasDailyAverage: null,
@@ -213,7 +191,40 @@ const BuildingDashboardPanel = ({ building }) => {
     gasUnregulatedDaily: null,
     gasDhwWindows: [],
     gasDecompositionConfidence: "Pending gas data",
+  };
+  const readCachedEnergySummary = () =>
+    readCachedDashboardState(
+      `${dataSourceBuildingId}:energySummary`,
+      defaultEnergySummary
+    );
+  const [sensorData, setSensorData] = useState(() =>
+    readCachedDashboardState(`${dataSourceBuildingId}:latestIaq`, defaultSensorData)
+  );
+  const [roomIaqData, setRoomIaqData] = useState(() =>
+    readCachedDashboardState(`${dataSourceBuildingId}:roomIaq`, [])
+  );
+  const supportsExtendedIaqColumns = useRef(true);
+
+  const [performanceValue, setPerformanceValue] = useState(null);
+  const [historicalPerformance, setHistoricalPerformance] = useState(() => {
+    const cachedEnergySummary = readCachedEnergySummary();
+    return Number.isFinite(cachedEnergySummary.totalDailyAverage)
+      ? cachedEnergySummary.totalDailyAverage
+      : null;
   });
+  const [carbonCredits, setCarbonCredits] = useState(0);
+  const [carbonSavingsSummary, setCarbonSavingsSummary] = useState({
+    latestDate: null,
+    latestSavedKgCo2e: null,
+    totalSavedKgCo2e: null,
+  });
+  const [carbonMarketPrice, setCarbonMarketPrice] = useState({
+    gbpPerTonne: FALLBACK_CARBON_PRICE_GBP_PER_TONNE,
+    source: "Estimated UK/EU carbon allowance price",
+    updatedAt: null,
+    live: false,
+  });
+  const [energySummary, setEnergySummary] = useState(readCachedEnergySummary);
 
   const [performanceBreakdown, setPerformanceBreakdown] = useState({
     health: null,
@@ -833,6 +844,15 @@ const BuildingDashboardPanel = ({ building }) => {
     return data || [];
   };
 
+  const applyEnergySummary = (nextEnergySummary, nextHistoricalPerformance) => {
+    setEnergySummary(nextEnergySummary);
+    setHistoricalPerformance(nextHistoricalPerformance);
+    localStorage.setItem(
+      `${dataSourceBuildingId}:energySummary`,
+      JSON.stringify(nextEnergySummary)
+    );
+  };
+
   const fetchLongTermAverage = async () => {
     try {
       const [completedDailyData, todayDailyData, gasIntervalData] = await Promise.all([
@@ -1046,7 +1066,7 @@ const BuildingDashboardPanel = ({ building }) => {
             : "Summer baseload estimate / needs winter HDD data"
           : "No gas data";
 
-        setEnergySummary({
+        applyEnergySummary({
           electricityDailyAverage,
           electricityTodayKwh,
           gasDailyAverage,
@@ -1063,29 +1083,12 @@ const BuildingDashboardPanel = ({ building }) => {
           gasUnregulatedDaily,
           gasDhwWindows: recurringDhwSlots.map((slot) => slot.label),
           gasDecompositionConfidence,
-        });
-        setHistoricalPerformance(totalDailyAverage);
+        }, totalDailyAverage);
         return;
       }
 
       if (!building.legacyUnscopedData) {
-        setEnergySummary({
-          electricityDailyAverage: null,
-          electricityTodayKwh: 0,
-          gasDailyAverage: null,
-          gasTodayKwh: 0,
-          totalDailyAverage: null,
-          electricityPowerKw: 0,
-          hasGasData: false,
-          gasBaseloadDaily: null,
-          gasHeatingDaily: null,
-          gasAnomalyDaily: null,
-          gasDhwDaily: null,
-          gasUnregulatedDaily: null,
-          gasDhwWindows: [],
-          gasDecompositionConfidence: "Pending gas data",
-        });
-        setHistoricalPerformance(null);
+        applyEnergySummary(defaultEnergySummary, null);
         return;
       }
 
@@ -1109,7 +1112,7 @@ const BuildingDashboardPanel = ({ building }) => {
 
         const electricityDailyAverage = total / validEntries.length;
 
-        setEnergySummary({
+        applyEnergySummary({
           electricityDailyAverage,
           electricityTodayKwh: 0,
           gasDailyAverage: 0,
@@ -1124,8 +1127,7 @@ const BuildingDashboardPanel = ({ building }) => {
           gasUnregulatedDaily: null,
           gasDhwWindows: [],
           gasDecompositionConfidence: "No gas data",
-        });
-        setHistoricalPerformance(electricityDailyAverage);
+        }, electricityDailyAverage);
       }
     } catch (err) {
       console.error("Error fetching historical performance:", err.message);
@@ -2174,6 +2176,13 @@ const BuildingDashboardPanel = ({ building }) => {
   };
 
   useEffect(() => {
+    const cachedEnergySummary = readCachedEnergySummary();
+    setEnergySummary(cachedEnergySummary);
+    setHistoricalPerformance(
+      Number.isFinite(cachedEnergySummary.totalDailyAverage)
+        ? cachedEnergySummary.totalDailyAverage
+        : null
+    );
     fetchLongTermAverage();
     fetchHeatLossSummary();
     fetchExternalTemp();
