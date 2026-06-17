@@ -4273,21 +4273,9 @@ const BuildingDashboardPanel = ({ building }) => {
               <div className="relative my-6 max-h-[calc(100vh-3rem)] w-full max-w-6xl overflow-y-auto rounded-lg border border-gray-200 bg-white p-5 shadow-2xl sm:p-6">
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
-                <h3 className="text-lg font-bold">
-                  {activeMrvEvidenceField === "overview"
-                    ? "Audit Evidence Pack"
-                    : activeMrvEvidenceField === "baseline"
-                    ? "Complete Baseline Lock"
-                    : activeMrvEvidenceField === "intervention"
-                    ? "Complete Intervention Evidence"
-                    : activeMrvEvidenceField === "ownership"
-                    ? "Complete Ownership Declaration"
-                    : "Complete Verifier Approval"}
-                </h3>
+                <h3 className="text-lg font-bold">Audit Evidence Pack</h3>
                 <p className="text-sm text-gray-600">
-                  {activeMrvEvidenceField === "overview"
-                    ? "Review evidence requirements and complete missing items."
-                    : "This evidence is saved to this building's MRV pack."}
+                  Review evidence requirements and complete missing items.
                 </p>
               </div>
               <button
@@ -4299,18 +4287,8 @@ const BuildingDashboardPanel = ({ building }) => {
               </button>
             </div>
 
-            <div className="space-y-4 text-sm">
-              {activeMrvEvidenceField !== "overview" ? (
-                <button
-                  type="button"
-                  className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm font-semibold text-gray-700"
-                  onClick={() => setActiveMrvEvidenceField("overview")}
-                >
-                  Back to evidence requirements
-                </button>
-              ) : null}
-
-              {activeMrvEvidenceField === "overview" ? (
+            <div className="relative space-y-4 text-sm">
+              {activeMrvEvidenceField ? (
                 <>
                   <div className="grid gap-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
                     <div className="rounded border border-gray-200 bg-gray-50 p-3">
@@ -4425,6 +4403,33 @@ const BuildingDashboardPanel = ({ building }) => {
                 </>
               ) : null}
 
+              {activeMrvEvidenceField !== "overview" ? (
+                <div className="absolute inset-0 z-10 overflow-y-auto rounded-lg border border-gray-200 bg-white/95 p-4 shadow-2xl backdrop-blur-sm sm:p-5">
+                  <div className="mb-4 flex items-start justify-between gap-4">
+                    <div>
+                      <h4 className="text-base font-bold">
+                        {activeMrvEvidenceField === "baseline"
+                          ? "Complete Baseline Lock"
+                          : activeMrvEvidenceField === "intervention"
+                          ? "Complete Intervention Evidence"
+                          : activeMrvEvidenceField === "ownership"
+                          ? "Complete Ownership Declaration"
+                          : "Complete Verifier Approval"}
+                      </h4>
+                      <p className="text-sm text-gray-600">
+                        This evidence is saved to this building's MRV pack.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="rounded bg-black px-4 py-2 text-sm font-semibold text-white"
+                      onClick={() => setActiveMrvEvidenceField("overview")}
+                    >
+                      Done
+                    </button>
+                  </div>
+
+                  <div className="space-y-4">
               {activeMrvEvidenceField === "baseline" ? (
                 <>
                   <div
@@ -4620,16 +4625,9 @@ const BuildingDashboardPanel = ({ building }) => {
                   </label>
                 </>
               ) : null}
-            </div>
-
-            <div className="mt-5 flex justify-end">
-              <button
-                type="button"
-                className="rounded bg-black px-4 py-2 text-sm font-semibold text-white"
-                onClick={() => setActiveMrvEvidenceField(null)}
-              >
-                Done
-              </button>
+                  </div>
+                </div>
+              ) : null}
             </div>
               </div>
             </div>,
