@@ -222,7 +222,7 @@ async function main() {
     `${DRY_RUN ? "Calculated" : "Upserted"} ${carbonRows.length} carbon saving day(s) for ${BUILDING_ID}.`
   );
   console.log(
-    `Total saved: ${totalSavedKgCo2e.toFixed(3)} kgCO2e / ${(totalSavedKgCo2e / 1000).toFixed(6)} WBPA-C candidate credits.`
+    `Total saved: ${totalSavedKgCo2e.toFixed(3)} kgCO2e / ${(totalSavedKgCo2e / 1000).toFixed(6)} WBP-C candidate credits.`
   );
 
   if (carbonRows.length) {
