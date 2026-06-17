@@ -2685,6 +2685,13 @@ const BuildingDashboardPanel = ({ building }) => {
   const evidencePackCompleteCount = evidencePackChecks.filter(
     (check) => check.complete
   ).length;
+  const orderedEvidencePackChecks = [...evidencePackChecks].sort((a, b) => {
+    if (a.complete === b.complete) {
+      return 0;
+    }
+
+    return a.complete ? 1 : -1;
+  });
   const evidencePackScore = Math.round(
     (evidencePackCompleteCount / evidencePackChecks.length) * 100
   );
@@ -4290,17 +4297,11 @@ const BuildingDashboardPanel = ({ building }) => {
             <div className="relative space-y-4 text-sm">
               {activeMrvEvidenceField ? (
                 <>
-                  <div className="grid gap-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="grid gap-3 text-xs sm:grid-cols-3">
                     <div className="rounded border border-gray-200 bg-gray-50 p-3">
                       <p className="uppercase text-gray-500">Audit ID</p>
                       <p className="mt-1 font-semibold text-gray-900">
                         {auditReference}
-                      </p>
-                    </div>
-                    <div className="rounded border border-gray-200 bg-gray-50 p-3">
-                      <p className="uppercase text-gray-500">Audit ready</p>
-                      <p className="mt-1 text-2xl font-bold text-gray-900">
-                        {evidencePackScore}%
                       </p>
                     </div>
                     <div className="rounded border border-gray-200 bg-gray-50 p-3">
@@ -4329,21 +4330,40 @@ const BuildingDashboardPanel = ({ building }) => {
                     </div>
                   </div>
 
-                  <div className="h-3 overflow-hidden rounded bg-gray-200">
-                    <div
-                      className={`h-full transition-all ${
-                        evidencePackScore >= 80
-                          ? "bg-emerald-500"
-                          : evidencePackScore >= 50
-                          ? "bg-amber-500"
-                          : "bg-red-500"
-                      }`}
-                      style={{ width: `${evidencePackScore}%` }}
-                    />
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                    <div className="min-w-0 flex-1">
+                      <div className="mb-1 flex items-center justify-between gap-3 text-xs">
+                        <span className="font-semibold text-gray-700">
+                          Audit readiness
+                        </span>
+                        <span className="font-bold text-gray-900">
+                          {evidencePackScore}%
+                        </span>
+                      </div>
+                      <div className="h-3 overflow-hidden rounded bg-gray-200">
+                        <div
+                          className={`h-full transition-all ${
+                            evidencePackScore >= 80
+                              ? "bg-emerald-500"
+                              : evidencePackScore >= 50
+                              ? "bg-amber-500"
+                              : "bg-red-500"
+                          }`}
+                          style={{ width: `${evidencePackScore}%` }}
+                        />
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-800 shadow-sm sm:w-auto"
+                      onClick={exportEvidencePack}
+                    >
+                      Export Evidence Pack
+                    </button>
                   </div>
 
                   <div className="grid gap-3 text-xs sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                    {evidencePackChecks.map((check) => {
+                    {orderedEvidencePackChecks.map((check) => {
                       const canCompleteInApp = Boolean(check.fieldKey);
                       const TileElement = canCompleteInApp ? "button" : "div";
                       return (
@@ -4379,7 +4399,7 @@ const BuildingDashboardPanel = ({ building }) => {
                     })}
                   </div>
 
-                  <div className="flex flex-wrap items-start justify-between gap-3 border-t pt-3">
+                  <div className="border-t pt-3">
                     <div className="text-xs text-gray-600">
                       <p className="font-semibold text-gray-800">
                         Missing evidence
@@ -4392,13 +4412,6 @@ const BuildingDashboardPanel = ({ building }) => {
                           : "No missing evidence flagged"}
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      className="rounded border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-800 shadow-sm"
-                      onClick={exportEvidencePack}
-                    >
-                      Export Evidence Pack
-                    </button>
                   </div>
                 </>
               ) : null}
