@@ -12,6 +12,9 @@ const ELECTRICITY_KGCO2E_PER_KWH = 0.20705;
 const GAS_KGCO2E_PER_KWH = 0.18254;
 const MIN_BASELINE_METERED_DAYS = 7;
 const MIN_BASELINE_HDD_DAYS = 14;
+const MIN_SEASONAL_BASELINE_DAYS = 90;
+const MIN_FULL_YEAR_BASELINE_DAYS = 365;
+const MIN_FULL_YEAR_METERED_DAYS = 300;
 
 const HOME_BUILDING = {
   id: "home",
@@ -2564,6 +2567,17 @@ const BuildingDashboardPanel = ({ building }) => {
     energySummary.baselineStartDate && energySummary.baselineEndDate
       ? `${energySummary.baselineStartDate} to ${energySummary.baselineEndDate}`
       : null;
+  const baselineCoverageDays =
+    energySummary.baselineStartDate && energySummary.baselineEndDate
+      ? Math.max(
+          1,
+          Math.round(
+            (new Date(energySummary.baselineEndDate) -
+              new Date(energySummary.baselineStartDate)) /
+              86400000
+          ) + 1
+        )
+      : 0;
   const candidateMeteredBaseline =
     hasEnergyBaseline && baselineMeteredDays >= MIN_BASELINE_METERED_DAYS;
   const hasWeatherNormalisedBaseline =
@@ -2572,20 +2586,55 @@ const BuildingDashboardPanel = ({ building }) => {
   const hasMatureHddBaseline =
     heatLossSummary.hddSource === "legacy" ||
     heatLossSummary.hddDays >= MIN_BASELINE_HDD_DAYS;
-  const autoBaselineAchieved =
+  const hddNormalisedBaseline =
     candidateMeteredBaseline &&
     hasWeatherNormalisedBaseline &&
     hasMatureHddBaseline;
+  const seasonalBaseline =
+    hddNormalisedBaseline && baselineMeteredDays >= MIN_SEASONAL_BASELINE_DAYS;
+  const fullConfidenceBaseline =
+    hddNormalisedBaseline &&
+    baselineCoverageDays >= MIN_FULL_YEAR_BASELINE_DAYS &&
+    baselineMeteredDays >= MIN_FULL_YEAR_METERED_DAYS;
+  const baselineConfidence = fullConfidenceBaseline
+    ? {
+        label: "Full confidence",
+        detail: "Full year plus cold-weather HDD baseline",
+        score: 100,
+        complete: true,
+      }
+    : seasonalBaseline
+    ? {
+        label: "High confidence",
+        detail: "Seasonal metered baseline with HDD normalisation",
+        score: 75,
+        complete: false,
+      }
+    : hddNormalisedBaseline
+    ? {
+        label: "Medium confidence",
+        detail: "Cold-weather/HDD-normalised candidate baseline",
+        score: 55,
+        complete: false,
+      }
+    : candidateMeteredBaseline
+    ? {
+        label: "Low confidence",
+        detail: "Metered candidate; needs cold-weather/HDD evidence",
+        score: 30,
+        complete: false,
+      }
+    : {
+        label: "Collecting",
+        detail: "Needs enough completed metered days",
+        score: 0,
+        complete: false,
+      };
   const hasLiveIaqFeed =
     Number.isFinite(sensorData.internalTemp) ||
     Number.isFinite(sensorData.humidity) ||
     roomIaqData.length > 0;
-  const baselineLockComplete = Boolean(
-    mrvEvidence.baselineLocked &&
-      mrvEvidence.baselineStartDate &&
-      mrvEvidence.baselineEndDate
-  );
-  const baselineEvidenceComplete = baselineLockComplete || autoBaselineAchieved;
+  const baselineEvidenceComplete = baselineConfidence.complete;
   const interventionComplete = Boolean(
     mrvEvidence.interventionDate && mrvEvidence.interventionEvidence?.trim()
   );
@@ -2624,7 +2673,7 @@ const BuildingDashboardPanel = ({ building }) => {
             heatLossSummary.hddDays || 0
           } HDD day(s)`
         : "Needs locked HDD method/source",
-      complete: hasWeatherNormalisedBaseline && hasMatureHddBaseline,
+      complete: hddNormalisedBaseline,
     },
     {
       label: "Live IAQ evidence",
@@ -2644,17 +2693,9 @@ const BuildingDashboardPanel = ({ building }) => {
       complete: true,
     },
     {
-      label: "Baseline lock",
+      label: "Baseline confidence",
       fieldKey: "baseline",
-      detail: baselineLockComplete
-        ? `${mrvEvidence.baselineStartDate} to ${mrvEvidence.baselineEndDate}`
-        : autoBaselineAchieved
-        ? `HDD-normalised baseline ready from ${
-            baselineDateRange || "metered readings"
-          }`
-        : candidateMeteredBaseline
-        ? `Metered candidate present; needs ${MIN_BASELINE_HDD_DAYS} HDD day(s)`
-        : `Needs ${MIN_BASELINE_METERED_DAYS} completed metered days`,
+      detail: `${baselineConfidence.label}: ${baselineConfidence.detail}`,
       complete: baselineEvidenceComplete,
     },
     {
@@ -2721,18 +2762,20 @@ const BuildingDashboardPanel = ({ building }) => {
         matterportModelId,
       },
       baseline: {
-        locked: baselineEvidenceComplete,
-        lockSource: baselineLockComplete
-          ? "manual"
-          : autoBaselineAchieved
-          ? "hdd-normalised-auto-detected"
-          : "candidate-only",
+        confidenceLabel: baselineConfidence.label,
+        confidenceScore: baselineConfidence.score,
+        confidenceDetail: baselineConfidence.detail,
+        fullConfidence: baselineEvidenceComplete,
         meteredDays: baselineMeteredDays,
+        coverageDays: baselineCoverageDays,
         hddDays: heatLossSummary.hddDays || 0,
         minimumMeteredDays: MIN_BASELINE_METERED_DAYS,
         minimumHddDays: MIN_BASELINE_HDD_DAYS,
-        startDate: mrvEvidence.baselineStartDate || energySummary.baselineStartDate,
-        endDate: mrvEvidence.baselineEndDate || energySummary.baselineEndDate,
+        minimumSeasonalDays: MIN_SEASONAL_BASELINE_DAYS,
+        minimumFullYearCoverageDays: MIN_FULL_YEAR_BASELINE_DAYS,
+        minimumFullYearMeteredDays: MIN_FULL_YEAR_METERED_DAYS,
+        startDate: energySummary.baselineStartDate,
+        endDate: energySummary.baselineEndDate,
         historicalPerformanceKwhPerDay: historicalPerformance,
         weatherNormalisedEui: heatLossSummary.weatherNormalisedEui,
         kwhPerHdd: heatLossSummary.kwhPerHdd,
@@ -4314,13 +4357,7 @@ const BuildingDashboardPanel = ({ building }) => {
                     <div className="rounded border border-gray-200 bg-gray-50 p-3">
                       <p className="uppercase text-gray-500">Baseline</p>
                       <p className="mt-1 font-semibold text-gray-900">
-                        {baselineEvidenceComplete
-                          ? baselineLockComplete
-                            ? "Locked"
-                            : "HDD-ready"
-                          : candidateMeteredBaseline
-                          ? "Candidate"
-                          : "Collecting"}
+                        {baselineConfidence.label}
                       </p>
                       <p className="mt-1 text-[11px] text-gray-600">
                         {baselineDateRange || "No complete range yet"}
@@ -4332,7 +4369,7 @@ const BuildingDashboardPanel = ({ building }) => {
                         {baselineMeteredDays}
                       </p>
                       <p className="mt-1 text-[11px] text-gray-600">
-                        {MIN_BASELINE_METERED_DAYS} metered / {MIN_BASELINE_HDD_DAYS} HDD needed
+                        {baselineCoverageDays} day span / {heatLossSummary.hddDays || 0} HDD
                       </p>
                     </div>
                   </div>
@@ -4435,7 +4472,7 @@ const BuildingDashboardPanel = ({ building }) => {
                       <div>
                         <h4 className="text-base font-bold">
                           {activeMrvEvidenceField === "baseline"
-                            ? "Complete Baseline Lock"
+                            ? "Baseline Confidence"
                             : activeMrvEvidenceField === "intervention"
                             ? "Complete Intervention Evidence"
                             : activeMrvEvidenceField === "ownership"
@@ -4460,98 +4497,74 @@ const BuildingDashboardPanel = ({ building }) => {
                 <>
                   <div
                     className={`rounded border p-3 text-sm ${
-                      autoBaselineAchieved
+                      baselineEvidenceComplete
                         ? "border-emerald-200 bg-emerald-50 text-emerald-900"
-                        : "border-amber-200 bg-amber-50 text-amber-900"
+                        : hddNormalisedBaseline
+                        ? "border-blue-200 bg-blue-50 text-blue-900"
+                        : candidateMeteredBaseline
+                        ? "border-amber-200 bg-amber-50 text-amber-900"
+                        : "border-gray-200 bg-gray-50 text-gray-800"
                     }`}
                   >
                     <p className="font-semibold">
-                      {autoBaselineAchieved
-                        ? "HDD-normalised baseline achieved automatically"
-                        : candidateMeteredBaseline
-                        ? "Metered baseline candidate found"
-                        : "Candidate baseline still collecting"}
+                      {baselineConfidence.label}: {baselineConfidence.detail}
                     </p>
                     <p className="mt-1 text-xs">
-                      {autoBaselineAchieved
-                        ? `${baselineMeteredDays} completed metered day(s) and ${
-                            heatLossSummary.hddDays || 0
-                          } HDD day(s) available${
-                            baselineDateRange ? `: ${baselineDateRange}` : ""
-                          }.`
-                        : candidateMeteredBaseline
-                        ? `${baselineMeteredDays} completed metered day(s) available, but only ${
-                            heatLossSummary.hddDays || 0
-                          }/${MIN_BASELINE_HDD_DAYS} HDD day(s) for weather-normalised readiness.`
-                        : `${baselineMeteredDays}/${MIN_BASELINE_METERED_DAYS} completed metered day(s) available.`}
+                      {baselineDateRange || "No complete metered range yet"}
                     </p>
-                    <button
-                      type="button"
-                      disabled={!autoBaselineAchieved}
-                      className={`mt-3 rounded border px-3 py-1.5 text-xs font-semibold ${
-                        autoBaselineAchieved
-                          ? "border-emerald-600 bg-white text-emerald-800"
-                          : "cursor-not-allowed border-amber-200 bg-white/60 text-amber-700"
-                      }`}
-                      onClick={() =>
-                        updateMrvEvidence({
-                          baselineStartDate:
-                            energySummary.baselineStartDate ||
-                            mrvEvidence.baselineStartDate,
-                          baselineEndDate:
-                            energySummary.baselineEndDate ||
-                            mrvEvidence.baselineEndDate,
-                          baselineLocked: true,
-                        })
-                      }
-                    >
-                      Lock HDD-normalised baseline dates
-                    </button>
+                    <div className="mt-3 h-2 overflow-hidden rounded bg-white/70">
+                      <div
+                        className={`h-full ${
+                          baselineEvidenceComplete
+                            ? "bg-emerald-500"
+                            : hddNormalisedBaseline
+                            ? "bg-blue-500"
+                            : candidateMeteredBaseline
+                            ? "bg-amber-500"
+                            : "bg-gray-400"
+                        }`}
+                        style={{ width: `${baselineConfidence.score}%` }}
+                      />
+                    </div>
                   </div>
-                  <label className="block space-y-1">
-                    <span className="font-semibold text-gray-700">
-                      Baseline start
-                    </span>
-                    <input
-                      type="date"
-                      value={mrvEvidence.baselineStartDate}
-                      onChange={(event) =>
-                        updateMrvEvidence({
-                          baselineStartDate: event.target.value,
-                        })
-                      }
-                      className="w-full rounded border border-gray-300 px-3 py-2"
-                    />
-                  </label>
-                  <label className="block space-y-1">
-                    <span className="font-semibold text-gray-700">
-                      Baseline end
-                    </span>
-                    <input
-                      type="date"
-                      value={mrvEvidence.baselineEndDate}
-                      onChange={(event) =>
-                        updateMrvEvidence({
-                          baselineEndDate: event.target.value,
-                        })
-                      }
-                      className="w-full rounded border border-gray-300 px-3 py-2"
-                    />
-                  </label>
-                  <label className="flex items-center gap-2 rounded border border-gray-200 bg-gray-50 p-3">
-                    <input
-                      type="checkbox"
-                      checked={mrvEvidence.baselineLocked}
-                      onChange={(event) =>
-                        updateMrvEvidence({
-                          baselineLocked: event.target.checked,
-                        })
-                      }
-                    />
-                    <span className="font-semibold text-gray-700">
-                      Lock this baseline period for crediting
-                    </span>
-                  </label>
+                  <div className="grid gap-2 text-xs sm:grid-cols-2">
+                    {[
+                      {
+                        label: "Metered candidate",
+                        complete: candidateMeteredBaseline,
+                        detail: `${baselineMeteredDays}/${MIN_BASELINE_METERED_DAYS} completed metered day(s)`,
+                      },
+                      {
+                        label: "Cold-weather HDD",
+                        complete: hddNormalisedBaseline,
+                        detail: `${heatLossSummary.hddDays || 0}/${MIN_BASELINE_HDD_DAYS} HDD day(s)`,
+                      },
+                      {
+                        label: "Seasonal confidence",
+                        complete: seasonalBaseline,
+                        detail: `${baselineMeteredDays}/${MIN_SEASONAL_BASELINE_DAYS} completed metered day(s)`,
+                      },
+                      {
+                        label: "Full-year confidence",
+                        complete: fullConfidenceBaseline,
+                        detail: `${baselineCoverageDays}/${MIN_FULL_YEAR_BASELINE_DAYS} day span and ${baselineMeteredDays}/${MIN_FULL_YEAR_METERED_DAYS} metered day(s)`,
+                      },
+                    ].map((step) => (
+                      <div
+                        key={step.label}
+                        className={`rounded border p-2 ${
+                          step.complete
+                            ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+                            : "border-gray-200 bg-gray-50 text-gray-700"
+                        }`}
+                      >
+                        <p className="font-semibold">
+                          {step.complete ? "Ready" : "Needed"}: {step.label}
+                        </p>
+                        <p className="mt-1 text-[11px]">{step.detail}</p>
+                      </div>
+                    ))}
+                  </div>
                 </>
               ) : null}
 
