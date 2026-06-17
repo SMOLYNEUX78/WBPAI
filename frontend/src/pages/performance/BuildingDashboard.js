@@ -196,11 +196,36 @@ const BuildingDashboardPanel = ({ building }) => {
     gasDhwWindows: [],
     gasDecompositionConfidence: "Pending gas data",
   };
+  const defaultCarbonSavingsSummary = {
+    latestDate: null,
+    latestSavedKgCo2e: null,
+    totalSavedKgCo2e: null,
+  };
+  const defaultCarbonIntervalSavingsSummary = {
+    latestTimestamp: null,
+    latestSavedKgCo2e: null,
+    totalSavedKgCo2e: null,
+    totalSavedKwh: null,
+    energyCostSavedGbp: null,
+    carbonCredits: null,
+  };
   const readCachedEnergySummary = () =>
     readCachedDashboardState(
       `${dataSourceBuildingId}:energySummary`,
       defaultEnergySummary
     );
+  const readCachedCarbonSavingsSummary = () =>
+    readCachedDashboardState(
+      `${dataSourceBuildingId}:carbonSavingsSummary`,
+      defaultCarbonSavingsSummary
+    );
+  const readCachedCarbonIntervalSavingsSummary = () =>
+    readCachedDashboardState(
+      `${dataSourceBuildingId}:carbonIntervalSavingsSummary`,
+      defaultCarbonIntervalSavingsSummary
+    );
+  const readCachedWeeklyTrendData = () =>
+    readCachedDashboardState(`${dataSourceBuildingId}:weeklyTrendData`, []);
   const [sensorData, setSensorData] = useState(() =>
     readCachedDashboardState(`${dataSourceBuildingId}:latestIaq`, defaultSensorData)
   );
@@ -216,20 +241,18 @@ const BuildingDashboardPanel = ({ building }) => {
       ? cachedEnergySummary.totalDailyAverage
       : null;
   });
-  const [carbonCredits, setCarbonCredits] = useState(0);
-  const [carbonSavingsSummary, setCarbonSavingsSummary] = useState({
-    latestDate: null,
-    latestSavedKgCo2e: null,
-    totalSavedKgCo2e: null,
+  const [carbonIntervalSavingsSummary, setCarbonIntervalSavingsSummary] = useState(
+    readCachedCarbonIntervalSavingsSummary
+  );
+  const [carbonCredits, setCarbonCredits] = useState(() => {
+    const cachedIntervalSummary = readCachedCarbonIntervalSavingsSummary();
+    return Number.isFinite(cachedIntervalSummary.carbonCredits)
+      ? cachedIntervalSummary.carbonCredits
+      : 0;
   });
-  const [carbonIntervalSavingsSummary, setCarbonIntervalSavingsSummary] = useState({
-    latestTimestamp: null,
-    latestSavedKgCo2e: null,
-    totalSavedKgCo2e: null,
-    totalSavedKwh: null,
-    energyCostSavedGbp: null,
-    carbonCredits: null,
-  });
+  const [carbonSavingsSummary, setCarbonSavingsSummary] = useState(
+    readCachedCarbonSavingsSummary
+  );
   const [carbonMarketPrice, setCarbonMarketPrice] = useState({
     gbpPerTonne: FALLBACK_CARBON_PRICE_GBP_PER_TONNE,
     source: "Estimated UK/EU carbon allowance price",
@@ -258,7 +281,7 @@ const BuildingDashboardPanel = ({ building }) => {
     flatlineIndoorTemp: false,
     filteredInsideReadings: 0,
   });
-  const [weeklyTrendData, setWeeklyTrendData] = useState([]);
+  const [weeklyTrendData, setWeeklyTrendData] = useState(readCachedWeeklyTrendData);
   const [selectedTrendMetricKeys, setSelectedTrendMetricKeys] = useState([]);
   const [hoveredTrendSlot, setHoveredTrendSlot] = useState(null);
 
@@ -862,6 +885,29 @@ const BuildingDashboardPanel = ({ building }) => {
     localStorage.setItem(
       `${dataSourceBuildingId}:energySummary`,
       JSON.stringify(nextEnergySummary)
+    );
+  };
+  const applyCarbonSavingsSummary = (nextCarbonSavingsSummary) => {
+    setCarbonSavingsSummary(nextCarbonSavingsSummary);
+    localStorage.setItem(
+      `${dataSourceBuildingId}:carbonSavingsSummary`,
+      JSON.stringify(nextCarbonSavingsSummary)
+    );
+  };
+  const applyCarbonIntervalSavingsSummary = (
+    nextCarbonIntervalSavingsSummary
+  ) => {
+    setCarbonIntervalSavingsSummary(nextCarbonIntervalSavingsSummary);
+    localStorage.setItem(
+      `${dataSourceBuildingId}:carbonIntervalSavingsSummary`,
+      JSON.stringify(nextCarbonIntervalSavingsSummary)
+    );
+  };
+  const applyWeeklyTrendData = (nextWeeklyTrendData) => {
+    setWeeklyTrendData(nextWeeklyTrendData);
+    localStorage.setItem(
+      `${dataSourceBuildingId}:weeklyTrendData`,
+      JSON.stringify(nextWeeklyTrendData)
     );
   };
 
@@ -1898,10 +1944,9 @@ const BuildingDashboardPanel = ({ building }) => {
         vocs: bucket.vocs.length ? average(bucket.vocs) : null,
       }));
 
-      setWeeklyTrendData(averagedWeeklyTrend);
+      applyWeeklyTrendData(averagedWeeklyTrend);
     } catch (err) {
       console.error("Error fetching weekly performance trend:", err.message);
-      setWeeklyTrendData([]);
     }
   };
 
@@ -2072,7 +2117,7 @@ const BuildingDashboardPanel = ({ building }) => {
       const latest = intervalRows[0] || null;
 
       setCarbonCredits(totalCredits);
-      setCarbonIntervalSavingsSummary({
+      applyCarbonIntervalSavingsSummary({
         latestTimestamp: latest?.timestamp || null,
         latestSavedKgCo2e: latest ? Number(latest.saved_kgco2e) : null,
         totalSavedKgCo2e,
@@ -2107,7 +2152,7 @@ const BuildingDashboardPanel = ({ building }) => {
       const latest = rows[0] || null;
 
       setCarbonCredits(totalCredits);
-      setCarbonSavingsSummary({
+      applyCarbonSavingsSummary({
         latestDate: latest?.saving_date || null,
         latestSavedKgCo2e: latest ? Number(latest.saved_kgco2e) : null,
         totalSavedKgCo2e,
@@ -2129,7 +2174,7 @@ const BuildingDashboardPanel = ({ building }) => {
         const latest = dailyRows[0] || null;
 
         setCarbonCredits(totalCredits);
-        setCarbonSavingsSummary({
+        applyCarbonSavingsSummary({
           latestDate: latest?.saving_date || null,
           latestSavedKgCo2e: latest ? Number(latest.saved_kgco2e) : null,
           totalSavedKgCo2e,
@@ -2272,6 +2317,16 @@ const BuildingDashboardPanel = ({ building }) => {
         ? cachedEnergySummary.totalDailyAverage
         : null
     );
+    const cachedCarbonIntervalSummary =
+      readCachedCarbonIntervalSavingsSummary();
+    setCarbonSavingsSummary(readCachedCarbonSavingsSummary());
+    setCarbonIntervalSavingsSummary(cachedCarbonIntervalSummary);
+    setCarbonCredits(
+      Number.isFinite(cachedCarbonIntervalSummary.carbonCredits)
+        ? cachedCarbonIntervalSummary.carbonCredits
+        : 0
+    );
+    setWeeklyTrendData(readCachedWeeklyTrendData());
     fetchLongTermAverage();
     fetchHeatLossSummary();
     fetchExternalTemp();
