@@ -128,10 +128,6 @@ const BuildingDashboardPanel = ({ building }) => {
   const isCarbonCreditTab = building.id === "cc";
   const [deepDivePanel, setDeepDivePanel] = useState(null);
   const [standardDeepDiveOpen, setStandardDeepDiveOpen] = useState(true);
-  const [carbonCreditDeepDiveOpen, setCarbonCreditDeepDiveOpen] =
-    useState(false);
-  const [auditEvidenceDeepDiveOpen, setAuditEvidenceDeepDiveOpen] =
-    useState(false);
   const [activeMrvEvidenceField, setActiveMrvEvidenceField] = useState(null);
   const deepDiveOpen = Boolean(deepDivePanel);
 
@@ -270,7 +266,7 @@ const BuildingDashboardPanel = ({ building }) => {
       ? cachedIntervalSummary.carbonCredits
       : 0;
   });
-  const [carbonSavingsSummary, setCarbonSavingsSummary] = useState(
+  const [, setCarbonSavingsSummary] = useState(
     readCachedCarbonSavingsSummary
   );
   const [carbonMarketPrice, setCarbonMarketPrice] = useState({
@@ -2565,14 +2561,6 @@ const BuildingDashboardPanel = ({ building }) => {
   const verifierApprovalComplete =
     mrvEvidence.verifierStatus === "approved" &&
     Boolean(mrvEvidence.verifierName?.trim());
-  const openMrvEvidenceModal = (fieldKey) => {
-    if (!fieldKey) {
-      return;
-    }
-
-    setAuditEvidenceDeepDiveOpen(true);
-    setActiveMrvEvidenceField(fieldKey);
-  };
   const evidencePackChecks = [
     {
       label: "Building identity",
@@ -3141,113 +3129,6 @@ const BuildingDashboardPanel = ({ building }) => {
     hddSource: "Projected PHPP / EnerPHit retrofit model",
     comfortNote: "20.5 deg C target internal temp / EnerPHit comfort assumed",
   };
-  const carbonProjectionMonths = [
-    "Jan",
-    "Feb",
-    "Mar",
-    "Apr",
-    "May",
-    "Jun",
-    "Jul",
-    "Aug",
-    "Sep",
-    "Oct",
-    "Nov",
-    "Dec",
-  ];
-  const baselineMonthlyFactors = [
-    1.42,
-    1.28,
-    1.12,
-    0.92,
-    0.78,
-    0.68,
-    0.64,
-    0.66,
-    0.78,
-    0.96,
-    1.16,
-    1.4,
-  ];
-  const enerphitMonthlyFactors = [
-    1.12,
-    1.08,
-    1.03,
-    0.98,
-    0.94,
-    0.9,
-    0.88,
-    0.9,
-    0.94,
-    0.99,
-    1.05,
-    1.11,
-  ];
-  const baselineDailyKwhForCarbonProjection = Number.isFinite(
-    energySummary.totalDailyAverage
-  )
-    ? energySummary.totalDailyAverage
-    : Number.isFinite(historicalPerformance)
-    ? historicalPerformance
-    : null;
-  const enerphitDailyKwhForCarbonProjection =
-    projectedPerformanceDeepDive.electricityDailyAverage +
-    projectedPerformanceDeepDive.gasDailyAverage;
-  const carbonProjectionData = carbonProjectionMonths.map((month, index) => ({
-    month,
-    baseline: Number.isFinite(baselineDailyKwhForCarbonProjection)
-      ? baselineDailyKwhForCarbonProjection * 30.4 * baselineMonthlyFactors[index]
-      : null,
-    newPerformance:
-      enerphitDailyKwhForCarbonProjection *
-      30.4 *
-      enerphitMonthlyFactors[index],
-  }));
-  const carbonProjectionValues = carbonProjectionData
-    .flatMap((point) => [point.baseline, point.newPerformance])
-    .filter((value) => Number.isFinite(value));
-  const carbonProjectionChart = {
-    width: 640,
-    height: 210,
-    padding: { top: 18, right: 18, bottom: 34, left: 44 },
-  };
-  carbonProjectionChart.plotWidth =
-    carbonProjectionChart.width -
-    carbonProjectionChart.padding.left -
-    carbonProjectionChart.padding.right;
-  carbonProjectionChart.plotHeight =
-    carbonProjectionChart.height -
-    carbonProjectionChart.padding.top -
-    carbonProjectionChart.padding.bottom;
-  const carbonProjectionMax = carbonProjectionValues.length
-    ? Math.max(...carbonProjectionValues) * 1.12
-    : 1;
-  const carbonProjectionPoint = (value, index) => {
-    if (!Number.isFinite(value)) {
-      return null;
-    }
-
-    const x =
-      carbonProjectionChart.padding.left +
-      (index / (carbonProjectionData.length - 1)) *
-        carbonProjectionChart.plotWidth;
-    const y =
-      carbonProjectionChart.padding.top +
-      (1 - value / carbonProjectionMax) *
-        carbonProjectionChart.plotHeight;
-    return { x, y };
-  };
-  const carbonProjectionPath = (key) =>
-    carbonProjectionData
-      .map((point, index) => carbonProjectionPoint(point[key], index))
-      .filter(Boolean)
-      .map(
-        (point, index) =>
-          `${index === 0 ? "M" : "L"} ${point.x.toFixed(1)} ${point.y.toFixed(
-            1
-          )}`
-      )
-      .join(" ");
   const displayedAnnualEui = isNewPerformanceDeepDive
     ? projectedPerformanceDeepDive.annualEui
     : Number.isFinite(historicalPerformance) &&
@@ -4294,18 +4175,13 @@ const BuildingDashboardPanel = ({ building }) => {
                 </span>
               </span>
             </button>
-            <button
-              type="button"
-              className="w-28 rounded border border-gray-300 bg-white px-3 py-1.5 text-center text-sm font-semibold text-gray-700 shadow-sm"
-              onClick={() =>
-                setCarbonCreditDeepDiveOpen((isOpen) => !isOpen)
-              }
-            >
-              Deep Dive
-            </button>
           </div>
 
-          <div className="rounded border border-gray-200 bg-gray-50 p-4 space-y-3">
+          <button
+            type="button"
+            className="w-full rounded border border-gray-200 bg-gray-50 p-4 text-left shadow-sm transition hover:border-gray-400"
+            onClick={() => setActiveMrvEvidenceField("overview")}
+          >
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h3 className="font-semibold">Audit Evidence Pack</h3>
@@ -4321,7 +4197,7 @@ const BuildingDashboardPanel = ({ building }) => {
               </div>
             </div>
 
-            <div className="h-3 overflow-hidden rounded bg-gray-200">
+            <div className="mt-3 h-3 overflow-hidden rounded bg-gray-200">
               <div
                 className={`h-full transition-all ${
                   evidencePackScore >= 80
@@ -4333,242 +4209,10 @@ const BuildingDashboardPanel = ({ building }) => {
                 style={{ width: `${evidencePackScore}%` }}
               />
             </div>
-
-            <button
-              type="button"
-              className="w-28 rounded border border-gray-300 bg-white px-3 py-1.5 text-center text-sm font-semibold text-gray-700 shadow-sm"
-              onClick={() =>
-                setAuditEvidenceDeepDiveOpen((isOpen) => !isOpen)
-              }
-            >
-              Deep Dive
-            </button>
-
-            {auditEvidenceDeepDiveOpen ? (
-              <div className="space-y-4 border-t pt-4">
-                <div className="grid gap-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
-                  <div className="rounded border border-gray-200 bg-white p-3">
-                    <p className="uppercase text-gray-500">Audit ID</p>
-                    <p className="mt-1 font-semibold text-gray-900">
-                      {auditReference}
-                    </p>
-                  </div>
-                  <div className="rounded border border-gray-200 bg-white p-3">
-                    <p className="uppercase text-gray-500">Baseline</p>
-                    <p className="mt-1 font-semibold text-gray-900">
-                      {baselineLockComplete
-                        ? "Locked"
-                        : hasEnergyBaseline
-                        ? "Candidate data present"
-                        : "Pending"}
-                    </p>
-                  </div>
-                  <div className="rounded border border-gray-200 bg-white p-3">
-                    <p className="uppercase text-gray-500">Intervention</p>
-                    <p className="mt-1 font-semibold text-gray-900">
-                      {mrvEvidence.interventionDate || "Not locked"}
-                    </p>
-                  </div>
-                  <div className="rounded border border-gray-200 bg-white p-3">
-                    <p className="uppercase text-gray-500">Verifier status</p>
-                    <p className="mt-1 font-semibold text-gray-900">
-                      {mrvEvidence.verifierStatus}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="grid gap-2 text-xs sm:grid-cols-2 lg:grid-cols-3">
-                  {evidencePackChecks.map((check) => {
-                    const canCompleteInApp = Boolean(check.fieldKey);
-                    const TileElement = canCompleteInApp ? "button" : "div";
-                    return (
-                    <TileElement
-                      key={check.label}
-                      type={canCompleteInApp ? "button" : undefined}
-                      onClick={
-                        canCompleteInApp
-                          ? () => openMrvEvidenceModal(check.fieldKey)
-                          : undefined
-                      }
-                      className={`rounded border p-2 text-left ${
-                        check.complete
-                          ? "border-emerald-200 bg-emerald-50 text-emerald-900"
-                          : "border-amber-200 bg-amber-50 text-amber-900"
-                      } ${canCompleteInApp ? "cursor-pointer hover:shadow-sm" : ""}`}
-                    >
-                      <p className="font-semibold">
-                        {check.complete ? "Ready" : "Needed"}: {check.label}
-                      </p>
-                      <p className="mt-1 text-[11px]">{check.detail}</p>
-                      {canCompleteInApp ? (
-                        <p className="mt-2 text-[11px] font-semibold underline">
-                          {check.complete ? "Edit" : "Complete in app"}
-                        </p>
-                      ) : null}
-                    </TileElement>
-                    );
-                  })}
-                </div>
-
-                <div className="flex flex-wrap items-start justify-between gap-3 border-t pt-3">
-                  <div className="text-xs text-gray-600">
-                    <p className="font-semibold text-gray-800">
-                      Missing evidence
-                    </p>
-                    <p>
-                      {missingEvidenceItems.length
-                        ? missingEvidenceItems
-                            .map((item) => item.label)
-                            .join(", ")
-                        : "No missing evidence flagged"}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    className="rounded border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-800 shadow-sm"
-                    onClick={exportEvidencePack}
-                  >
-                    Export Evidence Pack
-                  </button>
-                </div>
-              </div>
-            ) : null}
-          </div>
-
-          {carbonCreditDeepDiveOpen ? (
-            <div className="space-y-4 border-t pt-4">
-              <div className="grid gap-2 text-xs text-gray-600 sm:grid-cols-2">
-                <p>
-                  <strong>Carbon price:</strong>{" "}
-                  {Number.isFinite(carbonMarketPrice.gbpPerTonne)
-                    ? `${formatCurrency(carbonMarketPrice.gbpPerTonne)}/tCO2e`
-                    : "Pending"}
-                  <br />
-                  <span className="text-[10px] text-gray-500">
-                    {carbonMarketPrice.live ? "Live" : "Fallback"} -{" "}
-                    {carbonMarketPrice.source}
-                  </span>
-                </p>
-                <p>
-                  <strong>Carbon saved:</strong>{" "}
-                  {Number.isFinite(
-                    carbonIntervalSavingsSummary.totalSavedKgCo2e
-                  )
-                    ? `${formatNumber(
-                        carbonIntervalSavingsSummary.totalSavedKgCo2e,
-                        2
-                      )} kgCO2e`
-                    : "Pending calculation"}
-                </p>
-                <p>
-                  <strong>Daily evidence model:</strong>{" "}
-                  {Number.isFinite(carbonSavingsSummary.totalSavedKgCo2e)
-                    ? `${formatNumber(
-                        carbonSavingsSummary.totalSavedKgCo2e,
-                        2
-                      )} kgCO2e`
-                    : "Pending calculation"}
-                </p>
-                <p>
-                  <strong>Latest half-hour:</strong>{" "}
-                  {carbonIntervalSavingsSummary.latestTimestamp &&
-                  Number.isFinite(
-                    carbonIntervalSavingsSummary.latestSavedKgCo2e
-                  )
-                    ? `${new Date(
-                        carbonIntervalSavingsSummary.latestTimestamp
-                      ).toLocaleString("en-GB", {
-                        day: "2-digit",
-                        month: "short",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}: ${formatNumber(
-                        carbonIntervalSavingsSummary.latestSavedKgCo2e,
-                        3
-                      )} kgCO2e`
-                    : "Pending calculation"}
-                </p>
-              </div>
-
-              <div>
-                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                  <h3 className="text-sm font-semibold">
-                    Yearly Performance Projection
-                  </h3>
-                  <div className="flex gap-3 text-xs text-gray-600">
-                    <span>
-                      <span className="inline-block h-2 w-4 rounded bg-gray-300 align-middle" />{" "}
-                      Baseline
-                    </span>
-                    <span>
-                      <span className="inline-block h-2 w-4 rounded bg-emerald-500 align-middle" />{" "}
-                      EnerPHit
-                    </span>
-                  </div>
-                </div>
-                <svg
-                  viewBox={`0 0 ${carbonProjectionChart.width} ${carbonProjectionChart.height}`}
-                  className="h-52 w-full"
-                  role="img"
-                  aria-label="Baseline and EnerPHit yearly performance projection"
-                >
-                  {[0, 0.5, 1].map((tick) => {
-                    const y =
-                      carbonProjectionChart.padding.top +
-                      tick * carbonProjectionChart.plotHeight;
-                    return (
-                      <line
-                        key={tick}
-                        x1={carbonProjectionChart.padding.left}
-                        x2={
-                          carbonProjectionChart.width -
-                          carbonProjectionChart.padding.right
-                        }
-                        y1={y}
-                        y2={y}
-                        stroke="#e5e7eb"
-                      />
-                    );
-                  })}
-                  <path
-                    d={carbonProjectionPath("baseline")}
-                    fill="none"
-                    stroke="#9ca3af"
-                    strokeWidth="4"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    opacity="0.45"
-                  />
-                  <path
-                    d={carbonProjectionPath("newPerformance")}
-                    fill="none"
-                    stroke="#10b981"
-                    strokeWidth="4"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                  {carbonProjectionData.map((point, index) => {
-                    const x =
-                      carbonProjectionChart.padding.left +
-                      (index / (carbonProjectionData.length - 1)) *
-                        carbonProjectionChart.plotWidth;
-                    return (
-                      <text
-                        key={point.month}
-                        x={x}
-                        y={carbonProjectionChart.height - 10}
-                        textAnchor="middle"
-                        fontSize="11"
-                        fill="#6b7280"
-                      >
-                        {point.month}
-                      </text>
-                    );
-                  })}
-                </svg>
-              </div>
-            </div>
-          ) : null}
+            <p className="mt-2 text-xs font-semibold text-gray-700">
+              Click to view evidence requirements
+            </p>
+          </button>
         </div>
       </div>
 
@@ -4578,7 +4222,9 @@ const BuildingDashboardPanel = ({ building }) => {
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
                 <h3 className="text-lg font-bold">
-                  {activeMrvEvidenceField === "baseline"
+                  {activeMrvEvidenceField === "overview"
+                    ? "Audit Evidence Pack"
+                    : activeMrvEvidenceField === "baseline"
                     ? "Complete Baseline Lock"
                     : activeMrvEvidenceField === "intervention"
                     ? "Complete Intervention Evidence"
@@ -4587,7 +4233,9 @@ const BuildingDashboardPanel = ({ building }) => {
                     : "Complete Verifier Approval"}
                 </h3>
                 <p className="text-sm text-gray-600">
-                  This evidence is saved to this building's MRV pack.
+                  {activeMrvEvidenceField === "overview"
+                    ? "Review evidence requirements and complete missing items."
+                    : "This evidence is saved to this building's MRV pack."}
                 </p>
               </div>
               <button
@@ -4600,6 +4248,107 @@ const BuildingDashboardPanel = ({ building }) => {
             </div>
 
             <div className="space-y-4 text-sm">
+              {activeMrvEvidenceField !== "overview" ? (
+                <button
+                  type="button"
+                  className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm font-semibold text-gray-700"
+                  onClick={() => setActiveMrvEvidenceField("overview")}
+                >
+                  Back to evidence requirements
+                </button>
+              ) : null}
+
+              {activeMrvEvidenceField === "overview" ? (
+                <>
+                  <div className="grid gap-3 text-xs sm:grid-cols-2">
+                    <div className="rounded border border-gray-200 bg-gray-50 p-3">
+                      <p className="uppercase text-gray-500">Audit ID</p>
+                      <p className="mt-1 font-semibold text-gray-900">
+                        {auditReference}
+                      </p>
+                    </div>
+                    <div className="rounded border border-gray-200 bg-gray-50 p-3">
+                      <p className="uppercase text-gray-500">Audit ready</p>
+                      <p className="mt-1 text-2xl font-bold text-gray-900">
+                        {evidencePackScore}%
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="h-3 overflow-hidden rounded bg-gray-200">
+                    <div
+                      className={`h-full transition-all ${
+                        evidencePackScore >= 80
+                          ? "bg-emerald-500"
+                          : evidencePackScore >= 50
+                          ? "bg-amber-500"
+                          : "bg-red-500"
+                      }`}
+                      style={{ width: `${evidencePackScore}%` }}
+                    />
+                  </div>
+
+                  <div className="grid gap-2 text-xs sm:grid-cols-2">
+                    {evidencePackChecks.map((check) => {
+                      const canCompleteInApp = Boolean(check.fieldKey);
+                      const TileElement = canCompleteInApp ? "button" : "div";
+                      return (
+                        <TileElement
+                          key={check.label}
+                          type={canCompleteInApp ? "button" : undefined}
+                          onClick={
+                            canCompleteInApp
+                              ? () => setActiveMrvEvidenceField(check.fieldKey)
+                              : undefined
+                          }
+                          className={`rounded border p-3 text-left ${
+                            check.complete
+                              ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+                              : "border-amber-200 bg-amber-50 text-amber-900"
+                          } ${
+                            canCompleteInApp
+                              ? "cursor-pointer hover:shadow-sm"
+                              : ""
+                          }`}
+                        >
+                          <p className="font-semibold">
+                            {check.complete ? "Ready" : "Needed"}: {check.label}
+                          </p>
+                          <p className="mt-1 text-[11px]">{check.detail}</p>
+                          {canCompleteInApp ? (
+                            <p className="mt-2 text-[11px] font-semibold underline">
+                              {check.complete ? "Edit" : "Complete in app"}
+                            </p>
+                          ) : null}
+                        </TileElement>
+                      );
+                    })}
+                  </div>
+
+                  <div className="flex flex-wrap items-start justify-between gap-3 border-t pt-3">
+                    <div className="text-xs text-gray-600">
+                      <p className="font-semibold text-gray-800">
+                        Missing evidence
+                      </p>
+                      <p>
+                        {missingEvidenceItems.length
+                          ? missingEvidenceItems
+                              .map((item) => item.label)
+                              .join(", ")
+                          : "No missing evidence flagged"}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="rounded border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-800 shadow-sm"
+                      onClick={exportEvidencePack}
+                    >
+                      Export Evidence Pack
+                    </button>
+                  </div>
+                </>
+              ) : null}
+
               {activeMrvEvidenceField === "baseline" ? (
                 <>
                   <label className="block space-y-1">
