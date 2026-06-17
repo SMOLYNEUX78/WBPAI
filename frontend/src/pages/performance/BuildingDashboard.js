@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import AnalogGauge from "../../components/AnalogGauge";
 import supabase from "../../supabaseClient";
 
@@ -4216,9 +4217,10 @@ const BuildingDashboardPanel = ({ building }) => {
         </div>
       </div>
 
-      {activeMrvEvidenceField ? (
-        <div className="fixed inset-0 z-[9999] flex items-start justify-center overflow-y-auto bg-black/40 p-4 pt-20 sm:items-center sm:pt-4">
-          <div className="relative w-full max-w-lg rounded-lg border border-gray-200 bg-white p-5 shadow-2xl">
+      {activeMrvEvidenceField && typeof document !== "undefined"
+        ? createPortal(
+            <div className="fixed inset-0 z-[9999] flex items-center justify-center overflow-y-auto bg-black/40 p-4">
+              <div className="relative my-6 max-h-[calc(100vh-3rem)] w-full max-w-lg overflow-y-auto rounded-lg border border-gray-200 bg-white p-5 shadow-2xl">
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
                 <h3 className="text-lg font-bold">
@@ -4505,9 +4507,11 @@ const BuildingDashboardPanel = ({ building }) => {
                 Done
               </button>
             </div>
-          </div>
-        </div>
-      ) : null}
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
     </div>
   );
 };
