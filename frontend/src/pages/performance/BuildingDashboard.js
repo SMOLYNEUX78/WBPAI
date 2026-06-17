@@ -2695,8 +2695,9 @@ const BuildingDashboardPanel = ({ building }) => {
   const evidencePackScore = Math.round(
     (evidencePackCompleteCount / evidencePackChecks.length) * 100
   );
+  const evidencePackExportReady = evidencePackScore === 100;
   const sellCreditsAvailable =
-    evidencePackScore === 100 && verifierApprovalComplete;
+    evidencePackExportReady && verifierApprovalComplete;
   const missingEvidenceItems = evidencePackChecks.filter(
     (check) => !check.complete
   );
@@ -4355,10 +4356,15 @@ const BuildingDashboardPanel = ({ building }) => {
                     </div>
                     <button
                       type="button"
-                      className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-800 shadow-sm sm:w-auto"
+                      disabled={!evidencePackExportReady}
+                      className={`w-full rounded border px-3 py-2 text-sm font-semibold shadow-sm sm:w-auto ${
+                        evidencePackExportReady
+                          ? "border-gray-300 bg-white text-gray-800"
+                          : "cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400"
+                      }`}
                       onClick={exportEvidencePack}
                     >
-                      Export Evidence Pack
+                      Export
                     </button>
                   </div>
 
