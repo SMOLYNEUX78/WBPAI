@@ -4109,15 +4109,6 @@ const BuildingDashboardPanel = ({ building }) => {
             >
               {carbonTokenUnlocked ? "Unlocked" : "Locked"}
             </span>
-            <button
-              type="button"
-              className="text-sm font-semibold underline text-gray-700"
-              onClick={() =>
-                setCarbonCreditDeepDiveOpen((isOpen) => !isOpen)
-              }
-            >
-              {carbonCreditDeepDiveOpen ? "Hide deep dive" : "Deep Dive"}
-            </button>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -4157,6 +4148,29 @@ const BuildingDashboardPanel = ({ building }) => {
                   : "Pending calculation"}
               </p>
             </div>
+          </div>
+
+          <div className="flex flex-col items-start gap-2">
+            <button
+              type="button"
+              disabled={!carbonTokenUnlocked}
+              className={`w-36 rounded px-4 py-2 text-sm font-semibold text-white ${
+                carbonTokenUnlocked
+                  ? "bg-red-500"
+                  : "bg-gray-400 cursor-not-allowed"
+              }`}
+            >
+              SELL CREDITS
+            </button>
+            <button
+              type="button"
+              className="text-sm font-semibold underline text-gray-700"
+              onClick={() =>
+                setCarbonCreditDeepDiveOpen((isOpen) => !isOpen)
+              }
+            >
+              {carbonCreditDeepDiveOpen ? "Hide deep dive" : "Deep Dive"}
+            </button>
           </div>
 
           {carbonCreditDeepDiveOpen ? (
