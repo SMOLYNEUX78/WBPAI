@@ -252,6 +252,7 @@ const BuildingDashboardPanel = ({ building }) => {
     readCachedDashboardState(`${dataSourceBuildingId}:roomIaq`, [])
   );
   const supportsExtendedIaqColumns = useRef(true);
+  const mrvFormRefs = useRef({});
 
   const [performanceValue, setPerformanceValue] = useState(null);
   const [historicalPerformance, setHistoricalPerformance] = useState(() => {
@@ -2589,6 +2590,23 @@ const BuildingDashboardPanel = ({ building }) => {
   const verifierApprovalComplete =
     mrvEvidence.verifierStatus === "approved" &&
     Boolean(mrvEvidence.verifierName?.trim());
+  const focusMrvEvidenceField = (fieldKey) => {
+    if (!fieldKey) {
+      return;
+    }
+
+    setAuditEvidenceDeepDiveOpen(true);
+    window.setTimeout(() => {
+      const target = mrvFormRefs.current[fieldKey];
+      if (!target) {
+        return;
+      }
+
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
+      const focusTarget = target.querySelector("input, textarea, select");
+      focusTarget?.focus();
+    }, 0);
+  };
   const evidencePackChecks = [
     {
       label: "Building identity",
@@ -2637,6 +2655,7 @@ const BuildingDashboardPanel = ({ building }) => {
     },
     {
       label: "Baseline lock",
+      fieldKey: "baseline",
       detail: baselineLockComplete
         ? `${mrvEvidence.baselineStartDate} to ${mrvEvidence.baselineEndDate}`
         : "Needs formal locked baseline dates",
@@ -2644,6 +2663,7 @@ const BuildingDashboardPanel = ({ building }) => {
     },
     {
       label: "Intervention completion",
+      fieldKey: "intervention",
       detail: interventionComplete
         ? `${mrvEvidence.interventionDate}: ${mrvEvidence.interventionEvidence}`
         : "Needs retrofit completion date and evidence",
@@ -2651,6 +2671,7 @@ const BuildingDashboardPanel = ({ building }) => {
     },
     {
       label: "Ownership and consent",
+      fieldKey: "ownership",
       detail: ownershipConsentComplete
         ? "Credit assignment and no-double-counting declaration captured"
         : "Needs credit assignment and no-double-counting declaration",
@@ -2658,6 +2679,7 @@ const BuildingDashboardPanel = ({ building }) => {
     },
     {
       label: "Verifier approval",
+      fieldKey: "verifier",
       detail: verifierApprovalComplete
         ? `${mrvEvidence.verifierName} approved`
         : "Needs validation/verification body review",
@@ -4433,25 +4455,45 @@ const BuildingDashboardPanel = ({ building }) => {
                 </div>
 
                 <div className="grid gap-2 text-xs sm:grid-cols-2 lg:grid-cols-3">
-                  {evidencePackChecks.map((check) => (
-                    <div
+                  {evidencePackChecks.map((check) => {
+                    const canCompleteInApp = Boolean(check.fieldKey);
+                    const TileElement = canCompleteInApp ? "button" : "div";
+                    return (
+                    <TileElement
                       key={check.label}
-                      className={`rounded border p-2 ${
+                      type={canCompleteInApp ? "button" : undefined}
+                      onClick={
+                        canCompleteInApp
+                          ? () => focusMrvEvidenceField(check.fieldKey)
+                          : undefined
+                      }
+                      className={`rounded border p-2 text-left ${
                         check.complete
                           ? "border-emerald-200 bg-emerald-50 text-emerald-900"
                           : "border-amber-200 bg-amber-50 text-amber-900"
-                      }`}
+                      } ${canCompleteInApp ? "cursor-pointer hover:shadow-sm" : ""}`}
                     >
                       <p className="font-semibold">
                         {check.complete ? "Ready" : "Needed"}: {check.label}
                       </p>
                       <p className="mt-1 text-[11px]">{check.detail}</p>
-                    </div>
-                  ))}
+                      {canCompleteInApp ? (
+                        <p className="mt-2 text-[11px] font-semibold underline">
+                          {check.complete ? "Edit" : "Complete in app"}
+                        </p>
+                      ) : null}
+                    </TileElement>
+                    );
+                  })}
                 </div>
 
                 <div className="grid gap-3 text-xs sm:grid-cols-2">
-                  <label className="space-y-1">
+                  <label
+                    className="space-y-1"
+                    ref={(element) => {
+                      mrvFormRefs.current.baseline = element;
+                    }}
+                  >
                     <span className="font-semibold text-gray-700">
                       Baseline start
                     </span>
@@ -4495,7 +4537,12 @@ const BuildingDashboardPanel = ({ building }) => {
                       Lock this baseline period for crediting
                     </span>
                   </label>
-                  <label className="space-y-1">
+                  <label
+                    className="space-y-1"
+                    ref={(element) => {
+                      mrvFormRefs.current.intervention = element;
+                    }}
+                  >
                     <span className="font-semibold text-gray-700">
                       Intervention completion date
                     </span>
@@ -4510,7 +4557,12 @@ const BuildingDashboardPanel = ({ building }) => {
                       className="w-full rounded border border-gray-300 px-2 py-2"
                     />
                   </label>
-                  <label className="space-y-1">
+                  <label
+                    className="space-y-1"
+                    ref={(element) => {
+                      mrvFormRefs.current.verifier = element;
+                    }}
+                  >
                     <span className="font-semibold text-gray-700">
                       Verifier
                     </span>
@@ -4558,7 +4610,12 @@ const BuildingDashboardPanel = ({ building }) => {
                       <option value="approved">Approved</option>
                     </select>
                   </label>
-                  <label className="flex items-center gap-2 rounded border border-gray-200 bg-white p-2">
+                  <label
+                    className="flex items-center gap-2 rounded border border-gray-200 bg-white p-2"
+                    ref={(element) => {
+                      mrvFormRefs.current.ownership = element;
+                    }}
+                  >
                     <input
                       type="checkbox"
                       checked={mrvEvidence.ownershipConsent}
