@@ -2553,7 +2553,6 @@ const BuildingDashboardPanel = ({ building }) => {
     Number.isFinite(sensorData.internalTemp) ||
     Number.isFinite(sensorData.humidity) ||
     roomIaqData.length > 0;
-  const carbonTokenUnlocked = isCarbonCreditTab;
   const baselineLockComplete = Boolean(
     mrvEvidence.baselineLocked &&
       mrvEvidence.baselineStartDate &&
@@ -2659,6 +2658,8 @@ const BuildingDashboardPanel = ({ building }) => {
   const evidencePackScore = Math.round(
     (evidencePackCompleteCount / evidencePackChecks.length) * 100
   );
+  const sellCreditsAvailable =
+    evidencePackScore === 100 && verifierApprovalComplete;
   const missingEvidenceItems = evidencePackChecks.filter(
     (check) => !check.complete
   );
@@ -3338,6 +3339,17 @@ const BuildingDashboardPanel = ({ building }) => {
           >
             {title}
           </h3>
+          {statusLabel ? (
+            <span
+              className={`whitespace-nowrap rounded border px-2 py-0.5 text-[8px] font-semibold uppercase tracking-wide ${
+                tone === "primary"
+                  ? "border-emerald-300 bg-white text-emerald-800"
+                  : "border-gray-300 bg-white text-gray-600"
+              }`}
+            >
+              {statusLabel}
+            </span>
+          ) : null}
         </div>
       ) : null}
       <div
@@ -3387,21 +3399,10 @@ const BuildingDashboardPanel = ({ building }) => {
       </div>
       {isCarbonCreditTab && diveKey ? (
         <div className="mt-1.5 flex flex-col items-start gap-1.5 border-t border-gray-100 pt-1.5 sm:mt-3 sm:gap-2 sm:pt-2">
-          {statusLabel ? (
-            <span
-              className={`whitespace-nowrap rounded border px-2 py-0.5 text-[8px] font-semibold uppercase tracking-wide ${
-                tone === "primary"
-                  ? "border-emerald-300 bg-white text-emerald-800"
-                  : "border-gray-300 bg-white text-gray-600"
-              }`}
-            >
-              {statusLabel}
-            </span>
-          ) : null}
           <button
             type="button"
             onClick={() => toggleDeepDivePanel(diveKey)}
-            className="text-left text-[10px] font-semibold text-gray-700 underline decoration-gray-300 underline-offset-2 transition hover:text-black sm:text-xs"
+            className="rounded border border-gray-300 bg-white px-2 py-1 text-left text-[10px] font-semibold text-gray-700 shadow-sm transition hover:border-gray-500 hover:text-black sm:text-xs"
             aria-expanded={deepDivePanel === diveKey}
           >
             {deepDivePanel === diveKey ? "Hide deep dive" : "Deep Dive"}
@@ -3412,7 +3413,7 @@ const BuildingDashboardPanel = ({ building }) => {
           <button
             type="button"
             onClick={() => setStandardDeepDiveOpen((isOpen) => !isOpen)}
-            className="text-left text-[10px] font-semibold text-gray-700 underline decoration-gray-300 underline-offset-2 transition hover:text-black sm:text-xs"
+            className="rounded border border-gray-300 bg-white px-2 py-1 text-left text-[10px] font-semibold text-gray-700 shadow-sm transition hover:border-gray-500 hover:text-black sm:text-xs"
             aria-expanded={standardDeepDiveOpen}
           >
             {standardDeepDiveOpen ? "Hide deep dive" : "Deep Dive"}
@@ -4279,18 +4280,23 @@ const BuildingDashboardPanel = ({ building }) => {
           <div className="flex flex-col items-start gap-2">
             <button
               type="button"
-              disabled={!carbonTokenUnlocked}
-              className={`w-36 rounded px-4 py-2 text-sm font-semibold text-white ${
-                carbonTokenUnlocked
-                  ? "bg-red-500"
-                  : "bg-gray-400 cursor-not-allowed"
+              disabled={!sellCreditsAvailable}
+              className={`w-40 rounded border px-4 py-2 text-sm font-semibold ${
+                sellCreditsAvailable
+                  ? "border-red-500 bg-red-500 text-white"
+                  : "border-gray-300 bg-white/40 text-gray-500 cursor-not-allowed"
               }`}
             >
+              <span className="mr-2 inline-block" aria-hidden="true">
+                <span className="relative inline-block h-3 w-3 rounded-sm border-2 border-current align-[-1px]">
+                  <span className="absolute -top-2 left-1/2 h-2 w-2 -translate-x-1/2 rounded-t-full border-2 border-b-0 border-current" />
+                </span>
+              </span>
               SELL CREDITS
             </button>
             <button
               type="button"
-              className="text-sm font-semibold underline text-gray-700"
+              className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm font-semibold text-gray-700 shadow-sm"
               onClick={() =>
                 setCarbonCreditDeepDiveOpen((isOpen) => !isOpen)
               }
@@ -4330,7 +4336,7 @@ const BuildingDashboardPanel = ({ building }) => {
 
             <button
               type="button"
-              className="text-sm font-semibold underline text-gray-700"
+              className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm font-semibold text-gray-700 shadow-sm"
               onClick={() =>
                 setAuditEvidenceDeepDiveOpen((isOpen) => !isOpen)
               }
