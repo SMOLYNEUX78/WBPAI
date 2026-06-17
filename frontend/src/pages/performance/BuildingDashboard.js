@@ -10,6 +10,7 @@ const ELECTRICITY_PRICE_GBP_PER_KWH = 0.245;
 const GAS_PRICE_GBP_PER_KWH = 0.06;
 const ELECTRICITY_KGCO2E_PER_KWH = 0.20705;
 const GAS_KGCO2E_PER_KWH = 0.18254;
+const MIN_BASELINE_METERED_DAYS = 7;
 
 const HOME_BUILDING = {
   id: "home",
@@ -197,6 +198,9 @@ const BuildingDashboardPanel = ({ building }) => {
     gasUnregulatedDaily: null,
     gasDhwWindows: [],
     gasDecompositionConfidence: "Pending gas data",
+    baselineMeteredDays: 0,
+    baselineStartDate: null,
+    baselineEndDate: null,
   };
   const defaultCarbonSavingsSummary = {
     latestDate: null,
@@ -998,6 +1002,11 @@ const BuildingDashboardPanel = ({ building }) => {
 
           return totals;
         }, {});
+        const completedBaselineDays = Object.keys(completedDailyTotalsByDay).sort();
+        const baselineMeteredDays = completedBaselineDays.length;
+        const baselineStartDate = completedBaselineDays[0] || null;
+        const baselineEndDate =
+          completedBaselineDays[completedBaselineDays.length - 1] || null;
 
         const todayDailyTotalsByFuel = todayRows.reduce((totals, row) => {
           const usageKwh = Number(row.usage_kwh);
@@ -1169,6 +1178,9 @@ const BuildingDashboardPanel = ({ building }) => {
           gasUnregulatedDaily,
           gasDhwWindows: recurringDhwSlots.map((slot) => slot.label),
           gasDecompositionConfidence,
+          baselineMeteredDays,
+          baselineStartDate,
+          baselineEndDate,
         }, totalDailyAverage);
         return;
       }
@@ -1213,6 +1225,9 @@ const BuildingDashboardPanel = ({ building }) => {
           gasUnregulatedDaily: null,
           gasDhwWindows: [],
           gasDecompositionConfidence: "No gas data",
+          baselineMeteredDays: validEntries.length,
+          baselineStartDate: null,
+          baselineEndDate: null,
         }, electricityDailyAverage);
       }
     } catch (err) {
@@ -2543,6 +2558,13 @@ const BuildingDashboardPanel = ({ building }) => {
   );
   const hasConfirmedArea = matterportMetadata.internalArea !== "--";
   const hasEnergyBaseline = Number.isFinite(historicalPerformance);
+  const baselineMeteredDays = Number(energySummary.baselineMeteredDays) || 0;
+  const baselineDateRange =
+    energySummary.baselineStartDate && energySummary.baselineEndDate
+      ? `${energySummary.baselineStartDate} to ${energySummary.baselineEndDate}`
+      : null;
+  const autoBaselineAchieved =
+    hasEnergyBaseline && baselineMeteredDays >= MIN_BASELINE_METERED_DAYS;
   const hasWeatherNormalisedBaseline =
     Number.isFinite(heatLossSummary.weatherNormalisedEui) ||
     Number.isFinite(heatLossSummary.kwhPerHdd);
@@ -2555,6 +2577,7 @@ const BuildingDashboardPanel = ({ building }) => {
       mrvEvidence.baselineStartDate &&
       mrvEvidence.baselineEndDate
   );
+  const baselineEvidenceComplete = baselineLockComplete || autoBaselineAchieved;
   const interventionComplete = Boolean(
     mrvEvidence.interventionDate && mrvEvidence.interventionEvidence?.trim()
   );
@@ -2580,7 +2603,9 @@ const BuildingDashboardPanel = ({ building }) => {
     {
       label: "Smart meter baseline",
       detail: hasEnergyBaseline
-        ? `${formatNumber(historicalPerformance, 2)} kWh/day average`
+        ? `${formatNumber(historicalPerformance, 2)} kWh/day average across ${baselineMeteredDays} completed day(s)${
+            baselineDateRange ? ` (${baselineDateRange})` : ""
+          }`
         : "Needs metered baseline period",
       complete: hasEnergyBaseline,
     },
@@ -2613,8 +2638,10 @@ const BuildingDashboardPanel = ({ building }) => {
       fieldKey: "baseline",
       detail: baselineLockComplete
         ? `${mrvEvidence.baselineStartDate} to ${mrvEvidence.baselineEndDate}`
-        : "Needs formal locked baseline dates",
-      complete: baselineLockComplete,
+        : autoBaselineAchieved
+        ? `Auto-ready from ${baselineDateRange || "metered readings"}`
+        : `Needs ${MIN_BASELINE_METERED_DAYS} completed metered days`,
+      complete: baselineEvidenceComplete,
     },
     {
       label: "Intervention completion",
@@ -2672,9 +2699,11 @@ const BuildingDashboardPanel = ({ building }) => {
         matterportModelId,
       },
       baseline: {
-        locked: baselineLockComplete,
-        startDate: mrvEvidence.baselineStartDate,
-        endDate: mrvEvidence.baselineEndDate,
+        locked: baselineEvidenceComplete,
+        lockSource: baselineLockComplete ? "manual" : "auto-detected",
+        meteredDays: baselineMeteredDays,
+        startDate: mrvEvidence.baselineStartDate || energySummary.baselineStartDate,
+        endDate: mrvEvidence.baselineEndDate || energySummary.baselineEndDate,
         historicalPerformanceKwhPerDay: historicalPerformance,
         weatherNormalisedEui: heatLossSummary.weatherNormalisedEui,
         kwhPerHdd: heatLossSummary.kwhPerHdd,
@@ -4219,8 +4248,8 @@ const BuildingDashboardPanel = ({ building }) => {
 
       {activeMrvEvidenceField && typeof document !== "undefined"
         ? createPortal(
-            <div className="fixed inset-0 z-[9999] flex items-center justify-center overflow-y-auto bg-black/40 p-4">
-              <div className="relative my-6 max-h-[calc(100vh-3rem)] w-full max-w-lg overflow-y-auto rounded-lg border border-gray-200 bg-white p-5 shadow-2xl">
+            <div className="fixed inset-0 z-[9999] flex items-center justify-center overflow-y-auto bg-black/40 p-3 sm:p-6">
+              <div className="relative my-6 max-h-[calc(100vh-3rem)] w-full max-w-6xl overflow-y-auto rounded-lg border border-gray-200 bg-white p-5 shadow-2xl sm:p-6">
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
                 <h3 className="text-lg font-bold">
@@ -4262,7 +4291,7 @@ const BuildingDashboardPanel = ({ building }) => {
 
               {activeMrvEvidenceField === "overview" ? (
                 <>
-                  <div className="grid gap-3 text-xs sm:grid-cols-2">
+                  <div className="grid gap-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
                     <div className="rounded border border-gray-200 bg-gray-50 p-3">
                       <p className="uppercase text-gray-500">Audit ID</p>
                       <p className="mt-1 font-semibold text-gray-900">
@@ -4273,6 +4302,28 @@ const BuildingDashboardPanel = ({ building }) => {
                       <p className="uppercase text-gray-500">Audit ready</p>
                       <p className="mt-1 text-2xl font-bold text-gray-900">
                         {evidencePackScore}%
+                      </p>
+                    </div>
+                    <div className="rounded border border-gray-200 bg-gray-50 p-3">
+                      <p className="uppercase text-gray-500">Baseline</p>
+                      <p className="mt-1 font-semibold text-gray-900">
+                        {baselineEvidenceComplete
+                          ? baselineLockComplete
+                            ? "Locked"
+                            : "Auto-ready"
+                          : "Collecting"}
+                      </p>
+                      <p className="mt-1 text-[11px] text-gray-600">
+                        {baselineDateRange || "No complete range yet"}
+                      </p>
+                    </div>
+                    <div className="rounded border border-gray-200 bg-gray-50 p-3">
+                      <p className="uppercase text-gray-500">Metered days</p>
+                      <p className="mt-1 text-2xl font-bold text-gray-900">
+                        {baselineMeteredDays}
+                      </p>
+                      <p className="mt-1 text-[11px] text-gray-600">
+                        {MIN_BASELINE_METERED_DAYS} needed for auto-ready
                       </p>
                     </div>
                   </div>
@@ -4290,7 +4341,7 @@ const BuildingDashboardPanel = ({ building }) => {
                     />
                   </div>
 
-                  <div className="grid gap-2 text-xs sm:grid-cols-2">
+                  <div className="grid gap-3 text-xs sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                     {evidencePackChecks.map((check) => {
                       const canCompleteInApp = Boolean(check.fieldKey);
                       const TileElement = canCompleteInApp ? "button" : "div";
@@ -4353,6 +4404,48 @@ const BuildingDashboardPanel = ({ building }) => {
 
               {activeMrvEvidenceField === "baseline" ? (
                 <>
+                  <div
+                    className={`rounded border p-3 text-sm ${
+                      autoBaselineAchieved
+                        ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+                        : "border-amber-200 bg-amber-50 text-amber-900"
+                    }`}
+                  >
+                    <p className="font-semibold">
+                      {autoBaselineAchieved
+                        ? "Candidate baseline achieved automatically"
+                        : "Candidate baseline still collecting"}
+                    </p>
+                    <p className="mt-1 text-xs">
+                      {autoBaselineAchieved
+                        ? `${baselineMeteredDays} completed metered day(s) available${
+                            baselineDateRange ? `: ${baselineDateRange}` : ""
+                          }.`
+                        : `${baselineMeteredDays}/${MIN_BASELINE_METERED_DAYS} completed metered day(s) available.`}
+                    </p>
+                    <button
+                      type="button"
+                      disabled={!autoBaselineAchieved}
+                      className={`mt-3 rounded border px-3 py-1.5 text-xs font-semibold ${
+                        autoBaselineAchieved
+                          ? "border-emerald-600 bg-white text-emerald-800"
+                          : "cursor-not-allowed border-amber-200 bg-white/60 text-amber-700"
+                      }`}
+                      onClick={() =>
+                        updateMrvEvidence({
+                          baselineStartDate:
+                            energySummary.baselineStartDate ||
+                            mrvEvidence.baselineStartDate,
+                          baselineEndDate:
+                            energySummary.baselineEndDate ||
+                            mrvEvidence.baselineEndDate,
+                          baselineLocked: true,
+                        })
+                      }
+                    >
+                      Use detected baseline dates
+                    </button>
+                  </div>
                   <label className="block space-y-1">
                     <span className="font-semibold text-gray-700">
                       Baseline start
