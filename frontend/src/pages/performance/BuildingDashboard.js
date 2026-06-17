@@ -4236,11 +4236,7 @@ const BuildingDashboardPanel = ({ building }) => {
       <div className="bg-gray-100 p-4 rounded shadow">
         <h2 className="text-lg font-bold mb-3">WBP Carbon Credit</h2>
 
-        <div
-          className={`bg-white rounded border p-4 space-y-4 transition-opacity ${
-            carbonTokenUnlocked ? "opacity-100" : "opacity-45"
-          }`}
-        >
+        <div className="bg-white rounded border p-4 space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
               <p className="text-xs uppercase text-gray-500">Credits</p>
