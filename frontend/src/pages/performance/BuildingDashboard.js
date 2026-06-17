@@ -4174,19 +4174,19 @@ const BuildingDashboardPanel = ({ building }) => {
         )}
       </div>
 
-      <div className="relative bg-gray-100 p-4 rounded shadow">
-        <div
-          className="absolute right-4 top-4 text-gray-500"
-          aria-label="Carbon credit actions locked"
-          title="Carbon credit actions locked"
-        >
-          <span className="relative inline-block h-4 w-4 rounded-sm border-2 border-current">
-            <span className="absolute -top-3 left-1/2 h-3 w-3 -translate-x-1/2 rounded-t-full border-2 border-b-0 border-current" />
-          </span>
-        </div>
-        <h2 className="mb-3 pr-8 text-lg font-bold">WBP Carbon Credit</h2>
+      <div className="bg-gray-100 p-4 rounded shadow">
+        <h2 className="mb-3 text-lg font-bold">WBP Carbon Credit</h2>
 
-        <div className="bg-white rounded border p-4 space-y-4">
+        <div className="relative bg-white rounded border p-4 space-y-4">
+          <div
+            className="absolute right-4 top-4 text-gray-500"
+            aria-label="Carbon credit actions locked"
+            title="Carbon credit actions locked"
+          >
+            <span className="relative inline-block h-4 w-4 rounded-sm border-2 border-current">
+              <span className="absolute -top-3 left-1/2 h-3 w-3 -translate-x-1/2 rounded-t-full border-2 border-b-0 border-current" />
+            </span>
+          </div>
           <div className="opacity-35">
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -4231,18 +4231,13 @@ const BuildingDashboardPanel = ({ building }) => {
               <button
                 type="button"
                 disabled={!sellCreditsAvailable}
-                className={`flex w-40 items-center justify-between rounded border px-4 py-2 text-sm font-semibold ${
+                className={`w-40 rounded border px-4 py-2 text-sm font-semibold ${
                   sellCreditsAvailable
                     ? "border-emerald-600 bg-emerald-600 text-white"
                     : "border-emerald-200 bg-emerald-50/60 text-emerald-700 cursor-not-allowed"
                 }`}
               >
-                <span>SELL CREDITS</span>
-                <span className="ml-2 inline-block" aria-hidden="true">
-                  <span className="relative inline-block h-3 w-3 rounded-sm border-2 border-current align-[-1px]">
-                    <span className="absolute -top-2 left-1/2 h-2 w-2 -translate-x-1/2 rounded-t-full border-2 border-b-0 border-current" />
-                  </span>
-                </span>
+                SELL CREDITS
               </button>
             </div>
           </div>
