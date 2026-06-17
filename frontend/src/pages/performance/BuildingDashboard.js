@@ -3402,10 +3402,10 @@ const BuildingDashboardPanel = ({ building }) => {
           <button
             type="button"
             onClick={() => toggleDeepDivePanel(diveKey)}
-            className="rounded border border-gray-300 bg-white px-2 py-1 text-left text-[10px] font-semibold text-gray-700 shadow-sm transition hover:border-gray-500 hover:text-black sm:text-xs"
+            className="w-28 rounded border border-gray-300 bg-white px-2 py-1 text-center text-[10px] font-semibold text-gray-700 shadow-sm transition hover:border-gray-500 hover:text-black sm:text-xs"
             aria-expanded={deepDivePanel === diveKey}
           >
-            {deepDivePanel === diveKey ? "Hide deep dive" : "Deep Dive"}
+            Deep Dive
           </button>
         </div>
       ) : showStandardDeepDiveToggle ? (
@@ -3413,10 +3413,10 @@ const BuildingDashboardPanel = ({ building }) => {
           <button
             type="button"
             onClick={() => setStandardDeepDiveOpen((isOpen) => !isOpen)}
-            className="rounded border border-gray-300 bg-white px-2 py-1 text-left text-[10px] font-semibold text-gray-700 shadow-sm transition hover:border-gray-500 hover:text-black sm:text-xs"
+            className="w-28 rounded border border-gray-300 bg-white px-2 py-1 text-center text-[10px] font-semibold text-gray-700 shadow-sm transition hover:border-gray-500 hover:text-black sm:text-xs"
             aria-expanded={standardDeepDiveOpen}
           >
-            {standardDeepDiveOpen ? "Hide deep dive" : "Deep Dive"}
+            Deep Dive
           </button>
         </div>
       ) : null}
@@ -4281,27 +4281,27 @@ const BuildingDashboardPanel = ({ building }) => {
             <button
               type="button"
               disabled={!sellCreditsAvailable}
-              className={`w-40 rounded border px-4 py-2 text-sm font-semibold ${
+              className={`flex w-40 items-center justify-between rounded border px-4 py-2 text-sm font-semibold ${
                 sellCreditsAvailable
-                  ? "border-red-500 bg-red-500 text-white"
-                  : "border-gray-300 bg-white/40 text-gray-500 cursor-not-allowed"
+                  ? "border-emerald-600 bg-emerald-600 text-white"
+                  : "border-emerald-200 bg-emerald-50/60 text-emerald-700 cursor-not-allowed"
               }`}
             >
-              <span className="mr-2 inline-block" aria-hidden="true">
+              <span>SELL CREDITS</span>
+              <span className="ml-2 inline-block" aria-hidden="true">
                 <span className="relative inline-block h-3 w-3 rounded-sm border-2 border-current align-[-1px]">
                   <span className="absolute -top-2 left-1/2 h-2 w-2 -translate-x-1/2 rounded-t-full border-2 border-b-0 border-current" />
                 </span>
               </span>
-              SELL CREDITS
             </button>
             <button
               type="button"
-              className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm font-semibold text-gray-700 shadow-sm"
+              className="w-28 rounded border border-gray-300 bg-white px-3 py-1.5 text-center text-sm font-semibold text-gray-700 shadow-sm"
               onClick={() =>
                 setCarbonCreditDeepDiveOpen((isOpen) => !isOpen)
               }
             >
-              {carbonCreditDeepDiveOpen ? "Hide deep dive" : "Deep Dive"}
+              Deep Dive
             </button>
           </div>
 
@@ -4336,14 +4336,12 @@ const BuildingDashboardPanel = ({ building }) => {
 
             <button
               type="button"
-              className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm font-semibold text-gray-700 shadow-sm"
+              className="w-28 rounded border border-gray-300 bg-white px-3 py-1.5 text-center text-sm font-semibold text-gray-700 shadow-sm"
               onClick={() =>
                 setAuditEvidenceDeepDiveOpen((isOpen) => !isOpen)
               }
             >
-              {auditEvidenceDeepDiveOpen
-                ? "Hide evidence deep dive"
-                : "Evidence Deep Dive"}
+              Deep Dive
             </button>
 
             {auditEvidenceDeepDiveOpen ? (
@@ -4575,8 +4573,8 @@ const BuildingDashboardPanel = ({ building }) => {
       </div>
 
       {activeMrvEvidenceField ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded bg-white p-5 shadow-xl">
+        <div className="fixed inset-0 z-[9999] flex items-start justify-center overflow-y-auto bg-black/40 p-4 pt-20 sm:items-center sm:pt-4">
+          <div className="relative w-full max-w-lg rounded-lg border border-gray-200 bg-white p-5 shadow-2xl">
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
                 <h3 className="text-lg font-bold">
