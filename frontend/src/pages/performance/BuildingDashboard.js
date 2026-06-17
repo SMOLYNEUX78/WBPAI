@@ -2553,31 +2553,7 @@ const BuildingDashboardPanel = ({ building }) => {
     Number.isFinite(sensorData.internalTemp) ||
     Number.isFinite(sensorData.humidity) ||
     roomIaqData.length > 0;
-  const carbonEvidenceSteps = [
-    { label: "Energy baseline", complete: hasEnergyBaseline },
-    { label: "GIA confirmed", complete: hasConfirmedArea },
-    { label: "HDD normalised", complete: hasWeatherNormalisedBaseline },
-    { label: "Live IAQ active", complete: hasLiveIaqFeed },
-    { label: "Cold-season comfort", complete: heatLossSummary.htcSamples >= 30 },
-    { label: "Warm-season comfort", complete: false },
-    { label: "Post-improvement period", complete: false },
-    { label: "Credit evidence ready", complete: false },
-  ].map((step) =>
-    isCarbonCreditTab
-      ? { ...step, complete: true }
-      : step
-  );
-  const carbonEvidenceCompleteCount = carbonEvidenceSteps.filter(
-    (step) => step.complete
-  ).length;
-  const carbonEvidenceProgress = Math.round(
-    (carbonEvidenceCompleteCount / carbonEvidenceSteps.length) * 100
-  );
-  const nextCarbonEvidenceStep = carbonEvidenceSteps.find(
-    (step) => !step.complete
-  );
-  const carbonTokenUnlocked =
-    isCarbonCreditTab || carbonEvidenceSteps.every((step) => step.complete);
+  const carbonTokenUnlocked = isCarbonCreditTab;
   const baselineLockComplete = Boolean(
     mrvEvidence.baselineLocked &&
       mrvEvidence.baselineStartDate &&
@@ -4253,50 +4229,6 @@ const BuildingDashboardPanel = ({ building }) => {
               Weekly trend data will appear once energy or IAQ readings are available.
             </div>
           )}
-        </div>
-        )}
-
-        {!shouldShowDeepDive ? null : (
-        <div className="mt-4 bg-white rounded border p-4 space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <h3 className="font-semibold">Carbon Evidence Readiness</h3>
-              <p className="text-xs text-gray-600">
-                {nextCarbonEvidenceStep
-                  ? `Next: ${nextCarbonEvidenceStep.label}`
-                  : "Ready for token activation"}
-              </p>
-            </div>
-            <p className="text-sm font-semibold">
-              {carbonEvidenceCompleteCount}/{carbonEvidenceSteps.length} complete
-            </p>
-          </div>
-
-          <div className="h-3 rounded bg-gray-200 overflow-hidden">
-            <div
-              className="h-full bg-blue-600 transition-all"
-              style={{ width: `${carbonEvidenceProgress}%` }}
-            />
-          </div>
-
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 text-xs">
-            {carbonEvidenceSteps.map((step) => (
-              <div
-                key={step.label}
-                className={`rounded border p-2 ${
-                  step.complete
-                    ? "border-blue-200 bg-blue-50 text-blue-900"
-                    : "border-gray-200 bg-gray-50 text-gray-600"
-                }`}
-              >
-                <span className="font-semibold">
-                  {step.complete ? "Complete" : "Pending"}
-                </span>
-                <br />
-                {step.label}
-              </div>
-            ))}
-          </div>
         </div>
         )}
       </div>
