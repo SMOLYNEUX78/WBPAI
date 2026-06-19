@@ -2644,6 +2644,7 @@ const BuildingDashboardPanel = ({ building }) => {
     Boolean(mrvEvidence.verifierName?.trim());
   const evidencePackChecks = [
     {
+      category: "Monitoring inputs",
       label: "Building identity",
       detail: `${building.address || "Address pending"} / ${
         building.latitude || "--"
@@ -2651,6 +2652,7 @@ const BuildingDashboardPanel = ({ building }) => {
       complete: Boolean(building.address && building.latitude && building.longitude),
     },
     {
+      category: "Monitoring inputs",
       label: "Internal area",
       detail: hasConfirmedArea
         ? `${matterportMetadata.internalArea} m2`
@@ -2658,24 +2660,7 @@ const BuildingDashboardPanel = ({ building }) => {
       complete: hasConfirmedArea,
     },
     {
-      label: "Smart meter baseline",
-      detail: hasEnergyBaseline
-        ? `${formatNumber(historicalPerformance, 2)} kWh/day average across ${baselineMeteredDays} completed day(s)${
-            baselineDateRange ? ` (${baselineDateRange})` : ""
-          }`
-        : "Needs metered baseline period",
-      complete: hasEnergyBaseline,
-    },
-    {
-      label: "Weather normalisation",
-      detail: hasWeatherNormalisedBaseline
-        ? `${heatLossSummary.hddSource || "HDD"} calculation available across ${
-            heatLossSummary.hddDays || 0
-          } HDD day(s)`
-        : "Needs locked HDD method/source",
-      complete: hddNormalisedBaseline,
-    },
-    {
+      category: "Monitoring inputs",
       label: "Live IAQ evidence",
       detail: hasLiveIaqFeed
         ? `${roomIaqData.length || 1} active feed(s)`
@@ -2683,22 +2668,33 @@ const BuildingDashboardPanel = ({ building }) => {
       complete: hasLiveIaqFeed,
     },
     {
+      category: "Monitoring inputs",
       label: "Collector provenance",
       detail: "Collector instance and source columns captured in Supabase",
       complete: true,
     },
     {
+      category: "Monitoring inputs",
       label: "Calculation version",
       detail: "enerphit-certified-v1 / dashboard carbon v1",
       complete: true,
     },
     {
-      label: "Baseline confidence",
+      category: "Baseline performance",
+      label: "Baseline calculation",
       fieldKey: "baseline",
-      detail: `${baselineConfidence.label}: ${baselineConfidence.detail}`,
+      detail: hasEnergyBaseline
+        ? `${baselineConfidence.label}: ${formatNumber(
+            historicalPerformance,
+            2
+          )} kWh/day, ${baselineMeteredDays} metered day(s), ${
+            heatLossSummary.hddDays || 0
+          } HDD day(s)`
+        : "Needs metered energy plus HDD/weather-normalised baseline",
       complete: baselineEvidenceComplete,
     },
     {
+      category: "Retrofit works",
       label: "Intervention completion",
       fieldKey: "intervention",
       detail: interventionComplete
@@ -2707,20 +2703,13 @@ const BuildingDashboardPanel = ({ building }) => {
       complete: interventionComplete,
     },
     {
+      category: "Retrofit works",
       label: "Ownership and consent",
       fieldKey: "ownership",
       detail: ownershipConsentComplete
         ? "Credit assignment and no-double-counting declaration captured"
         : "Needs credit assignment and no-double-counting declaration",
       complete: ownershipConsentComplete,
-    },
-    {
-      label: "Verifier approval",
-      fieldKey: "verifier",
-      detail: verifierApprovalComplete
-        ? `${mrvEvidence.verifierName} approved`
-        : "Needs validation/verification body review",
-      complete: verifierApprovalComplete,
     },
   ];
   const evidencePackCompleteCount = evidencePackChecks.filter(
@@ -2733,12 +2722,28 @@ const BuildingDashboardPanel = ({ building }) => {
 
     return a.complete ? 1 : -1;
   });
+  const evidencePackCategories = [
+    "Monitoring inputs",
+    "Baseline performance",
+    "Retrofit works",
+  ];
+  const groupedEvidencePackChecks = evidencePackCategories
+    .map((category) => ({
+      category,
+      checks: orderedEvidencePackChecks.filter(
+        (check) => check.category === category
+      ),
+    }))
+    .filter((group) => group.checks.length > 0);
   const evidencePackScore = Math.round(
     (evidencePackCompleteCount / evidencePackChecks.length) * 100
   );
   const evidencePackExportReady = evidencePackScore === 100;
   const sellCreditsAvailable =
     evidencePackExportReady && verifierApprovalComplete;
+  const verifierRoutingStatus = evidencePackExportReady
+    ? "Ready to route to selected verifier on export"
+    : "Verifier routing unlocks when the evidence pack reaches 100%";
   const missingEvidenceItems = evidencePackChecks.filter(
     (check) => !check.complete
   );
@@ -2798,8 +2803,11 @@ const BuildingDashboardPanel = ({ building }) => {
         noDoubleCounting: mrvEvidence.ownershipConsent,
       },
       verifier: {
-        name: mrvEvidence.verifierName,
-        status: mrvEvidence.verifierStatus,
+        routingStatus: verifierRoutingStatus,
+        targetOrganisation: null,
+        status: evidencePackExportReady
+          ? "ready-for-submission"
+          : "awaiting-complete-evidence-pack",
       },
       carbon: {
         candidateCredits: carbonCredits,
@@ -2813,6 +2821,7 @@ const BuildingDashboardPanel = ({ building }) => {
         energyValueGbp: carbonIntervalSavingsSummary.energyCostSavedGbp,
       },
       checks: evidencePackChecks,
+      checkGroups: groupedEvidencePackChecks,
       missingEvidence: missingEvidenceItems.map((item) => item.label),
     };
     const blob = new Blob([JSON.stringify(evidencePack, null, 2)], {
@@ -4411,41 +4420,64 @@ const BuildingDashboardPanel = ({ building }) => {
                     </button>
                   </div>
 
-                  <div className="grid gap-3 text-xs sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                    {orderedEvidencePackChecks.map((check) => {
-                      const canCompleteInApp = Boolean(check.fieldKey);
-                      const TileElement = canCompleteInApp ? "button" : "div";
-                      return (
-                        <TileElement
-                          key={check.label}
-                          type={canCompleteInApp ? "button" : undefined}
-                          onClick={
-                            canCompleteInApp
-                              ? () => setActiveMrvEvidenceField(check.fieldKey)
-                              : undefined
-                          }
-                          className={`rounded border p-3 text-left ${
-                            check.complete
-                              ? "border-emerald-200 bg-emerald-50 text-emerald-900"
-                              : "border-amber-200 bg-amber-50 text-amber-900"
-                          } ${
-                            canCompleteInApp
-                              ? "cursor-pointer hover:shadow-sm"
-                              : ""
-                          }`}
-                        >
-                          <p className="font-semibold">
-                            {check.complete ? "Ready" : "Needed"}: {check.label}
-                          </p>
-                          <p className="mt-1 text-[11px]">{check.detail}</p>
-                          {canCompleteInApp ? (
-                            <p className="mt-2 text-[11px] font-semibold underline">
-                              {check.complete ? "Edit" : "Complete in app"}
-                            </p>
-                          ) : null}
-                        </TileElement>
-                      );
-                    })}
+                  <div className="space-y-3">
+                    {groupedEvidencePackChecks.map((group) => (
+                      <div key={group.category} className="space-y-2">
+                        <div className="flex items-center justify-between gap-3">
+                          <h4 className="text-xs font-bold uppercase text-gray-600">
+                            {group.category}
+                          </h4>
+                          <span className="text-[11px] font-semibold text-gray-500">
+                            {group.checks.filter((check) => check.complete).length}/
+                            {group.checks.length} ready
+                          </span>
+                        </div>
+                        <div className="grid gap-3 text-xs sm:grid-cols-2 lg:grid-cols-3">
+                          {group.checks.map((check) => {
+                            const canCompleteInApp = Boolean(check.fieldKey);
+                            const TileElement = canCompleteInApp ? "button" : "div";
+                            return (
+                              <TileElement
+                                key={check.label}
+                                type={canCompleteInApp ? "button" : undefined}
+                                onClick={
+                                  canCompleteInApp
+                                    ? () => setActiveMrvEvidenceField(check.fieldKey)
+                                    : undefined
+                                }
+                                className={`rounded border p-3 text-left ${
+                                  check.complete
+                                    ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+                                    : "border-amber-200 bg-amber-50 text-amber-900"
+                                } ${
+                                  canCompleteInApp
+                                    ? "cursor-pointer hover:shadow-sm"
+                                    : ""
+                                }`}
+                              >
+                                <p className="font-semibold">
+                                  {check.complete ? "Ready" : "Needed"}:{" "}
+                                  {check.label}
+                                </p>
+                                <p className="mt-1 text-[11px]">{check.detail}</p>
+                                {canCompleteInApp ? (
+                                  <p className="mt-2 text-[11px] font-semibold underline">
+                                    {check.complete ? "Edit" : "Complete in app"}
+                                  </p>
+                                ) : null}
+                              </TileElement>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="rounded border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600">
+                    <p className="font-semibold text-gray-800">
+                      Verifier approval
+                    </p>
+                    <p className="mt-1">{verifierRoutingStatus}</p>
                   </div>
 
                   <div className="border-t pt-3">
