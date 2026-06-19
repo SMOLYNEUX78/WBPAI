@@ -34,6 +34,7 @@ const RUN_SCHEDULE =
 const CRON_SCHEDULE = process.env.CARBON_SAVINGS_CRON || "15 0 * * *";
 const PAGE_SIZE = Number(process.env.CARBON_SAVINGS_PAGE_SIZE || 1000);
 const MAX_PAGES = Number(process.env.CARBON_SAVINGS_MAX_PAGES || 100);
+let supportsCarbonSavingsTable = true;
 let supportsExtendedSavingsColumns = true;
 
 function parseDate(value, label) {
@@ -229,7 +230,20 @@ function isMissingExtendedSavingsColumn(error) {
   );
 }
 
+function isMissingCarbonSavingsTable(error) {
+  return (
+    /CarbonSavingsDaily/i.test(error.message || "") ||
+    /CarbonSavingsDaily/i.test(error.details || "") ||
+    error.code === "42P01" ||
+    error.code === "PGRST205"
+  );
+}
+
 async function upsertCarbonSavings(rows) {
+  if (!supportsCarbonSavingsTable || rows.length === 0) {
+    return false;
+  }
+
   for (const batch of chunkRows(rows, 500)) {
     const uploadRows = supportsExtendedSavingsColumns
       ? batch
@@ -239,6 +253,14 @@ async function upsertCarbonSavings(rows) {
       .upsert(uploadRows, { onConflict: "building_id,saving_date,scenario" });
 
     if (error) {
+      if (isMissingCarbonSavingsTable(error)) {
+        supportsCarbonSavingsTable = false;
+        console.warn(
+          "CarbonSavingsDaily table is unavailable; calculated savings will remain live-only until the evidence table is created."
+        );
+        return false;
+      }
+
       if (supportsExtendedSavingsColumns && isMissingExtendedSavingsColumn(error)) {
         supportsExtendedSavingsColumns = false;
         console.warn(
@@ -260,6 +282,8 @@ async function upsertCarbonSavings(rows) {
       throw error;
     }
   }
+
+  return true;
 }
 
 async function main() {
@@ -282,18 +306,16 @@ async function main() {
     0
   );
 
-  if (!DRY_RUN) {
-    await upsertCarbonSavings(carbonRows);
-  }
+  const persisted = DRY_RUN ? false : await upsertCarbonSavings(carbonRows);
 
   console.log(
-    `${DRY_RUN ? "Calculated" : "Upserted"} ${carbonRows.length} carbon saving day(s) for ${BUILDING_ID}.`
+    `${persisted ? "Upserted" : "Calculated"} ${carbonRows.length} carbon saving day(s) for ${BUILDING_ID}.`
   );
   console.log(
     `Total saved: ${totalSavedKgCo2e.toFixed(3)} kgCO2e / ${(totalSavedKgCo2e / 1000).toFixed(6)} WBP-C candidate credits.`
   );
   console.log(
-    `Energy saved: ${totalSavedKwh.toFixed(3)} kWh / £${totalEnergyCostSavedGbp.toFixed(2)} candidate avoided cost.`
+    `Energy saved: ${totalSavedKwh.toFixed(3)} kWh / GBP ${totalEnergyCostSavedGbp.toFixed(2)} candidate avoided cost.`
   );
 
   if (carbonRows.length) {
