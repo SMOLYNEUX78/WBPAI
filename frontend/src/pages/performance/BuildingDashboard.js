@@ -2780,7 +2780,7 @@ const BuildingDashboardPanel = ({ building }) => {
       return 0;
     }
 
-    return a.complete ? -1 : 1;
+    return a.complete ? 1 : -1;
   });
   const evidencePackCategories = [
     "Monitoring inputs",
