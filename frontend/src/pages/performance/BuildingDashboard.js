@@ -226,6 +226,8 @@ const BuildingDashboardPanel = ({ building }) => {
     interventionDate: "",
     interventionEvidence: "",
     ownershipConsent: false,
+    ownershipRecordReference: "",
+    ownershipRecordFileName: "",
     verifierName: "",
     verifierStatus: "pre-verification",
   };
@@ -2736,7 +2738,13 @@ const BuildingDashboardPanel = ({ building }) => {
   const interventionComplete = Boolean(
     mrvEvidence.interventionDate && mrvEvidence.interventionEvidence?.trim()
   );
-  const ownershipConsentComplete = Boolean(mrvEvidence.ownershipConsent);
+  const ownershipRecordComplete = Boolean(
+    mrvEvidence.ownershipRecordReference?.trim() ||
+      mrvEvidence.ownershipRecordFileName
+  );
+  const ownershipConsentComplete = Boolean(
+    mrvEvidence.ownershipConsent && ownershipRecordComplete
+  );
   const verifierApprovalComplete =
     mrvEvidence.verifierStatus === "approved" &&
     Boolean(mrvEvidence.verifierName?.trim());
@@ -2800,8 +2808,11 @@ const BuildingDashboardPanel = ({ building }) => {
       label: "Ownership and consent",
       fieldKey: "ownership",
       detail: ownershipConsentComplete
-        ? "Credit assignment and no-double-counting declaration captured"
-        : "Needs credit assignment and no-double-counting declaration",
+        ? `Ownership record captured: ${
+            mrvEvidence.ownershipRecordFileName ||
+            mrvEvidence.ownershipRecordReference
+          }`
+        : "Needs ownership record plus credit assignment and no-double-counting declaration",
       complete: ownershipConsentComplete,
     },
   ];
@@ -2903,6 +2914,8 @@ const BuildingDashboardPanel = ({ building }) => {
       },
       declarations: {
         ownershipConsent: mrvEvidence.ownershipConsent,
+        ownershipRecordReference: mrvEvidence.ownershipRecordReference,
+        ownershipRecordFileName: mrvEvidence.ownershipRecordFileName,
         noDoubleCounting: mrvEvidence.ownershipConsent,
       },
       verifier: {
@@ -4749,27 +4762,68 @@ const BuildingDashboardPanel = ({ building }) => {
               ) : null}
 
               {activeMrvEvidenceField === "ownership" ? (
-                <label className="flex items-start gap-2 rounded border border-gray-200 bg-gray-50 p-3">
-                  <input
-                    type="checkbox"
-                    checked={mrvEvidence.ownershipConsent}
-                    onChange={(event) =>
-                      updateMrvEvidence({
-                        ownershipConsent: event.target.checked,
-                      })
-                    }
-                    className="mt-1"
-                  />
-                  <span>
-                    <span className="block font-semibold text-gray-700">
-                      Credit assignment and no-double-counting declaration
+                <>
+                  <label className="block space-y-1">
+                    <span className="font-semibold text-gray-700">
+                      Property ownership / authority record
                     </span>
-                    <span className="text-xs text-gray-600">
-                      Confirms the carbon saving claim will not be sold or
-                      assigned through another registry or programme.
+                    <input
+                      type="text"
+                      value={mrvEvidence.ownershipRecordReference || ""}
+                      onChange={(event) =>
+                        updateMrvEvidence({
+                          ownershipRecordReference: event.target.value,
+                        })
+                      }
+                      placeholder="Land Registry title number, tenancy authority, asset ID or consent record"
+                      className="w-full rounded border border-gray-300 px-3 py-2"
+                    />
+                  </label>
+
+                  <label className="block space-y-1">
+                    <span className="font-semibold text-gray-700">
+                      Upload ownership record
                     </span>
-                  </span>
-                </label>
+                    <input
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,application/pdf,image/*"
+                      onChange={(event) =>
+                        updateMrvEvidence({
+                          ownershipRecordFileName:
+                            event.target.files?.[0]?.name || "",
+                        })
+                      }
+                      className="block w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                    />
+                    <span className="block text-xs text-gray-600">
+                      {mrvEvidence.ownershipRecordFileName
+                        ? `Selected: ${mrvEvidence.ownershipRecordFileName}`
+                        : "Stores the document reference for the evidence pack; durable file storage can be connected later."}
+                    </span>
+                  </label>
+
+                  <label className="flex items-start gap-2 rounded border border-gray-200 bg-gray-50 p-3">
+                    <input
+                      type="checkbox"
+                      checked={mrvEvidence.ownershipConsent}
+                      onChange={(event) =>
+                        updateMrvEvidence({
+                          ownershipConsent: event.target.checked,
+                        })
+                      }
+                      className="mt-1"
+                    />
+                    <span>
+                      <span className="block font-semibold text-gray-700">
+                        Credit assignment and no-double-counting declaration
+                      </span>
+                      <span className="text-xs text-gray-600">
+                        Confirms the carbon saving claim will not be sold or
+                        assigned through another registry or programme.
+                      </span>
+                    </span>
+                  </label>
+                </>
               ) : null}
 
               {activeMrvEvidenceField === "verifier" ? (
