@@ -9,10 +9,12 @@ const DYSON_POLL_INTERVAL_MS = Number(
 const DYSON_SAVE_INTERVAL_MS = Number(
   process.env.DYSON_SAVE_INTERVAL_MS || 60000
 );
+const DYSON_TELEMETRY_STALE_MS = Number(
+  process.env.DYSON_TELEMETRY_STALE_MS || 10 * 60 * 1000
+);
 const DYSON_DEVICES = parseDevices(process.env.DYSON_DEVICES || "");
 
 const latestByDevice = new Map();
-let lastSavedAt = 0;
 
 function parseDevices(value) {
   if (!value.trim()) {
@@ -281,8 +283,11 @@ async function persistReadings() {
     ...values.map((value) => new Date(value.timestamp).getTime()).filter(Number.isFinite)
   );
 
-  if (latestTimestamp <= lastSavedAt) {
-    console.log("[dyson] No new purifier telemetry since last insert; skipping");
+  if (
+    !Number.isFinite(latestTimestamp) ||
+    Date.now() - latestTimestamp > DYSON_TELEMETRY_STALE_MS
+  ) {
+    console.log("[dyson] Purifier telemetry is stale; skipping insert");
     return;
   }
 
@@ -305,7 +310,6 @@ async function persistReadings() {
     return;
   }
 
-  lastSavedAt = latestTimestamp;
   console.log(
     `[dyson] Inserted ${rows.length} purifier telemetry row(s) for ${BUILDING_ID}`
   );
