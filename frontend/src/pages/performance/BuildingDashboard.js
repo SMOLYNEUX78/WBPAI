@@ -2794,7 +2794,17 @@ const BuildingDashboardPanel = ({ building }) => {
         (check) => check.category === category
       ),
     }))
-    .filter((group) => group.checks.length > 0);
+    .filter((group) => group.checks.length > 0)
+    .sort((a, b) => {
+      const aNeeded = a.checks.some((check) => !check.complete);
+      const bNeeded = b.checks.some((check) => !check.complete);
+
+      if (aNeeded === bNeeded) {
+        return 0;
+      }
+
+      return aNeeded ? -1 : 1;
+    });
   const evidencePackScore = Math.round(
     (evidencePackCompleteCount / evidencePackChecks.length) * 100
   );
