@@ -22,14 +22,19 @@ const ELECTRICITY_KGCO2E_PER_KWH = Number(
   process.env.ELECTRICITY_KGCO2E_PER_KWH || 0.20705
 );
 const GAS_KGCO2E_PER_KWH = Number(process.env.GAS_KGCO2E_PER_KWH || 0.18254);
+const ELECTRICITY_PRICE_GBP_PER_KWH = Number(
+  process.env.ELECTRICITY_PRICE_GBP_PER_KWH || 0.245
+);
+const GAS_PRICE_GBP_PER_KWH = Number(process.env.GAS_PRICE_GBP_PER_KWH || 0.06);
 const FROM_DATE = process.env.CARBON_SAVINGS_FROM || "2020-01-01";
-const TO_DATE = process.env.CARBON_SAVINGS_TO || new Date().toISOString();
+const TO_DATE = process.env.CARBON_SAVINGS_TO;
 const DRY_RUN = process.env.CARBON_SAVINGS_DRY_RUN === "true";
 const RUN_SCHEDULE =
   process.argv.includes("--schedule") || process.env.CARBON_SAVINGS_SCHEDULE === "true";
 const CRON_SCHEDULE = process.env.CARBON_SAVINGS_CRON || "15 0 * * *";
 const PAGE_SIZE = Number(process.env.CARBON_SAVINGS_PAGE_SIZE || 1000);
 const MAX_PAGES = Number(process.env.CARBON_SAVINGS_MAX_PAGES || 100);
+let supportsExtendedSavingsColumns = true;
 
 function parseDate(value, label) {
   const date = new Date(value);
@@ -133,6 +138,13 @@ function carbonForEnergy({ electricityKwh, gasKwh }) {
   );
 }
 
+function energyCostForEnergy({ electricityKwh, gasKwh }) {
+  return (
+    electricityKwh * ELECTRICITY_PRICE_GBP_PER_KWH +
+    gasKwh * GAS_PRICE_GBP_PER_KWH
+  );
+}
+
 function buildCarbonSavingRows(dailyEnergy) {
   return Object.entries(dailyEnergy)
     .map(([savingDate, fuels]) => {
@@ -146,6 +158,7 @@ function buildCarbonSavingRows(dailyEnergy) {
 
       const improvedElectricityKwh = IMPROVED_DAILY_ELECTRICITY_KWH;
       const improvedGasKwh = 0;
+      const improvedTotalKwh = improvedElectricityKwh + improvedGasKwh;
       const baselineKgCo2e = carbonForEnergy({
         electricityKwh: baselineElectricityKwh,
         gasKwh: baselineGasKwh,
@@ -155,6 +168,19 @@ function buildCarbonSavingRows(dailyEnergy) {
         gasKwh: improvedGasKwh,
       });
       const savedKgCo2e = Math.max(0, baselineKgCo2e - improvedKgCo2e);
+      const savedKwh = Math.max(0, baselineTotalKwh - improvedTotalKwh);
+      const baselineEnergyCostGbp = energyCostForEnergy({
+        electricityKwh: baselineElectricityKwh,
+        gasKwh: baselineGasKwh,
+      });
+      const improvedEnergyCostGbp = energyCostForEnergy({
+        electricityKwh: improvedElectricityKwh,
+        gasKwh: improvedGasKwh,
+      });
+      const energyCostSavedGbp = Math.max(
+        0,
+        baselineEnergyCostGbp - improvedEnergyCostGbp
+      );
 
       return {
         building_id: BUILDING_ID,
@@ -165,16 +191,20 @@ function buildCarbonSavingRows(dailyEnergy) {
         baseline_total_kwh: baselineTotalKwh,
         improved_electricity_kwh: improvedElectricityKwh,
         improved_gas_kwh: improvedGasKwh,
-        improved_total_kwh: improvedElectricityKwh + improvedGasKwh,
+        improved_total_kwh: improvedTotalKwh,
         baseline_kgco2e: baselineKgCo2e,
         improved_kgco2e: improvedKgCo2e,
         saved_kgco2e: savedKgCo2e,
+        saved_kwh: savedKwh,
+        energy_cost_saved_gbp: energyCostSavedGbp,
         carbon_credits: savedKgCo2e / 1000,
         source: "carbon-savings-calculator",
         calculation_version: "enerphit-certified-v1",
         raw_payload: {
           electricityKgCo2ePerKwh: ELECTRICITY_KGCO2E_PER_KWH,
           gasKgCo2ePerKwh: GAS_KGCO2E_PER_KWH,
+          electricityPriceGbpPerKwh: ELECTRICITY_PRICE_GBP_PER_KWH,
+          gasPriceGbpPerKwh: GAS_PRICE_GBP_PER_KWH,
           internalAreaM2: INTERNAL_AREA_M2,
           enerphitEuiKwhM2Year: ENERPHIT_EUI_KWH_M2_YEAR,
           improvedDailyElectricityKwh: IMPROVED_DAILY_ELECTRICITY_KWH,
@@ -187,13 +217,46 @@ function buildCarbonSavingRows(dailyEnergy) {
     .sort((a, b) => a.saving_date.localeCompare(b.saving_date));
 }
 
+function withoutExtendedSavingsColumns(rows) {
+  return rows.map(({ saved_kwh, energy_cost_saved_gbp, ...row }) => row);
+}
+
+function isMissingExtendedSavingsColumn(error) {
+  return (
+    /saved_kwh|energy_cost_saved_gbp/i.test(error.message || "") ||
+    /saved_kwh|energy_cost_saved_gbp/i.test(error.details || "") ||
+    error.code === "PGRST204"
+  );
+}
+
 async function upsertCarbonSavings(rows) {
   for (const batch of chunkRows(rows, 500)) {
+    const uploadRows = supportsExtendedSavingsColumns
+      ? batch
+      : withoutExtendedSavingsColumns(batch);
     const { error } = await supabase
       .from("CarbonSavingsDaily")
-      .upsert(batch, { onConflict: "building_id,saving_date,scenario" });
+      .upsert(uploadRows, { onConflict: "building_id,saving_date,scenario" });
 
     if (error) {
+      if (supportsExtendedSavingsColumns && isMissingExtendedSavingsColumn(error)) {
+        supportsExtendedSavingsColumns = false;
+        console.warn(
+          "CarbonSavingsDaily is missing saved_kwh/energy_cost_saved_gbp columns; retrying without them."
+        );
+        const retry = await supabase
+          .from("CarbonSavingsDaily")
+          .upsert(withoutExtendedSavingsColumns(batch), {
+            onConflict: "building_id,saving_date,scenario",
+          });
+
+        if (!retry.error) {
+          continue;
+        }
+
+        throw retry.error;
+      }
+
       throw error;
     }
   }
@@ -205,12 +268,17 @@ async function main() {
   }
 
   const fromDate = parseDate(FROM_DATE, "CARBON_SAVINGS_FROM");
-  const toDate = parseDate(TO_DATE, "CARBON_SAVINGS_TO");
+  const toDate = parseDate(TO_DATE || new Date().toISOString(), "CARBON_SAVINGS_TO");
   const energyRows = await fetchEnergyRows(fromDate, toDate);
   const dailyEnergy = buildMeasuredDailyEnergy(energyRows);
   const carbonRows = buildCarbonSavingRows(dailyEnergy);
   const totalSavedKgCo2e = carbonRows.reduce(
     (sum, row) => sum + row.saved_kgco2e,
+    0
+  );
+  const totalSavedKwh = carbonRows.reduce((sum, row) => sum + row.saved_kwh, 0);
+  const totalEnergyCostSavedGbp = carbonRows.reduce(
+    (sum, row) => sum + row.energy_cost_saved_gbp,
     0
   );
 
@@ -223,6 +291,9 @@ async function main() {
   );
   console.log(
     `Total saved: ${totalSavedKgCo2e.toFixed(3)} kgCO2e / ${(totalSavedKgCo2e / 1000).toFixed(6)} WBP-C candidate credits.`
+  );
+  console.log(
+    `Energy saved: ${totalSavedKwh.toFixed(3)} kWh / £${totalEnergyCostSavedGbp.toFixed(2)} candidate avoided cost.`
   );
 
   if (carbonRows.length) {

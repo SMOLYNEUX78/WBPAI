@@ -13,6 +13,7 @@ const allProcesses = [
   { name: "weather", script: "weather-handler.js" },
   { name: "mqtt", script: "mqtt-handler.js" },
   { name: "glow-api", script: "glow-api-handler.js" },
+  { name: "carbon-savings", script: "carbon-savings-calculator.js", args: ["--schedule"] },
   { name: "milesight", script: "milesight-handler.js" },
   { name: "dyson", script: "dyson-handler.js" },
   { name: "thingsboard", script: "thingsboard-handler.js" },
@@ -40,10 +41,10 @@ console.log(
 const runningChildren = new Map();
 let stopping = false;
 
-const startProcess = ({ name, script }) => {
+const startProcess = ({ name, script, args = [] }) => {
   const scriptPath = path.join(backendDir, script);
 
-  const child = spawn(process.execPath, [scriptPath], {
+  const child = spawn(process.execPath, [scriptPath, ...args], {
     cwd: backendDir,
     env: process.env,
     stdio: ["ignore", "pipe", "pipe"],

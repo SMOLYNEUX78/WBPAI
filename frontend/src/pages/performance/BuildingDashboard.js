@@ -2033,6 +2033,7 @@ const BuildingDashboardPanel = ({ building }) => {
 
       const intervalDays = new Set();
       const dailyEnergy = {};
+      const dailyFallbackEnergy = {};
       const intervalEnergy = {};
       const dayKey = (timestamp) => new Date(timestamp).toISOString().slice(0, 10);
       const intervalKey = (timestamp) => new Date(timestamp).toISOString();
@@ -2073,6 +2074,11 @@ const BuildingDashboardPanel = ({ building }) => {
             dailyEnergy[day][fuelType] || 0,
             usageKwh
           );
+          dailyFallbackEnergy[day] = dailyFallbackEnergy[day] || {};
+          dailyFallbackEnergy[day][fuelType] = Math.max(
+            dailyFallbackEnergy[day][fuelType] || 0,
+            usageKwh
+          );
         });
 
       const area = Number(matterportMetadata.internalArea);
@@ -2084,6 +2090,8 @@ const BuildingDashboardPanel = ({ building }) => {
         365;
       const improvedDailyKgCo2e =
         improvedDailyElectricityKwh * ELECTRICITY_KGCO2E_PER_KWH;
+      const improvedDailyEnergyCost =
+        improvedDailyElectricityKwh * ELECTRICITY_PRICE_GBP_PER_KWH;
       const improvedIntervalElectricityKwh = improvedDailyElectricityKwh / 48;
       const improvedIntervalKgCo2e =
         improvedIntervalElectricityKwh * ELECTRICITY_KGCO2E_PER_KWH;
@@ -2094,14 +2102,25 @@ const BuildingDashboardPanel = ({ building }) => {
         .map(([savingDate, fuels]) => {
           const electricityKwh = Number(fuels.electricity || 0);
           const gasKwh = Number(fuels.gas || 0);
+          const baselineTotalKwh = electricityKwh + gasKwh;
           const baselineKgCo2e =
             electricityKwh * ELECTRICITY_KGCO2E_PER_KWH +
             gasKwh * GAS_KGCO2E_PER_KWH;
+          const measuredEnergyCost =
+            electricityKwh * ELECTRICITY_PRICE_GBP_PER_KWH +
+            gasKwh * GAS_PRICE_GBP_PER_KWH;
           const savedKgCo2e = Math.max(0, baselineKgCo2e - improvedDailyKgCo2e);
+          const savedKwh = Math.max(0, baselineTotalKwh - improvedDailyElectricityKwh);
+          const energyCostSavedGbp = Math.max(
+            0,
+            measuredEnergyCost - improvedDailyEnergyCost
+          );
 
           return {
             saving_date: savingDate,
             saved_kgco2e: savedKgCo2e,
+            saved_kwh: savedKwh,
+            energy_cost_saved_gbp: energyCostSavedGbp,
             carbon_credits: savedKgCo2e / 1000,
           };
         })
@@ -2141,27 +2160,68 @@ const BuildingDashboardPanel = ({ building }) => {
         })
         .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
 
-      return { dailyRows: rows, intervalRows };
+      const accruedRows = [
+        ...intervalRows,
+        ...Object.entries(dailyFallbackEnergy).map(([savingDate, fuels]) => {
+          const electricityKwh = Number(fuels.electricity || 0);
+          const gasKwh = Number(fuels.gas || 0);
+          const improvedFallbackElectricityKwh =
+            electricityKwh > 0 ? improvedDailyElectricityKwh : 0;
+          const improvedFallbackKgCo2e =
+            improvedFallbackElectricityKwh * ELECTRICITY_KGCO2E_PER_KWH;
+          const improvedFallbackEnergyCost =
+            improvedFallbackElectricityKwh * ELECTRICITY_PRICE_GBP_PER_KWH;
+          const baselineTotalKwh = electricityKwh + gasKwh;
+          const baselineKgCo2e =
+            electricityKwh * ELECTRICITY_KGCO2E_PER_KWH +
+            gasKwh * GAS_KGCO2E_PER_KWH;
+          const measuredEnergyCost =
+            electricityKwh * ELECTRICITY_PRICE_GBP_PER_KWH +
+            gasKwh * GAS_PRICE_GBP_PER_KWH;
+          const savedKgCo2e = Math.max(
+            0,
+            baselineKgCo2e - improvedFallbackKgCo2e
+          );
+          const savedKwh = Math.max(
+            0,
+            baselineTotalKwh - improvedFallbackElectricityKwh
+          );
+          const energyCostSavedGbp = Math.max(
+            0,
+            measuredEnergyCost - improvedFallbackEnergyCost
+          );
+
+          return {
+            timestamp: `${savingDate}T00:00:00.000Z`,
+            saved_kgco2e: savedKgCo2e,
+            saved_kwh: savedKwh,
+            energy_cost_saved_gbp: energyCostSavedGbp,
+            carbon_credits: savedKgCo2e / 1000,
+          };
+        }),
+      ].sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+
+      return { dailyRows: rows, intervalRows, accruedRows };
     };
 
-    const applyIntervalSavingsSummary = (intervalRows) => {
-      const totalSavedKgCo2e = intervalRows.reduce(
+    const applyAccruedSavingsSummary = (accruedRows) => {
+      const totalSavedKgCo2e = accruedRows.reduce(
         (sum, row) => sum + (Number(row.saved_kgco2e) || 0),
         0
       );
-      const totalSavedKwh = intervalRows.reduce(
+      const totalSavedKwh = accruedRows.reduce(
         (sum, row) => sum + (Number(row.saved_kwh) || 0),
         0
       );
-      const energyCostSavedGbp = intervalRows.reduce(
+      const energyCostSavedGbp = accruedRows.reduce(
         (sum, row) => sum + (Number(row.energy_cost_saved_gbp) || 0),
         0
       );
-      const totalCredits = intervalRows.reduce(
+      const totalCredits = accruedRows.reduce(
         (sum, row) => sum + (Number(row.carbon_credits) || 0),
         0
       );
-      const latest = intervalRows[0] || null;
+      const latest = accruedRows[0] || null;
 
       setCarbonCredits(totalCredits);
       applyCarbonIntervalSavingsSummary({
@@ -2204,12 +2264,12 @@ const BuildingDashboardPanel = ({ building }) => {
         latestSavedKgCo2e: latest ? Number(latest.saved_kgco2e) : null,
         totalSavedKgCo2e,
       });
-      const { intervalRows } = await buildCarbonSavingsFromEnergyRows();
-      applyIntervalSavingsSummary(intervalRows);
+      const { accruedRows } = await buildCarbonSavingsFromEnergyRows();
+      applyAccruedSavingsSummary(accruedRows);
     } catch (err) {
       console.warn("Carbon savings table unavailable; calculating from EnergyReadings:", err.message);
       try {
-        const { dailyRows, intervalRows } = await buildCarbonSavingsFromEnergyRows();
+        const { dailyRows, accruedRows } = await buildCarbonSavingsFromEnergyRows();
         const totalSavedKgCo2e = dailyRows.reduce(
           (sum, row) => sum + (Number(row.saved_kgco2e) || 0),
           0
@@ -2226,7 +2286,7 @@ const BuildingDashboardPanel = ({ building }) => {
           latestSavedKgCo2e: latest ? Number(latest.saved_kgco2e) : null,
           totalSavedKgCo2e,
         });
-        applyIntervalSavingsSummary(intervalRows);
+        applyAccruedSavingsSummary(accruedRows);
       } catch (fallbackErr) {
         console.warn("Carbon savings fallback unavailable:", fallbackErr.message);
       }
