@@ -2780,7 +2780,7 @@ const BuildingDashboardPanel = ({ building }) => {
       return 0;
     }
 
-    return a.complete ? 1 : -1;
+    return a.complete ? -1 : 1;
   });
   const evidencePackCategories = [
     "Monitoring inputs",
@@ -3475,7 +3475,11 @@ const BuildingDashboardPanel = ({ building }) => {
     </div>
   );
   return (
-    <div className="min-h-screen bg-white p-4 flex flex-col space-y-6">
+    <div
+      className={`bg-white p-4 flex flex-col space-y-6 ${
+        isCarbonCreditTab ? "min-h-0" : "min-h-screen"
+      }`}
+    >
       <div className="bg-gray-100 p-4 rounded shadow">
         <h2 className="text-lg font-bold mb-3">Building Input</h2>
 
@@ -4540,20 +4544,6 @@ const BuildingDashboardPanel = ({ building }) => {
                     <p className="mt-1">{verifierRoutingStatus}</p>
                   </div>
 
-                  <div className="border-t pt-3">
-                    <div className="text-xs text-gray-600">
-                      <p className="font-semibold text-gray-800">
-                        Missing evidence
-                      </p>
-                      <p>
-                        {missingEvidenceItems.length
-                          ? missingEvidenceItems
-                              .map((item) => item.label)
-                              .join(", ")
-                          : "No missing evidence flagged"}
-                      </p>
-                    </div>
-                  </div>
                 </>
               ) : null}
 
