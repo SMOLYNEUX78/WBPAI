@@ -2690,6 +2690,44 @@ const BuildingDashboardPanel = ({ building }) => {
         score: 0,
         complete: false,
       };
+  const hddCalculationDetail = [
+    `${formatNumber(historicalPerformance, 2)} kWh/day`,
+    `${baselineMeteredDays} metered day(s)`,
+    `${heatLossSummary.hddDays || 0} HDD day(s)`,
+    Number.isFinite(heatLossSummary.kwhPerHdd)
+      ? `${formatNumber(heatLossSummary.kwhPerHdd, 3)} kWh/HDD`
+      : "kWh/HDD pending",
+    Number.isFinite(heatLossSummary.weatherNormalisedEui)
+      ? `${formatNumber(heatLossSummary.weatherNormalisedEui, 1)} kWh/m2/yr weather-normalised`
+      : "weather-normalised EUI pending",
+  ].join(", ");
+  const baselineConfidenceSteps = [
+    {
+      label: "Metered candidate",
+      complete: candidateMeteredBaseline,
+      detail: `${baselineMeteredDays}/${MIN_BASELINE_METERED_DAYS} completed metered day(s)`,
+    },
+    {
+      label: "Basic HDD calculation",
+      complete: hasWeatherNormalisedBaseline,
+      detail: `${heatLossSummary.hddDays || 0} HDD day(s), base ${HDD_BASE_TEMP_C} deg C`,
+    },
+    {
+      label: "Cold-weather HDD",
+      complete: hddNormalisedBaseline,
+      detail: `${heatLossSummary.hddDays || 0}/${MIN_BASELINE_HDD_DAYS} HDD day(s)`,
+    },
+    {
+      label: "Seasonal confidence",
+      complete: seasonalBaseline,
+      detail: `${baselineMeteredDays}/${MIN_SEASONAL_BASELINE_DAYS} completed metered day(s)`,
+    },
+    {
+      label: "Full-year confidence",
+      complete: fullConfidenceBaseline,
+      detail: `${baselineCoverageDays}/${MIN_FULL_YEAR_BASELINE_DAYS} day span and ${baselineMeteredDays}/${MIN_FULL_YEAR_METERED_DAYS} metered day(s)`,
+    },
+  ];
   const hasLiveIaqFeed =
     Number.isFinite(sensorData.internalTemp) ||
     Number.isFinite(sensorData.humidity) ||
@@ -2744,12 +2782,7 @@ const BuildingDashboardPanel = ({ building }) => {
       label: "Baseline calculation",
       fieldKey: "baseline",
       detail: hasEnergyBaseline
-        ? `${baselineConfidence.label}: ${formatNumber(
-            historicalPerformance,
-            2
-          )} kWh/day, ${baselineMeteredDays} metered day(s), ${
-            heatLossSummary.hddDays || 0
-          } HDD day(s)`
+        ? `${baselineConfidence.label}: ${hddCalculationDetail}`
         : "Needs metered energy plus HDD/weather-normalised baseline",
       complete: baselineEvidenceComplete,
     },
@@ -4622,26 +4655,46 @@ const BuildingDashboardPanel = ({ building }) => {
                   <div className="grid gap-2 text-xs sm:grid-cols-2">
                     {[
                       {
-                        label: "Metered candidate",
-                        complete: candidateMeteredBaseline,
-                        detail: `${baselineMeteredDays}/${MIN_BASELINE_METERED_DAYS} completed metered day(s)`,
+                        label: "HDD base",
+                        value: `${HDD_BASE_TEMP_C} deg C`,
                       },
                       {
-                        label: "Cold-weather HDD",
-                        complete: hddNormalisedBaseline,
-                        detail: `${heatLossSummary.hddDays || 0}/${MIN_BASELINE_HDD_DAYS} HDD day(s)`,
+                        label: "HDD days",
+                        value: `${heatLossSummary.hddDays || 0}`,
                       },
                       {
-                        label: "Seasonal confidence",
-                        complete: seasonalBaseline,
-                        detail: `${baselineMeteredDays}/${MIN_SEASONAL_BASELINE_DAYS} completed metered day(s)`,
+                        label: "kWh/HDD",
+                        value: Number.isFinite(heatLossSummary.kwhPerHdd)
+                          ? formatNumber(heatLossSummary.kwhPerHdd, 3)
+                          : "Pending",
                       },
                       {
-                        label: "Full-year confidence",
-                        complete: fullConfidenceBaseline,
-                        detail: `${baselineCoverageDays}/${MIN_FULL_YEAR_BASELINE_DAYS} day span and ${baselineMeteredDays}/${MIN_FULL_YEAR_METERED_DAYS} metered day(s)`,
+                        label: "Weather-normalised EUI",
+                        value: Number.isFinite(
+                          heatLossSummary.weatherNormalisedEui
+                        )
+                          ? `${formatNumber(
+                              heatLossSummary.weatherNormalisedEui,
+                              1
+                            )} kWh/m2/yr`
+                          : "Pending",
                       },
-                    ].map((step) => (
+                    ].map((metric) => (
+                      <div
+                        key={metric.label}
+                        className="rounded border border-gray-200 bg-gray-50 p-2"
+                      >
+                        <p className="uppercase text-[10px] text-gray-500">
+                          {metric.label}
+                        </p>
+                        <p className="mt-1 font-semibold text-gray-900">
+                          {metric.value}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="grid gap-2 text-xs sm:grid-cols-2">
+                    {baselineConfidenceSteps.map((step) => (
                       <div
                         key={step.label}
                         className={`rounded border p-2 ${
