@@ -5364,18 +5364,24 @@ const BuildingDashboard = () => {
             transition: dragOffset ? "none" : "transform 280ms ease-out",
           }}
         >
-          {BUILDINGS.map((building) => (
-            <div
-              key={building.id}
-              style={{ width: `${100 / BUILDINGS.length}%` }}
-            >
-              {building.setupOnly ? (
-                <NewBuildingSetupPanel />
-              ) : (
-                <BuildingDashboardPanel building={building} />
-              )}
-            </div>
-          ))}
+          {BUILDINGS.map((building) => {
+            const isActiveSlide = activeBuilding.id === building.id;
+
+            return (
+              <div
+                key={building.id}
+                className={isActiveSlide ? "h-auto" : "h-0 overflow-hidden"}
+                aria-hidden={!isActiveSlide}
+                style={{ width: `${100 / BUILDINGS.length}%` }}
+              >
+                {building.setupOnly ? (
+                  <NewBuildingSetupPanel />
+                ) : (
+                  <BuildingDashboardPanel building={building} />
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
