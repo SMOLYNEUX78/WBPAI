@@ -4367,17 +4367,31 @@ const BuildingDashboardPanel = ({ building }) => {
         <h2 className="mb-3 text-lg font-bold">WBP Carbon Credit</h2>
 
         <div className="relative bg-white rounded border p-4 space-y-4">
-          <div
-            className="absolute right-4 top-4 text-gray-500"
-            aria-label="Carbon credit actions locked"
-            title="Carbon credit actions locked"
-          >
-            <span className="relative inline-block h-4 w-4 rounded-sm border-2 border-current">
-              <span className="absolute -top-3 left-1/2 h-3 w-3 -translate-x-1/2 rounded-t-full border-2 border-b-0 border-current" />
-            </span>
-          </div>
-          <div className="opacity-35">
-            <div className="grid grid-cols-2 gap-4">
+          <div className="grid gap-4 sm:grid-cols-[150px_minmax(0,1fr)]">
+            <div className="flex flex-col items-start gap-3">
+              <div
+                className="text-gray-500"
+                aria-label="Carbon credit actions locked"
+                title="Carbon credit actions locked"
+              >
+                <span className="relative inline-block h-4 w-4 rounded-sm border-2 border-current">
+                  <span className="absolute -top-3 left-1/2 h-3 w-3 -translate-x-1/2 rounded-t-full border-2 border-b-0 border-current" />
+                </span>
+              </div>
+              <button
+                type="button"
+                disabled={!sellCreditsAvailable}
+                className={`w-36 rounded border px-3 py-2 text-sm font-semibold ${
+                  sellCreditsAvailable
+                    ? "border-emerald-600 bg-emerald-600 text-white"
+                    : "border-emerald-200 bg-emerald-50/60 text-emerald-700 cursor-not-allowed"
+                }`}
+              >
+                SELL CREDITS
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 opacity-35">
               <div>
                 <p className="text-xs uppercase text-gray-500">Credits</p>
                 <p className="text-3xl font-bold leading-tight">
@@ -4414,20 +4428,6 @@ const BuildingDashboardPanel = ({ building }) => {
                     : "Pending calculation"}
                 </p>
               </div>
-            </div>
-
-            <div className="mt-4 flex flex-col items-start gap-2">
-              <button
-                type="button"
-                disabled={!sellCreditsAvailable}
-                className={`w-40 rounded border px-4 py-2 text-sm font-semibold ${
-                  sellCreditsAvailable
-                    ? "border-emerald-600 bg-emerald-600 text-white"
-                    : "border-emerald-200 bg-emerald-50/60 text-emerald-700 cursor-not-allowed"
-                }`}
-              >
-                SELL CREDITS
-              </button>
             </div>
           </div>
 
