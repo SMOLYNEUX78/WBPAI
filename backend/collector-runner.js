@@ -75,7 +75,7 @@ const startProcess = ({ name, script, args = [] }) => {
 
     setTimeout(() => {
       if (!stopping) {
-        startProcess({ name, script });
+        startProcess({ name, script, args });
       }
     }, 5000);
   });

@@ -19,7 +19,8 @@ const RECONNECT_DELAY_MS = Number(
 const STALE_TELEMETRY_MS = Number(
   process.env.THINGSBOARD_STALE_TELEMETRY_MS || 5 * 60 * 1000
 );
-const BUILDING_ID = process.env.BUILDING_ID || "";
+const BUILDING_ID =
+  process.env.THINGSBOARD_BUILDING_ID || process.env.BUILDING_ID || "museum";
 
 const latestValues = {
   temperature: null,
