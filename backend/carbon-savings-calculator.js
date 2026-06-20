@@ -146,7 +146,18 @@ function energyCostForEnergy({ electricityKwh, gasKwh }) {
   );
 }
 
-function buildCarbonSavingRows(dailyEnergy) {
+function projectionFactorForDay(savingDate, toDate) {
+  const today = toDate.toISOString().slice(0, 10);
+
+  if (savingDate !== today) {
+    return 1;
+  }
+
+  const startOfToday = new Date(`${today}T00:00:00.000Z`);
+  return Math.min(1, Math.max(0, (toDate - startOfToday) / 86400000));
+}
+
+function buildCarbonSavingRows(dailyEnergy, toDate) {
   return Object.entries(dailyEnergy)
     .map(([savingDate, fuels]) => {
       const baselineElectricityKwh = Number(fuels.electricity || 0);
@@ -157,7 +168,9 @@ function buildCarbonSavingRows(dailyEnergy) {
         return null;
       }
 
-      const improvedElectricityKwh = IMPROVED_DAILY_ELECTRICITY_KWH;
+      const projectionFactor = projectionFactorForDay(savingDate, toDate);
+      const improvedElectricityKwh =
+        IMPROVED_DAILY_ELECTRICITY_KWH * projectionFactor;
       const improvedGasKwh = 0;
       const improvedTotalKwh = improvedElectricityKwh + improvedGasKwh;
       const baselineKgCo2e = carbonForEnergy({
@@ -209,6 +222,7 @@ function buildCarbonSavingRows(dailyEnergy) {
           internalAreaM2: INTERNAL_AREA_M2,
           enerphitEuiKwhM2Year: ENERPHIT_EUI_KWH_M2_YEAR,
           improvedDailyElectricityKwh: IMPROVED_DAILY_ELECTRICITY_KWH,
+          projectionFactor,
           note:
             "Daily saving = measured baseline operational emissions - projected EnerPHit certified operational emissions.",
         },
@@ -295,7 +309,7 @@ async function main() {
   const toDate = parseDate(TO_DATE || new Date().toISOString(), "CARBON_SAVINGS_TO");
   const energyRows = await fetchEnergyRows(fromDate, toDate);
   const dailyEnergy = buildMeasuredDailyEnergy(energyRows);
-  const carbonRows = buildCarbonSavingRows(dailyEnergy);
+  const carbonRows = buildCarbonSavingRows(dailyEnergy, toDate);
   const totalSavedKgCo2e = carbonRows.reduce(
     (sum, row) => sum + row.saved_kgco2e,
     0

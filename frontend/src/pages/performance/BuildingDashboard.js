@@ -2008,6 +2008,7 @@ const BuildingDashboardPanel = ({ building }) => {
       const pageSize = 1000;
       const maxPages = 100;
       const energyRows = [];
+      const now = new Date();
 
       for (let page = 0; page < maxPages; page += 1) {
         const { data, error } = await supabase
@@ -2017,7 +2018,7 @@ const BuildingDashboardPanel = ({ building }) => {
           .in("reading_type", ["daily_total", "interval_30m"])
           .not("usage_kwh", "is", null)
           .gte("timestamp", "2020-01-01")
-          .lte("timestamp", new Date().toISOString())
+          .lte("timestamp", now.toISOString())
           .order("timestamp", { ascending: true })
           .order("created_at", { ascending: true })
           .range(page * pageSize, (page + 1) * pageSize - 1);
@@ -2090,20 +2091,35 @@ const BuildingDashboardPanel = ({ building }) => {
           : building.estimatedInternalArea || 99.2) *
           projectedPerformanceDeepDive.annualEui) /
         365;
-      const improvedDailyKgCo2e =
-        improvedDailyElectricityKwh * ELECTRICITY_KGCO2E_PER_KWH;
-      const improvedDailyEnergyCost =
-        improvedDailyElectricityKwh * ELECTRICITY_PRICE_GBP_PER_KWH;
       const improvedIntervalElectricityKwh = improvedDailyElectricityKwh / 48;
       const improvedIntervalKgCo2e =
         improvedIntervalElectricityKwh * ELECTRICITY_KGCO2E_PER_KWH;
       const improvedIntervalEnergyCost =
         improvedIntervalElectricityKwh * ELECTRICITY_PRICE_GBP_PER_KWH;
+      const today = now.toISOString().slice(0, 10);
+      const projectionFactorForDay = (savingDate) => {
+        if (savingDate !== today) {
+          return 1;
+        }
+
+        const startOfToday = new Date(`${today}T00:00:00.000Z`);
+        return Math.min(
+          1,
+          Math.max(0, (now - startOfToday) / 86400000)
+        );
+      };
 
       const rows = Object.entries(dailyEnergy)
         .map(([savingDate, fuels]) => {
           const electricityKwh = Number(fuels.electricity || 0);
           const gasKwh = Number(fuels.gas || 0);
+          const projectionFactor = projectionFactorForDay(savingDate);
+          const improvedElectricityKwh =
+            improvedDailyElectricityKwh * projectionFactor;
+          const improvedKgCo2e =
+            improvedElectricityKwh * ELECTRICITY_KGCO2E_PER_KWH;
+          const improvedEnergyCost =
+            improvedElectricityKwh * ELECTRICITY_PRICE_GBP_PER_KWH;
           const baselineTotalKwh = electricityKwh + gasKwh;
           const baselineKgCo2e =
             electricityKwh * ELECTRICITY_KGCO2E_PER_KWH +
@@ -2111,11 +2127,11 @@ const BuildingDashboardPanel = ({ building }) => {
           const measuredEnergyCost =
             electricityKwh * ELECTRICITY_PRICE_GBP_PER_KWH +
             gasKwh * GAS_PRICE_GBP_PER_KWH;
-          const savedKgCo2e = Math.max(0, baselineKgCo2e - improvedDailyKgCo2e);
-          const savedKwh = Math.max(0, baselineTotalKwh - improvedDailyElectricityKwh);
+          const savedKgCo2e = Math.max(0, baselineKgCo2e - improvedKgCo2e);
+          const savedKwh = Math.max(0, baselineTotalKwh - improvedElectricityKwh);
           const energyCostSavedGbp = Math.max(
             0,
-            measuredEnergyCost - improvedDailyEnergyCost
+            measuredEnergyCost - improvedEnergyCost
           );
 
           return {
@@ -2167,8 +2183,9 @@ const BuildingDashboardPanel = ({ building }) => {
         ...Object.entries(dailyFallbackEnergy).map(([savingDate, fuels]) => {
           const electricityKwh = Number(fuels.electricity || 0);
           const gasKwh = Number(fuels.gas || 0);
+          const projectionFactor = projectionFactorForDay(savingDate);
           const improvedFallbackElectricityKwh =
-            electricityKwh > 0 ? improvedDailyElectricityKwh : 0;
+            electricityKwh > 0 ? improvedDailyElectricityKwh * projectionFactor : 0;
           const improvedFallbackKgCo2e =
             improvedFallbackElectricityKwh * ELECTRICITY_KGCO2E_PER_KWH;
           const improvedFallbackEnergyCost =
