@@ -4614,7 +4614,7 @@ const BuildingDashboardPanel = ({ building }) => {
                 </p>
               </div>
             </div>
-            <div className="mt-4">
+            <div className="mt-4 sm:flex sm:justify-end">
               <button
                 type="button"
                 disabled={!sellCreditsAvailable}
