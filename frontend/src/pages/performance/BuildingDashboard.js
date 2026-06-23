@@ -304,6 +304,9 @@ const BuildingDashboardPanel = ({ building }) => {
     hddDays: 0,
     htcSamples: 0,
     hddSource: "current",
+    hlaConfidence: "pending",
+    auditKwhPerHdd: null,
+    auditHtcEstimate: null,
     averageInternalTemp: null,
     comfortHddDays: 0,
     flatlineIndoorTemp: false,
@@ -1245,16 +1248,56 @@ const BuildingDashboardPanel = ({ building }) => {
     try {
       const area = Number(matterportMetadata.internalArea);
       const completedRows = await fetchEnergyDailyTotals({ beforeToday: true });
-      const { data: temperatureRows, error: temperatureError } =
+      const { data: indoorTemperatureRows, error: indoorTemperatureError } =
         await applyBuildingScope(
           supabase
             .from("Readings")
-            .select("timestamp, temperature_inside, temperature_outside")
+            .select("timestamp, temperature_inside")
+            .not("temperature_inside", "is", null)
+            .order("timestamp", { ascending: false })
+            .limit(10000)
+        );
+      const { data: outdoorTemperatureRows, error: outdoorTemperatureError } =
+        await applyBuildingScope(
+          supabase
+            .from("Readings")
+            .select("timestamp, temperature_outside")
+            .not("temperature_outside", "is", null)
             .order("timestamp", { ascending: false })
             .limit(10000)
         );
 
-      if (temperatureError) throw temperatureError;
+      if (indoorTemperatureError) throw indoorTemperatureError;
+      if (outdoorTemperatureError) throw outdoorTemperatureError;
+
+      const todayStart = `${new Date().toISOString().slice(0, 10)}T00:00:00+00:00`;
+      const indicativeEnergyRows = [];
+      const indicativePageSize = 1000;
+      const indicativeMaxPages = 40;
+
+      for (let page = 0; page < indicativeMaxPages; page += 1) {
+        const { data, error } = await supabase
+          .from("EnergyReadings")
+          .select("timestamp, fuel_type, reading_type, usage_kwh, raw_payload, source")
+          .eq("building_id", dataSourceBuildingId)
+          .in("reading_type", ["daily_total", "interval_30m"])
+          .not("usage_kwh", "is", null)
+          .gte("timestamp", "2024-01-01")
+          .lte("timestamp", new Date().toISOString())
+          .order("timestamp", { ascending: false })
+          .range(
+            page * indicativePageSize,
+            (page + 1) * indicativePageSize - 1
+          );
+
+        if (error) throw error;
+
+        indicativeEnergyRows.push(...(data || []));
+
+        if (!data || data.length < indicativePageSize) {
+          break;
+        }
+      }
 
       const dailyEnergy = completedRows.reduce((totals, row) => {
         const usageKwh = Number(row.usage_kwh);
@@ -1283,13 +1326,15 @@ const BuildingDashboardPanel = ({ building }) => {
         return totals;
       }, {});
 
-      const dailyTemperatures = (temperatureRows || []).reduce((totals, row) => {
+      const dailyTemperatures = {};
+      (indoorTemperatureRows || []).forEach((row) => {
         const day = new Date(row.timestamp).toISOString().slice(0, 10);
-        totals[day] = totals[day] || { inside: [], outside: [] };
+        dailyTemperatures[day] = dailyTemperatures[day] || {
+          inside: [],
+          outside: [],
+        };
 
         const inside = Number(row.temperature_inside);
-        const outside = Number(row.temperature_outside);
-
         const isKnownStuckMuseumInsideReading =
           dataSourceBuildingId === "museum" && Math.abs(inside - 17.6) < 0.05;
 
@@ -1298,110 +1343,216 @@ const BuildingDashboardPanel = ({ building }) => {
           inside !== 0 &&
           !isKnownStuckMuseumInsideReading
         ) {
-          totals[day].inside.push(inside);
-        }
-
-        if (Number.isFinite(outside) && outside !== 0) {
-          totals[day].outside.push(outside);
-        }
-
-        return totals;
-      }, {});
-
-      let hddTotal = 0;
-      let hddEnergyTotal = 0;
-      let htcTotal = 0;
-      let hddDays = 0;
-      let htcSamples = 0;
-      let comfortHddDays = 0;
-      const hlaInsideAverages = [];
-      let filteredInsideReadings = 0;
-
-      let usesLegacyMuseumEnergy = false;
-
-      Object.entries(dailyEnergy).forEach(([day, dayEnergy]) => {
-        const totalKwh = Object.values(dayEnergy.fuels).reduce(
-          (sum, value) => sum + value,
-          0
-        );
-        const temperatures = dailyTemperatures[day];
-        const outsideAverage = temperatures?.outside.length
-          ? average(temperatures.outside)
-          : null;
-        const insideAverage = temperatures?.inside.length
-          ? average(temperatures.inside)
-          : null;
-
-        const hdd = Number.isFinite(dayEnergy.hdd)
-          ? dayEnergy.hdd
-          : Number.isFinite(outsideAverage)
-          ? Math.max(0, HDD_BASE_TEMP_C - outsideAverage)
-          : null;
-
-        if (Number.isFinite(hdd) && hdd > 0 && totalKwh > 0) {
-          hddTotal += hdd;
-          hddEnergyTotal += totalKwh;
-          hddDays += 1;
-
-          if (Number.isFinite(insideAverage)) {
-            hlaInsideAverages.push(insideAverage);
-            if (insideAverage >= 18) {
-              comfortHddDays += 1;
-            }
-          }
-        }
-
-        if (dayEnergy.usesLegacy) {
-          usesLegacyMuseumEnergy = true;
-        }
-
-        if (
-          Number.isFinite(insideAverage) &&
-          Number.isFinite(outsideAverage) &&
-          insideAverage > outsideAverage &&
-          totalKwh > 0
-        ) {
-          const averagePowerWatts = (totalKwh * 1000) / 24;
-          htcTotal += averagePowerWatts / (insideAverage - outsideAverage);
-          htcSamples += 1;
+          dailyTemperatures[day].inside.push(inside);
         }
       });
+
+      (outdoorTemperatureRows || []).forEach((row) => {
+        const day = new Date(row.timestamp).toISOString().slice(0, 10);
+        dailyTemperatures[day] = dailyTemperatures[day] || {
+          inside: [],
+          outside: [],
+        };
+        const outside = Number(row.temperature_outside);
+        if (Number.isFinite(outside) && outside !== 0) {
+          dailyTemperatures[day].outside.push(outside);
+        }
+      });
+
+      const calculateHeatLossFromDailyEnergy = (energyByDay) => {
+        let nextHddTotal = 0;
+        let nextHddEnergyTotal = 0;
+        let nextHtcTotal = 0;
+        let nextHddDays = 0;
+        let nextHtcSamples = 0;
+        let nextComfortHddDays = 0;
+        const nextInsideAverages = [];
+        let nextUsesLegacyMuseumEnergy = false;
+
+        Object.entries(energyByDay).forEach(([day, dayEnergy]) => {
+          const totalKwh = Object.values(dayEnergy.fuels).reduce(
+            (sum, value) => sum + value,
+            0
+          );
+          const temperatures = dailyTemperatures[day];
+          const outsideAverage = temperatures?.outside.length
+            ? average(temperatures.outside)
+            : null;
+          const insideAverage = temperatures?.inside.length
+            ? average(temperatures.inside)
+            : null;
+
+          const hdd = Number.isFinite(dayEnergy.hdd)
+            ? dayEnergy.hdd
+            : Number.isFinite(outsideAverage)
+            ? Math.max(0, HDD_BASE_TEMP_C - outsideAverage)
+            : null;
+
+          if (Number.isFinite(hdd) && hdd > 0 && totalKwh > 0) {
+            nextHddTotal += hdd;
+            nextHddEnergyTotal += totalKwh;
+            nextHddDays += 1;
+
+            if (Number.isFinite(insideAverage)) {
+              nextInsideAverages.push(insideAverage);
+              if (insideAverage >= 18) {
+                nextComfortHddDays += 1;
+              }
+            }
+          }
+
+          if (dayEnergy.usesLegacy) {
+            nextUsesLegacyMuseumEnergy = true;
+          }
+
+          if (
+            Number.isFinite(insideAverage) &&
+            Number.isFinite(outsideAverage) &&
+            insideAverage > outsideAverage &&
+            totalKwh > 0
+          ) {
+            const averagePowerWatts = (totalKwh * 1000) / 24;
+            nextHtcTotal += averagePowerWatts / (insideAverage - outsideAverage);
+            nextHtcSamples += 1;
+          }
+        });
+
+        const nextKwhPerHdd =
+          nextHddTotal > 0 ? nextHddEnergyTotal / nextHddTotal : null;
+        const nextAnnualHddEstimate =
+          nextHddDays > 0 ? (nextHddTotal / nextHddDays) * 365 : null;
+        const nextWeatherNormalisedEui =
+          Number.isFinite(nextKwhPerHdd) &&
+          Number.isFinite(nextAnnualHddEstimate) &&
+          Number.isFinite(area) &&
+          area > 0
+            ? (nextKwhPerHdd * nextAnnualHddEstimate) / area
+            : null;
+
+        return {
+          kwhPerHdd: nextKwhPerHdd,
+          weatherNormalisedEui: nextWeatherNormalisedEui,
+          htcEstimate:
+            nextHtcSamples > 0 ? nextHtcTotal / nextHtcSamples : null,
+          hddDays: nextHddDays,
+          htcSamples: nextHtcSamples,
+          comfortHddDays: nextComfortHddDays,
+          averageInternalTemp: nextInsideAverages.length
+            ? average(nextInsideAverages)
+            : null,
+          hddSource: nextUsesLegacyMuseumEnergy ? "legacy" : "current",
+        };
+      };
+
+      let filteredInsideReadings = 0;
+
+      const auditHeatLoss = calculateHeatLossFromDailyEnergy(dailyEnergy);
+      const indicativeIntervalDays = new Set();
+      const indicativeDailyEnergy = {};
+
+      indicativeEnergyRows
+        .filter((row) => row.reading_type === "interval_30m")
+        .forEach((row) => {
+          const date = new Date(row.timestamp);
+          if (Number.isNaN(date.getTime())) {
+            return;
+          }
+
+          const day = date.toISOString().slice(0, 10);
+          const fuelType = row.fuel_type || "unknown";
+          const usageKwh = Number(row.usage_kwh);
+
+          if (!Number.isFinite(usageKwh)) {
+            return;
+          }
+
+          indicativeIntervalDays.add(`${fuelType}:${day}`);
+          indicativeDailyEnergy[day] = indicativeDailyEnergy[day] || {
+            fuels: {},
+            hdd: null,
+            usesLegacy: false,
+          };
+          indicativeDailyEnergy[day].fuels[fuelType] =
+            (indicativeDailyEnergy[day].fuels[fuelType] || 0) + usageKwh;
+        });
+
+      indicativeEnergyRows
+        .filter((row) => row.reading_type === "daily_total")
+        .forEach((row) => {
+          const date = new Date(row.timestamp);
+          if (Number.isNaN(date.getTime()) || row.timestamp >= todayStart) {
+            return;
+          }
+
+          const day = date.toISOString().slice(0, 10);
+          const fuelType = row.fuel_type || "unknown";
+          const usageKwh = Number(row.usage_kwh);
+
+          if (
+            !Number.isFinite(usageKwh) ||
+            indicativeIntervalDays.has(`${fuelType}:${day}`)
+          ) {
+            return;
+          }
+
+          indicativeDailyEnergy[day] = indicativeDailyEnergy[day] || {
+            fuels: {},
+            hdd: null,
+            usesLegacy: false,
+          };
+          indicativeDailyEnergy[day].fuels[fuelType] = Math.max(
+            indicativeDailyEnergy[day].fuels[fuelType] || 0,
+            usageKwh
+          );
+
+          const rowHdd = Number(row.raw_payload?.hdd);
+          if (Number.isFinite(rowHdd)) {
+            indicativeDailyEnergy[day].hdd = rowHdd;
+          }
+
+          if (row.source?.startsWith("legacy-readings-")) {
+            indicativeDailyEnergy[day].usesLegacy = true;
+          }
+        });
+
+      const indicativeHeatLoss =
+        calculateHeatLossFromDailyEnergy(indicativeDailyEnergy);
       if (dataSourceBuildingId === "museum") {
-        filteredInsideReadings = (temperatureRows || []).filter((row) => {
+        filteredInsideReadings = (indoorTemperatureRows || []).filter((row) => {
           const inside = Number(row.temperature_inside);
           return Number.isFinite(inside) && Math.abs(inside - 17.6) < 0.05;
         }).length;
       }
 
-      const currentKwhPerHdd = hddTotal > 0 ? hddEnergyTotal / hddTotal : null;
-      const currentAnnualHddEstimate =
-        hddDays > 0 ? (hddTotal / hddDays) * 365 : null;
-      const currentWeatherNormalisedEui =
-        Number.isFinite(currentKwhPerHdd) &&
-        Number.isFinite(currentAnnualHddEstimate) &&
-        Number.isFinite(area) &&
-        area > 0
-          ? (currentKwhPerHdd * currentAnnualHddEstimate) / area
-          : null;
-      const hddSummary = {
-        kwhPerHdd: currentKwhPerHdd,
-        weatherNormalisedEui: currentWeatherNormalisedEui,
-        hddDays,
-        hddSource: usesLegacyMuseumEnergy ? "legacy" : "current",
-      };
+      const hasAuditHeatLoss =
+        Number.isFinite(auditHeatLoss.kwhPerHdd) ||
+        Number.isFinite(auditHeatLoss.htcEstimate);
+      const hasIndicativeHeatLoss =
+        Number.isFinite(indicativeHeatLoss.kwhPerHdd) ||
+        Number.isFinite(indicativeHeatLoss.htcEstimate);
+      const displayedHeatLoss =
+        hasAuditHeatLoss || !hasIndicativeHeatLoss
+          ? auditHeatLoss
+          : indicativeHeatLoss;
+      const heatLossConfidence = hasAuditHeatLoss
+        ? "audit-grade"
+        : hasIndicativeHeatLoss
+        ? "indicative"
+        : "pending";
       const flatlineIndoorTemp = false;
 
       setHeatLossSummary({
-        kwhPerHdd: hddSummary.kwhPerHdd,
-        weatherNormalisedEui: hddSummary.weatherNormalisedEui,
-        htcEstimate: htcSamples > 0 ? htcTotal / htcSamples : null,
-        hddDays: hddSummary.hddDays || 0,
-        htcSamples,
-        hddSource: hddSummary.hddSource || "current",
-        averageInternalTemp: hlaInsideAverages.length
-          ? average(hlaInsideAverages)
-          : null,
-        comfortHddDays,
+        kwhPerHdd: displayedHeatLoss.kwhPerHdd,
+        weatherNormalisedEui: displayedHeatLoss.weatherNormalisedEui,
+        htcEstimate: displayedHeatLoss.htcEstimate,
+        hddDays: displayedHeatLoss.hddDays || 0,
+        htcSamples: displayedHeatLoss.htcSamples || 0,
+        hddSource: displayedHeatLoss.hddSource || "current",
+        hlaConfidence: heatLossConfidence,
+        auditKwhPerHdd: auditHeatLoss.kwhPerHdd,
+        auditHtcEstimate: auditHeatLoss.htcEstimate,
+        averageInternalTemp: displayedHeatLoss.averageInternalTemp,
+        comfortHddDays: displayedHeatLoss.comfortHddDays || 0,
         flatlineIndoorTemp,
         filteredInsideReadings,
       });
@@ -1414,6 +1565,9 @@ const BuildingDashboardPanel = ({ building }) => {
         hddDays: 0,
         htcSamples: 0,
         hddSource: "current",
+        hlaConfidence: "pending",
+        auditKwhPerHdd: null,
+        auditHtcEstimate: null,
         averageInternalTemp: null,
         comfortHddDays: 0,
         flatlineIndoorTemp: false,
@@ -3968,6 +4122,16 @@ const BuildingDashboardPanel = ({ building }) => {
                       ? "Legacy museum daily totals"
                       : "Current building data"}
                   </p>
+                  {!isNewPerformanceDeepDive ? (
+                    <p className="text-xs text-gray-600">
+                      HLA confidence:{" "}
+                      {heatLossSummary.hlaConfidence === "audit-grade"
+                        ? "Audit-grade daily baseline"
+                        : heatLossSummary.hlaConfidence === "indicative"
+                        ? "Indicative interval/weather fallback"
+                        : "Pending matching energy and temperature data"}
+                    </p>
+                  ) : null}
                   {isNewPerformanceDeepDive ? (
                     <p className="text-xs text-gray-600">
                       HLA comfort check: {projectedPerformanceDeepDive.comfortNote}
