@@ -1605,28 +1605,69 @@ const BuildingDashboardPanel = ({ building }) => {
         }).length;
       }
 
-      const hasAuditHeatLoss =
-        Number.isFinite(auditHeatLoss.kwhPerHdd) ||
-        Number.isFinite(auditHeatLoss.htcEstimate);
-      const hasIndicativeHeatLoss =
-        Number.isFinite(indicativeHeatLoss.kwhPerHdd) ||
-        Number.isFinite(indicativeHeatLoss.htcEstimate);
-      const hasLiveIndicativeHeatLoss =
-        Number.isFinite(liveIndicativeHeatLoss.kwhPerHdd) ||
-        Number.isFinite(liveIndicativeHeatLoss.htcEstimate);
-      const displayedHeatLoss =
-        hasAuditHeatLoss
+      const chooseHeatLossMetric = (key) => {
+        if (Number.isFinite(auditHeatLoss[key])) {
+          return { value: auditHeatLoss[key], source: "audit-grade" };
+        }
+
+        if (Number.isFinite(indicativeHeatLoss[key])) {
+          return { value: indicativeHeatLoss[key], source: "indicative" };
+        }
+
+        if (Number.isFinite(liveIndicativeHeatLoss[key])) {
+          return { value: liveIndicativeHeatLoss[key], source: "live-indicative" };
+        }
+
+        return { value: null, source: "pending" };
+      };
+      const chosenHdd = chooseHeatLossMetric("kwhPerHdd");
+      const chosenWeatherNormalisedEui = chooseHeatLossMetric(
+        "weatherNormalisedEui"
+      );
+      const chosenHtc = chooseHeatLossMetric("htcEstimate");
+      const lowestConfidenceSource = [
+        chosenHdd.source,
+        chosenWeatherNormalisedEui.source,
+        chosenHtc.source,
+      ].find((source) => source === "live-indicative") ||
+        [chosenHdd.source, chosenWeatherNormalisedEui.source, chosenHtc.source].find(
+          (source) => source === "indicative"
+        ) ||
+        [chosenHdd.source, chosenWeatherNormalisedEui.source, chosenHtc.source].find(
+          (source) => source === "audit-grade"
+        ) ||
+        "pending";
+      const hddSampleSource =
+        chosenHdd.source === "audit-grade"
           ? auditHeatLoss
-          : hasIndicativeHeatLoss
+          : chosenHdd.source === "indicative"
           ? indicativeHeatLoss
           : liveIndicativeHeatLoss;
-      const heatLossConfidence = hasAuditHeatLoss
-        ? "audit-grade"
-        : hasIndicativeHeatLoss
-        ? "indicative"
-        : hasLiveIndicativeHeatLoss
-        ? "live-indicative"
-        : "pending";
+      const htcSampleSource =
+        chosenHtc.source === "audit-grade"
+          ? auditHeatLoss
+          : chosenHtc.source === "indicative"
+          ? indicativeHeatLoss
+          : liveIndicativeHeatLoss;
+      const displayedHeatLoss = {
+        kwhPerHdd: chosenHdd.value,
+        weatherNormalisedEui: chosenWeatherNormalisedEui.value,
+        htcEstimate: chosenHtc.value,
+        hddDays: hddSampleSource.hddDays || 0,
+        htcSamples: htcSampleSource.htcSamples || 0,
+        hddSource:
+          lowestConfidenceSource === "live-indicative"
+            ? "live"
+            : hddSampleSource.hddSource || "current",
+        hlaConfidence: lowestConfidenceSource,
+        hddConfidence: chosenHdd.source,
+        htcConfidence: chosenHtc.source,
+        comfortHddDays: hddSampleSource.comfortHddDays || 0,
+        averageInternalTemp:
+          htcSampleSource.averageInternalTemp ||
+          hddSampleSource.averageInternalTemp ||
+          null,
+      };
       const flatlineIndoorTemp = false;
 
       setHeatLossSummary({
@@ -1636,7 +1677,9 @@ const BuildingDashboardPanel = ({ building }) => {
         hddDays: displayedHeatLoss.hddDays || 0,
         htcSamples: displayedHeatLoss.htcSamples || 0,
         hddSource: displayedHeatLoss.hddSource || "current",
-        hlaConfidence: heatLossConfidence,
+        hlaConfidence: displayedHeatLoss.hlaConfidence,
+        hddConfidence: displayedHeatLoss.hddConfidence,
+        htcConfidence: displayedHeatLoss.htcConfidence,
         auditKwhPerHdd: auditHeatLoss.kwhPerHdd,
         auditHtcEstimate: auditHeatLoss.htcEstimate,
         averageInternalTemp: displayedHeatLoss.averageInternalTemp,
