@@ -3456,7 +3456,7 @@ const BuildingDashboardPanel = ({ building }) => {
       }`}
     >
       {title ? (
-        <div className="mb-1.5 flex items-center justify-between gap-2">
+        <div className="mb-1.5 flex flex-wrap items-start justify-between gap-1.5 sm:gap-2">
           <h3
             className={`text-[10px] font-semibold uppercase tracking-wide sm:text-xs ${
               tone === "primary" ? "text-emerald-800" : "text-gray-500"
@@ -3466,7 +3466,7 @@ const BuildingDashboardPanel = ({ building }) => {
           </h3>
           {statusLabel ? (
             <span
-              className={`whitespace-nowrap rounded border px-2 py-0.5 text-[8px] font-semibold uppercase tracking-wide ${
+              className={`max-w-full rounded border px-1.5 py-0.5 text-right text-[7px] font-semibold uppercase leading-tight tracking-wide sm:whitespace-nowrap sm:px-2 sm:text-[8px] ${
                 tone === "primary"
                   ? "border-emerald-300 bg-white text-emerald-800"
                   : "border-gray-300 bg-white text-gray-600"
@@ -3516,18 +3516,18 @@ const BuildingDashboardPanel = ({ building }) => {
               showStandardDeepDiveToggle
                 ? "h-auto w-[210px] max-w-full min-[390px]:w-[240px] sm:w-[340px] lg:w-[410px]"
                 : compact
-                ? "h-auto w-[130px] max-w-full min-[390px]:w-[145px] sm:w-[170px]"
-                : "h-auto w-[185px] max-w-full min-[390px]:w-[215px] sm:w-[265px]"
+                ? "h-auto w-[104px] max-w-full min-[390px]:w-[122px] sm:w-[170px]"
+                : "h-auto w-[145px] max-w-full min-[390px]:w-[170px] sm:w-[265px]"
             }
           />
         </div>
       </div>
       {isCarbonCreditTab && diveKey ? (
-        <div className="mt-1 flex flex-col items-start gap-1.5 border-t border-gray-100 pt-1.5 sm:mt-2 sm:gap-2">
+        <div className="mt-1 flex flex-col items-stretch gap-1.5 border-t border-gray-100 pt-1.5 sm:mt-2 sm:items-start sm:gap-2">
           <button
             type="button"
             onClick={() => toggleDeepDivePanel(diveKey)}
-            className="w-28 rounded border border-gray-300 bg-white px-2 py-1 text-center text-[10px] font-semibold text-gray-700 shadow-sm transition hover:border-gray-500 hover:text-black sm:text-xs"
+            className="w-full max-w-full rounded border border-gray-300 bg-white px-2 py-1 text-center text-[10px] font-semibold text-gray-700 shadow-sm transition hover:border-gray-500 hover:text-black sm:w-28 sm:text-xs"
             aria-expanded={deepDivePanel === diveKey}
           >
             Deep Dive
@@ -3538,7 +3538,7 @@ const BuildingDashboardPanel = ({ building }) => {
           <button
             type="button"
             onClick={() => setStandardDeepDiveOpen((isOpen) => !isOpen)}
-            className="w-28 rounded border border-gray-300 bg-white px-2 py-1 text-center text-[10px] font-semibold text-gray-700 shadow-sm transition hover:border-gray-500 hover:text-black sm:text-xs"
+            className="w-full max-w-full rounded border border-gray-300 bg-white px-2 py-1 text-center text-[10px] font-semibold text-gray-700 shadow-sm transition hover:border-gray-500 hover:text-black sm:w-28 sm:text-xs"
             aria-expanded={standardDeepDiveOpen}
           >
             Deep Dive
@@ -3636,7 +3636,7 @@ const BuildingDashboardPanel = ({ building }) => {
 
         <div className="space-y-2.5 sm:space-y-4">
           {isCarbonCreditTab ? (
-            <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-3">
+            <div className="grid grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] sm:gap-3">
               {renderPerformanceCard({
                 title: "Baseline",
                 healthScore: performanceBreakdown.health,
@@ -4367,7 +4367,7 @@ const BuildingDashboardPanel = ({ building }) => {
         <h2 className="mb-3 text-lg font-bold">WBP Carbon Credit</h2>
 
         <div className="relative bg-white rounded border p-4 space-y-4">
-          <div className="absolute right-4 top-4 flex flex-col items-end gap-3">
+          <div className="mb-3 flex flex-col items-end gap-3 sm:absolute sm:right-4 sm:top-4 sm:mb-0">
             <div
               className="text-gray-500"
               aria-label="Carbon credit actions locked"
@@ -4380,7 +4380,7 @@ const BuildingDashboardPanel = ({ building }) => {
             <button
               type="button"
               disabled={!sellCreditsAvailable}
-              className={`w-36 rounded border px-3 py-2 text-sm font-semibold ${
+              className={`w-36 max-w-full rounded border px-3 py-2 text-sm font-semibold ${
                 sellCreditsAvailable
                   ? "border-emerald-600 bg-emerald-600 text-white"
                   : "border-emerald-200 bg-emerald-50/60 text-emerald-700 cursor-not-allowed"
@@ -4390,11 +4390,11 @@ const BuildingDashboardPanel = ({ building }) => {
             </button>
           </div>
 
-          <div className="opacity-35 pr-40">
-            <div className="grid grid-cols-2 gap-4">
+          <div className="opacity-35 sm:pr-40">
+            <div className="grid grid-cols-2 gap-3 sm:gap-4">
               <div>
                 <p className="text-xs uppercase text-gray-500">Credits</p>
-                <p className="text-3xl font-bold leading-tight">
+                <p className="text-2xl font-bold leading-tight min-[390px]:text-3xl">
                   {formatNumber(carbonCredits, 4)}
                 </p>
                 <p className="text-sm font-semibold text-gray-700">WBP-C</p>
