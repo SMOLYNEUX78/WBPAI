@@ -1541,6 +1541,63 @@ const BuildingDashboardPanel = ({ building }) => {
 
       const indicativeHeatLoss =
         calculateHeatLossFromDailyEnergy(indicativeDailyEnergy);
+      const todayTemperatures = dailyTemperatures[todayKey];
+      const todayInsideAverage = todayTemperatures?.inside.length
+        ? average(todayTemperatures.inside)
+        : null;
+      const todayOutsideAverage = todayTemperatures?.outside.length
+        ? average(todayTemperatures.outside)
+        : null;
+      const todayEnergy = indicativeDailyEnergy[todayKey];
+      const todayTotalKwh = todayEnergy
+        ? Object.values(todayEnergy.fuels).reduce((sum, value) => sum + value, 0)
+        : null;
+      const currentHdd = Number.isFinite(todayOutsideAverage)
+        ? Math.max(0, HDD_BASE_TEMP_C - todayOutsideAverage)
+        : null;
+      const liveKwhPerHdd =
+        Number.isFinite(currentHdd) &&
+        currentHdd > 0 &&
+        Number.isFinite(todayTotalKwh) &&
+        todayTotalKwh > 0
+          ? todayTotalKwh / currentHdd
+          : null;
+      const liveHtcEstimate =
+        Number.isFinite(todayInsideAverage) &&
+        Number.isFinite(todayOutsideAverage) &&
+        todayInsideAverage > todayOutsideAverage &&
+        Number.isFinite(todayTotalKwh) &&
+        todayTotalKwh > 0
+          ? ((todayTotalKwh * 1000) / elapsedHoursToday) /
+            (todayInsideAverage - todayOutsideAverage)
+          : null;
+      const liveAnnualHddEstimate =
+        Number.isFinite(currentHdd) && currentHdd > 0
+          ? currentHdd * 365
+          : null;
+      const liveWeatherNormalisedEui =
+        Number.isFinite(liveKwhPerHdd) &&
+        Number.isFinite(liveAnnualHddEstimate) &&
+        Number.isFinite(area) &&
+        area > 0
+          ? (liveKwhPerHdd * liveAnnualHddEstimate) / area
+          : null;
+      const liveIndicativeHeatLoss = {
+        kwhPerHdd: liveKwhPerHdd,
+        weatherNormalisedEui: liveWeatherNormalisedEui,
+        htcEstimate: liveHtcEstimate,
+        hddDays: Number.isFinite(currentHdd) && currentHdd > 0 ? 1 : 0,
+        htcSamples: Number.isFinite(liveHtcEstimate) ? 1 : 0,
+        comfortHddDays:
+          Number.isFinite(currentHdd) &&
+          currentHdd > 0 &&
+          Number.isFinite(todayInsideAverage) &&
+          todayInsideAverage >= 18
+            ? 1
+            : 0,
+        averageInternalTemp: todayInsideAverage,
+        hddSource: "live",
+      };
       if (dataSourceBuildingId === "museum") {
         filteredInsideReadings = (indoorTemperatureRows || []).filter((row) => {
           const inside = Number(row.temperature_inside);
@@ -1554,14 +1611,21 @@ const BuildingDashboardPanel = ({ building }) => {
       const hasIndicativeHeatLoss =
         Number.isFinite(indicativeHeatLoss.kwhPerHdd) ||
         Number.isFinite(indicativeHeatLoss.htcEstimate);
+      const hasLiveIndicativeHeatLoss =
+        Number.isFinite(liveIndicativeHeatLoss.kwhPerHdd) ||
+        Number.isFinite(liveIndicativeHeatLoss.htcEstimate);
       const displayedHeatLoss =
-        hasAuditHeatLoss || !hasIndicativeHeatLoss
+        hasAuditHeatLoss
           ? auditHeatLoss
-          : indicativeHeatLoss;
+          : hasIndicativeHeatLoss
+          ? indicativeHeatLoss
+          : liveIndicativeHeatLoss;
       const heatLossConfidence = hasAuditHeatLoss
         ? "audit-grade"
         : hasIndicativeHeatLoss
         ? "indicative"
+        : hasLiveIndicativeHeatLoss
+        ? "live-indicative"
         : "pending";
       const flatlineIndoorTemp = false;
 
@@ -4153,6 +4217,8 @@ const BuildingDashboardPanel = ({ building }) => {
                         ? "Audit-grade daily baseline"
                         : heatLossSummary.hlaConfidence === "indicative"
                         ? "Indicative interval/weather fallback"
+                        : heatLossSummary.hlaConfidence === "live-indicative"
+                        ? "Live current-day indication"
                         : "Pending matching energy and temperature data"}
                     </p>
                   ) : null}
