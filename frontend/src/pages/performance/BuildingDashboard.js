@@ -1250,8 +1250,8 @@ const BuildingDashboardPanel = ({ building }) => {
           supabase
             .from("Readings")
             .select("timestamp, temperature_inside, temperature_outside")
-            .order("timestamp", { ascending: true })
-            .limit(5000)
+            .order("timestamp", { ascending: false })
+            .limit(10000)
         );
 
       if (temperatureError) throw temperatureError;
@@ -3638,7 +3638,7 @@ const BuildingDashboardPanel = ({ building }) => {
           {isCarbonCreditTab ? (
             <div className="grid grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] sm:gap-3">
               {renderPerformanceCard({
-                title: "Baseline",
+                title: "Before",
                 healthScore: performanceBreakdown.health,
                 energyScore: performanceBreakdown.energy,
                 gaugeValue: performanceValue,
@@ -3649,13 +3649,13 @@ const BuildingDashboardPanel = ({ building }) => {
                 activeBandOnly: true,
               })}
               {renderPerformanceCard({
-                title: "New Performance",
+                title: "After",
                 healthScore: enerphitPerformance.health,
                 energyScore: enerphitPerformance.energy,
                 gaugeValue: enerphitPerformance.value,
                 diveKey: "new",
                 tone: "primary",
-                statusLabel: "Enerphit Certified",
+                statusLabel: "Enerphit",
               })}
             </div>
           ) : (
@@ -3673,8 +3673,8 @@ const BuildingDashboardPanel = ({ building }) => {
               <div className="mb-3 border-b border-gray-100 pb-2 text-xs text-gray-600">
                 <h3 className="font-semibold text-gray-900">
                   {deepDivePanel === "new"
-                    ? "New EnerPHit Certified Performance Deep Dive"
-                    : "Baseline Performance Deep Dive"}
+                    ? "After EnerPHit Performance Deep Dive"
+                    : "Before Performance Deep Dive"}
                 </h3>
                 <p>
                   {deepDivePanel === "new"
@@ -3935,7 +3935,9 @@ const BuildingDashboardPanel = ({ building }) => {
                     <strong>HDD Intensity:</strong>{" "}
                     {Number.isFinite(displayedHeatLossSummary.kwhPerHdd)
                       ? `${formatNumber(displayedHeatLossSummary.kwhPerHdd, 3)} kWh/HDD`
-                      : "Pending completed energy + HDD data"}
+                      : (displayedHeatLossSummary.hddDays || 0) > 0
+                      ? "Pending completed energy + HDD data"
+                      : "Needs cold-weather days below 15.5 deg C"}
                     {!isNewPerformanceDeepDive && hddDataCaveat
                       ? ` (${hddDataCaveat})`
                       : ""}
@@ -3945,12 +3947,18 @@ const BuildingDashboardPanel = ({ building }) => {
                     <strong>HTC Estimate:</strong>{" "}
                     {Number.isFinite(displayedHeatLossSummary.htcEstimate)
                       ? `${formatNumber(displayedHeatLossSummary.htcEstimate, 1)} W/K`
-                      : "Pending energy + indoor/outdoor temperature overlap"}
+                      : (displayedHeatLossSummary.htcSamples || 0) > 0
+                      ? "Pending energy + indoor/outdoor temperature overlap"
+                      : "Needs indoor/outdoor temperature and energy overlap"}
                   </p>
                   <p className="pt-2 mt-2 border-t border-gray-200">
                     <strong>HDD / HTC Days:</strong>{" "}
-                    {displayedHeatLossSummary.hddDays || 0} /{" "}
-                    {displayedHeatLossSummary.htcSamples || 0}
+                    {(displayedHeatLossSummary.hddDays || 0) > 0 ||
+                    (displayedHeatLossSummary.htcSamples || 0) > 0
+                      ? `${displayedHeatLossSummary.hddDays || 0} / ${
+                          displayedHeatLossSummary.htcSamples || 0
+                        }`
+                      : "No valid overlap yet"}
                   </p>
                   <p className="pt-2 mt-2 border-t border-gray-200">
                     <strong>HDD Source:</strong>{" "}
@@ -4367,7 +4375,7 @@ const BuildingDashboardPanel = ({ building }) => {
         <h2 className="mb-3 text-lg font-bold">WBP Carbon Credit</h2>
 
         <div className="relative bg-white rounded border p-4 space-y-4">
-          <div className="mb-3 flex flex-col items-end gap-3 sm:absolute sm:right-4 sm:top-4 sm:mb-0">
+          <div className="absolute right-4 top-4">
             <div
               className="text-gray-500"
               aria-label="Carbon credit actions locked"
@@ -4377,20 +4385,9 @@ const BuildingDashboardPanel = ({ building }) => {
                 <span className="absolute -top-3 left-1/2 h-3 w-3 -translate-x-1/2 rounded-t-full border-2 border-b-0 border-current" />
               </span>
             </div>
-            <button
-              type="button"
-              disabled={!sellCreditsAvailable}
-              className={`w-36 max-w-full rounded border px-3 py-2 text-sm font-semibold ${
-                sellCreditsAvailable
-                  ? "border-emerald-600 bg-emerald-600 text-white"
-                  : "border-emerald-200 bg-emerald-50/60 text-emerald-700 cursor-not-allowed"
-              }`}
-            >
-              SELL CREDITS
-            </button>
           </div>
 
-          <div className="opacity-35 sm:pr-40">
+          <div className="opacity-35 pr-8">
             <div className="grid grid-cols-2 gap-3 sm:gap-4">
               <div>
                 <p className="text-xs uppercase text-gray-500">Credits</p>
@@ -4428,6 +4425,19 @@ const BuildingDashboardPanel = ({ building }) => {
                     : "Pending calculation"}
                 </p>
               </div>
+            </div>
+            <div className="mt-4">
+              <button
+                type="button"
+                disabled={!sellCreditsAvailable}
+                className={`w-full rounded border px-3 py-2 text-sm font-semibold sm:w-40 ${
+                  sellCreditsAvailable
+                    ? "border-emerald-600 bg-emerald-600 text-white"
+                    : "border-emerald-200 bg-emerald-50/60 text-emerald-700 cursor-not-allowed"
+                }`}
+              >
+                SELL CREDITS
+              </button>
             </div>
           </div>
 
