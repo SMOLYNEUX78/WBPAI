@@ -1270,7 +1270,15 @@ const BuildingDashboardPanel = ({ building }) => {
       if (indoorTemperatureError) throw indoorTemperatureError;
       if (outdoorTemperatureError) throw outdoorTemperatureError;
 
-      const todayStart = `${new Date().toISOString().slice(0, 10)}T00:00:00+00:00`;
+      const todayKey = new Date().toISOString().slice(0, 10);
+      const now = new Date();
+      const elapsedHoursToday = Math.max(
+        0.5,
+        Math.min(
+          24,
+          (now - new Date(`${todayKey}T00:00:00.000Z`)) / (1000 * 60 * 60)
+        )
+      );
       const indicativeEnergyRows = [];
       const indicativePageSize = 1000;
       const indicativeMaxPages = 40;
@@ -1278,7 +1286,9 @@ const BuildingDashboardPanel = ({ building }) => {
       for (let page = 0; page < indicativeMaxPages; page += 1) {
         const { data, error } = await supabase
           .from("EnergyReadings")
-          .select("timestamp, fuel_type, reading_type, usage_kwh, raw_payload, source")
+          .select(
+            "timestamp, fuel_type, reading_type, usage_kwh, raw_payload, source"
+          )
           .eq("building_id", dataSourceBuildingId)
           .in("reading_type", ["daily_total", "interval_30m"])
           .not("usage_kwh", "is", null)
@@ -1411,7 +1421,11 @@ const BuildingDashboardPanel = ({ building }) => {
             insideAverage > outsideAverage &&
             totalKwh > 0
           ) {
-            const averagePowerWatts = (totalKwh * 1000) / 24;
+            const sampleHours =
+              Number.isFinite(dayEnergy.hours) && dayEnergy.hours > 0
+                ? dayEnergy.hours
+                : 24;
+            const averagePowerWatts = (totalKwh * 1000) / sampleHours;
             nextHtcTotal += averagePowerWatts / (insideAverage - outsideAverage);
             nextHtcSamples += 1;
           }
@@ -1471,16 +1485,21 @@ const BuildingDashboardPanel = ({ building }) => {
             fuels: {},
             hdd: null,
             usesLegacy: false,
+            hours: 0,
           };
           indicativeDailyEnergy[day].fuels[fuelType] =
             (indicativeDailyEnergy[day].fuels[fuelType] || 0) + usageKwh;
+          indicativeDailyEnergy[day].hours = Math.min(
+            24,
+            (indicativeDailyEnergy[day].hours || 0) + 0.5
+          );
         });
 
       indicativeEnergyRows
         .filter((row) => row.reading_type === "daily_total")
         .forEach((row) => {
           const date = new Date(row.timestamp);
-          if (Number.isNaN(date.getTime()) || row.timestamp >= todayStart) {
+          if (Number.isNaN(date.getTime())) {
             return;
           }
 
@@ -1499,10 +1518,15 @@ const BuildingDashboardPanel = ({ building }) => {
             fuels: {},
             hdd: null,
             usesLegacy: false,
+            hours: day === todayKey ? elapsedHoursToday : 24,
           };
           indicativeDailyEnergy[day].fuels[fuelType] = Math.max(
             indicativeDailyEnergy[day].fuels[fuelType] || 0,
             usageKwh
+          );
+          indicativeDailyEnergy[day].hours = Math.max(
+            indicativeDailyEnergy[day].hours || 0,
+            day === todayKey ? elapsedHoursToday : 24
           );
 
           const rowHdd = Number(row.raw_payload?.hdd);
