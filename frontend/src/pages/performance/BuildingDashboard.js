@@ -2916,6 +2916,39 @@ const BuildingDashboardPanel = ({ building }) => {
       : "poor"
     : "pending";
   const htcStatus = heatLossSummary.flatlineIndoorTemp ? "pending" : rawHtcStatus;
+  const liveHeatExclusionBuffer =
+    Number.isFinite(sensorData.externalTemp) &&
+    Number.isFinite(sensorData.internalTemp)
+      ? sensorData.externalTemp - sensorData.internalTemp
+      : null;
+  const roomHeatExclusionBuffers = roomIaqData
+    .map((room) =>
+      Number.isFinite(sensorData.externalTemp) && Number.isFinite(room.internalTemp)
+        ? {
+            label: room.label,
+            buffer: sensorData.externalTemp - room.internalTemp,
+          }
+        : null
+    )
+    .filter(Boolean);
+  const heatExclusionStatus = Number.isFinite(liveHeatExclusionBuffer)
+    ? liveHeatExclusionBuffer >= 2
+      ? "good"
+      : liveHeatExclusionBuffer >= 0
+      ? "warning"
+      : "poor"
+    : "pending";
+  const formatHeatExclusionBuffer = (value) => {
+    if (!Number.isFinite(value)) {
+      return "Pending indoor/outdoor overlap";
+    }
+
+    if (value >= 0) {
+      return `${formatMeasurement(value)} deg C cooler than outside`;
+    }
+
+    return `${formatMeasurement(Math.abs(value))} deg C hotter than outside`;
+  };
   const HeatLossStatusDot = ({ status }) => (
     <span
       className={`inline-block h-2.5 w-2.5 rounded-full ${heatLossStatusDotClass(
@@ -4222,6 +4255,11 @@ const BuildingDashboardPanel = ({ building }) => {
                       ? `${formatNumber(displayedHeatLossSummary.kwhPerHdd, 3)} kWh/HDD`
                       : (displayedHeatLossSummary.hddDays || 0) > 0
                       ? "Pending completed energy + HDD data"
+                      : Number.isFinite(displayedSensorData.externalTemp) &&
+                        displayedSensorData.externalTemp > HDD_BASE_TEMP_C
+                      ? `0 active HDD at ${formatMeasurement(
+                          displayedSensorData.externalTemp
+                        )} deg C outside`
                       : "Needs cold-weather days below 15.5 deg C"}
                     {!isNewPerformanceDeepDive && hddDataCaveat
                       ? ` (${hddDataCaveat})`
@@ -4236,6 +4274,33 @@ const BuildingDashboardPanel = ({ building }) => {
                       ? "Pending energy + indoor/outdoor temperature overlap"
                       : "Needs indoor/outdoor temperature and energy overlap"}
                   </p>
+                  {!isNewPerformanceDeepDive ? (
+                    <div className={heatLossStatusClass(heatExclusionStatus)}>
+                      <p>
+                        <HeatLossStatusDot status={heatExclusionStatus} />{" "}
+                        <strong>Heat Exclusion:</strong>{" "}
+                        {formatHeatExclusionBuffer(liveHeatExclusionBuffer)}
+                      </p>
+                      {roomHeatExclusionBuffers.length > 0 ? (
+                        <p className="pl-4 text-xs">
+                          {roomHeatExclusionBuffers
+                            .map(
+                              (room) =>
+                                `${room.label}: ${formatHeatExclusionBuffer(
+                                  room.buffer
+                                )}`
+                            )
+                            .join(" / ")}
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <p className="text-emerald-700">
+                      <HeatLossStatusDot status="good" />{" "}
+                      <strong>Heat Exclusion:</strong> Shading and summer bypass
+                      assumed
+                    </p>
+                  )}
                   <p className="pt-2 mt-2 border-t border-gray-200">
                     <strong>HDD / HTC Days:</strong>{" "}
                     {(displayedHeatLossSummary.hddDays || 0) > 0 ||
