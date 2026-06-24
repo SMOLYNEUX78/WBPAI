@@ -1836,7 +1836,18 @@ const BuildingDashboardPanel = ({ building }) => {
           return (order[a.label] ?? 10) - (order[b.label] ?? 10);
         });
 
-      const fallbackIaqRow = data[0];
+      const hasIndoorIaqData = (row) =>
+        [
+          row.temperature_inside,
+          row.humidity,
+          row.co2,
+          row.vocs,
+          row.pm25,
+          row.pm10,
+          row.hcho,
+          row.no2,
+        ].some((value) => Number.isFinite(Number(value)));
+      const fallbackIaqRow = data.find(hasIndoorIaqData) || data[0];
       const sourceRow = wholeHomeRow || fallbackIaqRow;
       const combinedFromRooms =
         !wholeHomeRow && roomRows.length > 0
