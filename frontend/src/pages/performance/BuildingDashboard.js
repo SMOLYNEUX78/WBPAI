@@ -292,6 +292,7 @@ const BuildingDashboardPanel = ({ building }) => {
   const [performanceBreakdown, setPerformanceBreakdown] = useState({
     health: null,
     energy: null,
+    hla: null,
     resilience: null,
     iaq: null,
     comfort: null,
@@ -1971,14 +1972,16 @@ const BuildingDashboardPanel = ({ building }) => {
         .filter(Boolean);
       const hotWeatherBuffers = hotWeatherRows.map((row) => row.buffer);
       const overheatingRows = hotWeatherRows.filter((row) => row.inside >= 28);
+      const averageHeatExclusionBuffer = hotWeatherBuffers.length
+        ? average(hotWeatherBuffers)
+        : null;
+      const overheatingShare = hotWeatherRows.length
+        ? overheatingRows.length / hotWeatherRows.length
+        : null;
       setHeatExclusionSummary({
-        averageBuffer: hotWeatherBuffers.length
-          ? average(hotWeatherBuffers)
-          : null,
+        averageBuffer: averageHeatExclusionBuffer,
         sampleCount: hotWeatherBuffers.length,
-        overheatingShare: hotWeatherRows.length
-          ? overheatingRows.length / hotWeatherRows.length
-          : null,
+        overheatingShare,
         hotThreshold: 24,
       });
 
@@ -2029,9 +2032,79 @@ const BuildingDashboardPanel = ({ building }) => {
         building.targetEui,
         building.nationalAverageEui
       );
+      const lowerIsBetterScore = (value, goodLimit, poorLimit) => {
+        if (
+          !Number.isFinite(value) ||
+          !Number.isFinite(goodLimit) ||
+          !Number.isFinite(poorLimit) ||
+          poorLimit <= goodLimit
+        ) {
+          return null;
+        }
+
+        if (value <= goodLimit) {
+          return 100;
+        }
+
+        if (value >= poorLimit) {
+          return 0;
+        }
+
+        return clampScore(
+          100 - ((value - goodLimit) / (poorLimit - goodLimit)) * 100
+        );
+      };
+      const hddIntensityPerM2ForScore =
+        Number.isFinite(heatLossSummary.kwhPerHdd) &&
+        Number.isFinite(estimatedArea) &&
+        estimatedArea > 0
+          ? heatLossSummary.kwhPerHdd / estimatedArea
+          : null;
+      const annualHddForScore =
+        Number.isFinite(heatLossSummary.weatherNormalisedEui) &&
+        Number.isFinite(hddIntensityPerM2ForScore) &&
+        hddIntensityPerM2ForScore > 0
+          ? heatLossSummary.weatherNormalisedEui / hddIntensityPerM2ForScore
+          : null;
+      const targetHddIntensityForScore =
+        Number.isFinite(annualHddForScore) && annualHddForScore > 0
+          ? building.targetEui / annualHddForScore
+          : 0.0075;
+      const hddScore = lowerIsBetterScore(
+        hddIntensityPerM2ForScore,
+        targetHddIntensityForScore,
+        targetHddIntensityForScore * 6
+      );
+      const htcPerM2ForScore =
+        Number.isFinite(heatLossSummary.htcEstimate) &&
+        Number.isFinite(estimatedArea) &&
+        estimatedArea > 0
+          ? heatLossSummary.htcEstimate / estimatedArea
+          : null;
+      const htcScore = lowerIsBetterScore(htcPerM2ForScore, 1.5, 3.5);
+      const heatExclusionScore = Number.isFinite(averageHeatExclusionBuffer)
+        ? clampScore(
+            averageHeatExclusionBuffer >= 2
+              ? 100
+              : averageHeatExclusionBuffer >= 0
+              ? 70 + (averageHeatExclusionBuffer / 2) * 30
+              : 70 + (averageHeatExclusionBuffer / 3) * 70
+          )
+        : null;
+      const overheatingAdjustedHeatExclusionScore =
+        Number.isFinite(heatExclusionScore) &&
+        Number.isFinite(overheatingShare)
+          ? clampScore(heatExclusionScore - overheatingShare * 35)
+          : heatExclusionScore;
+      const hlaScore = averageScore([
+        weatherNormalisedEuiScore,
+        hddScore,
+        htcScore,
+        overheatingAdjustedHeatExclusionScore,
+      ]);
       const calculatedEnergyScore = averageScore([
         annualEuiScore,
-        weatherNormalisedEuiScore,
+        hlaScore,
       ]);
 
       const buildingPerformanceIndex = calculateGlobalIeqEnergyIndex({
@@ -2042,6 +2115,7 @@ const BuildingDashboardPanel = ({ building }) => {
       setPerformanceBreakdown({
         health: calculatedHealthScore,
         energy: calculatedEnergyScore,
+        hla: hlaScore,
         resilience: resilienceScore,
         iaq: calculatedIAQScore,
         comfort: calculatedComfortScore,
@@ -2874,6 +2948,10 @@ const BuildingDashboardPanel = ({ building }) => {
     historicalPerformance,
     matterportMetadata.internalArea,
     heatLossSummary.weatherNormalisedEui,
+    heatLossSummary.kwhPerHdd,
+    heatLossSummary.htcEstimate,
+    heatExclusionSummary.averageBuffer,
+    heatExclusionSummary.overheatingShare,
   ]);
 
   const estimatedElectricityDailyKwh = Number.isFinite(
@@ -4330,6 +4408,12 @@ const BuildingDashboardPanel = ({ building }) => {
               <div className="space-y-2 sm:space-y-3 break-words min-w-0">
                 <h3 className="font-semibold mb-2 sm:mb-3">HLA</h3>
                 <div className="space-y-0.5">
+                  <p>
+                    <strong>HLA Score:</strong>{" "}
+                    {Number.isFinite(performanceBreakdown.hla)
+                      ? `${formatScore(performanceBreakdown.hla)}/100`
+                      : "Pending"}
+                  </p>
                   <p>
                     <strong>Weather-normalised EUI:</strong>{" "}
                     {Number.isFinite(displayedHeatLossSummary.weatherNormalisedEui)
