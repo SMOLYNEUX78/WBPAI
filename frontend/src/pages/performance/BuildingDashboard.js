@@ -312,6 +312,12 @@ const BuildingDashboardPanel = ({ building }) => {
     flatlineIndoorTemp: false,
     filteredInsideReadings: 0,
   });
+  const [heatExclusionSummary, setHeatExclusionSummary] = useState({
+    averageBuffer: null,
+    sampleCount: 0,
+    overheatingShare: null,
+    hotThreshold: 24,
+  });
   const [weeklyTrendData, setWeeklyTrendData] = useState(readCachedWeeklyTrendData);
   const [selectedTrendMetricKeys, setSelectedTrendMetricKeys] = useState([]);
   const [hoveredTrendSlot, setHoveredTrendSlot] = useState(null);
@@ -1915,6 +1921,39 @@ const BuildingDashboardPanel = ({ building }) => {
       const pm10Values = getValidValues(ieqRows, "pm10");
       const hchoValues = getValidValues(ieqRows, "hcho");
       const no2Values = getValidValues(ieqRows, "no2");
+      const hotWeatherRows = ieqRows
+        .map((row) => {
+          const inside = Number(row.temperature_inside);
+          const outside = Number(row.temperature_outside);
+
+          if (
+            !Number.isFinite(inside) ||
+            !Number.isFinite(outside) ||
+            inside === 0 ||
+            outside < 24
+          ) {
+            return null;
+          }
+
+          return {
+            buffer: outside - inside,
+            inside,
+            outside,
+          };
+        })
+        .filter(Boolean);
+      const hotWeatherBuffers = hotWeatherRows.map((row) => row.buffer);
+      const overheatingRows = hotWeatherRows.filter((row) => row.inside >= 28);
+      setHeatExclusionSummary({
+        averageBuffer: hotWeatherBuffers.length
+          ? average(hotWeatherBuffers)
+          : null,
+        sampleCount: hotWeatherBuffers.length,
+        overheatingShare: hotWeatherRows.length
+          ? overheatingRows.length / hotWeatherRows.length
+          : null,
+        hotThreshold: 24,
+      });
 
       const calculatedIAQScore = calculateIAQScore({
         co2Values,
@@ -2953,25 +2992,12 @@ const BuildingDashboardPanel = ({ building }) => {
       : "poor"
     : "pending";
   const htcStatus = heatLossSummary.flatlineIndoorTemp ? "pending" : rawHtcStatus;
-  const liveHeatExclusionBuffer =
-    Number.isFinite(sensorData.externalTemp) &&
-    Number.isFinite(sensorData.internalTemp)
-      ? sensorData.externalTemp - sensorData.internalTemp
-      : null;
-  const roomHeatExclusionBuffers = roomIaqData
-    .map((room) =>
-      Number.isFinite(sensorData.externalTemp) && Number.isFinite(room.internalTemp)
-        ? {
-            label: room.label,
-            buffer: sensorData.externalTemp - room.internalTemp,
-          }
-        : null
-    )
-    .filter(Boolean);
-  const heatExclusionStatus = Number.isFinite(liveHeatExclusionBuffer)
-    ? liveHeatExclusionBuffer >= 2
+  const heatExclusionStatus = Number.isFinite(
+    heatExclusionSummary.averageBuffer
+  )
+    ? heatExclusionSummary.averageBuffer >= 2
       ? "good"
-      : liveHeatExclusionBuffer >= 0
+      : heatExclusionSummary.averageBuffer >= 0
       ? "warning"
       : "poor"
     : "pending";
@@ -4316,18 +4342,20 @@ const BuildingDashboardPanel = ({ building }) => {
                       <p>
                         <HeatLossStatusDot status={heatExclusionStatus} />{" "}
                         <strong>Heat Exclusion:</strong>{" "}
-                        {formatHeatExclusionBuffer(liveHeatExclusionBuffer)}
+                        {formatHeatExclusionBuffer(
+                          heatExclusionSummary.averageBuffer
+                        )}
                       </p>
-                      {roomHeatExclusionBuffers.length > 0 ? (
+                      {heatExclusionSummary.sampleCount > 0 ? (
                         <p className="pl-4 text-xs">
-                          {roomHeatExclusionBuffers
-                            .map(
-                              (room) =>
-                                `${room.label}: ${formatHeatExclusionBuffer(
-                                  room.buffer
-                                )}`
-                            )
-                            .join(" / ")}
+                          {heatExclusionSummary.sampleCount} hot-weather sample(s)
+                          above {heatExclusionSummary.hotThreshold} deg C outside
+                          {Number.isFinite(heatExclusionSummary.overheatingShare)
+                            ? ` / ${formatNumber(
+                                heatExclusionSummary.overheatingShare * 100,
+                                0
+                              )}% at 28 deg C+ indoors`
+                            : ""}
                         </p>
                       ) : null}
                     </div>
