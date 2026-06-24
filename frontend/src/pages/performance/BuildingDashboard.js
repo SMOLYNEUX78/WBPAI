@@ -403,6 +403,7 @@ const BuildingDashboardPanel = ({ building }) => {
     const runQuery = async (includeExtended) => {
       const valueColumns = [
         "temperature_inside",
+        "temperature_outside",
         "humidity",
         "co2",
         "vocs",
@@ -1921,10 +1922,36 @@ const BuildingDashboardPanel = ({ building }) => {
       const pm10Values = getValidValues(ieqRows, "pm10");
       const hchoValues = getValidValues(ieqRows, "hcho");
       const no2Values = getValidValues(ieqRows, "no2");
-      const hotWeatherRows = ieqRows
-        .map((row) => {
-          const inside = Number(row.temperature_inside);
-          const outside = Number(row.temperature_outside);
+      const hotWeatherBuckets = ieqRows.reduce((buckets, row) => {
+        const date = new Date(row.timestamp);
+
+        if (Number.isNaN(date.getTime())) {
+          return buckets;
+        }
+
+        const bucketKey = date.toISOString().slice(0, 13);
+        buckets[bucketKey] = buckets[bucketKey] || {
+          inside: [],
+          outside: [],
+        };
+
+        const inside = Number(row.temperature_inside);
+        const outside = Number(row.temperature_outside);
+
+        if (Number.isFinite(inside) && inside !== 0) {
+          buckets[bucketKey].inside.push(inside);
+        }
+
+        if (Number.isFinite(outside) && outside !== 0) {
+          buckets[bucketKey].outside.push(outside);
+        }
+
+        return buckets;
+      }, {});
+      const hotWeatherRows = Object.values(hotWeatherBuckets)
+        .map((bucket) => {
+          const inside = bucket.inside.length ? average(bucket.inside) : null;
+          const outside = bucket.outside.length ? average(bucket.outside) : null;
 
           if (
             !Number.isFinite(inside) ||
