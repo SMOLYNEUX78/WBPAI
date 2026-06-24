@@ -219,6 +219,21 @@ const BuildingDashboardPanel = ({ building }) => {
     energyCostSavedGbp: null,
     carbonCredits: null,
   };
+  const defaultHeatLossSummary = {
+    kwhPerHdd: null,
+    weatherNormalisedEui: null,
+    htcEstimate: null,
+    hddDays: 0,
+    htcSamples: 0,
+    hddSource: "current",
+    hlaConfidence: "pending",
+    auditKwhPerHdd: null,
+    auditHtcEstimate: null,
+    averageInternalTemp: null,
+    comfortHddDays: 0,
+    flatlineIndoorTemp: false,
+    filteredInsideReadings: 0,
+  };
   const defaultMrvEvidence = {
     baselineStartDate: "",
     baselineEndDate: "",
@@ -248,6 +263,11 @@ const BuildingDashboardPanel = ({ building }) => {
     );
   const readCachedWeeklyTrendData = () =>
     readCachedDashboardState(`${dataSourceBuildingId}:weeklyTrendData`, []);
+  const readCachedHeatLossSummary = () =>
+    readCachedDashboardState(
+      `${dataSourceBuildingId}:heatLossSummary`,
+      defaultHeatLossSummary
+    );
   const readCachedMrvEvidence = () =>
     readCachedDashboardState(
       `${dataSourceBuildingId}:mrvEvidence`,
@@ -298,21 +318,9 @@ const BuildingDashboardPanel = ({ building }) => {
     comfort: null,
     humidity: null,
   });
-  const [heatLossSummary, setHeatLossSummary] = useState({
-    kwhPerHdd: null,
-    weatherNormalisedEui: null,
-    htcEstimate: null,
-    hddDays: 0,
-    htcSamples: 0,
-    hddSource: "current",
-    hlaConfidence: "pending",
-    auditKwhPerHdd: null,
-    auditHtcEstimate: null,
-    averageInternalTemp: null,
-    comfortHddDays: 0,
-    flatlineIndoorTemp: false,
-    filteredInsideReadings: 0,
-  });
+  const [heatLossSummary, setHeatLossSummary] = useState(
+    readCachedHeatLossSummary
+  );
   const [heatExclusionSummary, setHeatExclusionSummary] = useState({
     averageBuffer: null,
     sampleCount: 0,
@@ -1715,7 +1723,7 @@ const BuildingDashboardPanel = ({ building }) => {
       };
       const flatlineIndoorTemp = false;
 
-      setHeatLossSummary({
+      const nextHeatLossSummary = {
         kwhPerHdd: displayedHeatLoss.kwhPerHdd,
         weatherNormalisedEui: displayedHeatLoss.weatherNormalisedEui,
         htcEstimate: displayedHeatLoss.htcEstimate,
@@ -1731,7 +1739,12 @@ const BuildingDashboardPanel = ({ building }) => {
         comfortHddDays: displayedHeatLoss.comfortHddDays || 0,
         flatlineIndoorTemp,
         filteredInsideReadings,
-      });
+      };
+      setHeatLossSummary(nextHeatLossSummary);
+      localStorage.setItem(
+        `${dataSourceBuildingId}:heatLossSummary`,
+        JSON.stringify(nextHeatLossSummary)
+      );
     } catch (err) {
       console.error("Error fetching heat loss summary:", err.message);
       setHeatLossSummary({
@@ -2926,6 +2939,7 @@ const BuildingDashboardPanel = ({ building }) => {
         : 0
     );
     setWeeklyTrendData(readCachedWeeklyTrendData());
+    setHeatLossSummary(readCachedHeatLossSummary());
     setMrvEvidence(readCachedMrvEvidence());
     fetchLongTermAverage();
     fetchHeatLossSummary();
