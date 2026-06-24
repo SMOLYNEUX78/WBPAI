@@ -1248,7 +1248,16 @@ const BuildingDashboardPanel = ({ building }) => {
     try {
       const area = Number(matterportMetadata.internalArea);
       const completedRows = await fetchEnergyDailyTotals({ beforeToday: true });
-      const { data: indoorTemperatureRows, error: indoorTemperatureError } =
+      const { data: olderIndoorTemperatureRows, error: olderIndoorTemperatureError } =
+        await applyBuildingScope(
+          supabase
+            .from("Readings")
+            .select("timestamp, temperature_inside")
+            .not("temperature_inside", "is", null)
+            .order("timestamp", { ascending: true })
+            .limit(10000)
+        );
+      const { data: recentIndoorTemperatureRows, error: recentIndoorTemperatureError } =
         await applyBuildingScope(
           supabase
             .from("Readings")
@@ -1257,7 +1266,16 @@ const BuildingDashboardPanel = ({ building }) => {
             .order("timestamp", { ascending: false })
             .limit(10000)
         );
-      const { data: outdoorTemperatureRows, error: outdoorTemperatureError } =
+      const { data: olderOutdoorTemperatureRows, error: olderOutdoorTemperatureError } =
+        await applyBuildingScope(
+          supabase
+            .from("Readings")
+            .select("timestamp, temperature_outside")
+            .not("temperature_outside", "is", null)
+            .order("timestamp", { ascending: true })
+            .limit(10000)
+        );
+      const { data: recentOutdoorTemperatureRows, error: recentOutdoorTemperatureError } =
         await applyBuildingScope(
           supabase
             .from("Readings")
@@ -1267,8 +1285,27 @@ const BuildingDashboardPanel = ({ building }) => {
             .limit(10000)
         );
 
-      if (indoorTemperatureError) throw indoorTemperatureError;
-      if (outdoorTemperatureError) throw outdoorTemperatureError;
+      if (olderIndoorTemperatureError) throw olderIndoorTemperatureError;
+      if (recentIndoorTemperatureError) throw recentIndoorTemperatureError;
+      if (olderOutdoorTemperatureError) throw olderOutdoorTemperatureError;
+      if (recentOutdoorTemperatureError) throw recentOutdoorTemperatureError;
+
+      const mergeRowsByTimestamp = (rows) =>
+        Array.from(
+          new Map(
+            rows
+              .filter((row) => row?.timestamp)
+              .map((row) => [row.timestamp, row])
+          ).values()
+        );
+      const indoorTemperatureRows = mergeRowsByTimestamp([
+        ...(olderIndoorTemperatureRows || []),
+        ...(recentIndoorTemperatureRows || []),
+      ]);
+      const outdoorTemperatureRows = mergeRowsByTimestamp([
+        ...(olderOutdoorTemperatureRows || []),
+        ...(recentOutdoorTemperatureRows || []),
+      ]);
 
       const todayKey = new Date().toISOString().slice(0, 10);
       const now = new Date();
