@@ -4511,8 +4511,13 @@ const BuildingDashboardPanel = ({ building }) => {
                         }`
                       : "No valid overlap yet"}
                   </p>
-                  <p className="pt-2 mt-2 border-t border-gray-200 text-xs sm:text-sm leading-snug break-words">
-                    <strong>HDD Source:</strong>{" "}
+                  <p
+                    className="pt-2 mt-2 border-t border-gray-200 text-[11px] sm:text-xs leading-snug text-gray-600 break-words"
+                    style={{ fontSize: "clamp(11px, 2.8vw, 12px)" }}
+                  >
+                    <span className="font-semibold text-gray-700">
+                      HDD source:
+                    </span>{" "}
                     {isNewPerformanceDeepDive
                       ? projectedPerformanceDeepDive.hddSource
                       : heatLossSummary.hddSource === "legacy"
