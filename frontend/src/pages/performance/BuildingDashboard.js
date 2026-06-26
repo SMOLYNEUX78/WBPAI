@@ -4511,7 +4511,7 @@ const BuildingDashboardPanel = ({ building }) => {
                         }`
                       : "No valid overlap yet"}
                   </p>
-                  <p className="pt-2 mt-2 border-t border-gray-200">
+                  <p className="pt-2 mt-2 border-t border-gray-200 text-xs sm:text-sm leading-snug break-words">
                     <strong>HDD Source:</strong>{" "}
                     {isNewPerformanceDeepDive
                       ? projectedPerformanceDeepDive.hddSource
@@ -4520,7 +4520,7 @@ const BuildingDashboardPanel = ({ building }) => {
                       : "Current building data"}
                   </p>
                   {!isNewPerformanceDeepDive ? (
-                    <p className="text-xs text-gray-600">
+                    <p className="text-[11px] sm:text-xs leading-snug text-gray-600 break-words">
                       HLA confidence:{" "}
                       {heatLossSummary.hlaConfidence === "audit-grade"
                         ? "Audit-grade daily baseline"
