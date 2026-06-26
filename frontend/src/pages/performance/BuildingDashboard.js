@@ -403,6 +403,7 @@ const BuildingDashboardPanel = ({ building }) => {
   const fetchScopedIaqRows = async ({
     includeTimestamp = false,
     includeReadingType = false,
+    indoorOnly = false,
     limit,
     orderDescending = false,
     readingTypes,
@@ -412,7 +413,7 @@ const BuildingDashboardPanel = ({ building }) => {
     const runQuery = async (includeExtended) => {
       const valueColumns = [
         "temperature_inside",
-        "temperature_outside",
+        ...(indoorOnly ? [] : ["temperature_outside"]),
         "humidity",
         "co2",
         "vocs",
@@ -1809,6 +1810,7 @@ const BuildingDashboardPanel = ({ building }) => {
           : null;
       const { data, error } = await fetchScopedIaqRows({
         includeReadingType: true,
+        indoorOnly: true,
         limit: dataSourceBuildingId === "home" ? 60 : 30,
         orderDescending: true,
         readingTypes: dysonReadingTypes,
