@@ -1914,10 +1914,29 @@ const BuildingDashboardPanel = ({ building }) => {
 
   const fetchLongTermBuildingPerformance = async () => {
     try {
-      const { data, error } = await fetchScopedIaqRows({
-        includeTimestamp: true,
-        includeReadingType: true,
-      });
+      const data = [];
+      let error = null;
+
+      for (let rangeFrom = 0; rangeFrom < 12000; rangeFrom += 1000) {
+        const result = await fetchScopedIaqRows({
+          includeTimestamp: true,
+          includeReadingType: true,
+          orderDescending: true,
+          rangeFrom,
+          rangeTo: rangeFrom + 999,
+        });
+
+        if (result.error) {
+          error = result.error;
+          break;
+        }
+
+        data.push(...(result.data || []));
+
+        if (!result.data || result.data.length < 1000) {
+          break;
+        }
+      }
 
       if (error) throw error;
       if (!data || data.length === 0) return;
