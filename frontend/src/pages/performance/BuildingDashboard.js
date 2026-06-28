@@ -234,6 +234,12 @@ const BuildingDashboardPanel = ({ building }) => {
     flatlineIndoorTemp: false,
     filteredInsideReadings: 0,
   };
+  const defaultHeatExclusionSummary = {
+    averageBuffer: null,
+    sampleCount: 0,
+    overheatingShare: null,
+    hotThreshold: 24,
+  };
   const defaultMrvEvidence = {
     baselineStartDate: "",
     baselineEndDate: "",
@@ -267,6 +273,11 @@ const BuildingDashboardPanel = ({ building }) => {
     readCachedDashboardState(
       `${dataSourceBuildingId}:heatLossSummary`,
       defaultHeatLossSummary
+    );
+  const readCachedHeatExclusionSummary = () =>
+    readCachedDashboardState(
+      `${dataSourceBuildingId}:heatExclusionSummary`,
+      defaultHeatExclusionSummary
     );
   const readCachedMrvEvidence = () =>
     readCachedDashboardState(
@@ -321,12 +332,9 @@ const BuildingDashboardPanel = ({ building }) => {
   const [heatLossSummary, setHeatLossSummary] = useState(
     readCachedHeatLossSummary
   );
-  const [heatExclusionSummary, setHeatExclusionSummary] = useState({
-    averageBuffer: null,
-    sampleCount: 0,
-    overheatingShare: null,
-    hotThreshold: 24,
-  });
+  const [heatExclusionSummary, setHeatExclusionSummary] = useState(
+    readCachedHeatExclusionSummary
+  );
   const [weeklyTrendData, setWeeklyTrendData] = useState(readCachedWeeklyTrendData);
   const [selectedTrendMetricKeys, setSelectedTrendMetricKeys] = useState([]);
   const [hoveredTrendSlot, setHoveredTrendSlot] = useState(null);
@@ -1766,6 +1774,117 @@ const BuildingDashboardPanel = ({ building }) => {
     }
   };
 
+  const calculateHeatExclusionFromRows = (indoorRows, outdoorRows) => {
+    const buckets = {};
+
+    [...(indoorRows || []), ...(outdoorRows || [])].forEach((row) => {
+      const date = new Date(row.timestamp);
+
+      if (Number.isNaN(date.getTime())) {
+        return;
+      }
+
+      const bucketKey = date.toISOString().slice(0, 13);
+      buckets[bucketKey] = buckets[bucketKey] || {
+        inside: [],
+        outside: [],
+      };
+
+      const inside = Number(row.temperature_inside);
+      const outside = Number(row.temperature_outside);
+
+      if (Number.isFinite(inside) && inside !== 0) {
+        buckets[bucketKey].inside.push(inside);
+      }
+
+      if (Number.isFinite(outside) && outside !== 0) {
+        buckets[bucketKey].outside.push(outside);
+      }
+    });
+
+    const hotWeatherRows = Object.values(buckets)
+      .map((bucket) => {
+        const inside = bucket.inside.length ? average(bucket.inside) : null;
+        const outside = bucket.outside.length ? average(bucket.outside) : null;
+
+        if (
+          !Number.isFinite(inside) ||
+          !Number.isFinite(outside) ||
+          inside === 0 ||
+          outside < 24
+        ) {
+          return null;
+        }
+
+        return {
+          buffer: outside - inside,
+          inside,
+          outside,
+        };
+      })
+      .filter(Boolean);
+    const hotWeatherBuffers = hotWeatherRows.map((row) => row.buffer);
+    const overheatingRows = hotWeatherRows.filter((row) => row.inside >= 28);
+
+    return {
+      averageBuffer: hotWeatherBuffers.length ? average(hotWeatherBuffers) : null,
+      sampleCount: hotWeatherBuffers.length,
+      overheatingShare: hotWeatherRows.length
+        ? overheatingRows.length / hotWeatherRows.length
+        : null,
+      hotThreshold: 24,
+    };
+  };
+
+  const fetchHeatExclusionSummary = async () => {
+    try {
+      const since = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
+      const fetchTemperatureRows = async ({ column, maxRows }) => {
+        const rows = [];
+        const pageSize = 1000;
+
+        for (let rangeFrom = 0; rangeFrom < maxRows; rangeFrom += pageSize) {
+          const result = await applyBuildingScope(
+            supabase
+              .from("Readings")
+              .select(`timestamp, ${column}`)
+              .not(column, "is", null)
+              .gte("timestamp", since)
+              .order("timestamp", { ascending: false })
+              .range(rangeFrom, rangeFrom + pageSize - 1)
+          );
+
+          if (result.error) throw result.error;
+
+          rows.push(...(result.data || []));
+
+          if (!result.data || result.data.length < pageSize) {
+            break;
+          }
+        }
+
+        return rows;
+      };
+      const [indoorRows, outdoorRows] = await Promise.all([
+        fetchTemperatureRows({ column: "temperature_inside", maxRows: 12000 }),
+        fetchTemperatureRows({ column: "temperature_outside", maxRows: 5000 }),
+      ]);
+
+      const nextHeatExclusionSummary = calculateHeatExclusionFromRows(
+        indoorRows || [],
+        outdoorRows || []
+      );
+
+      setHeatExclusionSummary(nextHeatExclusionSummary);
+      localStorage.setItem(
+        `${dataSourceBuildingId}:heatExclusionSummary`,
+        JSON.stringify(nextHeatExclusionSummary)
+      );
+    } catch (err) {
+      console.error("Error fetching heat exclusion summary:", err.message);
+    }
+  };
+
   const fetchExternalTemp = async () => {
     try {
       const { data, error } = await applyBuildingScope(
@@ -1968,67 +2087,18 @@ const BuildingDashboardPanel = ({ building }) => {
       const pm10Values = getValidValues(ieqRows, "pm10");
       const hchoValues = getValidValues(ieqRows, "hcho");
       const no2Values = getValidValues(ieqRows, "no2");
-      const hotWeatherBuckets = ieqRows.reduce((buckets, row) => {
-        const date = new Date(row.timestamp);
-
-        if (Number.isNaN(date.getTime())) {
-          return buckets;
-        }
-
-        const bucketKey = date.toISOString().slice(0, 13);
-        buckets[bucketKey] = buckets[bucketKey] || {
-          inside: [],
-          outside: [],
-        };
-
-        const inside = Number(row.temperature_inside);
-        const outside = Number(row.temperature_outside);
-
-        if (Number.isFinite(inside) && inside !== 0) {
-          buckets[bucketKey].inside.push(inside);
-        }
-
-        if (Number.isFinite(outside) && outside !== 0) {
-          buckets[bucketKey].outside.push(outside);
-        }
-
-        return buckets;
-      }, {});
-      const hotWeatherRows = Object.values(hotWeatherBuckets)
-        .map((bucket) => {
-          const inside = bucket.inside.length ? average(bucket.inside) : null;
-          const outside = bucket.outside.length ? average(bucket.outside) : null;
-
-          if (
-            !Number.isFinite(inside) ||
-            !Number.isFinite(outside) ||
-            inside === 0 ||
-            outside < 24
-          ) {
-            return null;
-          }
-
-          return {
-            buffer: outside - inside,
-            inside,
-            outside,
-          };
-        })
-        .filter(Boolean);
-      const hotWeatherBuffers = hotWeatherRows.map((row) => row.buffer);
-      const overheatingRows = hotWeatherRows.filter((row) => row.inside >= 28);
-      const averageHeatExclusionBuffer = hotWeatherBuffers.length
-        ? average(hotWeatherBuffers)
-        : null;
-      const overheatingShare = hotWeatherRows.length
-        ? overheatingRows.length / hotWeatherRows.length
-        : null;
-      setHeatExclusionSummary({
-        averageBuffer: averageHeatExclusionBuffer,
-        sampleCount: hotWeatherBuffers.length,
-        overheatingShare,
-        hotThreshold: 24,
-      });
+      const nextHeatExclusionSummary = calculateHeatExclusionFromRows(
+        ieqRows,
+        ieqRows
+      );
+      const averageHeatExclusionBuffer =
+        nextHeatExclusionSummary.averageBuffer;
+      const overheatingShare = nextHeatExclusionSummary.overheatingShare;
+      setHeatExclusionSummary(nextHeatExclusionSummary);
+      localStorage.setItem(
+        `${dataSourceBuildingId}:heatExclusionSummary`,
+        JSON.stringify(nextHeatExclusionSummary)
+      );
 
       const calculatedIAQScore = calculateIAQScore({
         co2Values,
@@ -2961,9 +3031,11 @@ const BuildingDashboardPanel = ({ building }) => {
     );
     setWeeklyTrendData(readCachedWeeklyTrendData());
     setHeatLossSummary(readCachedHeatLossSummary());
+    setHeatExclusionSummary(readCachedHeatExclusionSummary());
     setMrvEvidence(readCachedMrvEvidence());
     fetchLongTermAverage();
     fetchHeatLossSummary();
+    fetchHeatExclusionSummary();
     fetchExternalTemp();
     fetchIAQData();
     fetchWeeklyPerformanceTrend();
