@@ -239,6 +239,7 @@ const BuildingDashboardPanel = ({ building }) => {
     sampleCount: 0,
     overheatingShare: null,
     hotThreshold: 24,
+    hotDays: [],
   };
   const defaultMrvEvidence = {
     baselineStartDate: "",
@@ -1802,8 +1803,8 @@ const BuildingDashboardPanel = ({ building }) => {
       }
     });
 
-    const hotWeatherRows = Object.values(buckets)
-      .map((bucket) => {
+    const hotWeatherRows = Object.entries(buckets)
+      .map(([bucketKey, bucket]) => {
         const inside = bucket.inside.length ? average(bucket.inside) : null;
         const outside = bucket.outside.length ? average(bucket.outside) : null;
 
@@ -1817,6 +1818,8 @@ const BuildingDashboardPanel = ({ building }) => {
         }
 
         return {
+          bucketKey,
+          date: bucketKey.slice(0, 10),
           buffer: outside - inside,
           inside,
           outside,
@@ -1825,6 +1828,35 @@ const BuildingDashboardPanel = ({ building }) => {
       .filter(Boolean);
     const hotWeatherBuffers = hotWeatherRows.map((row) => row.buffer);
     const overheatingRows = hotWeatherRows.filter((row) => row.inside >= 28);
+    const hotDays = Object.values(
+      hotWeatherRows.reduce((days, row) => {
+        days[row.date] = days[row.date] || {
+          date: row.date,
+          buffers: [],
+          insideValues: [],
+          outsideValues: [],
+          overheatingCount: 0,
+        };
+        days[row.date].buffers.push(row.buffer);
+        days[row.date].insideValues.push(row.inside);
+        days[row.date].outsideValues.push(row.outside);
+        if (row.inside >= 28) {
+          days[row.date].overheatingCount += 1;
+        }
+        return days;
+      }, {})
+    )
+      .map((day) => ({
+        date: day.date,
+        sampleCount: day.buffers.length,
+        averageBuffer: average(day.buffers),
+        peakInside: Math.max(...day.insideValues),
+        peakOutside: Math.max(...day.outsideValues),
+        overheatingShare: day.buffers.length
+          ? day.overheatingCount / day.buffers.length
+          : null,
+      }))
+      .sort((a, b) => b.date.localeCompare(a.date));
 
     return {
       averageBuffer: hotWeatherBuffers.length ? average(hotWeatherBuffers) : null,
@@ -1833,26 +1865,34 @@ const BuildingDashboardPanel = ({ building }) => {
         ? overheatingRows.length / hotWeatherRows.length
         : null,
       hotThreshold: 24,
+      hotDays,
     };
   };
 
   const fetchHeatExclusionSummary = async () => {
     try {
-      const since = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
+      const since = new Date(Date.now() - 21 * 24 * 60 * 60 * 1000).toISOString();
       const fetchTemperatureRows = async ({ column, maxRows }) => {
         const rows = [];
         const pageSize = 1000;
 
         for (let rangeFrom = 0; rangeFrom < maxRows; rangeFrom += pageSize) {
-          const result = await applyBuildingScope(
-            supabase
-              .from("Readings")
-              .select(`timestamp, ${column}`)
-              .not(column, "is", null)
-              .gte("timestamp", since)
-              .order("timestamp", { ascending: false })
-              .range(rangeFrom, rangeFrom + pageSize - 1)
-          );
+          let query = supabase
+            .from("Readings")
+            .select(`timestamp, ${column}`)
+            .not(column, "is", null)
+            .gte("timestamp", since)
+            .order("timestamp", { ascending: false })
+            .range(rangeFrom, rangeFrom + pageSize - 1);
+
+          if (
+            dataSourceBuildingId === "home" &&
+            column === "temperature_inside"
+          ) {
+            query = query.eq("reading_type", "dyson:whole_home");
+          }
+
+          const result = await applyBuildingScope(query);
 
           if (result.error) throw result.error;
 
@@ -1866,8 +1906,8 @@ const BuildingDashboardPanel = ({ building }) => {
         return rows;
       };
       const [indoorRows, outdoorRows] = await Promise.all([
-        fetchTemperatureRows({ column: "temperature_inside", maxRows: 12000 }),
-        fetchTemperatureRows({ column: "temperature_outside", maxRows: 5000 }),
+        fetchTemperatureRows({ column: "temperature_inside", maxRows: 30000 }),
+        fetchTemperatureRows({ column: "temperature_outside", maxRows: 10000 }),
       ]);
 
       const nextHeatExclusionSummary = calculateHeatExclusionFromRows(
@@ -2087,18 +2127,24 @@ const BuildingDashboardPanel = ({ building }) => {
       const pm10Values = getValidValues(ieqRows, "pm10");
       const hchoValues = getValidValues(ieqRows, "hcho");
       const no2Values = getValidValues(ieqRows, "no2");
-      const nextHeatExclusionSummary = calculateHeatExclusionFromRows(
+      const calculatedHeatExclusionSummary = calculateHeatExclusionFromRows(
         ieqRows,
         ieqRows
       );
+      const nextHeatExclusionSummary =
+        calculatedHeatExclusionSummary.sampleCount > 0
+          ? calculatedHeatExclusionSummary
+          : heatExclusionSummary;
       const averageHeatExclusionBuffer =
         nextHeatExclusionSummary.averageBuffer;
       const overheatingShare = nextHeatExclusionSummary.overheatingShare;
-      setHeatExclusionSummary(nextHeatExclusionSummary);
-      localStorage.setItem(
-        `${dataSourceBuildingId}:heatExclusionSummary`,
-        JSON.stringify(nextHeatExclusionSummary)
-      );
+      if (calculatedHeatExclusionSummary.sampleCount > 0) {
+        setHeatExclusionSummary(nextHeatExclusionSummary);
+        localStorage.setItem(
+          `${dataSourceBuildingId}:heatExclusionSummary`,
+          JSON.stringify(nextHeatExclusionSummary)
+        );
+      }
 
       const calculatedIAQScore = calculateIAQScore({
         co2Values,
@@ -3234,6 +3280,18 @@ const BuildingDashboardPanel = ({ building }) => {
     }
 
     return `${formatMeasurement(Math.abs(value))} deg C hotter than outside`;
+  };
+  const formatHeatExclusionDate = (value) => {
+    const date = new Date(`${value}T12:00:00Z`);
+
+    if (Number.isNaN(date.getTime())) {
+      return value;
+    }
+
+    return date.toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "short",
+    });
   };
   const HeatLossStatusDot = ({ status }) => (
     <span
@@ -4586,6 +4644,29 @@ const BuildingDashboardPanel = ({ building }) => {
                               )}% at 28 deg C+ indoors`
                             : ""}
                         </p>
+                      ) : null}
+                      {heatExclusionSummary.hotDays?.length > 0 ? (
+                        <div className="pl-4 mt-1 space-y-1 text-[11px] leading-snug text-gray-600">
+                          <p className="font-semibold text-gray-700">
+                            Hot day log
+                          </p>
+                          {heatExclusionSummary.hotDays.slice(0, 5).map((day) => (
+                            <p key={day.date}>
+                              {formatHeatExclusionDate(day.date)}:{" "}
+                              {formatHeatExclusionBuffer(day.averageBuffer)}
+                              {Number.isFinite(day.peakOutside)
+                                ? ` / peak outside ${formatMeasurement(
+                                    day.peakOutside
+                                  )} deg C`
+                                : ""}
+                              {Number.isFinite(day.peakInside)
+                                ? ` / peak inside ${formatMeasurement(
+                                    day.peakInside
+                                  )} deg C`
+                                : ""}
+                            </p>
+                          ))}
+                        </div>
                       ) : null}
                     </div>
                   ) : (
