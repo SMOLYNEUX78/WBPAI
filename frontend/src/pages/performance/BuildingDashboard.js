@@ -2609,8 +2609,8 @@ const BuildingDashboardPanel = ({ building }) => {
           .not("usage_kwh", "is", null)
           .gte("timestamp", "2020-01-01")
           .lte("timestamp", now.toISOString())
-          .order("timestamp", { ascending: true })
-          .order("created_at", { ascending: true })
+          .order("timestamp", { ascending: false })
+          .order("created_at", { ascending: false })
           .range(page * pageSize, (page + 1) * pageSize - 1);
 
         if (error) {
