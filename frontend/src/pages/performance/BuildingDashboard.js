@@ -239,7 +239,6 @@ const BuildingDashboardPanel = ({ building }) => {
     sampleCount: 0,
     overheatingShare: null,
     hotThreshold: 24,
-    hotDays: [],
   };
   const defaultMrvEvidence = {
     baselineStartDate: "",
@@ -1818,8 +1817,6 @@ const BuildingDashboardPanel = ({ building }) => {
         }
 
         return {
-          bucketKey,
-          date: bucketKey.slice(0, 10),
           buffer: outside - inside,
           inside,
           outside,
@@ -1828,35 +1825,6 @@ const BuildingDashboardPanel = ({ building }) => {
       .filter(Boolean);
     const hotWeatherBuffers = hotWeatherRows.map((row) => row.buffer);
     const overheatingRows = hotWeatherRows.filter((row) => row.inside >= 28);
-    const hotDays = Object.values(
-      hotWeatherRows.reduce((days, row) => {
-        days[row.date] = days[row.date] || {
-          date: row.date,
-          buffers: [],
-          insideValues: [],
-          outsideValues: [],
-          overheatingCount: 0,
-        };
-        days[row.date].buffers.push(row.buffer);
-        days[row.date].insideValues.push(row.inside);
-        days[row.date].outsideValues.push(row.outside);
-        if (row.inside >= 28) {
-          days[row.date].overheatingCount += 1;
-        }
-        return days;
-      }, {})
-    )
-      .map((day) => ({
-        date: day.date,
-        sampleCount: day.buffers.length,
-        averageBuffer: average(day.buffers),
-        peakInside: Math.max(...day.insideValues),
-        peakOutside: Math.max(...day.outsideValues),
-        overheatingShare: day.buffers.length
-          ? day.overheatingCount / day.buffers.length
-          : null,
-      }))
-      .sort((a, b) => b.date.localeCompare(a.date));
 
     return {
       averageBuffer: hotWeatherBuffers.length ? average(hotWeatherBuffers) : null,
@@ -1865,7 +1833,6 @@ const BuildingDashboardPanel = ({ building }) => {
         ? overheatingRows.length / hotWeatherRows.length
         : null,
       hotThreshold: 24,
-      hotDays,
     };
   };
 
@@ -3281,18 +3248,6 @@ const BuildingDashboardPanel = ({ building }) => {
 
     return `${formatMeasurement(Math.abs(value))} deg C hotter than outside`;
   };
-  const formatHeatExclusionDate = (value) => {
-    const date = new Date(`${value}T12:00:00Z`);
-
-    if (Number.isNaN(date.getTime())) {
-      return value;
-    }
-
-    return date.toLocaleDateString("en-GB", {
-      day: "2-digit",
-      month: "short",
-    });
-  };
   const HeatLossStatusDot = ({ status }) => (
     <span
       className={`inline-block h-2.5 w-2.5 rounded-full ${heatLossStatusDotClass(
@@ -4644,29 +4599,6 @@ const BuildingDashboardPanel = ({ building }) => {
                               )}% at 28 deg C+ indoors`
                             : ""}
                         </p>
-                      ) : null}
-                      {heatExclusionSummary.hotDays?.length > 0 ? (
-                        <div className="pl-4 mt-1 space-y-1 text-[11px] leading-snug text-gray-600">
-                          <p className="font-semibold text-gray-700">
-                            Hot day log
-                          </p>
-                          {heatExclusionSummary.hotDays.slice(0, 5).map((day) => (
-                            <p key={day.date}>
-                              {formatHeatExclusionDate(day.date)}:{" "}
-                              {formatHeatExclusionBuffer(day.averageBuffer)}
-                              {Number.isFinite(day.peakOutside)
-                                ? ` / peak outside ${formatMeasurement(
-                                    day.peakOutside
-                                  )} deg C`
-                                : ""}
-                              {Number.isFinite(day.peakInside)
-                                ? ` / peak inside ${formatMeasurement(
-                                    day.peakInside
-                                  )} deg C`
-                                : ""}
-                            </p>
-                          ))}
-                        </div>
                       ) : null}
                     </div>
                   ) : (
