@@ -2603,10 +2603,12 @@ const BuildingDashboardPanel = ({ building }) => {
       for (let page = 0; page < maxPages; page += 1) {
         const { data, error } = await supabase
           .from("EnergyReadings")
-          .select("timestamp, created_at, fuel_type, reading_type, usage_kwh")
+          .select(
+            "timestamp, created_at, fuel_type, reading_type, usage_kwh, power_kw"
+          )
           .eq("building_id", dataSourceBuildingId)
-          .in("reading_type", ["daily_total", "interval_30m"])
-          .not("usage_kwh", "is", null)
+          .in("reading_type", ["daily_total", "interval_30m", "instant_power"])
+          .or("usage_kwh.not.is.null,power_kw.not.is.null")
           .gte("timestamp", "2020-01-01")
           .lte("timestamp", now.toISOString())
           .order("timestamp", { ascending: false })
@@ -2629,7 +2631,12 @@ const BuildingDashboardPanel = ({ building }) => {
       const dailyFallbackEnergy = {};
       const intervalEnergy = {};
       const dayKey = (timestamp) => new Date(timestamp).toISOString().slice(0, 10);
-      const intervalKey = (timestamp) => new Date(timestamp).toISOString();
+      const intervalKey = (timestamp) => {
+        const date = new Date(timestamp);
+        date.setUTCMinutes(date.getUTCMinutes() < 30 ? 0 : 30, 0, 0);
+        return date.toISOString();
+      };
+      const measuredIntervalBuckets = new Set();
 
       energyRows
         .filter((row) => row.reading_type === "interval_30m")
@@ -2644,12 +2651,70 @@ const BuildingDashboardPanel = ({ building }) => {
           }
 
           intervalDays.add(`${fuelType}:${day}`);
+          measuredIntervalBuckets.add(`${fuelType}:${interval}`);
           dailyEnergy[day] = dailyEnergy[day] || {};
           dailyEnergy[day][fuelType] = (dailyEnergy[day][fuelType] || 0) + usageKwh;
           intervalEnergy[interval] = intervalEnergy[interval] || {};
           intervalEnergy[interval][fuelType] =
             (intervalEnergy[interval][fuelType] || 0) + usageKwh;
         });
+
+      const instantRowsByFuel = energyRows
+        .filter((row) => row.reading_type === "instant_power")
+        .reduce((groups, row) => {
+          const fuelType = row.fuel_type || "unknown";
+          groups[fuelType] = groups[fuelType] || [];
+          groups[fuelType].push(row);
+          return groups;
+        }, {});
+
+      Object.entries(instantRowsByFuel).forEach(([fuelType, rowsForFuel]) => {
+        rowsForFuel
+          .slice()
+          .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
+          .forEach((row, index, sortedRows) => {
+            if (index === 0) {
+              return;
+            }
+
+            const previousRow = sortedRows[index - 1];
+            const previousTimestamp = new Date(previousRow.timestamp);
+            const timestamp = new Date(row.timestamp);
+            const elapsedHours = (timestamp - previousTimestamp) / 3600000;
+            const previousPowerKw = Number(previousRow.power_kw);
+            const powerKw = Number(row.power_kw);
+
+            if (
+              !Number.isFinite(elapsedHours) ||
+              elapsedHours <= 0 ||
+              elapsedHours > 0.25 ||
+              !Number.isFinite(previousPowerKw) ||
+              !Number.isFinite(powerKw)
+            ) {
+              return;
+            }
+
+            const interval = intervalKey(row.timestamp);
+            const day = dayKey(row.timestamp);
+
+            if (measuredIntervalBuckets.has(`${fuelType}:${interval}`)) {
+              return;
+            }
+
+            const usageKwh = ((previousPowerKw + powerKw) / 2) * elapsedHours;
+
+            if (!Number.isFinite(usageKwh) || usageKwh <= 0) {
+              return;
+            }
+
+            intervalDays.add(`${fuelType}:${day}`);
+            dailyEnergy[day] = dailyEnergy[day] || {};
+            dailyEnergy[day][fuelType] = (dailyEnergy[day][fuelType] || 0) + usageKwh;
+            intervalEnergy[interval] = intervalEnergy[interval] || {};
+            intervalEnergy[interval][fuelType] =
+              (intervalEnergy[interval][fuelType] || 0) + usageKwh;
+          });
+      });
 
       energyRows
         .filter((row) => row.reading_type === "daily_total")
