@@ -240,6 +240,18 @@ const BuildingDashboardPanel = ({ building }) => {
     overheatingShare: null,
     hotThreshold: 24,
   };
+  const defaultPerformanceSummary = {
+    value: null,
+    breakdown: {
+      health: null,
+      energy: null,
+      hla: null,
+      resilience: null,
+      iaq: null,
+      comfort: null,
+      humidity: null,
+    },
+  };
   const defaultMrvEvidence = {
     baselineStartDate: "",
     baselineEndDate: "",
@@ -279,6 +291,11 @@ const BuildingDashboardPanel = ({ building }) => {
       `${dataSourceBuildingId}:heatExclusionSummary`,
       defaultHeatExclusionSummary
     );
+  const readCachedPerformanceSummary = () =>
+    readCachedDashboardState(
+      `${dataSourceBuildingId}:performanceSummary`,
+      defaultPerformanceSummary
+    );
   const readCachedMrvEvidence = () =>
     readCachedDashboardState(
       `${dataSourceBuildingId}:mrvEvidence`,
@@ -292,7 +309,12 @@ const BuildingDashboardPanel = ({ building }) => {
   );
   const supportsExtendedIaqColumns = useRef(true);
 
-  const [performanceValue, setPerformanceValue] = useState(null);
+  const [performanceValue, setPerformanceValue] = useState(() => {
+    const cachedPerformanceSummary = readCachedPerformanceSummary();
+    return Number.isFinite(cachedPerformanceSummary.value)
+      ? cachedPerformanceSummary.value
+      : null;
+  });
   const [historicalPerformance, setHistoricalPerformance] = useState(() => {
     const cachedEnergySummary = readCachedEnergySummary();
     return Number.isFinite(cachedEnergySummary.totalDailyAverage)
@@ -320,14 +342,12 @@ const BuildingDashboardPanel = ({ building }) => {
   const [mrvEvidence, setMrvEvidence] = useState(readCachedMrvEvidence);
   const [energySummary, setEnergySummary] = useState(readCachedEnergySummary);
 
-  const [performanceBreakdown, setPerformanceBreakdown] = useState({
-    health: null,
-    energy: null,
-    hla: null,
-    resilience: null,
-    iaq: null,
-    comfort: null,
-    humidity: null,
+  const [performanceBreakdown, setPerformanceBreakdown] = useState(() => {
+    const cachedPerformanceSummary = readCachedPerformanceSummary();
+    return {
+      ...defaultPerformanceSummary.breakdown,
+      ...(cachedPerformanceSummary.breakdown || {}),
+    };
   });
   const [heatLossSummary, setHeatLossSummary] = useState(
     readCachedHeatLossSummary
@@ -2240,7 +2260,7 @@ const BuildingDashboardPanel = ({ building }) => {
         ieqPenaltyFactor,
       });
 
-      setPerformanceBreakdown({
+      const nextPerformanceBreakdown = {
         health: calculatedHealthScore,
         energy: calculatedEnergyScore,
         hla: hlaScore,
@@ -2248,9 +2268,18 @@ const BuildingDashboardPanel = ({ building }) => {
         iaq: calculatedIAQScore,
         comfort: calculatedComfortScore,
         humidity: humidityStabilityScore,
-      });
+      };
+
+      setPerformanceBreakdown(nextPerformanceBreakdown);
 
       setPerformanceValue(buildingPerformanceIndex);
+      localStorage.setItem(
+        `${dataSourceBuildingId}:performanceSummary`,
+        JSON.stringify({
+          value: buildingPerformanceIndex,
+          breakdown: nextPerformanceBreakdown,
+        })
+      );
     } catch (err) {
       console.error(
         "Error calculating long-term building performance:",
@@ -3110,6 +3139,16 @@ const BuildingDashboardPanel = ({ building }) => {
     setWeeklyTrendData(readCachedWeeklyTrendData());
     setHeatLossSummary(readCachedHeatLossSummary());
     setHeatExclusionSummary(readCachedHeatExclusionSummary());
+    const cachedPerformanceSummary = readCachedPerformanceSummary();
+    setPerformanceValue(
+      Number.isFinite(cachedPerformanceSummary.value)
+        ? cachedPerformanceSummary.value
+        : null
+    );
+    setPerformanceBreakdown({
+      ...defaultPerformanceSummary.breakdown,
+      ...(cachedPerformanceSummary.breakdown || {}),
+    });
     setMrvEvidence(readCachedMrvEvidence());
     fetchLongTermAverage();
     fetchHeatLossSummary();
