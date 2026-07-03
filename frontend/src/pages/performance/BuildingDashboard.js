@@ -437,6 +437,8 @@ const BuildingDashboardPanel = ({ building }) => {
     readingTypes,
     rangeFrom,
     rangeTo,
+    timestampFrom,
+    timestampTo,
   } = {}) => {
     const runQuery = async (includeExtended) => {
       const valueColumns = [
@@ -467,8 +469,18 @@ const BuildingDashboardPanel = ({ building }) => {
         query = query.in("reading_type", readingTypes);
       }
 
+      if (timestampFrom) {
+        query = query.gte("timestamp", timestampFrom);
+      }
+
+      if (timestampTo) {
+        query = query.lt("timestamp", timestampTo);
+      }
+
       if (orderDescending) {
         query = query.order("timestamp", { ascending: false });
+      } else if (timestampFrom || timestampTo) {
+        query = query.order("timestamp", { ascending: true });
       }
 
       if (limit) {
@@ -2290,58 +2302,65 @@ const BuildingDashboardPanel = ({ building }) => {
 
   const fetchWeeklyPerformanceTrend = async () => {
     try {
-      const pageSize = 1000;
-      const maxTrendPages = 10;
+      const trendLookbackDays = 35;
+      const trendWindowEnd = new Date();
+      const trendWindowStart = new Date(
+        trendWindowEnd.getTime() - trendLookbackDays * 24 * 60 * 60 * 1000
+      );
 
       const fetchEnergyIntervalRows = async () => {
-        const rows = [];
-
-        for (let page = 0; page < maxTrendPages; page += 1) {
-          const from = page * pageSize;
-          const to = from + pageSize - 1;
-          const { data, error } = await supabase
+        const [intervalResult, dailyResult] = await Promise.all([
+          supabase
             .from("EnergyReadings")
             .select("timestamp, created_at, fuel_type, reading_type, usage_kwh")
             .eq("building_id", dataSourceBuildingId)
-            .in("reading_type", ["interval_30m", "daily_total"])
+            .eq("reading_type", "interval_30m")
             .not("usage_kwh", "is", null)
-            .order("timestamp", { ascending: false })
+            .gte("timestamp", trendWindowStart.toISOString())
+            .lte("timestamp", trendWindowEnd.toISOString())
+            .order("timestamp", { ascending: true })
+            .limit(5000),
+          supabase
+            .from("EnergyReadings")
+            .select("timestamp, created_at, fuel_type, reading_type, usage_kwh")
+            .eq("building_id", dataSourceBuildingId)
+            .eq("reading_type", "daily_total")
+            .not("usage_kwh", "is", null)
+            .gte("created_at", trendWindowStart.toISOString())
             .order("created_at", { ascending: false })
-            .range(from, to);
+            .limit(3000),
+        ]);
 
-          if (error) throw error;
+        if (intervalResult.error) throw intervalResult.error;
+        if (dailyResult.error) throw dailyResult.error;
 
-          rows.push(...(data || []));
-
-          if (!data || data.length < pageSize) {
-            break;
-          }
-        }
-
-        return rows;
+        return [...(intervalResult.data || []), ...(dailyResult.data || [])];
       };
 
       const fetchIaqTrendRows = async () => {
         const rows = [];
+        const dayStart = new Date(
+          Date.UTC(
+            trendWindowStart.getUTCFullYear(),
+            trendWindowStart.getUTCMonth(),
+            trendWindowStart.getUTCDate()
+          )
+        );
 
-        for (let page = 0; page < maxTrendPages; page += 1) {
-          const from = page * pageSize;
-          const to = from + pageSize - 1;
+        for (let day = 0; day <= trendLookbackDays; day += 1) {
+          const fromDate = new Date(dayStart.getTime() + day * 24 * 60 * 60 * 1000);
+          const toDate = new Date(fromDate.getTime() + 24 * 60 * 60 * 1000);
           const result = await fetchScopedIaqRows({
             includeTimestamp: true,
             includeReadingType: true,
-            orderDescending: true,
-            rangeFrom: from,
-            rangeTo: to,
+            limit: 240,
+            timestampFrom: fromDate.toISOString(),
+            timestampTo: toDate.toISOString(),
           });
 
           if (result.error) throw result.error;
 
           rows.push(...(result.data || []));
-
-          if (!result.data || result.data.length < pageSize) {
-            break;
-          }
         }
 
         return rows;
