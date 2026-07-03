@@ -14,12 +14,18 @@ const GLOW_API_BASE_URL =
 const GLOW_API_POLL_INTERVAL_MS = Number(
   process.env.GLOW_API_POLL_INTERVAL_MS || 60000
 );
+const GLOW_API_DAILY_TOTAL_INTERVAL_MS = Number(
+  process.env.GLOW_API_DAILY_TOTAL_INTERVAL_MS || 30 * 60 * 1000
+);
+const GLOW_API_STORE_RAW_PAYLOAD =
+  String(process.env.GLOW_API_STORE_RAW_PAYLOAD || "").toLowerCase() === "true";
 const COLLECTOR_INSTANCE = process.env.COLLECTOR_INSTANCE || "unknown";
 const SOURCE_NAME = `glow-api:${COLLECTOR_INSTANCE}`;
 const GLOW_API_RESOURCES = process.env.GLOW_API_RESOURCES || "";
 
 let cachedToken = null;
 let tokenExpiresAt = 0;
+const lastDailyTotalPollByResource = new Map();
 
 const defaultResources = [
   {
@@ -137,25 +143,40 @@ function latestPair(data) {
   };
 }
 
+function shouldPollDailyTotal(resource, nowMs) {
+  const key = `${resource.buildingId}:${resource.fuelType}:${resource.resourceId}`;
+  const lastPoll = lastDailyTotalPollByResource.get(key);
+
+  if (!lastPoll || nowMs - lastPoll >= GLOW_API_DAILY_TOTAL_INTERVAL_MS) {
+    lastDailyTotalPollByResource.set(key, nowMs);
+    return true;
+  }
+
+  return false;
+}
+
 async function collectResource(resource) {
-  const dailyData = await glowFetch(
-    `/resource/${resource.resourceId}/readings?${buildDailyQuery()}`
-  );
-  const daily = latestPair(dailyData);
   const rows = [];
 
-  if (daily) {
-    rows.push({
-      timestamp: daily.timestamp,
-      building_id: resource.buildingId,
-      fuel_type: resource.fuelType,
-      reading_type: "daily_total",
-      usage_kwh: daily.value,
-      power_kw: null,
-      source: SOURCE_NAME,
-      topic: resource.resourceId,
-      raw_payload: dailyData,
-    });
+  if (shouldPollDailyTotal(resource, Date.now())) {
+    const dailyData = await glowFetch(
+      `/resource/${resource.resourceId}/readings?${buildDailyQuery()}`
+    );
+    const daily = latestPair(dailyData);
+
+    if (daily) {
+      rows.push({
+        timestamp: daily.timestamp,
+        building_id: resource.buildingId,
+        fuel_type: resource.fuelType,
+        reading_type: "daily_total",
+        usage_kwh: daily.value,
+        power_kw: null,
+        source: SOURCE_NAME,
+        topic: resource.resourceId,
+        raw_payload: GLOW_API_STORE_RAW_PAYLOAD ? dailyData : null,
+      });
+    }
   }
 
   if (resource.fuelType === "electricity") {
@@ -172,7 +193,7 @@ async function collectResource(resource) {
         power_kw: current.value / 1000,
         source: SOURCE_NAME,
         topic: resource.resourceId,
-        raw_payload: currentData,
+        raw_payload: GLOW_API_STORE_RAW_PAYLOAD ? currentData : null,
       });
     }
   }
@@ -211,7 +232,7 @@ if (!GLOW_USERNAME || !GLOW_PASSWORD) {
 }
 
 console.log(
-  `Starting Glow API collector (${COLLECTOR_INSTANCE}) for ${resources.length} resource(s) every ${GLOW_API_POLL_INTERVAL_MS}ms`
+  `Starting Glow API collector (${COLLECTOR_INSTANCE}) for ${resources.length} resource(s) every ${GLOW_API_POLL_INTERVAL_MS}ms; daily totals every ${GLOW_API_DAILY_TOTAL_INTERVAL_MS}ms`
 );
 
 pollGlowApi();
