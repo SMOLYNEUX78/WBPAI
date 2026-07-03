@@ -1893,8 +1893,8 @@ const BuildingDashboardPanel = ({ building }) => {
         return rows;
       };
       const [indoorRows, outdoorRows] = await Promise.all([
-        fetchTemperatureRows({ column: "temperature_inside", maxRows: 30000 }),
-        fetchTemperatureRows({ column: "temperature_outside", maxRows: 10000 }),
+        fetchTemperatureRows({ column: "temperature_inside", maxRows: 8000 }),
+        fetchTemperatureRows({ column: "temperature_outside", maxRows: 3000 }),
       ]);
 
       const nextHeatExclusionSummary = calculateHeatExclusionFromRows(
@@ -2063,7 +2063,7 @@ const BuildingDashboardPanel = ({ building }) => {
       const data = [];
       let error = null;
 
-      for (let rangeFrom = 0; rangeFrom < 12000; rangeFrom += 1000) {
+      for (let rangeFrom = 0; rangeFrom < 6000; rangeFrom += 1000) {
         const result = await fetchScopedIaqRows({
           includeTimestamp: true,
           includeReadingType: true,
@@ -2291,7 +2291,7 @@ const BuildingDashboardPanel = ({ building }) => {
   const fetchWeeklyPerformanceTrend = async () => {
     try {
       const pageSize = 1000;
-      const maxTrendPages = 100;
+      const maxTrendPages = 10;
 
       const fetchEnergyIntervalRows = async () => {
         const rows = [];
@@ -2625,7 +2625,7 @@ const BuildingDashboardPanel = ({ building }) => {
 
     const buildCarbonSavingsFromEnergyRows = async () => {
       const pageSize = 1000;
-      const maxPages = 100;
+      const maxPages = 20;
       const energyRows = [];
       const now = new Date();
 
@@ -3173,7 +3173,7 @@ const BuildingDashboardPanel = ({ building }) => {
       fetchWeeklyPerformanceTrend();
       fetchCarbonSavingsSummary();
       fetchCarbonMarketPrice();
-    }, 60000);
+    }, 5 * 60 * 1000);
 
     return () => clearInterval(interval);
     // The interval should reset only when the selected building or area source changes.
