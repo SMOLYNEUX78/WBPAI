@@ -34,9 +34,7 @@ const RUN_SCHEDULE =
 const CRON_SCHEDULE = process.env.CARBON_SAVINGS_CRON || "*/15 * * * *";
 const PAGE_SIZE = Number(process.env.CARBON_SAVINGS_PAGE_SIZE || 1000);
 const MAX_PAGES = Number(process.env.CARBON_SAVINGS_MAX_PAGES || 200);
-let supportsCarbonSavingsTable = true;
 let supportsExtendedSavingsColumns = true;
-let supportsCarbonSavingsSummaryTable = true;
 
 function parseDate(value, label) {
   const date = new Date(value);
@@ -264,7 +262,7 @@ function isMissingCarbonSavingsSummaryTable(error) {
 }
 
 async function upsertCarbonSavings(rows) {
-  if (!supportsCarbonSavingsTable || rows.length === 0) {
+  if (rows.length === 0) {
     return false;
   }
 
@@ -278,9 +276,8 @@ async function upsertCarbonSavings(rows) {
 
     if (error) {
       if (isMissingCarbonSavingsTable(error)) {
-        supportsCarbonSavingsTable = false;
         console.warn(
-          "CarbonSavingsDaily table is unavailable; calculated savings will remain live-only until the evidence table is created."
+          `CarbonSavingsDaily table is unavailable via API (${error.message}); calculated daily evidence will retry on the next run.`
         );
         return false;
       }
@@ -311,10 +308,6 @@ async function upsertCarbonSavings(rows) {
 }
 
 async function upsertCarbonSavingsSummary({ rows, toDate }) {
-  if (!supportsCarbonSavingsSummaryTable) {
-    return false;
-  }
-
   const totalSavedKgCo2e = rows.reduce((sum, row) => sum + row.saved_kgco2e, 0);
   const totalSavedKwh = rows.reduce((sum, row) => sum + row.saved_kwh, 0);
   const totalEnergyCostSavedGbp = rows.reduce(
@@ -361,9 +354,8 @@ async function upsertCarbonSavingsSummary({ rows, toDate }) {
 
   if (error) {
     if (isMissingCarbonSavingsSummaryTable(error)) {
-      supportsCarbonSavingsSummaryTable = false;
       console.warn(
-        "CarbonSavingsSummary table is unavailable; dashboard will fall back to daily/raw calculations until the summary table is created."
+        `CarbonSavingsSummary table is unavailable via API (${error.message}); summary upsert will retry on the next run.`
       );
       return false;
     }
