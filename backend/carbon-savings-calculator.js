@@ -69,10 +69,10 @@ async function fetchEnergyRows(fromDate, toDate) {
     const to = from + PAGE_SIZE - 1;
     const { data, error } = await supabase
       .from("EnergyReadings")
-      .select("timestamp, created_at, fuel_type, reading_type, usage_kwh")
+      .select("timestamp, created_at, fuel_type, reading_type, usage_kwh, power_kw")
       .eq("building_id", BUILDING_ID)
-      .in("reading_type", ["daily_total", "interval_30m"])
-      .not("usage_kwh", "is", null)
+      .in("reading_type", ["daily_total", "interval_30m", "instant_power"])
+      .or("usage_kwh.not.is.null,power_kw.not.is.null")
       .gte("timestamp", fromDate.toISOString())
       .lte("timestamp", toDate.toISOString())
       .order("timestamp", { ascending: true })
@@ -96,6 +96,17 @@ async function fetchEnergyRows(fromDate, toDate) {
 function buildMeasuredDailyEnergy(rows) {
   const intervalDays = new Set();
   const days = {};
+  const measuredIntervalBuckets = new Set();
+  const intervalKey = (timestamp) => {
+    const date = new Date(timestamp);
+
+    if (Number.isNaN(date.getTime())) {
+      return null;
+    }
+
+    date.setUTCMinutes(date.getUTCMinutes() < 30 ? 0 : 30, 0, 0);
+    return date.toISOString();
+  };
 
   rows
     .filter((row) => row.reading_type === "interval_30m")
@@ -109,9 +120,64 @@ function buildMeasuredDailyEnergy(rows) {
       }
 
       intervalDays.add(`${fuelType}:${day}`);
+      measuredIntervalBuckets.add(`${fuelType}:${intervalKey(row.timestamp)}`);
       days[day] = days[day] || {};
       days[day][fuelType] = (days[day][fuelType] || 0) + usageKwh;
     });
+
+  const instantRowsByFuel = rows
+    .filter((row) => row.reading_type === "instant_power")
+    .reduce((groups, row) => {
+      const fuelType = row.fuel_type || "unknown";
+      groups[fuelType] = groups[fuelType] || [];
+      groups[fuelType].push(row);
+      return groups;
+    }, {});
+
+  Object.entries(instantRowsByFuel).forEach(([fuelType, rowsForFuel]) => {
+    rowsForFuel
+      .slice()
+      .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
+      .forEach((row, index, sortedRows) => {
+        if (index === 0) {
+          return;
+        }
+
+        const previousRow = sortedRows[index - 1];
+        const previousTimestamp = new Date(previousRow.timestamp);
+        const timestamp = new Date(row.timestamp);
+        const elapsedHours = (timestamp - previousTimestamp) / 3600000;
+        const previousPowerKw = Number(previousRow.power_kw);
+        const powerKw = Number(row.power_kw);
+
+        if (
+          !Number.isFinite(elapsedHours) ||
+          elapsedHours <= 0 ||
+          elapsedHours > 0.25 ||
+          !Number.isFinite(previousPowerKw) ||
+          !Number.isFinite(powerKw)
+        ) {
+          return;
+        }
+
+        const interval = intervalKey(row.timestamp);
+        const day = dateKey(row.timestamp);
+
+        if (!day || !interval || measuredIntervalBuckets.has(`${fuelType}:${interval}`)) {
+          return;
+        }
+
+        const usageKwh = ((previousPowerKw + powerKw) / 2) * elapsedHours;
+
+        if (!Number.isFinite(usageKwh) || usageKwh <= 0) {
+          return;
+        }
+
+        intervalDays.add(`${fuelType}:${day}`);
+        days[day] = days[day] || {};
+        days[day][fuelType] = (days[day][fuelType] || 0) + usageKwh;
+      });
+  });
 
   rows
     .filter((row) => row.reading_type === "daily_total")
