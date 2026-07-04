@@ -3021,15 +3021,68 @@ const BuildingDashboardPanel = ({ building }) => {
         carbonCredits: totalCredits,
       });
     };
+    const applyPersistedSavingsSummary = (summaryRow) => {
+      const totalSavedKgCo2e = Number(summaryRow.total_saved_kgco2e);
+      const totalSavedKwh = Number(summaryRow.total_saved_kwh);
+      const energyCostSavedGbp = Number(summaryRow.total_energy_cost_saved_gbp);
+      const totalCredits = Number(summaryRow.carbon_credits);
+      const latestSavedKgCo2e = Number(summaryRow.latest_saved_kgco2e);
+
+      setCarbonCredits(Number.isFinite(totalCredits) ? totalCredits : null);
+      applyCarbonSavingsSummary({
+        latestDate: summaryRow.latest_date || summaryRow.to_date || null,
+        latestSavedKgCo2e: Number.isFinite(latestSavedKgCo2e)
+          ? latestSavedKgCo2e
+          : null,
+        totalSavedKgCo2e: Number.isFinite(totalSavedKgCo2e)
+          ? totalSavedKgCo2e
+          : null,
+      });
+      applyCarbonIntervalSavingsSummary({
+        latestTimestamp: summaryRow.calculated_at || summaryRow.latest_date || null,
+        latestSavedKgCo2e: Number.isFinite(latestSavedKgCo2e)
+          ? latestSavedKgCo2e
+          : null,
+        totalSavedKgCo2e: Number.isFinite(totalSavedKgCo2e)
+          ? totalSavedKgCo2e
+          : null,
+        totalSavedKwh: Number.isFinite(totalSavedKwh) ? totalSavedKwh : null,
+        energyCostSavedGbp: Number.isFinite(energyCostSavedGbp)
+          ? energyCostSavedGbp
+          : null,
+        carbonCredits: Number.isFinite(totalCredits) ? totalCredits : null,
+      });
+    };
 
     try {
+      const { data: summaryData, error: summaryError } = await supabase
+        .from("CarbonSavingsSummary")
+        .select(
+          "from_date, to_date, calculated_at, daily_rows, total_saved_kgco2e, total_saved_kwh, total_energy_cost_saved_gbp, carbon_credits, latest_date, latest_saved_kgco2e, latest_saved_kwh, latest_energy_cost_saved_gbp"
+        )
+        .eq("building_id", dataSourceBuildingId)
+        .eq("scenario", "enerphit-certified")
+        .maybeSingle();
+
+      if (!summaryError && summaryData) {
+        applyPersistedSavingsSummary(summaryData);
+        return;
+      }
+
+      if (summaryError) {
+        console.warn(
+          "Carbon savings summary unavailable; checking daily evidence:",
+          summaryError.message
+        );
+      }
+
       const { data, error } = await supabase
         .from("CarbonSavingsDaily")
-        .select("saving_date, saved_kgco2e, carbon_credits")
+        .select("saving_date, saved_kgco2e, saved_kwh, energy_cost_saved_gbp, carbon_credits")
         .eq("building_id", dataSourceBuildingId)
         .eq("scenario", "enerphit-certified")
         .order("saving_date", { ascending: false })
-        .limit(365);
+        .limit(5000);
 
       if (error) {
         throw error;
@@ -3044,6 +3097,14 @@ const BuildingDashboardPanel = ({ building }) => {
         (sum, row) => sum + (Number(row.carbon_credits) || 0),
         0
       );
+      const totalSavedKwh = rows.reduce(
+        (sum, row) => sum + (Number(row.saved_kwh) || 0),
+        0
+      );
+      const energyCostSavedGbp = rows.reduce(
+        (sum, row) => sum + (Number(row.energy_cost_saved_gbp) || 0),
+        0
+      );
       const latest = rows[0] || null;
 
       setCarbonCredits(totalCredits);
@@ -3052,6 +3113,18 @@ const BuildingDashboardPanel = ({ building }) => {
         latestSavedKgCo2e: latest ? Number(latest.saved_kgco2e) : null,
         totalSavedKgCo2e,
       });
+      if (Number.isFinite(totalSavedKwh) && totalSavedKwh > 0) {
+        applyCarbonIntervalSavingsSummary({
+          latestTimestamp: latest?.saving_date || null,
+          latestSavedKgCo2e: latest ? Number(latest.saved_kgco2e) : null,
+          totalSavedKgCo2e,
+          totalSavedKwh,
+          energyCostSavedGbp,
+          carbonCredits: totalCredits,
+        });
+        return;
+      }
+
       const { accruedRows } = await buildCarbonSavingsFromEnergyRows();
       applyAccruedSavingsSummary(accruedRows);
     } catch (err) {

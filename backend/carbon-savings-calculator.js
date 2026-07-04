@@ -31,11 +31,12 @@ const TO_DATE = process.env.CARBON_SAVINGS_TO;
 const DRY_RUN = process.env.CARBON_SAVINGS_DRY_RUN === "true";
 const RUN_SCHEDULE =
   process.argv.includes("--schedule") || process.env.CARBON_SAVINGS_SCHEDULE === "true";
-const CRON_SCHEDULE = process.env.CARBON_SAVINGS_CRON || "15 0 * * *";
+const CRON_SCHEDULE = process.env.CARBON_SAVINGS_CRON || "*/15 * * * *";
 const PAGE_SIZE = Number(process.env.CARBON_SAVINGS_PAGE_SIZE || 1000);
-const MAX_PAGES = Number(process.env.CARBON_SAVINGS_MAX_PAGES || 100);
+const MAX_PAGES = Number(process.env.CARBON_SAVINGS_MAX_PAGES || 200);
 let supportsCarbonSavingsTable = true;
 let supportsExtendedSavingsColumns = true;
+let supportsCarbonSavingsSummaryTable = true;
 
 function parseDate(value, label) {
   const date = new Date(value);
@@ -253,6 +254,15 @@ function isMissingCarbonSavingsTable(error) {
   );
 }
 
+function isMissingCarbonSavingsSummaryTable(error) {
+  return (
+    /CarbonSavingsSummary/i.test(error.message || "") ||
+    /CarbonSavingsSummary/i.test(error.details || "") ||
+    error.code === "42P01" ||
+    error.code === "PGRST205"
+  );
+}
+
 async function upsertCarbonSavings(rows) {
   if (!supportsCarbonSavingsTable || rows.length === 0) {
     return false;
@@ -300,6 +310,70 @@ async function upsertCarbonSavings(rows) {
   return true;
 }
 
+async function upsertCarbonSavingsSummary({ rows, toDate }) {
+  if (!supportsCarbonSavingsSummaryTable) {
+    return false;
+  }
+
+  const totalSavedKgCo2e = rows.reduce((sum, row) => sum + row.saved_kgco2e, 0);
+  const totalSavedKwh = rows.reduce((sum, row) => sum + row.saved_kwh, 0);
+  const totalEnergyCostSavedGbp = rows.reduce(
+    (sum, row) => sum + row.energy_cost_saved_gbp,
+    0
+  );
+  const totalCarbonCredits = rows.reduce((sum, row) => sum + row.carbon_credits, 0);
+  const latest = rows[rows.length - 1] || null;
+  const first = rows[0] || null;
+
+  const summaryRow = {
+    building_id: BUILDING_ID,
+    scenario: SCENARIO,
+    from_date: first?.saving_date || null,
+    to_date: latest?.saving_date || null,
+    calculated_at: toDate.toISOString(),
+    daily_rows: rows.length,
+    total_saved_kgco2e: totalSavedKgCo2e,
+    total_saved_kwh: totalSavedKwh,
+    total_energy_cost_saved_gbp: totalEnergyCostSavedGbp,
+    carbon_credits: totalCarbonCredits,
+    latest_date: latest?.saving_date || null,
+    latest_saved_kgco2e: latest?.saved_kgco2e || null,
+    latest_saved_kwh: latest?.saved_kwh || null,
+    latest_energy_cost_saved_gbp: latest?.energy_cost_saved_gbp || null,
+    source: "carbon-savings-calculator",
+    calculation_version: "enerphit-certified-v1",
+    raw_payload: {
+      internalAreaM2: INTERNAL_AREA_M2,
+      enerphitEuiKwhM2Year: ENERPHIT_EUI_KWH_M2_YEAR,
+      improvedDailyElectricityKwh: IMPROVED_DAILY_ELECTRICITY_KWH,
+      electricityKgCo2ePerKwh: ELECTRICITY_KGCO2E_PER_KWH,
+      gasKgCo2ePerKwh: GAS_KGCO2E_PER_KWH,
+      electricityPriceGbpPerKwh: ELECTRICITY_PRICE_GBP_PER_KWH,
+      gasPriceGbpPerKwh: GAS_PRICE_GBP_PER_KWH,
+      note:
+        "Summary row for dashboard display; daily evidence rows remain in CarbonSavingsDaily where the table exists.",
+    },
+  };
+
+  const { error } = await supabase
+    .from("CarbonSavingsSummary")
+    .upsert(summaryRow, { onConflict: "building_id,scenario" });
+
+  if (error) {
+    if (isMissingCarbonSavingsSummaryTable(error)) {
+      supportsCarbonSavingsSummaryTable = false;
+      console.warn(
+        "CarbonSavingsSummary table is unavailable; dashboard will fall back to daily/raw calculations until the summary table is created."
+      );
+      return false;
+    }
+
+    throw error;
+  }
+
+  return true;
+}
+
 async function main() {
   if (!SUPABASE_URL || !SUPABASE_KEY) {
     throw new Error("Supabase environment variables are missing.");
@@ -321,9 +395,15 @@ async function main() {
   );
 
   const persisted = DRY_RUN ? false : await upsertCarbonSavings(carbonRows);
+  const summaryPersisted = DRY_RUN
+    ? false
+    : await upsertCarbonSavingsSummary({ rows: carbonRows, toDate });
 
   console.log(
     `${persisted ? "Upserted" : "Calculated"} ${carbonRows.length} carbon saving day(s) for ${BUILDING_ID}.`
+  );
+  console.log(
+    `${summaryPersisted ? "Upserted" : "Calculated"} carbon savings summary for ${BUILDING_ID}.`
   );
   console.log(
     `Total saved: ${totalSavedKgCo2e.toFixed(3)} kgCO2e / ${(totalSavedKgCo2e / 1000).toFixed(6)} WBP-C candidate credits.`

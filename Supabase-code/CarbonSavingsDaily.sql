@@ -12,6 +12,8 @@ create table if not exists public."CarbonSavingsDaily" (
   baseline_kgco2e double precision not null default 0,
   improved_kgco2e double precision not null default 0,
   saved_kgco2e double precision not null default 0,
+  saved_kwh double precision not null default 0,
+  energy_cost_saved_gbp double precision not null default 0,
   carbon_credits double precision not null default 0,
   source text not null default 'carbon-savings-calculator',
   calculation_version text not null default 'enerphit-certified-v1',
@@ -23,3 +25,9 @@ create table if not exists public."CarbonSavingsDaily" (
 
 create index if not exists carbon_savings_daily_building_date_idx
   on public."CarbonSavingsDaily" (building_id, saving_date desc);
+
+alter table public."CarbonSavingsDaily"
+  add column if not exists saved_kwh double precision not null default 0;
+
+alter table public."CarbonSavingsDaily"
+  add column if not exists energy_cost_saved_gbp double precision not null default 0;
