@@ -2631,7 +2631,73 @@ const BuildingDashboardPanel = ({ building }) => {
         vocs: bucket.vocs.length ? average(bucket.vocs) : null,
       }));
 
-      applyWeeklyTrendData(averagedWeeklyTrend);
+      const fillSparseTrendMetric = (rows, key) => {
+        const values = rows.map((row) => row[key]);
+        const firstValidIndex = values.findIndex((value) => Number.isFinite(value));
+
+        if (firstValidIndex === -1) {
+          return rows;
+        }
+
+        return rows.map((row, index) => {
+          if (Number.isFinite(row[key])) {
+            return row;
+          }
+
+          let previousIndex = index - 1;
+          while (previousIndex >= 0 && !Number.isFinite(values[previousIndex])) {
+            previousIndex -= 1;
+          }
+
+          let nextIndex = index + 1;
+          while (nextIndex < values.length && !Number.isFinite(values[nextIndex])) {
+            nextIndex += 1;
+          }
+
+          const previousValue =
+            previousIndex >= 0 && Number.isFinite(values[previousIndex])
+              ? values[previousIndex]
+              : null;
+          const nextValue =
+            nextIndex < values.length && Number.isFinite(values[nextIndex])
+              ? values[nextIndex]
+              : null;
+
+          let filledValue = previousValue ?? nextValue;
+
+          if (
+            Number.isFinite(previousValue) &&
+            Number.isFinite(nextValue) &&
+            nextIndex > previousIndex
+          ) {
+            const progress = (index - previousIndex) / (nextIndex - previousIndex);
+            filledValue = previousValue + (nextValue - previousValue) * progress;
+          }
+
+          return Number.isFinite(filledValue)
+            ? { ...row, [key]: filledValue, [`${key}Interpolated`]: true }
+            : row;
+        });
+      };
+      const trendValueKeys = [
+        "electricity",
+        "electricityRegulated",
+        "electricityUnregulated",
+        "gas",
+        "gasRegulated",
+        "gasUnregulated",
+        "internalTemp",
+        "externalTemp",
+        "humidity",
+        "pm25",
+        "vocs",
+      ];
+      const displayWeeklyTrend = trendValueKeys.reduce(
+        (rows, key) => fillSparseTrendMetric(rows, key),
+        averagedWeeklyTrend
+      );
+
+      applyWeeklyTrendData(displayWeeklyTrend);
     } catch (err) {
       console.error("Error fetching weekly performance trend:", err.message);
     }
@@ -2644,7 +2710,7 @@ const BuildingDashboardPanel = ({ building }) => {
 
     const buildCarbonSavingsFromEnergyRows = async () => {
       const pageSize = 1000;
-      const maxPages = 20;
+      const maxPages = 200;
       const energyRows = [];
       const now = new Date();
 
