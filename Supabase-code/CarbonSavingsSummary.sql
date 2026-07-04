@@ -24,3 +24,27 @@ create table if not exists public."CarbonSavingsSummary" (
 
 create index if not exists carbon_savings_summary_building_idx
   on public."CarbonSavingsSummary" (building_id, scenario);
+
+alter table public."CarbonSavingsSummary" enable row level security;
+
+drop policy if exists "Carbon savings summary read" on public."CarbonSavingsSummary";
+create policy "Carbon savings summary read"
+  on public."CarbonSavingsSummary"
+  for select
+  to anon, authenticated
+  using (true);
+
+drop policy if exists "Carbon savings summary insert" on public."CarbonSavingsSummary";
+create policy "Carbon savings summary insert"
+  on public."CarbonSavingsSummary"
+  for insert
+  to anon, authenticated
+  with check (true);
+
+drop policy if exists "Carbon savings summary update" on public."CarbonSavingsSummary";
+create policy "Carbon savings summary update"
+  on public."CarbonSavingsSummary"
+  for update
+  to anon, authenticated
+  using (true)
+  with check (true);

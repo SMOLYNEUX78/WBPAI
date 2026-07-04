@@ -31,3 +31,27 @@ alter table public."CarbonSavingsDaily"
 
 alter table public."CarbonSavingsDaily"
   add column if not exists energy_cost_saved_gbp double precision not null default 0;
+
+alter table public."CarbonSavingsDaily" enable row level security;
+
+drop policy if exists "Carbon savings daily read" on public."CarbonSavingsDaily";
+create policy "Carbon savings daily read"
+  on public."CarbonSavingsDaily"
+  for select
+  to anon, authenticated
+  using (true);
+
+drop policy if exists "Carbon savings daily insert" on public."CarbonSavingsDaily";
+create policy "Carbon savings daily insert"
+  on public."CarbonSavingsDaily"
+  for insert
+  to anon, authenticated
+  with check (true);
+
+drop policy if exists "Carbon savings daily update" on public."CarbonSavingsDaily";
+create policy "Carbon savings daily update"
+  on public."CarbonSavingsDaily"
+  for update
+  to anon, authenticated
+  using (true)
+  with check (true);
