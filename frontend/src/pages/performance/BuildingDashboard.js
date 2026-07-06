@@ -1305,64 +1305,45 @@ const BuildingDashboardPanel = ({ building }) => {
     try {
       const area = Number(matterportMetadata.internalArea);
       const completedRows = await fetchEnergyDailyTotals({ beforeToday: true });
-      const { data: olderIndoorTemperatureRows, error: olderIndoorTemperatureError } =
-        await applyBuildingScope(
+      const temperatureRows = [];
+      const temperaturePageSize = 1000;
+      const maxTemperaturePages = 80;
+      const temperatureWindowStart = new Date(
+        Date.now() - 120 * 24 * 60 * 60 * 1000
+      ).toISOString();
+
+      for (let page = 0; page < maxTemperaturePages; page += 1) {
+        const { data, error } = await applyBuildingScope(
           supabase
             .from("Readings")
-            .select("timestamp, temperature_inside")
-            .not("temperature_inside", "is", null)
+            .select("timestamp, temperature_inside, temperature_outside")
+            .or("temperature_inside.not.is.null,temperature_outside.not.is.null")
+            .gte("timestamp", temperatureWindowStart)
             .order("timestamp", { ascending: true })
-            .limit(10000)
-        );
-      const { data: recentIndoorTemperatureRows, error: recentIndoorTemperatureError } =
-        await applyBuildingScope(
-          supabase
-            .from("Readings")
-            .select("timestamp, temperature_inside")
-            .not("temperature_inside", "is", null)
-            .order("timestamp", { ascending: false })
-            .limit(10000)
-        );
-      const { data: olderOutdoorTemperatureRows, error: olderOutdoorTemperatureError } =
-        await applyBuildingScope(
-          supabase
-            .from("Readings")
-            .select("timestamp, temperature_outside")
-            .not("temperature_outside", "is", null)
-            .order("timestamp", { ascending: true })
-            .limit(10000)
-        );
-      const { data: recentOutdoorTemperatureRows, error: recentOutdoorTemperatureError } =
-        await applyBuildingScope(
-          supabase
-            .from("Readings")
-            .select("timestamp, temperature_outside")
-            .not("temperature_outside", "is", null)
-            .order("timestamp", { ascending: false })
-            .limit(10000)
+            .range(
+              page * temperaturePageSize,
+              (page + 1) * temperaturePageSize - 1
+            )
         );
 
-      if (olderIndoorTemperatureError) throw olderIndoorTemperatureError;
-      if (recentIndoorTemperatureError) throw recentIndoorTemperatureError;
-      if (olderOutdoorTemperatureError) throw olderOutdoorTemperatureError;
-      if (recentOutdoorTemperatureError) throw recentOutdoorTemperatureError;
+        if (error) throw error;
 
-      const mergeRowsByTimestamp = (rows) =>
-        Array.from(
-          new Map(
-            rows
-              .filter((row) => row?.timestamp)
-              .map((row) => [row.timestamp, row])
-          ).values()
-        );
-      const indoorTemperatureRows = mergeRowsByTimestamp([
-        ...(olderIndoorTemperatureRows || []),
-        ...(recentIndoorTemperatureRows || []),
-      ]);
-      const outdoorTemperatureRows = mergeRowsByTimestamp([
-        ...(olderOutdoorTemperatureRows || []),
-        ...(recentOutdoorTemperatureRows || []),
-      ]);
+        temperatureRows.push(...(data || []));
+
+        if (!data || data.length < temperaturePageSize) {
+          break;
+        }
+      }
+
+      const temperatureRowsByTimestamp = Array.from(
+        new Map(
+          temperatureRows
+            .filter((row) => row?.timestamp)
+            .map((row) => [row.timestamp, row])
+        ).values()
+      );
+      const indoorTemperatureRows = temperatureRowsByTimestamp;
+      const outdoorTemperatureRows = temperatureRowsByTimestamp;
 
       const todayKey = new Date().toISOString().slice(0, 10);
       const now = new Date();
