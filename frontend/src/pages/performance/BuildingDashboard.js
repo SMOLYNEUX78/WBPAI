@@ -1307,9 +1307,9 @@ const BuildingDashboardPanel = ({ building }) => {
       const completedRows = await fetchEnergyDailyTotals({ beforeToday: true });
       const temperatureRows = [];
       const temperaturePageSize = 1000;
-      const maxTemperaturePages = 80;
+      const maxTemperaturePages = 120;
       const temperatureWindowStart = new Date(
-        Date.now() - 120 * 24 * 60 * 60 * 1000
+        Date.now() - 45 * 24 * 60 * 60 * 1000
       ).toISOString();
 
       for (let page = 0; page < maxTemperaturePages; page += 1) {
@@ -1319,7 +1319,7 @@ const BuildingDashboardPanel = ({ building }) => {
             .select("timestamp, temperature_inside, temperature_outside")
             .or("temperature_inside.not.is.null,temperature_outside.not.is.null")
             .gte("timestamp", temperatureWindowStart)
-            .order("timestamp", { ascending: true })
+            .order("timestamp", { ascending: false })
             .range(
               page * temperaturePageSize,
               (page + 1) * temperaturePageSize - 1
