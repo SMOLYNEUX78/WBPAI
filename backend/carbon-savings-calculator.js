@@ -396,9 +396,9 @@ async function upsertCarbonSavingsSummary({ rows, toDate }) {
     total_energy_cost_saved_gbp: totalEnergyCostSavedGbp,
     carbon_credits: totalCarbonCredits,
     latest_date: latest?.saving_date || null,
-    latest_saved_kgco2e: latest?.saved_kgco2e || null,
-    latest_saved_kwh: latest?.saved_kwh || null,
-    latest_energy_cost_saved_gbp: latest?.energy_cost_saved_gbp || null,
+    latest_saved_kgco2e: latest?.saved_kgco2e ?? null,
+    latest_saved_kwh: latest?.saved_kwh ?? null,
+    latest_energy_cost_saved_gbp: latest?.energy_cost_saved_gbp ?? null,
     source: "carbon-savings-calculator",
     calculation_version: "enerphit-certified-v1",
     raw_payload: {
