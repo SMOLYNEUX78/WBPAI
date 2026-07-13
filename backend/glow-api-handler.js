@@ -17,15 +17,32 @@ const GLOW_API_POLL_INTERVAL_MS = Number(
 const GLOW_API_DAILY_TOTAL_INTERVAL_MS = Number(
   process.env.GLOW_API_DAILY_TOTAL_INTERVAL_MS || 30 * 60 * 1000
 );
+const GLOW_API_INTERVAL_TOTAL_INTERVAL_MS = Number(
+  process.env.GLOW_API_INTERVAL_TOTAL_INTERVAL_MS || 30 * 60 * 1000
+);
+const GLOW_API_INTERVAL_LOOKBACK_HOURS = Number(
+  process.env.GLOW_API_INTERVAL_LOOKBACK_HOURS || 72
+);
+const GLOW_API_INSTANT_POWER_INTERVAL_MS = Number(
+  process.env.GLOW_API_INSTANT_POWER_INTERVAL_MS || 30 * 60 * 1000
+);
 const GLOW_API_STORE_RAW_PAYLOAD =
   String(process.env.GLOW_API_STORE_RAW_PAYLOAD || "").toLowerCase() === "true";
 const COLLECTOR_INSTANCE = process.env.COLLECTOR_INSTANCE || "unknown";
 const SOURCE_NAME = `glow-api:${COLLECTOR_INSTANCE}`;
 const GLOW_API_RESOURCES = process.env.GLOW_API_RESOURCES || "";
+const GLOW_API_INTERVAL_FUELS = new Set(
+  (process.env.GLOW_API_INTERVAL_FUELS || "electricity")
+    .split(",")
+    .map((fuel) => fuel.trim().toLowerCase())
+    .filter(Boolean)
+);
 
 let cachedToken = null;
 let tokenExpiresAt = 0;
 const lastDailyTotalPollByResource = new Map();
+const lastIntervalTotalPollByResource = new Map();
+const lastInstantPowerPollByResource = new Map();
 
 const defaultResources = [
   {
@@ -124,6 +141,23 @@ function buildDailyQuery() {
   return params.toString();
 }
 
+function buildIntervalQuery() {
+  const now = new Date();
+  const start = new Date(
+    now.getTime() - GLOW_API_INTERVAL_LOOKBACK_HOURS * 60 * 60 * 1000
+  );
+  start.setUTCMinutes(start.getUTCMinutes() < 30 ? 0 : 30, 0, 0);
+
+  const params = new URLSearchParams({
+    from: start.toISOString().slice(0, 19),
+    to: now.toISOString().slice(0, 19),
+    period: "PT30M",
+    function: "sum",
+  });
+
+  return { query: params.toString(), from: start, to: now };
+}
+
 function latestPair(data) {
   if (!Array.isArray(data?.data) || data.data.length === 0) {
     return null;
@@ -155,10 +189,77 @@ function shouldPollDailyTotal(resource, nowMs) {
   return false;
 }
 
+function shouldPollIntervalTotal(resource, nowMs) {
+  if (!GLOW_API_INTERVAL_FUELS.has(String(resource.fuelType).toLowerCase())) {
+    return false;
+  }
+
+  const key = `${resource.buildingId}:${resource.fuelType}:${resource.resourceId}`;
+  const lastPoll = lastIntervalTotalPollByResource.get(key);
+
+  if (!lastPoll || nowMs - lastPoll >= GLOW_API_INTERVAL_TOTAL_INTERVAL_MS) {
+    lastIntervalTotalPollByResource.set(key, nowMs);
+    return true;
+  }
+
+  return false;
+}
+
+function shouldPollInstantPower(resource, nowMs) {
+  if (GLOW_API_INSTANT_POWER_INTERVAL_MS <= 0) {
+    return false;
+  }
+
+  const key = `${resource.buildingId}:${resource.resourceId}`;
+  const lastPoll = lastInstantPowerPollByResource.get(key);
+
+  if (!lastPoll || nowMs - lastPoll >= GLOW_API_INSTANT_POWER_INTERVAL_MS) {
+    lastInstantPowerPollByResource.set(key, nowMs);
+    return true;
+  }
+
+  return false;
+}
+
+async function existingIntervalTimestamps(resource, from, to) {
+  const timestamps = new Set();
+  const pageSize = 1000;
+
+  for (let page = 0; page < 10; page += 1) {
+    const { data, error } = await supabase
+      .from("EnergyReadings")
+      .select("timestamp")
+      .eq("building_id", resource.buildingId)
+      .eq("fuel_type", resource.fuelType)
+      .eq("reading_type", "interval_30m")
+      .eq("topic", resource.resourceId)
+      .gte("timestamp", from.toISOString())
+      .lte("timestamp", to.toISOString())
+      .range(page * pageSize, (page + 1) * pageSize - 1);
+
+    if (error) {
+      throw error;
+    }
+
+    (data || []).forEach((row) => {
+      if (row.timestamp) {
+        timestamps.add(new Date(row.timestamp).toISOString());
+      }
+    });
+
+    if (!data || data.length < pageSize) {
+      break;
+    }
+  }
+
+  return timestamps;
+}
+
 async function collectResource(resource) {
   const rows = [];
+  const nowMs = Date.now();
 
-  if (shouldPollDailyTotal(resource, Date.now())) {
+  if (shouldPollDailyTotal(resource, nowMs)) {
     const dailyData = await glowFetch(
       `/resource/${resource.resourceId}/readings?${buildDailyQuery()}`
     );
@@ -179,7 +280,46 @@ async function collectResource(resource) {
     }
   }
 
-  if (resource.fuelType === "electricity") {
+  if (shouldPollIntervalTotal(resource, nowMs)) {
+    const intervalQuery = buildIntervalQuery();
+    const intervalData = await glowFetch(
+      `/resource/${resource.resourceId}/readings?${intervalQuery.query}`
+    );
+    const existingTimestamps = await existingIntervalTimestamps(
+      resource,
+      intervalQuery.from,
+      intervalQuery.to
+    );
+
+    if (Array.isArray(intervalData?.data)) {
+      intervalData.data.forEach(([timestampSeconds, value]) => {
+        const usageKwh = Number(value);
+        const timestamp = new Date(Number(timestampSeconds) * 1000).toISOString();
+
+        if (
+          !Number.isFinite(usageKwh) ||
+          existingTimestamps.has(timestamp)
+        ) {
+          return;
+        }
+
+        existingTimestamps.add(timestamp);
+        rows.push({
+          timestamp,
+          building_id: resource.buildingId,
+          fuel_type: resource.fuelType,
+          reading_type: "interval_30m",
+          usage_kwh: usageKwh,
+          power_kw: null,
+          source: SOURCE_NAME,
+          topic: resource.resourceId,
+          raw_payload: GLOW_API_STORE_RAW_PAYLOAD ? intervalData : null,
+        });
+      });
+    }
+  }
+
+  if (resource.fuelType === "electricity" && shouldPollInstantPower(resource, nowMs)) {
     const currentData = await glowFetch(`/resource/${resource.resourceId}/current`);
     const current = latestPair(currentData);
 
@@ -232,7 +372,7 @@ if (!GLOW_USERNAME || !GLOW_PASSWORD) {
 }
 
 console.log(
-  `Starting Glow API collector (${COLLECTOR_INSTANCE}) for ${resources.length} resource(s) every ${GLOW_API_POLL_INTERVAL_MS}ms; daily totals every ${GLOW_API_DAILY_TOTAL_INTERVAL_MS}ms`
+  `Starting Glow API collector (${COLLECTOR_INSTANCE}) for ${resources.length} resource(s) every ${GLOW_API_POLL_INTERVAL_MS}ms; daily totals every ${GLOW_API_DAILY_TOTAL_INTERVAL_MS}ms; interval totals every ${GLOW_API_INTERVAL_TOTAL_INTERVAL_MS}ms; instant power every ${GLOW_API_INSTANT_POWER_INTERVAL_MS}ms`
 );
 
 pollGlowApi();
