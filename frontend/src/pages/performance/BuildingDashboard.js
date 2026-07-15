@@ -212,6 +212,10 @@ const BuildingDashboardPanel = ({ building }) => {
     totalSavedKgCo2e: null,
   };
   const defaultCarbonIntervalSavingsSummary = {
+    fromDate: null,
+    toDate: null,
+    calculatedAt: null,
+    dailyRows: null,
     latestTimestamp: null,
     latestSavedKgCo2e: null,
     totalSavedKgCo2e: null,
@@ -274,11 +278,6 @@ const BuildingDashboardPanel = ({ building }) => {
       `${dataSourceBuildingId}:carbonSavingsSummary`,
       defaultCarbonSavingsSummary
     );
-  const readCachedCarbonIntervalSavingsSummary = () =>
-    readCachedDashboardState(
-      `${dataSourceBuildingId}:carbonIntervalSavingsSummary`,
-      defaultCarbonIntervalSavingsSummary
-    );
   const readCachedWeeklyTrendData = () =>
     readCachedDashboardState(`${dataSourceBuildingId}:weeklyTrendData`, []);
   const readCachedHeatLossSummary = () =>
@@ -322,14 +321,9 @@ const BuildingDashboardPanel = ({ building }) => {
       : null;
   });
   const [carbonIntervalSavingsSummary, setCarbonIntervalSavingsSummary] = useState(
-    readCachedCarbonIntervalSavingsSummary
+    defaultCarbonIntervalSavingsSummary
   );
-  const [carbonCredits, setCarbonCredits] = useState(() => {
-    const cachedIntervalSummary = readCachedCarbonIntervalSavingsSummary();
-    return Number.isFinite(cachedIntervalSummary.carbonCredits)
-      ? cachedIntervalSummary.carbonCredits
-      : 0;
-  });
+  const [carbonCredits, setCarbonCredits] = useState(0);
   const [, setCarbonSavingsSummary] = useState(
     readCachedCarbonSavingsSummary
   );
@@ -986,10 +980,7 @@ const BuildingDashboardPanel = ({ building }) => {
     nextCarbonIntervalSavingsSummary
   ) => {
     setCarbonIntervalSavingsSummary(nextCarbonIntervalSavingsSummary);
-    localStorage.setItem(
-      `${dataSourceBuildingId}:carbonIntervalSavingsSummary`,
-      JSON.stringify(nextCarbonIntervalSavingsSummary)
-    );
+    localStorage.removeItem(`${dataSourceBuildingId}:carbonIntervalSavingsSummary`);
   };
   const applyWeeklyTrendData = (nextWeeklyTrendData) => {
     setWeeklyTrendData(nextWeeklyTrendData);
@@ -2994,6 +2985,10 @@ const BuildingDashboardPanel = ({ building }) => {
 
       setCarbonCredits(totalCredits);
       applyCarbonIntervalSavingsSummary({
+        fromDate: null,
+        toDate: null,
+        calculatedAt: null,
+        dailyRows: accruedRows.length,
         latestTimestamp: latest?.timestamp || null,
         latestSavedKgCo2e: latest ? Number(latest.saved_kgco2e) : null,
         totalSavedKgCo2e,
@@ -3020,6 +3015,12 @@ const BuildingDashboardPanel = ({ building }) => {
           : null,
       });
       applyCarbonIntervalSavingsSummary({
+        fromDate: summaryRow.from_date || null,
+        toDate: summaryRow.to_date || null,
+        calculatedAt: summaryRow.calculated_at || null,
+        dailyRows: Number.isFinite(Number(summaryRow.daily_rows))
+          ? Number(summaryRow.daily_rows)
+          : null,
         latestTimestamp: summaryRow.calculated_at || summaryRow.latest_date || null,
         latestSavedKgCo2e: Number.isFinite(latestSavedKgCo2e)
           ? latestSavedKgCo2e
@@ -3096,6 +3097,10 @@ const BuildingDashboardPanel = ({ building }) => {
       });
       if (Number.isFinite(totalSavedKwh) && totalSavedKwh > 0) {
         applyCarbonIntervalSavingsSummary({
+          fromDate: rows[rows.length - 1]?.saving_date || null,
+          toDate: latest?.saving_date || null,
+          calculatedAt: null,
+          dailyRows: rows.length,
           latestTimestamp: latest?.saving_date || null,
           latestSavedKgCo2e: latest ? Number(latest.saved_kgco2e) : null,
           totalSavedKgCo2e,
@@ -3266,15 +3271,9 @@ const BuildingDashboardPanel = ({ building }) => {
         ? cachedEnergySummary.totalDailyAverage
         : null
     );
-    const cachedCarbonIntervalSummary =
-      readCachedCarbonIntervalSavingsSummary();
     setCarbonSavingsSummary(readCachedCarbonSavingsSummary());
-    setCarbonIntervalSavingsSummary(cachedCarbonIntervalSummary);
-    setCarbonCredits(
-      Number.isFinite(cachedCarbonIntervalSummary.carbonCredits)
-        ? cachedCarbonIntervalSummary.carbonCredits
-        : 0
-    );
+    setCarbonIntervalSavingsSummary(defaultCarbonIntervalSavingsSummary);
+    setCarbonCredits(0);
     setWeeklyTrendData(readCachedWeeklyTrendData());
     setHeatLossSummary(readCachedHeatLossSummary());
     setHeatExclusionSummary(readCachedHeatExclusionSummary());
@@ -3837,6 +3836,12 @@ const BuildingDashboardPanel = ({ building }) => {
     Number.isFinite(carbonMarketPrice.gbpPerTonne)
       ? intervalCarbonSavedTonnes * carbonMarketPrice.gbpPerTonne
       : null;
+  const carbonCalculationWindow =
+    carbonIntervalSavingsSummary.fromDate && carbonIntervalSavingsSummary.toDate
+      ? `${carbonIntervalSavingsSummary.dailyRows || "--"} metered days / ${
+          carbonIntervalSavingsSummary.fromDate
+        } to ${carbonIntervalSavingsSummary.toDate}`
+      : "Awaiting persisted carbon summary";
   const trendMetrics = [
     {
       key: "electricity",
@@ -5356,6 +5361,19 @@ const BuildingDashboardPanel = ({ building }) => {
                 SELL CREDITS
               </button>
             </div>
+            <p className="mt-3 text-xs font-medium text-gray-600">
+              Calculation: {carbonCalculationWindow}
+              {carbonIntervalSavingsSummary.calculatedAt
+                ? ` / updated ${new Date(
+                    carbonIntervalSavingsSummary.calculatedAt
+                  ).toLocaleString("en-GB", {
+                    day: "2-digit",
+                    month: "short",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}`
+                : ""}
+            </p>
           </div>
 
           <button
