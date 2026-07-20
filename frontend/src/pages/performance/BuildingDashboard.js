@@ -2044,16 +2044,34 @@ const BuildingDashboardPanel = ({ building }) => {
 
   const fetchLongTermBuildingPerformance = async () => {
     try {
-      const data = [];
+      const rowsByKey = new Map();
       let error = null;
+      const now = Date.now();
+      const historicalWindows = [
+        { fromDaysAgo: 0, toDaysAgo: 2, limit: 1200 },
+        { fromDaysAgo: 2, toDaysAgo: 7, limit: 1200 },
+        { fromDaysAgo: 7, toDaysAgo: 30, limit: 1200 },
+        { fromDaysAgo: 30, toDaysAgo: 90, limit: 1200 },
+        { fromDaysAgo: 90, toDaysAgo: 180, limit: 1200 },
+      ];
 
-      for (let rangeFrom = 0; rangeFrom < 6000; rangeFrom += 1000) {
+      for (const window of historicalWindows) {
+        const timestampFrom = new Date(
+          now - window.toDaysAgo * 24 * 60 * 60 * 1000
+        ).toISOString();
+        const timestampTo =
+          window.fromDaysAgo > 0
+            ? new Date(
+                now - window.fromDaysAgo * 24 * 60 * 60 * 1000
+              ).toISOString()
+            : null;
         const result = await fetchScopedIaqRows({
           includeTimestamp: true,
           includeReadingType: true,
           orderDescending: true,
-          rangeFrom,
-          rangeTo: rangeFrom + 999,
+          limit: window.limit,
+          timestampFrom,
+          timestampTo,
         });
 
         if (result.error) {
@@ -2061,12 +2079,13 @@ const BuildingDashboardPanel = ({ building }) => {
           break;
         }
 
-        data.push(...(result.data || []));
-
-        if (!result.data || result.data.length < 1000) {
-          break;
-        }
+        (result.data || []).forEach((row) => {
+          const key = `${row.timestamp || ""}:${row.reading_type || ""}`;
+          rowsByKey.set(key, row);
+        });
       }
+
+      const data = Array.from(rowsByKey.values());
 
       if (error) throw error;
       if (!data || data.length === 0) return;
@@ -2138,8 +2157,19 @@ const BuildingDashboardPanel = ({ building }) => {
         humidity: humidityStabilityScore,
         resilience: resilienceScore,
       });
+      const measuredIaqCategories = [
+        co2Values,
+        vocValues,
+        pm25Values,
+        pm10Values,
+        hchoValues,
+        no2Values,
+      ].filter((values) => values.length > 0).length;
       const calculatedHealthScore = Number.isFinite(ieqPenaltyFactor)
-        ? ieqPenaltyFactor * 100
+        ? Math.min(
+            ieqPenaltyFactor * 100,
+            measuredIaqCategories >= 6 ? 100 : 98
+          )
         : null;
 
       const estimatedArea =
