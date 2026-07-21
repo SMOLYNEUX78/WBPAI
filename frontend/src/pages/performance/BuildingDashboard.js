@@ -290,11 +290,6 @@ const BuildingDashboardPanel = ({ building }) => {
       `${dataSourceBuildingId}:heatExclusionSummary`,
       defaultHeatExclusionSummary
     );
-  const readCachedPerformanceSummary = () =>
-    readCachedDashboardState(
-      `${dataSourceBuildingId}:performanceSummary`,
-      defaultPerformanceSummary
-    );
   const readCachedMrvEvidence = () =>
     readCachedDashboardState(
       `${dataSourceBuildingId}:mrvEvidence`,
@@ -308,12 +303,7 @@ const BuildingDashboardPanel = ({ building }) => {
   );
   const supportsExtendedIaqColumns = useRef(true);
 
-  const [performanceValue, setPerformanceValue] = useState(() => {
-    const cachedPerformanceSummary = readCachedPerformanceSummary();
-    return Number.isFinite(cachedPerformanceSummary.value)
-      ? cachedPerformanceSummary.value
-      : null;
-  });
+  const [performanceValue, setPerformanceValue] = useState(null);
   const [historicalPerformance, setHistoricalPerformance] = useState(() => {
     const cachedEnergySummary = readCachedEnergySummary();
     return Number.isFinite(cachedEnergySummary.totalDailyAverage)
@@ -336,13 +326,9 @@ const BuildingDashboardPanel = ({ building }) => {
   const [mrvEvidence, setMrvEvidence] = useState(readCachedMrvEvidence);
   const [energySummary, setEnergySummary] = useState(readCachedEnergySummary);
 
-  const [performanceBreakdown, setPerformanceBreakdown] = useState(() => {
-    const cachedPerformanceSummary = readCachedPerformanceSummary();
-    return {
-      ...defaultPerformanceSummary.breakdown,
-      ...(cachedPerformanceSummary.breakdown || {}),
-    };
-  });
+  const [performanceBreakdown, setPerformanceBreakdown] = useState(
+    defaultPerformanceSummary.breakdown
+  );
   const [heatLossSummary, setHeatLossSummary] = useState(
     readCachedHeatLossSummary
   );
@@ -1842,43 +1828,71 @@ const BuildingDashboardPanel = ({ building }) => {
 
   const fetchHeatExclusionSummary = async () => {
     try {
-      const since = new Date(Date.now() - 21 * 24 * 60 * 60 * 1000).toISOString();
-      const fetchTemperatureRows = async ({ column, maxRows }) => {
-        const rows = [];
+      const now = Date.now();
+      const heatExclusionWindows = [
+        { fromDaysAgo: 0, toDaysAgo: 7, maxRows: 4000 },
+        { fromDaysAgo: 7, toDaysAgo: 30, maxRows: 5000 },
+        { fromDaysAgo: 30, toDaysAgo: 90, maxRows: 5000 },
+        { fromDaysAgo: 90, toDaysAgo: 180, maxRows: 5000 },
+      ];
+      const fetchTemperatureRows = async ({ column }) => {
+        const rowsByKey = new Map();
         const pageSize = 1000;
 
-        for (let rangeFrom = 0; rangeFrom < maxRows; rangeFrom += pageSize) {
-          let query = supabase
-            .from("Readings")
-            .select(`timestamp, ${column}`)
-            .not(column, "is", null)
-            .gte("timestamp", since)
-            .order("timestamp", { ascending: false })
-            .range(rangeFrom, rangeFrom + pageSize - 1);
+        for (const window of heatExclusionWindows) {
+          const timestampFrom = new Date(
+            now - window.toDaysAgo * 24 * 60 * 60 * 1000
+          ).toISOString();
+          const timestampTo =
+            window.fromDaysAgo > 0
+              ? new Date(
+                  now - window.fromDaysAgo * 24 * 60 * 60 * 1000
+                ).toISOString()
+              : null;
 
-          if (
-            dataSourceBuildingId === "home" &&
-            column === "temperature_inside"
+          for (
+            let rangeFrom = 0;
+            rangeFrom < window.maxRows;
+            rangeFrom += pageSize
           ) {
-            query = query.eq("reading_type", "dyson:whole_home");
-          }
+            let query = supabase
+              .from("Readings")
+              .select(`timestamp, ${column}`)
+              .not(column, "is", null)
+              .gte("timestamp", timestampFrom)
+              .order("timestamp", { ascending: false })
+              .range(rangeFrom, rangeFrom + pageSize - 1);
 
-          const result = await applyBuildingScope(query);
+            if (timestampTo) {
+              query = query.lt("timestamp", timestampTo);
+            }
 
-          if (result.error) throw result.error;
+            if (
+              dataSourceBuildingId === "home" &&
+              column === "temperature_inside"
+            ) {
+              query = query.eq("reading_type", "dyson:whole_home");
+            }
 
-          rows.push(...(result.data || []));
+            const result = await applyBuildingScope(query);
 
-          if (!result.data || result.data.length < pageSize) {
-            break;
+            if (result.error) throw result.error;
+
+            (result.data || []).forEach((row) => {
+              rowsByKey.set(`${row.timestamp || ""}:${column}`, row);
+            });
+
+            if (!result.data || result.data.length < pageSize) {
+              break;
+            }
           }
         }
 
-        return rows;
+        return Array.from(rowsByKey.values());
       };
       const [indoorRows, outdoorRows] = await Promise.all([
-        fetchTemperatureRows({ column: "temperature_inside", maxRows: 8000 }),
-        fetchTemperatureRows({ column: "temperature_outside", maxRows: 3000 }),
+        fetchTemperatureRows({ column: "temperature_inside" }),
+        fetchTemperatureRows({ column: "temperature_outside" }),
       ]);
 
       const nextHeatExclusionSummary = calculateHeatExclusionFromRows(
@@ -2287,13 +2301,7 @@ const BuildingDashboardPanel = ({ building }) => {
       setPerformanceBreakdown(nextPerformanceBreakdown);
 
       setPerformanceValue(buildingPerformanceIndex);
-      localStorage.setItem(
-        `${dataSourceBuildingId}:performanceSummary`,
-        JSON.stringify({
-          value: buildingPerformanceIndex,
-          breakdown: nextPerformanceBreakdown,
-        })
-      );
+      localStorage.removeItem(`${dataSourceBuildingId}:performanceSummary`);
     } catch (err) {
       console.error(
         "Error calculating long-term building performance:",
@@ -3307,16 +3315,8 @@ const BuildingDashboardPanel = ({ building }) => {
     setWeeklyTrendData(readCachedWeeklyTrendData());
     setHeatLossSummary(readCachedHeatLossSummary());
     setHeatExclusionSummary(readCachedHeatExclusionSummary());
-    const cachedPerformanceSummary = readCachedPerformanceSummary();
-    setPerformanceValue(
-      Number.isFinite(cachedPerformanceSummary.value)
-        ? cachedPerformanceSummary.value
-        : null
-    );
-    setPerformanceBreakdown({
-      ...defaultPerformanceSummary.breakdown,
-      ...(cachedPerformanceSummary.breakdown || {}),
-    });
+    setPerformanceValue(null);
+    setPerformanceBreakdown(defaultPerformanceSummary.breakdown);
     setMrvEvidence(readCachedMrvEvidence());
     fetchLongTermAverage();
     fetchHeatLossSummary();
