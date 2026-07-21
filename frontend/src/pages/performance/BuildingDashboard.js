@@ -2131,24 +2131,10 @@ const BuildingDashboardPanel = ({ building }) => {
       const pm10Values = getValidValues(ieqRows, "pm10");
       const hchoValues = getValidValues(ieqRows, "hcho");
       const no2Values = getValidValues(ieqRows, "no2");
-      const calculatedHeatExclusionSummary = calculateHeatExclusionFromRows(
-        ieqRows,
-        ieqRows
-      );
-      const nextHeatExclusionSummary =
-        calculatedHeatExclusionSummary.sampleCount > 0
-          ? calculatedHeatExclusionSummary
-          : heatExclusionSummary;
+      const nextHeatExclusionSummary = heatExclusionSummary;
       const averageHeatExclusionBuffer =
         nextHeatExclusionSummary.averageBuffer;
       const overheatingShare = nextHeatExclusionSummary.overheatingShare;
-      if (calculatedHeatExclusionSummary.sampleCount > 0) {
-        setHeatExclusionSummary(nextHeatExclusionSummary);
-        localStorage.setItem(
-          `${dataSourceBuildingId}:heatExclusionSummary`,
-          JSON.stringify(nextHeatExclusionSummary)
-        );
-      }
 
       const calculatedIAQScore = calculateIAQScore({
         co2Values,
