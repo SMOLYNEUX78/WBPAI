@@ -222,6 +222,20 @@ function energyCostForEnergy({ electricityKwh, gasKwh }) {
   );
 }
 
+function valuePhysicalEnergySaved({ savedKwh, baselineTotalKwh, measuredEnergyCost }) {
+  if (
+    !Number.isFinite(savedKwh) ||
+    savedKwh <= 0 ||
+    !Number.isFinite(baselineTotalKwh) ||
+    baselineTotalKwh <= 0 ||
+    !Number.isFinite(measuredEnergyCost)
+  ) {
+    return 0;
+  }
+
+  return savedKwh * (measuredEnergyCost / baselineTotalKwh);
+}
+
 function projectionFactorForDay(savingDate, toDate) {
   const today = toDate.toISOString().slice(0, 10);
 
@@ -263,14 +277,11 @@ function buildCarbonSavingRows(dailyEnergy, toDate) {
         electricityKwh: baselineElectricityKwh,
         gasKwh: baselineGasKwh,
       });
-      const improvedEnergyCostGbp = energyCostForEnergy({
-        electricityKwh: improvedElectricityKwh,
-        gasKwh: improvedGasKwh,
+      const energyCostSavedGbp = valuePhysicalEnergySaved({
+        savedKwh,
+        baselineTotalKwh,
+        measuredEnergyCost: baselineEnergyCostGbp,
       });
-      const energyCostSavedGbp = Math.max(
-        0,
-        baselineEnergyCostGbp - improvedEnergyCostGbp
-      );
 
       return {
         building_id: BUILDING_ID,
@@ -295,6 +306,7 @@ function buildCarbonSavingRows(dailyEnergy, toDate) {
           gasKgCo2ePerKwh: GAS_KGCO2E_PER_KWH,
           electricityPriceGbpPerKwh: ELECTRICITY_PRICE_GBP_PER_KWH,
           gasPriceGbpPerKwh: GAS_PRICE_GBP_PER_KWH,
+          energyValueMethod: "saved_kwh_x_measured_baseline_blended_tariff",
           internalAreaM2: INTERNAL_AREA_M2,
           enerphitEuiKwhM2Year: ENERPHIT_EUI_KWH_M2_YEAR,
           improvedDailyElectricityKwh: IMPROVED_DAILY_ELECTRICITY_KWH,

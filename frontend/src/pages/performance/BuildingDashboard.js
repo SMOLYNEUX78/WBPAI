@@ -2859,9 +2859,24 @@ const BuildingDashboardPanel = ({ building }) => {
       const improvedIntervalElectricityKwh = improvedDailyElectricityKwh / 48;
       const improvedIntervalKgCo2e =
         improvedIntervalElectricityKwh * ELECTRICITY_KGCO2E_PER_KWH;
-      const improvedIntervalEnergyCost =
-        improvedIntervalElectricityKwh * ELECTRICITY_PRICE_GBP_PER_KWH;
       const today = now.toISOString().slice(0, 10);
+      const valuePhysicalEnergySaved = ({
+        savedKwh,
+        baselineTotalKwh,
+        measuredEnergyCost,
+      }) => {
+        if (
+          !Number.isFinite(savedKwh) ||
+          savedKwh <= 0 ||
+          !Number.isFinite(baselineTotalKwh) ||
+          baselineTotalKwh <= 0 ||
+          !Number.isFinite(measuredEnergyCost)
+        ) {
+          return 0;
+        }
+
+        return savedKwh * (measuredEnergyCost / baselineTotalKwh);
+      };
       const projectionFactorForDay = (savingDate) => {
         if (savingDate !== today) {
           return 1;
@@ -2883,8 +2898,6 @@ const BuildingDashboardPanel = ({ building }) => {
             improvedDailyElectricityKwh * projectionFactor;
           const improvedKgCo2e =
             improvedElectricityKwh * ELECTRICITY_KGCO2E_PER_KWH;
-          const improvedEnergyCost =
-            improvedElectricityKwh * ELECTRICITY_PRICE_GBP_PER_KWH;
           const baselineTotalKwh = electricityKwh + gasKwh;
           const baselineKgCo2e =
             electricityKwh * ELECTRICITY_KGCO2E_PER_KWH +
@@ -2894,10 +2907,11 @@ const BuildingDashboardPanel = ({ building }) => {
             gasKwh * GAS_PRICE_GBP_PER_KWH;
           const savedKgCo2e = Math.max(0, baselineKgCo2e - improvedKgCo2e);
           const savedKwh = Math.max(0, baselineTotalKwh - improvedElectricityKwh);
-          const energyCostSavedGbp = Math.max(
-            0,
-            measuredEnergyCost - improvedEnergyCost
-          );
+          const energyCostSavedGbp = valuePhysicalEnergySaved({
+            savedKwh,
+            baselineTotalKwh,
+            measuredEnergyCost,
+          });
 
           return {
             saving_date: savingDate,
@@ -2928,10 +2942,11 @@ const BuildingDashboardPanel = ({ building }) => {
             0,
             baselineTotalKwh - improvedIntervalElectricityKwh
           );
-          const energyCostSavedGbp = Math.max(
-            0,
-            measuredEnergyCost - improvedIntervalEnergyCost
-          );
+          const energyCostSavedGbp = valuePhysicalEnergySaved({
+            savedKwh,
+            baselineTotalKwh,
+            measuredEnergyCost,
+          });
 
           return {
             timestamp,
@@ -2953,8 +2968,6 @@ const BuildingDashboardPanel = ({ building }) => {
             electricityKwh > 0 ? improvedDailyElectricityKwh * projectionFactor : 0;
           const improvedFallbackKgCo2e =
             improvedFallbackElectricityKwh * ELECTRICITY_KGCO2E_PER_KWH;
-          const improvedFallbackEnergyCost =
-            improvedFallbackElectricityKwh * ELECTRICITY_PRICE_GBP_PER_KWH;
           const baselineTotalKwh = electricityKwh + gasKwh;
           const baselineKgCo2e =
             electricityKwh * ELECTRICITY_KGCO2E_PER_KWH +
@@ -2970,10 +2983,11 @@ const BuildingDashboardPanel = ({ building }) => {
             0,
             baselineTotalKwh - improvedFallbackElectricityKwh
           );
-          const energyCostSavedGbp = Math.max(
-            0,
-            measuredEnergyCost - improvedFallbackEnergyCost
-          );
+          const energyCostSavedGbp = valuePhysicalEnergySaved({
+            savedKwh,
+            baselineTotalKwh,
+            measuredEnergyCost,
+          });
 
           return {
             timestamp: `${savingDate}T00:00:00.000Z`,
@@ -3072,6 +3086,17 @@ const BuildingDashboardPanel = ({ building }) => {
 
       if (!summaryError && summaryData) {
         applyPersistedSavingsSummary(summaryData);
+        try {
+          const { accruedRows } = await buildCarbonSavingsFromEnergyRows();
+          if (accruedRows.length > 0) {
+            applyAccruedSavingsSummary(accruedRows);
+          }
+        } catch (rawEnergyErr) {
+          console.warn(
+            "Fresh EnergyReadings carbon calculation unavailable; using persisted summary:",
+            rawEnergyErr.message
+          );
+        }
         return;
       }
 
