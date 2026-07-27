@@ -3862,14 +3862,18 @@ const BuildingDashboardPanel = ({ building }) => {
     {
       key: "electricity",
       label: "Electricity",
-      unit: "kWh",
+      unit: "kWh/h",
+      summaryUnit: "kWh/day",
+      summaryMultiplier: 24,
       color: "#2563eb",
       energyStatus: true,
     },
     {
       key: "gas",
       label: "Gas",
-      unit: "kWh",
+      unit: "kWh/h",
+      summaryUnit: "kWh/day",
+      summaryMultiplier: 24,
       color: "#dc2626",
       energyStatus: true,
     },
@@ -4206,7 +4210,10 @@ const BuildingDashboardPanel = ({ building }) => {
     const values = data
       .map((day) => day[metric.key])
       .filter((value) => Number.isFinite(value));
-    return values.length ? average(values) : null;
+    const meanValue = values.length ? average(values) : null;
+    return Number.isFinite(meanValue) && Number.isFinite(metric.summaryMultiplier)
+      ? meanValue * metric.summaryMultiplier
+      : meanValue;
   };
   const hoveredTrendMetric = hoveredTrendPoint
     ? visibleTrendMetrics.find((metric) =>
@@ -5287,7 +5294,9 @@ const BuildingDashboardPanel = ({ building }) => {
                       </span>
                       <span className="font-semibold">
                         {Number.isFinite(averageValue)
-                          ? `${formatMeasurement(averageValue)} ${metric.unit}`
+                          ? `${formatMeasurement(averageValue)} ${
+                              metric.summaryUnit || metric.unit
+                            }`
                           : "No Data"}
                       </span>
                     </button>
