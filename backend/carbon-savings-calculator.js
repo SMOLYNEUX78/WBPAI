@@ -99,7 +99,6 @@ function buildMeasuredEnergy(rows) {
   const intervalDays = new Set();
   const days = {};
   const measuredIntervalBuckets = new Set();
-  const intervalBuckets = new Map();
   const intervalEnergy = {};
   const dailyFallbackEnergy = {};
   const intervalKey = (timestamp) => {
@@ -125,23 +124,14 @@ function buildMeasuredEnergy(rows) {
         return;
       }
 
-      const bucketKey = `${fuelType}:${interval}`;
-      const existing = intervalBuckets.get(bucketKey);
-
-      if (!existing || usageKwh > existing.usageKwh) {
-        intervalBuckets.set(bucketKey, { day, fuelType, usageKwh, timestamp: interval });
-      }
+      intervalDays.add(`${fuelType}:${day}`);
+      measuredIntervalBuckets.add(`${fuelType}:${interval}`);
+      days[day] = days[day] || {};
+      days[day][fuelType] = (days[day][fuelType] || 0) + usageKwh;
+      intervalEnergy[interval] = intervalEnergy[interval] || {};
+      intervalEnergy[interval][fuelType] =
+        (intervalEnergy[interval][fuelType] || 0) + usageKwh;
     });
-
-  intervalBuckets.forEach(({ day, fuelType, usageKwh, timestamp }, bucketKey) => {
-    intervalDays.add(`${fuelType}:${day}`);
-    measuredIntervalBuckets.add(bucketKey);
-    days[day] = days[day] || {};
-    days[day][fuelType] = (days[day][fuelType] || 0) + usageKwh;
-    intervalEnergy[timestamp] = intervalEnergy[timestamp] || {};
-    intervalEnergy[timestamp][fuelType] =
-      (intervalEnergy[timestamp][fuelType] || 0) + usageKwh;
-  });
 
   const instantRowsByFuel = rows
     .filter((row) => row.reading_type === "instant_power")
