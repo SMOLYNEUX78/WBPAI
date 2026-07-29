@@ -34,8 +34,8 @@ const RUN_SCHEDULE =
 const CRON_SCHEDULE = process.env.CARBON_SAVINGS_CRON || "*/15 * * * *";
 const PAGE_SIZE = Number(process.env.CARBON_SAVINGS_PAGE_SIZE || 1000);
 const MAX_PAGES = Number(process.env.CARBON_SAVINGS_MAX_PAGES || 200);
-const CALCULATION_VERSION = "enerphit-certified-v2";
-const ENERGY_VALUE_METHOD = "saved_kwh_x_measured_baseline_blended_tariff";
+const CALCULATION_VERSION = "enerphit-certified-v3";
+const ENERGY_VALUE_METHOD = "measured_minus_constant_enerphit";
 let supportsExtendedSavingsColumns = true;
 
 function parseDate(value, label) {
@@ -224,20 +224,6 @@ function energyCostForEnergy({ electricityKwh, gasKwh }) {
   );
 }
 
-function valuePhysicalEnergySaved({ savedKwh, baselineTotalKwh, measuredEnergyCost }) {
-  if (
-    !Number.isFinite(savedKwh) ||
-    savedKwh <= 0 ||
-    !Number.isFinite(baselineTotalKwh) ||
-    baselineTotalKwh <= 0 ||
-    !Number.isFinite(measuredEnergyCost)
-  ) {
-    return 0;
-  }
-
-  return savedKwh * (measuredEnergyCost / baselineTotalKwh);
-}
-
 function projectionFactorForDay(savingDate, toDate) {
   const today = toDate.toISOString().slice(0, 10);
 
@@ -273,17 +259,17 @@ function buildCarbonSavingRows(dailyEnergy, toDate) {
         electricityKwh: improvedElectricityKwh,
         gasKwh: improvedGasKwh,
       });
-      const savedKgCo2e = Math.max(0, baselineKgCo2e - improvedKgCo2e);
-      const savedKwh = Math.max(0, baselineTotalKwh - improvedTotalKwh);
+      const savedKgCo2e = baselineKgCo2e - improvedKgCo2e;
+      const savedKwh = baselineTotalKwh - improvedTotalKwh;
       const baselineEnergyCostGbp = energyCostForEnergy({
         electricityKwh: baselineElectricityKwh,
         gasKwh: baselineGasKwh,
       });
-      const energyCostSavedGbp = valuePhysicalEnergySaved({
-        savedKwh,
-        baselineTotalKwh,
-        measuredEnergyCost: baselineEnergyCostGbp,
+      const improvedEnergyCostGbp = energyCostForEnergy({
+        electricityKwh: improvedElectricityKwh,
+        gasKwh: improvedGasKwh,
       });
+      const energyCostSavedGbp = baselineEnergyCostGbp - improvedEnergyCostGbp;
 
       return {
         building_id: BUILDING_ID,
@@ -405,7 +391,7 @@ async function upsertCarbonSavingsSummary({ rows, toDate }) {
     (sum, row) => sum + row.energy_cost_saved_gbp,
     0
   );
-  const totalCarbonCredits = rows.reduce((sum, row) => sum + row.carbon_credits, 0);
+  const totalCarbonCredits = Math.max(0, totalSavedKgCo2e / 1000);
   const latest = rows[rows.length - 1] || null;
   const first = rows[0] || null;
 

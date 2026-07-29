@@ -8,9 +8,9 @@ const HDD_BASE_TEMP_C = 15.5;
 const FALLBACK_CARBON_PRICE_GBP_PER_TONNE = 65;
 const ELECTRICITY_PRICE_GBP_PER_KWH = 0.245;
 const GAS_PRICE_GBP_PER_KWH = 0.06;
-const CARBON_SAVINGS_CALCULATION_VERSION = "enerphit-certified-v2";
+const CARBON_SAVINGS_CALCULATION_VERSION = "enerphit-certified-v3";
 const CARBON_SAVINGS_ENERGY_VALUE_METHOD =
-  "saved_kwh_x_measured_baseline_blended_tariff";
+  "measured_minus_constant_enerphit";
 const ELECTRICITY_KGCO2E_PER_KWH = 0.20705;
 const GAS_KGCO2E_PER_KWH = 0.18254;
 const MIN_BASELINE_METERED_DAYS = 7;
@@ -283,7 +283,7 @@ const BuildingDashboardPanel = ({ building }) => {
     );
   const readCachedCarbonIntervalSavingsSummary = () =>
     readCachedDashboardState(
-      `${dataSourceBuildingId}:carbonIntervalSavingsSummary:v3`,
+      `${dataSourceBuildingId}:carbonIntervalSavingsSummary:v4`,
       defaultCarbonIntervalSavingsSummary
     );
   const readCachedWeeklyTrendData = () =>
@@ -994,9 +994,10 @@ const BuildingDashboardPanel = ({ building }) => {
   ) => {
     setCarbonIntervalSavingsSummary(nextCarbonIntervalSavingsSummary);
     localStorage.setItem(
-      `${dataSourceBuildingId}:carbonIntervalSavingsSummary:v3`,
+      `${dataSourceBuildingId}:carbonIntervalSavingsSummary:v4`,
       JSON.stringify(nextCarbonIntervalSavingsSummary)
     );
+    localStorage.removeItem(`${dataSourceBuildingId}:carbonIntervalSavingsSummary:v3`);
     localStorage.removeItem(`${dataSourceBuildingId}:carbonIntervalSavingsSummary:v2`);
     localStorage.removeItem(`${dataSourceBuildingId}:carbonIntervalSavingsSummary`);
   };
@@ -2899,24 +2900,9 @@ const BuildingDashboardPanel = ({ building }) => {
       const improvedIntervalElectricityKwh = improvedDailyElectricityKwh / 48;
       const improvedIntervalKgCo2e =
         improvedIntervalElectricityKwh * ELECTRICITY_KGCO2E_PER_KWH;
+      const improvedIntervalEnergyCost =
+        improvedIntervalElectricityKwh * ELECTRICITY_PRICE_GBP_PER_KWH;
       const today = now.toISOString().slice(0, 10);
-      const valuePhysicalEnergySaved = ({
-        savedKwh,
-        baselineTotalKwh,
-        measuredEnergyCost,
-      }) => {
-        if (
-          !Number.isFinite(savedKwh) ||
-          savedKwh <= 0 ||
-          !Number.isFinite(baselineTotalKwh) ||
-          baselineTotalKwh <= 0 ||
-          !Number.isFinite(measuredEnergyCost)
-        ) {
-          return 0;
-        }
-
-        return savedKwh * (measuredEnergyCost / baselineTotalKwh);
-      };
       const projectionFactorForDay = (savingDate) => {
         if (savingDate !== today) {
           return 1;
@@ -2938,6 +2924,8 @@ const BuildingDashboardPanel = ({ building }) => {
             improvedDailyElectricityKwh * projectionFactor;
           const improvedKgCo2e =
             improvedElectricityKwh * ELECTRICITY_KGCO2E_PER_KWH;
+          const improvedEnergyCost =
+            improvedElectricityKwh * ELECTRICITY_PRICE_GBP_PER_KWH;
           const baselineTotalKwh = electricityKwh + gasKwh;
           const baselineKgCo2e =
             electricityKwh * ELECTRICITY_KGCO2E_PER_KWH +
@@ -2945,13 +2933,9 @@ const BuildingDashboardPanel = ({ building }) => {
           const measuredEnergyCost =
             electricityKwh * ELECTRICITY_PRICE_GBP_PER_KWH +
             gasKwh * GAS_PRICE_GBP_PER_KWH;
-          const savedKgCo2e = Math.max(0, baselineKgCo2e - improvedKgCo2e);
-          const savedKwh = Math.max(0, baselineTotalKwh - improvedElectricityKwh);
-          const energyCostSavedGbp = valuePhysicalEnergySaved({
-            savedKwh,
-            baselineTotalKwh,
-            measuredEnergyCost,
-          });
+          const savedKgCo2e = baselineKgCo2e - improvedKgCo2e;
+          const savedKwh = baselineTotalKwh - improvedElectricityKwh;
+          const energyCostSavedGbp = measuredEnergyCost - improvedEnergyCost;
 
           return {
             saving_date: savingDate,
@@ -2974,19 +2958,10 @@ const BuildingDashboardPanel = ({ building }) => {
           const measuredEnergyCost =
             electricityKwh * ELECTRICITY_PRICE_GBP_PER_KWH +
             gasKwh * GAS_PRICE_GBP_PER_KWH;
-          const savedKgCo2e = Math.max(
-            0,
-            baselineKgCo2e - improvedIntervalKgCo2e
-          );
-          const savedKwh = Math.max(
-            0,
-            baselineTotalKwh - improvedIntervalElectricityKwh
-          );
-          const energyCostSavedGbp = valuePhysicalEnergySaved({
-            savedKwh,
-            baselineTotalKwh,
-            measuredEnergyCost,
-          });
+          const savedKgCo2e = baselineKgCo2e - improvedIntervalKgCo2e;
+          const savedKwh = baselineTotalKwh - improvedIntervalElectricityKwh;
+          const energyCostSavedGbp =
+            measuredEnergyCost - improvedIntervalEnergyCost;
 
           return {
             timestamp,
@@ -3008,6 +2983,8 @@ const BuildingDashboardPanel = ({ building }) => {
             electricityKwh > 0 ? improvedDailyElectricityKwh * projectionFactor : 0;
           const improvedFallbackKgCo2e =
             improvedFallbackElectricityKwh * ELECTRICITY_KGCO2E_PER_KWH;
+          const improvedFallbackEnergyCost =
+            improvedFallbackElectricityKwh * ELECTRICITY_PRICE_GBP_PER_KWH;
           const baselineTotalKwh = electricityKwh + gasKwh;
           const baselineKgCo2e =
             electricityKwh * ELECTRICITY_KGCO2E_PER_KWH +
@@ -3015,19 +2992,10 @@ const BuildingDashboardPanel = ({ building }) => {
           const measuredEnergyCost =
             electricityKwh * ELECTRICITY_PRICE_GBP_PER_KWH +
             gasKwh * GAS_PRICE_GBP_PER_KWH;
-          const savedKgCo2e = Math.max(
-            0,
-            baselineKgCo2e - improvedFallbackKgCo2e
-          );
-          const savedKwh = Math.max(
-            0,
-            baselineTotalKwh - improvedFallbackElectricityKwh
-          );
-          const energyCostSavedGbp = valuePhysicalEnergySaved({
-            savedKwh,
-            baselineTotalKwh,
-            measuredEnergyCost,
-          });
+          const savedKgCo2e = baselineKgCo2e - improvedFallbackKgCo2e;
+          const savedKwh = baselineTotalKwh - improvedFallbackElectricityKwh;
+          const energyCostSavedGbp =
+            measuredEnergyCost - improvedFallbackEnergyCost;
 
           return {
             timestamp: `${savingDate}T00:00:00.000Z`,
@@ -3925,10 +3893,17 @@ const BuildingDashboardPanel = ({ building }) => {
   )
     ? carbonIntervalSavingsSummary.totalSavedKgCo2e / 1000
     : null;
+  const candidateCarbonCredits = Number.isFinite(
+    carbonIntervalSavingsSummary.carbonCredits
+  )
+    ? carbonIntervalSavingsSummary.carbonCredits
+    : Number.isFinite(intervalCarbonSavedTonnes)
+    ? Math.max(0, intervalCarbonSavedTonnes)
+    : null;
   const intervalCarbonMarketValue =
-    Number.isFinite(intervalCarbonSavedTonnes) &&
+    Number.isFinite(candidateCarbonCredits) &&
     Number.isFinite(carbonMarketPrice.gbpPerTonne)
-      ? intervalCarbonSavedTonnes * carbonMarketPrice.gbpPerTonne
+      ? candidateCarbonCredits * carbonMarketPrice.gbpPerTonne
       : null;
   const carbonCalculationWindow =
     carbonIntervalSavingsSummary.fromDate && carbonIntervalSavingsSummary.toDate
@@ -5440,7 +5415,7 @@ const BuildingDashboardPanel = ({ building }) => {
                 </p>
                 <p className="text-sm font-semibold text-gray-700">kWh</p>
                 <p className="mt-2 text-sm text-gray-600">
-                  <strong>Value:</strong>{" "}
+                  <strong>Cost delta:</strong>{" "}
                   {Number.isFinite(
                     carbonIntervalSavingsSummary.energyCostSavedGbp
                   )
