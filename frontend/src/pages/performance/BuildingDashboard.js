@@ -223,6 +223,11 @@ const BuildingDashboardPanel = ({ building }) => {
     energyCostSavedGbp: null,
     carbonCredits: null,
   };
+  const hasDisplayableCarbonIntervalSummary = (summary) =>
+    Number.isFinite(summary?.totalSavedKgCo2e) ||
+    Number.isFinite(summary?.totalSavedKwh) ||
+    Number.isFinite(summary?.energyCostSavedGbp) ||
+    Number.isFinite(summary?.carbonCredits);
   const defaultHeatLossSummary = {
     kwhPerHdd: null,
     weatherNormalisedEui: null,
@@ -278,6 +283,11 @@ const BuildingDashboardPanel = ({ building }) => {
       `${dataSourceBuildingId}:carbonSavingsSummary`,
       defaultCarbonSavingsSummary
     );
+  const readCachedCarbonIntervalSavingsSummary = () =>
+    readCachedDashboardState(
+      `${dataSourceBuildingId}:carbonIntervalSavingsSummary:v2`,
+      defaultCarbonIntervalSavingsSummary
+    );
   const readCachedWeeklyTrendData = () =>
     readCachedDashboardState(`${dataSourceBuildingId}:weeklyTrendData`, []);
   const readCachedHeatLossSummary = () =>
@@ -289,6 +299,11 @@ const BuildingDashboardPanel = ({ building }) => {
     readCachedDashboardState(
       `${dataSourceBuildingId}:heatExclusionSummary`,
       defaultHeatExclusionSummary
+    );
+  const readCachedPerformanceSummary = () =>
+    readCachedDashboardState(
+      `${dataSourceBuildingId}:performanceSummary:v2`,
+      defaultPerformanceSummary
     );
   const readCachedMrvEvidence = () =>
     readCachedDashboardState(
@@ -303,7 +318,12 @@ const BuildingDashboardPanel = ({ building }) => {
   );
   const supportsExtendedIaqColumns = useRef(true);
 
-  const [performanceValue, setPerformanceValue] = useState(null);
+  const [performanceValue, setPerformanceValue] = useState(() => {
+    const cachedPerformanceSummary = readCachedPerformanceSummary();
+    return Number.isFinite(cachedPerformanceSummary.value)
+      ? cachedPerformanceSummary.value
+      : null;
+  });
   const [historicalPerformance, setHistoricalPerformance] = useState(() => {
     const cachedEnergySummary = readCachedEnergySummary();
     return Number.isFinite(cachedEnergySummary.totalDailyAverage)
@@ -311,9 +331,14 @@ const BuildingDashboardPanel = ({ building }) => {
       : null;
   });
   const [carbonIntervalSavingsSummary, setCarbonIntervalSavingsSummary] = useState(
-    defaultCarbonIntervalSavingsSummary
+    readCachedCarbonIntervalSavingsSummary
   );
-  const [carbonCredits, setCarbonCredits] = useState(0);
+  const [carbonCredits, setCarbonCredits] = useState(() => {
+    const cachedCarbonIntervalSummary = readCachedCarbonIntervalSavingsSummary();
+    return Number.isFinite(cachedCarbonIntervalSummary.carbonCredits)
+      ? cachedCarbonIntervalSummary.carbonCredits
+      : 0;
+  });
   const [, setCarbonSavingsSummary] = useState(
     readCachedCarbonSavingsSummary
   );
@@ -326,9 +351,13 @@ const BuildingDashboardPanel = ({ building }) => {
   const [mrvEvidence, setMrvEvidence] = useState(readCachedMrvEvidence);
   const [energySummary, setEnergySummary] = useState(readCachedEnergySummary);
 
-  const [performanceBreakdown, setPerformanceBreakdown] = useState(
-    defaultPerformanceSummary.breakdown
-  );
+  const [performanceBreakdown, setPerformanceBreakdown] = useState(() => {
+    const cachedPerformanceSummary = readCachedPerformanceSummary();
+    return {
+      ...defaultPerformanceSummary.breakdown,
+      ...(cachedPerformanceSummary.breakdown || {}),
+    };
+  });
   const [heatLossSummary, setHeatLossSummary] = useState(
     readCachedHeatLossSummary
   );
@@ -966,6 +995,10 @@ const BuildingDashboardPanel = ({ building }) => {
     nextCarbonIntervalSavingsSummary
   ) => {
     setCarbonIntervalSavingsSummary(nextCarbonIntervalSavingsSummary);
+    localStorage.setItem(
+      `${dataSourceBuildingId}:carbonIntervalSavingsSummary:v2`,
+      JSON.stringify(nextCarbonIntervalSavingsSummary)
+    );
     localStorage.removeItem(`${dataSourceBuildingId}:carbonIntervalSavingsSummary`);
   };
   const applyWeeklyTrendData = (nextWeeklyTrendData) => {
@@ -2287,6 +2320,14 @@ const BuildingDashboardPanel = ({ building }) => {
       setPerformanceBreakdown(nextPerformanceBreakdown);
 
       setPerformanceValue(buildingPerformanceIndex);
+      localStorage.setItem(
+        `${dataSourceBuildingId}:performanceSummary:v2`,
+        JSON.stringify({
+          value: buildingPerformanceIndex,
+          breakdown: nextPerformanceBreakdown,
+          calculatedAt: new Date().toISOString(),
+        })
+      );
       localStorage.removeItem(`${dataSourceBuildingId}:performanceSummary`);
     } catch (err) {
       console.error(
@@ -3085,7 +3126,13 @@ const BuildingDashboardPanel = ({ building }) => {
         .maybeSingle();
 
       if (!summaryError && summaryData) {
-        applyPersistedSavingsSummary(summaryData);
+        const cachedCarbonIntervalSummary = readCachedCarbonIntervalSavingsSummary();
+        if (
+          !hasDisplayableCarbonIntervalSummary(carbonIntervalSavingsSummary) &&
+          !hasDisplayableCarbonIntervalSummary(cachedCarbonIntervalSummary)
+        ) {
+          applyPersistedSavingsSummary(summaryData);
+        }
         try {
           const { accruedRows } = await buildCarbonSavingsFromEnergyRows();
           if (accruedRows.length > 0) {
@@ -3321,13 +3368,26 @@ const BuildingDashboardPanel = ({ building }) => {
         : null
     );
     setCarbonSavingsSummary(readCachedCarbonSavingsSummary());
-    setCarbonIntervalSavingsSummary(defaultCarbonIntervalSavingsSummary);
-    setCarbonCredits(0);
+    const cachedCarbonIntervalSummary = readCachedCarbonIntervalSavingsSummary();
+    setCarbonIntervalSavingsSummary(cachedCarbonIntervalSummary);
+    setCarbonCredits(
+      Number.isFinite(cachedCarbonIntervalSummary.carbonCredits)
+        ? cachedCarbonIntervalSummary.carbonCredits
+        : 0
+    );
     setWeeklyTrendData(readCachedWeeklyTrendData());
     setHeatLossSummary(readCachedHeatLossSummary());
     setHeatExclusionSummary(readCachedHeatExclusionSummary());
-    setPerformanceValue(null);
-    setPerformanceBreakdown(defaultPerformanceSummary.breakdown);
+    const cachedPerformanceSummary = readCachedPerformanceSummary();
+    setPerformanceValue(
+      Number.isFinite(cachedPerformanceSummary.value)
+        ? cachedPerformanceSummary.value
+        : null
+    );
+    setPerformanceBreakdown({
+      ...defaultPerformanceSummary.breakdown,
+      ...(cachedPerformanceSummary.breakdown || {}),
+    });
     setMrvEvidence(readCachedMrvEvidence());
     fetchLongTermAverage();
     fetchHeatLossSummary();
