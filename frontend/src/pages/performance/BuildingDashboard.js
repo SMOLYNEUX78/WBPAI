@@ -283,7 +283,7 @@ const BuildingDashboardPanel = ({ building }) => {
     );
   const readCachedCarbonIntervalSavingsSummary = () =>
     readCachedDashboardState(
-      `${dataSourceBuildingId}:carbonIntervalSavingsSummary:v2`,
+      `${dataSourceBuildingId}:carbonIntervalSavingsSummary:v3`,
       defaultCarbonIntervalSavingsSummary
     );
   const readCachedWeeklyTrendData = () =>
@@ -994,9 +994,10 @@ const BuildingDashboardPanel = ({ building }) => {
   ) => {
     setCarbonIntervalSavingsSummary(nextCarbonIntervalSavingsSummary);
     localStorage.setItem(
-      `${dataSourceBuildingId}:carbonIntervalSavingsSummary:v2`,
+      `${dataSourceBuildingId}:carbonIntervalSavingsSummary:v3`,
       JSON.stringify(nextCarbonIntervalSavingsSummary)
     );
+    localStorage.removeItem(`${dataSourceBuildingId}:carbonIntervalSavingsSummary:v2`);
     localStorage.removeItem(`${dataSourceBuildingId}:carbonIntervalSavingsSummary`);
   };
   const applyWeeklyTrendData = (nextWeeklyTrendData) => {
@@ -3146,7 +3147,9 @@ const BuildingDashboardPanel = ({ building }) => {
 
       const { data, error } = await supabase
         .from("CarbonSavingsDaily")
-        .select("saving_date, saved_kgco2e, saved_kwh, energy_cost_saved_gbp, carbon_credits")
+        .select(
+          "saving_date, saved_kgco2e, saved_kwh, energy_cost_saved_gbp, carbon_credits, calculation_version, raw_payload"
+        )
         .eq("building_id", dataSourceBuildingId)
         .eq("scenario", "enerphit-certified")
         .order("saving_date", { ascending: false })
@@ -3156,7 +3159,7 @@ const BuildingDashboardPanel = ({ building }) => {
         throw error;
       }
 
-      const rows = data || [];
+      const rows = (data || []).filter(isCurrentPersistedSavingsSummary);
       const totalSavedKgCo2e = rows.reduce(
         (sum, row) => sum + (Number(row.saved_kgco2e) || 0),
         0
