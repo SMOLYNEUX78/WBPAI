@@ -95,11 +95,13 @@ async function fetchEnergyRows(fromDate, toDate) {
   return rows;
 }
 
-function buildMeasuredDailyEnergy(rows) {
+function buildMeasuredEnergy(rows) {
   const intervalDays = new Set();
   const days = {};
   const measuredIntervalBuckets = new Set();
   const intervalBuckets = new Map();
+  const intervalEnergy = {};
+  const dailyFallbackEnergy = {};
   const intervalKey = (timestamp) => {
     const date = new Date(timestamp);
 
@@ -127,15 +129,18 @@ function buildMeasuredDailyEnergy(rows) {
       const existing = intervalBuckets.get(bucketKey);
 
       if (!existing || usageKwh > existing.usageKwh) {
-        intervalBuckets.set(bucketKey, { day, fuelType, usageKwh });
+        intervalBuckets.set(bucketKey, { day, fuelType, usageKwh, timestamp: interval });
       }
     });
 
-  intervalBuckets.forEach(({ day, fuelType, usageKwh }, bucketKey) => {
+  intervalBuckets.forEach(({ day, fuelType, usageKwh, timestamp }, bucketKey) => {
     intervalDays.add(`${fuelType}:${day}`);
     measuredIntervalBuckets.add(bucketKey);
     days[day] = days[day] || {};
     days[day][fuelType] = (days[day][fuelType] || 0) + usageKwh;
+    intervalEnergy[timestamp] = intervalEnergy[timestamp] || {};
+    intervalEnergy[timestamp][fuelType] =
+      (intervalEnergy[timestamp][fuelType] || 0) + usageKwh;
   });
 
   const instantRowsByFuel = rows
@@ -189,6 +194,9 @@ function buildMeasuredDailyEnergy(rows) {
         intervalDays.add(`${fuelType}:${day}`);
         days[day] = days[day] || {};
         days[day][fuelType] = (days[day][fuelType] || 0) + usageKwh;
+        intervalEnergy[interval] = intervalEnergy[interval] || {};
+        intervalEnergy[interval][fuelType] =
+          (intervalEnergy[interval][fuelType] || 0) + usageKwh;
       });
   });
 
@@ -205,9 +213,14 @@ function buildMeasuredDailyEnergy(rows) {
 
       days[day] = days[day] || {};
       days[day][fuelType] = Math.max(days[day][fuelType] || 0, usageKwh);
+      dailyFallbackEnergy[day] = dailyFallbackEnergy[day] || {};
+      dailyFallbackEnergy[day][fuelType] = Math.max(
+        dailyFallbackEnergy[day][fuelType] || 0,
+        usageKwh
+      );
     });
 
-  return days;
+  return { dailyEnergy: days, intervalEnergy, dailyFallbackEnergy };
 }
 
 function carbonForEnergy({ electricityKwh, gasKwh }) {
@@ -322,6 +335,104 @@ function buildCarbonSavingRows(dailyEnergy, toDate) {
     .sort((a, b) => a.saving_date.localeCompare(b.saving_date));
 }
 
+function savingRowForMeasuredEnergy({
+  savingDate,
+  timestamp,
+  electricityKwh,
+  gasKwh,
+  improvedElectricityKwh,
+  projectionFactor,
+  basis,
+}) {
+  const baselineTotalKwh = electricityKwh + gasKwh;
+
+  if (baselineTotalKwh <= 0) {
+    return null;
+  }
+
+  const improvedGasKwh = 0;
+  const improvedTotalKwh = improvedElectricityKwh + improvedGasKwh;
+  const baselineKgCo2e = carbonForEnergy({ electricityKwh, gasKwh });
+  const improvedKgCo2e = carbonForEnergy({
+    electricityKwh: improvedElectricityKwh,
+    gasKwh: improvedGasKwh,
+  });
+  const savedKgCo2e = Math.max(0, baselineKgCo2e - improvedKgCo2e);
+  const savedKwh = Math.max(0, baselineTotalKwh - improvedTotalKwh);
+  const baselineEnergyCostGbp = energyCostForEnergy({ electricityKwh, gasKwh });
+  const energyCostSavedGbp = valuePhysicalEnergySaved({
+    savedKwh,
+    baselineTotalKwh,
+    measuredEnergyCost: baselineEnergyCostGbp,
+  });
+
+  return {
+    timestamp,
+    saving_date: savingDate,
+    saved_kgco2e: savedKgCo2e,
+    saved_kwh: savedKwh,
+    energy_cost_saved_gbp: energyCostSavedGbp,
+    carbon_credits: savedKgCo2e / 1000,
+    raw_payload: {
+      basis,
+      projectionFactor,
+      baseline_electricity_kwh: electricityKwh,
+      baseline_gas_kwh: gasKwh,
+      improved_electricity_kwh: improvedElectricityKwh,
+      improved_gas_kwh: improvedGasKwh,
+    },
+  };
+}
+
+function buildAccruedSavingRows({ intervalEnergy, dailyFallbackEnergy, toDate }) {
+  const improvedIntervalElectricityKwh = IMPROVED_DAILY_ELECTRICITY_KWH / 48;
+  const intervalRows = Object.entries(intervalEnergy)
+    .map(([timestamp, fuels]) => {
+      const savingDate = dateKey(timestamp);
+
+      if (!savingDate) {
+        return null;
+      }
+
+      return savingRowForMeasuredEnergy({
+        savingDate,
+        timestamp,
+        electricityKwh: Number(fuels.electricity || 0),
+        gasKwh: Number(fuels.gas || 0),
+        improvedElectricityKwh: improvedIntervalElectricityKwh,
+        projectionFactor: 1 / 48,
+        basis: "interval_30m_accrual",
+      });
+    })
+    .filter(Boolean);
+
+  const fallbackRows = Object.entries(dailyFallbackEnergy)
+    .map(([savingDate, fuels]) => {
+      const projectionFactor = projectionFactorForDay(savingDate, toDate);
+
+      return savingRowForMeasuredEnergy({
+        savingDate,
+        timestamp: `${savingDate}T00:00:00.000Z`,
+        electricityKwh: Number(fuels.electricity || 0),
+        gasKwh: Number(fuels.gas || 0),
+        improvedElectricityKwh: IMPROVED_DAILY_ELECTRICITY_KWH * projectionFactor,
+        projectionFactor,
+        basis: "daily_total_fallback",
+      });
+    })
+    .filter(Boolean);
+
+  return [...intervalRows, ...fallbackRows].sort((a, b) => {
+    const dateCompare = a.saving_date.localeCompare(b.saving_date);
+
+    if (dateCompare !== 0) {
+      return dateCompare;
+    }
+
+    return String(a.timestamp || "").localeCompare(String(b.timestamp || ""));
+  });
+}
+
 function withoutExtendedSavingsColumns(rows) {
   return rows.map(({ saved_kwh, energy_cost_saved_gbp, ...row }) => row);
 }
@@ -399,28 +510,51 @@ async function upsertCarbonSavings(rows) {
 }
 
 async function upsertCarbonSavingsSummary({ rows, toDate }) {
-  const totalSavedKgCo2e = rows.reduce((sum, row) => sum + row.saved_kgco2e, 0);
-  const totalSavedKwh = rows.reduce((sum, row) => sum + row.saved_kwh, 0);
-  const totalEnergyCostSavedGbp = rows.reduce(
+  const summaryRows = rows
+    .filter((row) => row.saving_date || dateKey(row.timestamp))
+    .slice()
+    .sort((a, b) => {
+      const dateCompare = String(a.saving_date || dateKey(a.timestamp)).localeCompare(
+        String(b.saving_date || dateKey(b.timestamp))
+      );
+
+      if (dateCompare !== 0) {
+        return dateCompare;
+      }
+
+      return String(a.timestamp || "").localeCompare(String(b.timestamp || ""));
+    });
+
+  const rowDate = (row) => row?.saving_date || dateKey(row?.timestamp);
+  const totalSavedKgCo2e = summaryRows.reduce(
+    (sum, row) => sum + row.saved_kgco2e,
+    0
+  );
+  const totalSavedKwh = summaryRows.reduce((sum, row) => sum + row.saved_kwh, 0);
+  const totalEnergyCostSavedGbp = summaryRows.reduce(
     (sum, row) => sum + row.energy_cost_saved_gbp,
     0
   );
-  const totalCarbonCredits = rows.reduce((sum, row) => sum + row.carbon_credits, 0);
-  const latest = rows[rows.length - 1] || null;
-  const first = rows[0] || null;
+  const totalCarbonCredits = summaryRows.reduce(
+    (sum, row) => sum + row.carbon_credits,
+    0
+  );
+  const latest = summaryRows[summaryRows.length - 1] || null;
+  const first = summaryRows[0] || null;
+  const uniqueMeteredDays = new Set(summaryRows.map(rowDate).filter(Boolean)).size;
 
   const summaryRow = {
     building_id: BUILDING_ID,
     scenario: SCENARIO,
-    from_date: first?.saving_date || null,
-    to_date: latest?.saving_date || null,
+    from_date: rowDate(first) || null,
+    to_date: rowDate(latest) || null,
     calculated_at: toDate.toISOString(),
-    daily_rows: rows.length,
+    daily_rows: uniqueMeteredDays,
     total_saved_kgco2e: totalSavedKgCo2e,
     total_saved_kwh: totalSavedKwh,
     total_energy_cost_saved_gbp: totalEnergyCostSavedGbp,
     carbon_credits: totalCarbonCredits,
-    latest_date: latest?.saving_date || null,
+    latest_date: rowDate(latest) || null,
     latest_saved_kgco2e: latest?.saved_kgco2e ?? null,
     latest_saved_kwh: latest?.saved_kwh ?? null,
     latest_energy_cost_saved_gbp: latest?.energy_cost_saved_gbp ?? null,
@@ -435,6 +569,9 @@ async function upsertCarbonSavingsSummary({ rows, toDate }) {
       electricityPriceGbpPerKwh: ELECTRICITY_PRICE_GBP_PER_KWH,
       gasPriceGbpPerKwh: GAS_PRICE_GBP_PER_KWH,
       energyValueMethod: ENERGY_VALUE_METHOD,
+      summaryAggregation: "interval_accrued_plus_daily_fallback",
+      summaryRows: summaryRows.length,
+      meteredDays: uniqueMeteredDays,
       note:
         "Summary row for dashboard display; daily evidence rows remain in CarbonSavingsDaily where the table exists.",
     },
@@ -466,14 +603,21 @@ async function main() {
   const fromDate = parseDate(FROM_DATE, "CARBON_SAVINGS_FROM");
   const toDate = parseDate(TO_DATE || new Date().toISOString(), "CARBON_SAVINGS_TO");
   const energyRows = await fetchEnergyRows(fromDate, toDate);
-  const dailyEnergy = buildMeasuredDailyEnergy(energyRows);
+  const measuredEnergy = buildMeasuredEnergy(energyRows);
+  const { dailyEnergy, intervalEnergy, dailyFallbackEnergy } = measuredEnergy;
   const carbonRows = buildCarbonSavingRows(dailyEnergy, toDate);
-  const totalSavedKgCo2e = carbonRows.reduce(
+  const accruedRows = buildAccruedSavingRows({
+    intervalEnergy,
+    dailyFallbackEnergy,
+    toDate,
+  });
+  const summaryRows = accruedRows.length ? accruedRows : carbonRows;
+  const totalSavedKgCo2e = summaryRows.reduce(
     (sum, row) => sum + row.saved_kgco2e,
     0
   );
-  const totalSavedKwh = carbonRows.reduce((sum, row) => sum + row.saved_kwh, 0);
-  const totalEnergyCostSavedGbp = carbonRows.reduce(
+  const totalSavedKwh = summaryRows.reduce((sum, row) => sum + row.saved_kwh, 0);
+  const totalEnergyCostSavedGbp = summaryRows.reduce(
     (sum, row) => sum + row.energy_cost_saved_gbp,
     0
   );
@@ -481,13 +625,15 @@ async function main() {
   const persisted = DRY_RUN ? false : await upsertCarbonSavings(carbonRows);
   const summaryPersisted = DRY_RUN
     ? false
-    : await upsertCarbonSavingsSummary({ rows: carbonRows, toDate });
+    : await upsertCarbonSavingsSummary({ rows: summaryRows, toDate });
 
   console.log(
     `${persisted ? "Upserted" : "Calculated"} ${carbonRows.length} carbon saving day(s) for ${BUILDING_ID}.`
   );
   console.log(
-    `${summaryPersisted ? "Upserted" : "Calculated"} carbon savings summary for ${BUILDING_ID}.`
+    `${summaryPersisted ? "Upserted" : "Calculated"} carbon savings summary for ${BUILDING_ID} from ${
+      accruedRows.length ? "interval accrued data" : "daily evidence rows"
+    }.`
   );
   console.log(
     `Total saved: ${totalSavedKgCo2e.toFixed(3)} kgCO2e / ${(totalSavedKgCo2e / 1000).toFixed(6)} WBP-C candidate credits.`
