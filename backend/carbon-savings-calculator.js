@@ -501,19 +501,23 @@ async function main() {
   }
 }
 
-if (RUN_SCHEDULE) {
-  console.log(`Starting carbon savings scheduler: ${CRON_SCHEDULE}`);
-  main().catch((error) => {
-    console.error("Initial carbon savings calculation failed:", error.message);
-  });
-  cron.schedule(CRON_SCHEDULE, () => {
+if (require.main === module) {
+  if (RUN_SCHEDULE) {
+    console.log(`Starting carbon savings scheduler: ${CRON_SCHEDULE}`);
     main().catch((error) => {
-      console.error("Scheduled carbon savings calculation failed:", error.message);
+      console.error("Initial carbon savings calculation failed:", error.message);
     });
-  });
-} else {
-  main().catch((error) => {
-    console.error("Carbon savings calculation failed:", error.message);
-    process.exit(1);
-  });
+    cron.schedule(CRON_SCHEDULE, () => {
+      main().catch((error) => {
+        console.error("Scheduled carbon savings calculation failed:", error.message);
+      });
+    });
+  } else {
+    main().catch((error) => {
+      console.error("Carbon savings calculation failed:", error.message);
+      process.exit(1);
+    });
+  }
 }
+
+module.exports = { calculateCarbonSavings: main };

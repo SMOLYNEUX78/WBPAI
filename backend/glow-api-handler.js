@@ -1,4 +1,5 @@
 const { createClient } = require("@supabase/supabase-js");
+const { calculateCarbonSavings } = require("./carbon-savings-calculator");
 require("dotenv").config();
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -28,6 +29,11 @@ const GLOW_API_INSTANT_POWER_INTERVAL_MS = Number(
 );
 const GLOW_API_STORE_RAW_PAYLOAD =
   String(process.env.GLOW_API_STORE_RAW_PAYLOAD || "").toLowerCase() === "true";
+const CARBON_SAVINGS_AFTER_GLOW_INTERVAL_MS = Number(
+  process.env.CARBON_SAVINGS_AFTER_GLOW_INTERVAL_MS || 10 * 60 * 1000
+);
+const CARBON_SAVINGS_BUILDING_ID =
+  process.env.CARBON_SAVINGS_BUILDING_ID || "home";
 const COLLECTOR_INSTANCE = process.env.COLLECTOR_INSTANCE || "unknown";
 const SOURCE_NAME = `glow-api:${COLLECTOR_INSTANCE}`;
 const GLOW_API_RESOURCES = process.env.GLOW_API_RESOURCES || "";
@@ -43,6 +49,8 @@ let tokenExpiresAt = 0;
 const lastDailyTotalPollByResource = new Map();
 const lastIntervalTotalPollByResource = new Map();
 const lastInstantPowerPollByResource = new Map();
+let lastCarbonSavingsRefreshAt = 0;
+let carbonSavingsRefreshInFlight = false;
 
 const defaultResources = [
   {
@@ -361,9 +369,48 @@ async function pollGlowApi() {
     }
 
     console.log(`[${timestamp}] Logged ${rows.length} Glow API energy row(s)`);
+    scheduleCarbonSavingsRefresh(rows, timestamp);
   } catch (error) {
     console.error(`[${timestamp}] Glow API poll failed:`, error.message);
   }
+}
+
+function scheduleCarbonSavingsRefresh(rows, timestamp) {
+  const hasCarbonRelevantEnergy = rows.some(
+    (row) =>
+      row.building_id === CARBON_SAVINGS_BUILDING_ID &&
+      ["daily_total", "interval_30m"].includes(row.reading_type) &&
+      Number.isFinite(Number(row.usage_kwh))
+  );
+
+  if (!hasCarbonRelevantEnergy || CARBON_SAVINGS_AFTER_GLOW_INTERVAL_MS <= 0) {
+    return;
+  }
+
+  const nowMs = Date.now();
+
+  if (
+    carbonSavingsRefreshInFlight ||
+    nowMs - lastCarbonSavingsRefreshAt < CARBON_SAVINGS_AFTER_GLOW_INTERVAL_MS
+  ) {
+    return;
+  }
+
+  lastCarbonSavingsRefreshAt = nowMs;
+  carbonSavingsRefreshInFlight = true;
+  calculateCarbonSavings()
+    .then(() => {
+      console.log(`[${timestamp}] Refreshed carbon savings summary after Glow energy update`);
+    })
+    .catch((error) => {
+      console.error(
+        `[${timestamp}] Carbon savings refresh after Glow update failed:`,
+        error.message
+      );
+    })
+    .finally(() => {
+      carbonSavingsRefreshInFlight = false;
+    });
 }
 
 if (!GLOW_USERNAME || !GLOW_PASSWORD) {

@@ -223,11 +223,6 @@ const BuildingDashboardPanel = ({ building }) => {
     energyCostSavedGbp: null,
     carbonCredits: null,
   };
-  const hasDisplayableCarbonIntervalSummary = (summary) =>
-    Number.isFinite(summary?.totalSavedKgCo2e) ||
-    Number.isFinite(summary?.totalSavedKwh) ||
-    Number.isFinite(summary?.energyCostSavedGbp) ||
-    Number.isFinite(summary?.carbonCredits);
   const defaultHeatLossSummary = {
     kwhPerHdd: null,
     weatherNormalisedEui: null,
@@ -3126,24 +3121,7 @@ const BuildingDashboardPanel = ({ building }) => {
         .maybeSingle();
 
       if (!summaryError && summaryData) {
-        const cachedCarbonIntervalSummary = readCachedCarbonIntervalSavingsSummary();
-        if (
-          !hasDisplayableCarbonIntervalSummary(carbonIntervalSavingsSummary) &&
-          !hasDisplayableCarbonIntervalSummary(cachedCarbonIntervalSummary)
-        ) {
-          applyPersistedSavingsSummary(summaryData);
-        }
-        try {
-          const { accruedRows } = await buildCarbonSavingsFromEnergyRows();
-          if (accruedRows.length > 0) {
-            applyAccruedSavingsSummary(accruedRows);
-          }
-        } catch (rawEnergyErr) {
-          console.warn(
-            "Fresh EnergyReadings carbon calculation unavailable; using persisted summary:",
-            rawEnergyErr.message
-          );
-        }
+        applyPersistedSavingsSummary(summaryData);
         return;
       }
 
