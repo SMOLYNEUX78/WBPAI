@@ -34,6 +34,8 @@ const RUN_SCHEDULE =
 const CRON_SCHEDULE = process.env.CARBON_SAVINGS_CRON || "*/15 * * * *";
 const PAGE_SIZE = Number(process.env.CARBON_SAVINGS_PAGE_SIZE || 1000);
 const MAX_PAGES = Number(process.env.CARBON_SAVINGS_MAX_PAGES || 200);
+const CALCULATION_VERSION = "enerphit-certified-v2";
+const ENERGY_VALUE_METHOD = "saved_kwh_x_measured_baseline_blended_tariff";
 let supportsExtendedSavingsColumns = true;
 
 function parseDate(value, label) {
@@ -300,13 +302,13 @@ function buildCarbonSavingRows(dailyEnergy, toDate) {
         energy_cost_saved_gbp: energyCostSavedGbp,
         carbon_credits: savedKgCo2e / 1000,
         source: "carbon-savings-calculator",
-        calculation_version: "enerphit-certified-v1",
+        calculation_version: CALCULATION_VERSION,
         raw_payload: {
           electricityKgCo2ePerKwh: ELECTRICITY_KGCO2E_PER_KWH,
           gasKgCo2ePerKwh: GAS_KGCO2E_PER_KWH,
           electricityPriceGbpPerKwh: ELECTRICITY_PRICE_GBP_PER_KWH,
           gasPriceGbpPerKwh: GAS_PRICE_GBP_PER_KWH,
-          energyValueMethod: "saved_kwh_x_measured_baseline_blended_tariff",
+          energyValueMethod: ENERGY_VALUE_METHOD,
           internalAreaM2: INTERNAL_AREA_M2,
           enerphitEuiKwhM2Year: ENERPHIT_EUI_KWH_M2_YEAR,
           improvedDailyElectricityKwh: IMPROVED_DAILY_ELECTRICITY_KWH,
@@ -423,7 +425,7 @@ async function upsertCarbonSavingsSummary({ rows, toDate }) {
     latest_saved_kwh: latest?.saved_kwh ?? null,
     latest_energy_cost_saved_gbp: latest?.energy_cost_saved_gbp ?? null,
     source: "carbon-savings-calculator",
-    calculation_version: "enerphit-certified-v1",
+    calculation_version: CALCULATION_VERSION,
     raw_payload: {
       internalAreaM2: INTERNAL_AREA_M2,
       enerphitEuiKwhM2Year: ENERPHIT_EUI_KWH_M2_YEAR,
@@ -432,6 +434,7 @@ async function upsertCarbonSavingsSummary({ rows, toDate }) {
       gasKgCo2ePerKwh: GAS_KGCO2E_PER_KWH,
       electricityPriceGbpPerKwh: ELECTRICITY_PRICE_GBP_PER_KWH,
       gasPriceGbpPerKwh: GAS_PRICE_GBP_PER_KWH,
+      energyValueMethod: ENERGY_VALUE_METHOD,
       note:
         "Summary row for dashboard display; daily evidence rows remain in CarbonSavingsDaily where the table exists.",
     },

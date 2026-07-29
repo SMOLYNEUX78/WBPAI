@@ -8,6 +8,9 @@ const HDD_BASE_TEMP_C = 15.5;
 const FALLBACK_CARBON_PRICE_GBP_PER_TONNE = 65;
 const ELECTRICITY_PRICE_GBP_PER_KWH = 0.245;
 const GAS_PRICE_GBP_PER_KWH = 0.06;
+const CARBON_SAVINGS_CALCULATION_VERSION = "enerphit-certified-v2";
+const CARBON_SAVINGS_ENERGY_VALUE_METHOD =
+  "saved_kwh_x_measured_baseline_blended_tariff";
 const ELECTRICITY_KGCO2E_PER_KWH = 0.20705;
 const GAS_KGCO2E_PER_KWH = 0.18254;
 const MIN_BASELINE_METERED_DAYS = 7;
@@ -3109,20 +3112,29 @@ const BuildingDashboardPanel = ({ building }) => {
         carbonCredits: Number.isFinite(totalCredits) ? totalCredits : null,
       });
     };
+    const isCurrentPersistedSavingsSummary = (summaryRow) =>
+      summaryRow?.calculation_version === CARBON_SAVINGS_CALCULATION_VERSION &&
+      summaryRow?.raw_payload?.energyValueMethod ===
+        CARBON_SAVINGS_ENERGY_VALUE_METHOD;
 
     try {
       const { data: summaryData, error: summaryError } = await supabase
         .from("CarbonSavingsSummary")
         .select(
-          "from_date, to_date, calculated_at, daily_rows, total_saved_kgco2e, total_saved_kwh, total_energy_cost_saved_gbp, carbon_credits, latest_date, latest_saved_kgco2e, latest_saved_kwh, latest_energy_cost_saved_gbp"
+          "from_date, to_date, calculated_at, daily_rows, total_saved_kgco2e, total_saved_kwh, total_energy_cost_saved_gbp, carbon_credits, latest_date, latest_saved_kgco2e, latest_saved_kwh, latest_energy_cost_saved_gbp, calculation_version, raw_payload"
         )
         .eq("building_id", dataSourceBuildingId)
         .eq("scenario", "enerphit-certified")
         .maybeSingle();
 
       if (!summaryError && summaryData) {
-        applyPersistedSavingsSummary(summaryData);
-        return;
+        if (isCurrentPersistedSavingsSummary(summaryData)) {
+          applyPersistedSavingsSummary(summaryData);
+          return;
+        }
+        console.warn(
+          "Carbon savings summary is stale; calculating from EnergyReadings until the tablet refreshes it."
+        );
       }
 
       if (summaryError) {
