@@ -11,6 +11,7 @@ const GAS_PRICE_GBP_PER_KWH = 0.06;
 const CARBON_SAVINGS_CALCULATION_VERSION = "enerphit-certified-v2";
 const CARBON_SAVINGS_ENERGY_VALUE_METHOD =
   "saved_kwh_x_measured_baseline_blended_tariff";
+const CARBON_INTERVAL_SAVINGS_CACHE_KEY = "carbonIntervalSavingsSummary:v4";
 const ELECTRICITY_KGCO2E_PER_KWH = 0.20705;
 const GAS_KGCO2E_PER_KWH = 0.18254;
 const MIN_BASELINE_METERED_DAYS = 7;
@@ -283,7 +284,7 @@ const BuildingDashboardPanel = ({ building }) => {
     );
   const readCachedCarbonIntervalSavingsSummary = () =>
     readCachedDashboardState(
-      `${dataSourceBuildingId}:carbonIntervalSavingsSummary:v3`,
+      `${dataSourceBuildingId}:${CARBON_INTERVAL_SAVINGS_CACHE_KEY}`,
       defaultCarbonIntervalSavingsSummary
     );
   const readCachedWeeklyTrendData = () =>
@@ -994,9 +995,10 @@ const BuildingDashboardPanel = ({ building }) => {
   ) => {
     setCarbonIntervalSavingsSummary(nextCarbonIntervalSavingsSummary);
     localStorage.setItem(
-      `${dataSourceBuildingId}:carbonIntervalSavingsSummary:v3`,
+      `${dataSourceBuildingId}:${CARBON_INTERVAL_SAVINGS_CACHE_KEY}`,
       JSON.stringify(nextCarbonIntervalSavingsSummary)
     );
+    localStorage.removeItem(`${dataSourceBuildingId}:carbonIntervalSavingsSummary:v3`);
     localStorage.removeItem(`${dataSourceBuildingId}:carbonIntervalSavingsSummary:v2`);
     localStorage.removeItem(`${dataSourceBuildingId}:carbonIntervalSavingsSummary`);
   };
@@ -3043,6 +3045,10 @@ const BuildingDashboardPanel = ({ building }) => {
     };
 
     const applyAccruedSavingsSummary = (accruedRows) => {
+      const sortedRows = accruedRows
+        .filter((row) => row.timestamp)
+        .slice()
+        .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
       const totalSavedKgCo2e = accruedRows.reduce(
         (sum, row) => sum + (Number(row.saved_kgco2e) || 0),
         0
@@ -3059,14 +3065,25 @@ const BuildingDashboardPanel = ({ building }) => {
         (sum, row) => sum + (Number(row.carbon_credits) || 0),
         0
       );
-      const latest = accruedRows[0] || null;
+      const latest = sortedRows[sortedRows.length - 1] || accruedRows[0] || null;
+      const first = sortedRows[0] || null;
+      const meteredDays = new Set(
+        accruedRows
+          .map((row) => row.timestamp || row.saving_date)
+          .filter(Boolean)
+          .map((value) => new Date(value).toISOString().slice(0, 10))
+      ).size;
 
       setCarbonCredits(totalCredits);
       applyCarbonIntervalSavingsSummary({
-        fromDate: null,
-        toDate: null,
-        calculatedAt: null,
-        dailyRows: accruedRows.length,
+        fromDate: first
+          ? new Date(first.timestamp).toISOString().slice(0, 10)
+          : null,
+        toDate: latest
+          ? new Date(latest.timestamp).toISOString().slice(0, 10)
+          : null,
+        calculatedAt: new Date().toISOString(),
+        dailyRows: meteredDays || accruedRows.length,
         latestTimestamp: latest?.timestamp || null,
         latestSavedKgCo2e: latest ? Number(latest.saved_kgco2e) : null,
         totalSavedKgCo2e,
@@ -3113,10 +3130,31 @@ const BuildingDashboardPanel = ({ building }) => {
         carbonCredits: Number.isFinite(totalCredits) ? totalCredits : null,
       });
     };
-    const isCurrentPersistedSavingsSummary = (summaryRow) =>
-      summaryRow?.calculation_version === CARBON_SAVINGS_CALCULATION_VERSION &&
-      summaryRow?.raw_payload?.energyValueMethod ===
-        CARBON_SAVINGS_ENERGY_VALUE_METHOD;
+    const isCurrentPersistedSavingsSummary = (summaryRow) => {
+      const rawPayload =
+        typeof summaryRow?.raw_payload === "string"
+          ? (() => {
+              try {
+                return JSON.parse(summaryRow.raw_payload);
+              } catch (error) {
+                return {};
+              }
+            })()
+          : summaryRow?.raw_payload || {};
+      const hasUsableTotals =
+        Number.isFinite(Number(summaryRow?.total_saved_kgco2e)) &&
+        Number.isFinite(Number(summaryRow?.total_saved_kwh)) &&
+        Number.isFinite(Number(summaryRow?.total_energy_cost_saved_gbp));
+      const hasCurrentValueMethod =
+        rawPayload.energyValueMethod === CARBON_SAVINGS_ENERGY_VALUE_METHOD ||
+        rawPayload.summaryAggregation === "interval_accrued_plus_daily_fallback";
+
+      return (
+        summaryRow?.calculation_version === CARBON_SAVINGS_CALCULATION_VERSION &&
+        hasUsableTotals &&
+        hasCurrentValueMethod
+      );
+    };
 
     try {
       const { data: summaryData, error: summaryError } = await supabase
