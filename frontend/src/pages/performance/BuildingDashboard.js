@@ -16,6 +16,7 @@ const MIN_BASELINE_HDD_DAYS = 14;
 const MIN_RELIABLE_HDD_TOTAL = 10;
 const MIN_RELIABLE_HTC_SAMPLES = 7;
 const MIN_RELIABLE_HTC_DELTA_TOTAL = 35;
+const NIGHT_COOLDOWN_HEAT_CAPACITY_KJ_PER_M2K = 165;
 const MIN_SEASONAL_BASELINE_DAYS = 90;
 const MIN_FULL_YEAR_BASELINE_DAYS = 365;
 const MIN_FULL_YEAR_METERED_DAYS = 300;
@@ -235,6 +236,11 @@ const BuildingDashboardPanel = ({ building }) => {
     hddTotal: 0,
     htcSamples: 0,
     htcDeltaTotal: 0,
+    nightCooldownHtc: null,
+    nightCooldownTauHours: null,
+    nightCooldownRateCPerHour: null,
+    nightCooldownNights: 0,
+    nightCooldownSamples: 0,
     hddSource: "current",
     hlaConfidence: "pending",
     auditKwhPerHdd: null,
@@ -1492,6 +1498,149 @@ const BuildingDashboardPanel = ({ building }) => {
         }
       });
 
+      const calculateNightCooldownHtc = () => {
+        const validNightSamples = temperatureRowsByTimestamp
+          .map((row) => {
+            const timestamp = new Date(row.timestamp);
+            const inside = Number(row.temperature_inside);
+            const outside = Number(row.temperature_outside);
+
+            if (
+              Number.isNaN(timestamp.getTime()) ||
+              !Number.isFinite(inside) ||
+              !Number.isFinite(outside)
+            ) {
+              return null;
+            }
+
+            const hour = timestamp.getUTCHours();
+
+            if (!(hour >= 22 || hour < 6)) {
+              return null;
+            }
+
+            const nightDate = new Date(timestamp);
+            if (hour < 6) {
+              nightDate.setUTCDate(nightDate.getUTCDate() - 1);
+            }
+
+            const delta = inside - outside;
+
+            if (delta <= 1.5) {
+              return null;
+            }
+
+            return {
+              night: nightDate.toISOString().slice(0, 10),
+              timestamp,
+              inside,
+              outside,
+              delta,
+            };
+          })
+          .filter(Boolean);
+        const nights = validNightSamples.reduce((groups, sample) => {
+          groups[sample.night] = groups[sample.night] || [];
+          groups[sample.night].push(sample);
+          return groups;
+        }, {});
+        const acceptedNights = [];
+
+        Object.entries(nights).forEach(([night, samples]) => {
+          const sortedSamples = samples
+            .slice()
+            .sort((a, b) => a.timestamp - b.timestamp);
+          const first = sortedSamples[0];
+          const last = sortedSamples[sortedSamples.length - 1];
+          const spanHours = (last.timestamp - first.timestamp) / 3600000;
+
+          if (sortedSamples.length < 6 || spanHours < 3) {
+            return;
+          }
+
+          const firstDelta = first.delta;
+          const lastDelta = last.delta;
+
+          if (firstDelta < 2 || firstDelta - lastDelta < 0.25) {
+            return;
+          }
+
+          const xMean =
+            sortedSamples.reduce(
+              (sum, sample) => sum + (sample.timestamp - first.timestamp) / 3600000,
+              0
+            ) / sortedSamples.length;
+          const yValues = sortedSamples.map((sample) => Math.log(sample.delta));
+          const yMean =
+            yValues.reduce((sum, value) => sum + value, 0) / yValues.length;
+          const { numerator, denominator } = sortedSamples.reduce(
+            (acc, sample, index) => {
+              const x = (sample.timestamp - first.timestamp) / 3600000;
+              const y = yValues[index];
+              acc.numerator += (x - xMean) * (y - yMean);
+              acc.denominator += (x - xMean) ** 2;
+              return acc;
+            },
+            { numerator: 0, denominator: 0 }
+          );
+
+          if (denominator <= 0) {
+            return;
+          }
+
+          const slopePerHour = numerator / denominator;
+
+          if (!Number.isFinite(slopePerHour) || slopePerHour >= -0.002) {
+            return;
+          }
+
+          const tauHours = -1 / slopePerHour;
+          const areaM2 = Number.isFinite(area) && area > 0 ? area : 99.2;
+          const thermalCapacityJPerK =
+            areaM2 * NIGHT_COOLDOWN_HEAT_CAPACITY_KJ_PER_M2K * 1000;
+          const htcEstimate = thermalCapacityJPerK / (tauHours * 3600);
+
+          if (!Number.isFinite(htcEstimate) || htcEstimate <= 0) {
+            return;
+          }
+
+          acceptedNights.push({
+            night,
+            samples: sortedSamples.length,
+            tauHours,
+            htcEstimate,
+            coolingRateCPerHour: (first.inside - last.inside) / spanHours,
+          });
+        });
+
+        if (acceptedNights.length === 0) {
+          return {
+            nightCooldownHtc: null,
+            nightCooldownTauHours: null,
+            nightCooldownRateCPerHour: null,
+            nightCooldownNights: 0,
+            nightCooldownSamples: 0,
+          };
+        }
+
+        return {
+          nightCooldownHtc: average(
+            acceptedNights.map((night) => night.htcEstimate)
+          ),
+          nightCooldownTauHours: average(
+            acceptedNights.map((night) => night.tauHours)
+          ),
+          nightCooldownRateCPerHour: average(
+            acceptedNights.map((night) => night.coolingRateCPerHour)
+          ),
+          nightCooldownNights: acceptedNights.length,
+          nightCooldownSamples: acceptedNights.reduce(
+            (sum, night) => sum + night.samples,
+            0
+          ),
+        };
+      };
+
       const calculateHeatLossFromDailyEnergy = (energyByDay) => {
         let nextHddTotal = 0;
         let nextHddEnergyTotal = 0;
@@ -1806,6 +1955,7 @@ const BuildingDashboardPanel = ({ building }) => {
           null,
       };
       const flatlineIndoorTemp = false;
+      const nightCooldownSummary = calculateNightCooldownHtc();
 
       const nextHeatLossSummary = {
         kwhPerHdd: displayedHeatLoss.kwhPerHdd,
@@ -1823,6 +1973,12 @@ const BuildingDashboardPanel = ({ building }) => {
         auditHtcEstimate: auditHeatLoss.htcEstimate,
         averageInternalTemp: displayedHeatLoss.averageInternalTemp,
         comfortHddDays: displayedHeatLoss.comfortHddDays || 0,
+        nightCooldownHtc: nightCooldownSummary.nightCooldownHtc,
+        nightCooldownTauHours: nightCooldownSummary.nightCooldownTauHours,
+        nightCooldownRateCPerHour:
+          nightCooldownSummary.nightCooldownRateCPerHour,
+        nightCooldownNights: nightCooldownSummary.nightCooldownNights,
+        nightCooldownSamples: nightCooldownSummary.nightCooldownSamples,
         flatlineIndoorTemp,
         filteredInsideReadings,
       };
@@ -1841,6 +1997,11 @@ const BuildingDashboardPanel = ({ building }) => {
         hddTotal: 0,
         htcSamples: 0,
         htcDeltaTotal: 0,
+        nightCooldownHtc: null,
+        nightCooldownTauHours: null,
+        nightCooldownRateCPerHour: null,
+        nightCooldownNights: 0,
+        nightCooldownSamples: 0,
         hddSource: "current",
         hlaConfidence: "pending",
         auditKwhPerHdd: null,
@@ -3298,6 +3459,21 @@ const BuildingDashboardPanel = ({ building }) => {
     heatLossSummary.flatlineIndoorTemp || hasWeakHtcSample
       ? "pending"
       : rawHtcStatus;
+  const nightCooldownHtcPerM2 =
+    Number.isFinite(heatLossSummary.nightCooldownHtc) &&
+    Number.isFinite(dashboardArea) &&
+    dashboardArea > 0
+      ? heatLossSummary.nightCooldownHtc / dashboardArea
+      : null;
+  const nightCooldownStatus = Number.isFinite(nightCooldownHtcPerM2)
+    ? (heatLossSummary.nightCooldownNights || 0) < 3
+      ? "warning"
+      : nightCooldownHtcPerM2 <= 1.5
+      ? "good"
+      : nightCooldownHtcPerM2 <= 3
+      ? "warning"
+      : "poor"
+    : "pending";
   const heatExclusionStatus = Number.isFinite(
     heatExclusionSummary.averageBuffer
   )
@@ -4080,6 +4256,11 @@ const BuildingDashboardPanel = ({ building }) => {
     hddTotal: 365,
     htcSamples: 90,
     htcDeltaTotal: 450,
+    nightCooldownHtc: 115,
+    nightCooldownTauHours: 39.5,
+    nightCooldownRateCPerHour: 0.08,
+    nightCooldownNights: 90,
+    nightCooldownSamples: 720,
     hddSource: "Projected PHPP / EnerPHit retrofit model",
     comfortNote: "20.5 deg C target internal temp / EnerPHit comfort assumed",
   };
@@ -4127,7 +4308,16 @@ const BuildingDashboardPanel = ({ building }) => {
         kwhPerHdd: projectedPerformanceDeepDive.kwhPerHdd,
         htcEstimate: projectedPerformanceDeepDive.htcEstimate,
         hddDays: projectedPerformanceDeepDive.hddDays,
+        hddTotal: projectedPerformanceDeepDive.hddTotal,
         htcSamples: projectedPerformanceDeepDive.htcSamples,
+        htcDeltaTotal: projectedPerformanceDeepDive.htcDeltaTotal,
+        nightCooldownHtc: projectedPerformanceDeepDive.nightCooldownHtc,
+        nightCooldownTauHours:
+          projectedPerformanceDeepDive.nightCooldownTauHours,
+        nightCooldownRateCPerHour:
+          projectedPerformanceDeepDive.nightCooldownRateCPerHour,
+        nightCooldownNights: projectedPerformanceDeepDive.nightCooldownNights,
+        nightCooldownSamples: projectedPerformanceDeepDive.nightCooldownSamples,
         hddSource: "projected",
         averageInternalTemp: projectedPerformanceDeepDive.internalTemp,
         flatlineIndoorTemp: false,
@@ -4136,6 +4326,9 @@ const BuildingDashboardPanel = ({ building }) => {
     : heatLossSummary;
   const displayedHddStatus = isNewPerformanceDeepDive ? "good" : hddStatus;
   const displayedHtcStatus = isNewPerformanceDeepDive ? "good" : htcStatus;
+  const displayedNightCooldownStatus = isNewPerformanceDeepDive
+    ? "good"
+    : nightCooldownStatus;
   const shouldShowDeepDive = isCarbonCreditTab
     ? deepDiveOpen
     : standardDeepDiveOpen;
@@ -4678,6 +4871,30 @@ const BuildingDashboardPanel = ({ building }) => {
                         )} total deg C delta)`
                       : ""}
                   </p>
+                  <p className={heatLossStatusClass(displayedNightCooldownStatus)}>
+                    <HeatLossStatusDot status={displayedNightCooldownStatus} />{" "}
+                    <strong>Night Cooldown HTC:</strong>{" "}
+                    {Number.isFinite(displayedHeatLossSummary.nightCooldownHtc)
+                      ? `${formatNumber(
+                          displayedHeatLossSummary.nightCooldownHtc,
+                          1
+                        )} W/K`
+                      : "Needs clear overnight cooling windows"}
+                    {Number.isFinite(displayedHeatLossSummary.nightCooldownTauHours)
+                      ? ` / tau ${formatNumber(
+                          displayedHeatLossSummary.nightCooldownTauHours,
+                          1
+                        )} h`
+                      : ""}
+                    {Number.isFinite(
+                      displayedHeatLossSummary.nightCooldownRateCPerHour
+                    )
+                      ? ` / ${formatNumber(
+                          displayedHeatLossSummary.nightCooldownRateCPerHour,
+                          2
+                        )} deg C/h`
+                      : ""}
+                  </p>
                   {!isNewPerformanceDeepDive ? (
                     <div className={heatLossStatusClass(heatExclusionStatus)}>
                       <p>
@@ -4728,6 +4945,9 @@ const BuildingDashboardPanel = ({ building }) => {
                           displayedHeatLossSummary.htcDeltaTotal,
                           1
                         )} HTC deg C delta`
+                      : ""}
+                    {(displayedHeatLossSummary.nightCooldownNights || 0) > 0
+                      ? ` / ${displayedHeatLossSummary.nightCooldownNights} cooldown night(s)`
                       : ""}
                   </p>
                   <p
