@@ -6,14 +6,11 @@ import supabase from "../../supabaseClient";
 const DEFAULT_MATTERPORT_URL = "https://my.matterport.com/show/?m=zHm8SwWeHiN";
 const HDD_BASE_TEMP_C = 15.5;
 const FALLBACK_CARBON_PRICE_GBP_PER_TONNE = 65;
-const ELECTRICITY_PRICE_GBP_PER_KWH = 0.245;
-const GAS_PRICE_GBP_PER_KWH = 0.06;
 const CARBON_SAVINGS_CALCULATION_VERSION = "enerphit-certified-v2";
 const CARBON_SAVINGS_ENERGY_VALUE_METHOD =
   "saved_kwh_x_measured_baseline_blended_tariff";
 const CARBON_INTERVAL_SAVINGS_CACHE_KEY = "carbonIntervalSavingsSummary:v4";
-const ELECTRICITY_KGCO2E_PER_KWH = 0.20705;
-const GAS_KGCO2E_PER_KWH = 0.18254;
+const CARBON_SUMMARY_REFRESH_MS = 12 * 60 * 60 * 1000;
 const MIN_BASELINE_METERED_DAYS = 7;
 const MIN_BASELINE_HDD_DAYS = 14;
 const MIN_SEASONAL_BASELINE_DAYS = 90;
@@ -287,6 +284,31 @@ const BuildingDashboardPanel = ({ building }) => {
       `${dataSourceBuildingId}:${CARBON_INTERVAL_SAVINGS_CACHE_KEY}`,
       defaultCarbonIntervalSavingsSummary
     );
+  const hasUsableCarbonIntervalSummary = (summary) =>
+    Number.isFinite(Number(summary?.carbonCredits)) &&
+    Number(summary.carbonCredits) >= 0 &&
+    Number.isFinite(Number(summary?.totalSavedKgCo2e)) &&
+    Number(summary.totalSavedKgCo2e) >= 0 &&
+    Number.isFinite(Number(summary?.totalSavedKwh)) &&
+    Number(summary.totalSavedKwh) >= 0 &&
+    Number.isFinite(Number(summary?.energyCostSavedGbp)) &&
+    Number(summary.energyCostSavedGbp) >= 0;
+  const normaliseCarbonIntervalSummary = (summary) =>
+    hasUsableCarbonIntervalSummary(summary)
+      ? {
+          ...summary,
+          dailyRows: Number.isFinite(Number(summary.dailyRows))
+            ? Number(summary.dailyRows)
+            : null,
+          latestSavedKgCo2e: Number.isFinite(Number(summary.latestSavedKgCo2e))
+            ? Number(summary.latestSavedKgCo2e)
+            : null,
+          totalSavedKgCo2e: Number(summary.totalSavedKgCo2e),
+          totalSavedKwh: Number(summary.totalSavedKwh),
+          energyCostSavedGbp: Number(summary.energyCostSavedGbp),
+          carbonCredits: Number(summary.carbonCredits),
+        }
+      : defaultCarbonIntervalSavingsSummary;
   const readCachedWeeklyTrendData = () =>
     readCachedDashboardState(`${dataSourceBuildingId}:weeklyTrendData`, []);
   const readCachedHeatLossSummary = () =>
@@ -330,13 +352,15 @@ const BuildingDashboardPanel = ({ building }) => {
       : null;
   });
   const [carbonIntervalSavingsSummary, setCarbonIntervalSavingsSummary] = useState(
-    readCachedCarbonIntervalSavingsSummary
+    () => normaliseCarbonIntervalSummary(readCachedCarbonIntervalSavingsSummary())
   );
   const [carbonCredits, setCarbonCredits] = useState(() => {
-    const cachedCarbonIntervalSummary = readCachedCarbonIntervalSavingsSummary();
+    const cachedCarbonIntervalSummary = normaliseCarbonIntervalSummary(
+      readCachedCarbonIntervalSavingsSummary()
+    );
     return Number.isFinite(cachedCarbonIntervalSummary.carbonCredits)
       ? cachedCarbonIntervalSummary.carbonCredits
-      : 0;
+      : null;
   });
   const [, setCarbonSavingsSummary] = useState(
     readCachedCarbonSavingsSummary
@@ -993,10 +1017,18 @@ const BuildingDashboardPanel = ({ building }) => {
   const applyCarbonIntervalSavingsSummary = (
     nextCarbonIntervalSavingsSummary
   ) => {
-    setCarbonIntervalSavingsSummary(nextCarbonIntervalSavingsSummary);
+    const safeCarbonIntervalSummary = normaliseCarbonIntervalSummary(
+      nextCarbonIntervalSavingsSummary
+    );
+
+    if (!hasUsableCarbonIntervalSummary(safeCarbonIntervalSummary)) {
+      return;
+    }
+
+    setCarbonIntervalSavingsSummary(safeCarbonIntervalSummary);
     localStorage.setItem(
       `${dataSourceBuildingId}:${CARBON_INTERVAL_SAVINGS_CACHE_KEY}`,
-      JSON.stringify(nextCarbonIntervalSavingsSummary)
+      JSON.stringify(safeCarbonIntervalSummary)
     );
     localStorage.removeItem(`${dataSourceBuildingId}:carbonIntervalSavingsSummary:v3`);
     localStorage.removeItem(`${dataSourceBuildingId}:carbonIntervalSavingsSummary:v2`);
@@ -2746,352 +2778,6 @@ const BuildingDashboardPanel = ({ building }) => {
       return;
     }
 
-    const buildCarbonSavingsFromEnergyRows = async () => {
-      const pageSize = 1000;
-      const maxPages = 200;
-      const energyRows = [];
-      const now = new Date();
-
-      for (let page = 0; page < maxPages; page += 1) {
-        const { data, error } = await supabase
-          .from("EnergyReadings")
-          .select(
-            "timestamp, created_at, fuel_type, reading_type, usage_kwh, power_kw"
-          )
-          .eq("building_id", dataSourceBuildingId)
-          .in("reading_type", ["daily_total", "interval_30m", "instant_power"])
-          .or("usage_kwh.not.is.null,power_kw.not.is.null")
-          .gte("timestamp", "2020-01-01")
-          .lte("timestamp", now.toISOString())
-          .order("timestamp", { ascending: false })
-          .order("created_at", { ascending: false })
-          .range(page * pageSize, (page + 1) * pageSize - 1);
-
-        if (error) {
-          throw error;
-        }
-
-        energyRows.push(...(data || []));
-
-        if (!data || data.length < pageSize) {
-          break;
-        }
-      }
-
-      const intervalDays = new Set();
-      const dailyEnergy = {};
-      const dailyFallbackEnergy = {};
-      const intervalEnergy = {};
-      const dayKey = (timestamp) => new Date(timestamp).toISOString().slice(0, 10);
-      const intervalKey = (timestamp) => {
-        const date = new Date(timestamp);
-        date.setUTCMinutes(date.getUTCMinutes() < 30 ? 0 : 30, 0, 0);
-        return date.toISOString();
-      };
-      const measuredIntervalBuckets = new Set();
-
-      energyRows
-        .filter((row) => row.reading_type === "interval_30m")
-        .forEach((row) => {
-          const day = dayKey(row.timestamp);
-          const interval = intervalKey(row.timestamp);
-          const fuelType = row.fuel_type || "unknown";
-          const usageKwh = Number(row.usage_kwh);
-
-          if (!Number.isFinite(usageKwh)) {
-            return;
-          }
-
-          intervalDays.add(`${fuelType}:${day}`);
-          measuredIntervalBuckets.add(`${fuelType}:${interval}`);
-          dailyEnergy[day] = dailyEnergy[day] || {};
-          dailyEnergy[day][fuelType] = (dailyEnergy[day][fuelType] || 0) + usageKwh;
-          intervalEnergy[interval] = intervalEnergy[interval] || {};
-          intervalEnergy[interval][fuelType] =
-            (intervalEnergy[interval][fuelType] || 0) + usageKwh;
-        });
-
-      const instantRowsByFuel = energyRows
-        .filter((row) => row.reading_type === "instant_power")
-        .reduce((groups, row) => {
-          const fuelType = row.fuel_type || "unknown";
-          groups[fuelType] = groups[fuelType] || [];
-          groups[fuelType].push(row);
-          return groups;
-        }, {});
-
-      Object.entries(instantRowsByFuel).forEach(([fuelType, rowsForFuel]) => {
-        rowsForFuel
-          .slice()
-          .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
-          .forEach((row, index, sortedRows) => {
-            if (index === 0) {
-              return;
-            }
-
-            const previousRow = sortedRows[index - 1];
-            const previousTimestamp = new Date(previousRow.timestamp);
-            const timestamp = new Date(row.timestamp);
-            const elapsedHours = (timestamp - previousTimestamp) / 3600000;
-            const previousPowerKw = Number(previousRow.power_kw);
-            const powerKw = Number(row.power_kw);
-
-            if (
-              !Number.isFinite(elapsedHours) ||
-              elapsedHours <= 0 ||
-              elapsedHours > 0.25 ||
-              !Number.isFinite(previousPowerKw) ||
-              !Number.isFinite(powerKw)
-            ) {
-              return;
-            }
-
-            const interval = intervalKey(row.timestamp);
-            const day = dayKey(row.timestamp);
-
-            if (measuredIntervalBuckets.has(`${fuelType}:${interval}`)) {
-              return;
-            }
-
-            const usageKwh = ((previousPowerKw + powerKw) / 2) * elapsedHours;
-
-            if (!Number.isFinite(usageKwh) || usageKwh <= 0) {
-              return;
-            }
-
-            intervalDays.add(`${fuelType}:${day}`);
-            dailyEnergy[day] = dailyEnergy[day] || {};
-            dailyEnergy[day][fuelType] = (dailyEnergy[day][fuelType] || 0) + usageKwh;
-            intervalEnergy[interval] = intervalEnergy[interval] || {};
-            intervalEnergy[interval][fuelType] =
-              (intervalEnergy[interval][fuelType] || 0) + usageKwh;
-          });
-      });
-
-      energyRows
-        .filter((row) => row.reading_type === "daily_total")
-        .forEach((row) => {
-          const day = dayKey(row.timestamp);
-          const fuelType = row.fuel_type || "unknown";
-          const usageKwh = Number(row.usage_kwh);
-
-          if (!Number.isFinite(usageKwh) || intervalDays.has(`${fuelType}:${day}`)) {
-            return;
-          }
-
-          dailyEnergy[day] = dailyEnergy[day] || {};
-          dailyEnergy[day][fuelType] = Math.max(
-            dailyEnergy[day][fuelType] || 0,
-            usageKwh
-          );
-          dailyFallbackEnergy[day] = dailyFallbackEnergy[day] || {};
-          dailyFallbackEnergy[day][fuelType] = Math.max(
-            dailyFallbackEnergy[day][fuelType] || 0,
-            usageKwh
-          );
-        });
-
-      const area = Number(matterportMetadata.internalArea);
-      const improvedDailyElectricityKwh =
-        ((Number.isFinite(area) && area > 0
-          ? area
-          : building.estimatedInternalArea || 99.2) *
-          projectedPerformanceDeepDive.annualEui) /
-        365;
-      const improvedIntervalElectricityKwh = improvedDailyElectricityKwh / 48;
-      const improvedIntervalKgCo2e =
-        improvedIntervalElectricityKwh * ELECTRICITY_KGCO2E_PER_KWH;
-      const today = now.toISOString().slice(0, 10);
-      const valuePhysicalEnergySaved = ({
-        savedKwh,
-        baselineTotalKwh,
-        measuredEnergyCost,
-      }) => {
-        if (
-          !Number.isFinite(savedKwh) ||
-          savedKwh <= 0 ||
-          !Number.isFinite(baselineTotalKwh) ||
-          baselineTotalKwh <= 0 ||
-          !Number.isFinite(measuredEnergyCost)
-        ) {
-          return 0;
-        }
-
-        return savedKwh * (measuredEnergyCost / baselineTotalKwh);
-      };
-      const projectionFactorForDay = (savingDate) => {
-        if (savingDate !== today) {
-          return 1;
-        }
-
-        const startOfToday = new Date(`${today}T00:00:00.000Z`);
-        return Math.min(
-          1,
-          Math.max(0, (now - startOfToday) / 86400000)
-        );
-      };
-
-      const rows = Object.entries(dailyEnergy)
-        .map(([savingDate, fuels]) => {
-          const electricityKwh = Number(fuels.electricity || 0);
-          const gasKwh = Number(fuels.gas || 0);
-          const projectionFactor = projectionFactorForDay(savingDate);
-          const improvedElectricityKwh =
-            improvedDailyElectricityKwh * projectionFactor;
-          const improvedKgCo2e =
-            improvedElectricityKwh * ELECTRICITY_KGCO2E_PER_KWH;
-          const baselineTotalKwh = electricityKwh + gasKwh;
-          const baselineKgCo2e =
-            electricityKwh * ELECTRICITY_KGCO2E_PER_KWH +
-            gasKwh * GAS_KGCO2E_PER_KWH;
-          const measuredEnergyCost =
-            electricityKwh * ELECTRICITY_PRICE_GBP_PER_KWH +
-            gasKwh * GAS_PRICE_GBP_PER_KWH;
-          const savedKgCo2e = Math.max(0, baselineKgCo2e - improvedKgCo2e);
-          const savedKwh = Math.max(0, baselineTotalKwh - improvedElectricityKwh);
-          const energyCostSavedGbp = valuePhysicalEnergySaved({
-            savedKwh,
-            baselineTotalKwh,
-            measuredEnergyCost,
-          });
-
-          return {
-            saving_date: savingDate,
-            saved_kgco2e: savedKgCo2e,
-            saved_kwh: savedKwh,
-            energy_cost_saved_gbp: energyCostSavedGbp,
-            carbon_credits: savedKgCo2e / 1000,
-          };
-        })
-        .sort((a, b) => b.saving_date.localeCompare(a.saving_date));
-
-      const intervalRows = Object.entries(intervalEnergy)
-        .map(([timestamp, fuels]) => {
-          const electricityKwh = Number(fuels.electricity || 0);
-          const gasKwh = Number(fuels.gas || 0);
-          const baselineTotalKwh = electricityKwh + gasKwh;
-          const baselineKgCo2e =
-            electricityKwh * ELECTRICITY_KGCO2E_PER_KWH +
-            gasKwh * GAS_KGCO2E_PER_KWH;
-          const measuredEnergyCost =
-            electricityKwh * ELECTRICITY_PRICE_GBP_PER_KWH +
-            gasKwh * GAS_PRICE_GBP_PER_KWH;
-          const savedKgCo2e = Math.max(
-            0,
-            baselineKgCo2e - improvedIntervalKgCo2e
-          );
-          const savedKwh = Math.max(
-            0,
-            baselineTotalKwh - improvedIntervalElectricityKwh
-          );
-          const energyCostSavedGbp = valuePhysicalEnergySaved({
-            savedKwh,
-            baselineTotalKwh,
-            measuredEnergyCost,
-          });
-
-          return {
-            timestamp,
-            saved_kgco2e: savedKgCo2e,
-            saved_kwh: savedKwh,
-            energy_cost_saved_gbp: energyCostSavedGbp,
-            carbon_credits: savedKgCo2e / 1000,
-          };
-        })
-        .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
-
-      const accruedRows = [
-        ...intervalRows,
-        ...Object.entries(dailyFallbackEnergy).map(([savingDate, fuels]) => {
-          const electricityKwh = Number(fuels.electricity || 0);
-          const gasKwh = Number(fuels.gas || 0);
-          const projectionFactor = projectionFactorForDay(savingDate);
-          const improvedFallbackElectricityKwh =
-            electricityKwh > 0 ? improvedDailyElectricityKwh * projectionFactor : 0;
-          const improvedFallbackKgCo2e =
-            improvedFallbackElectricityKwh * ELECTRICITY_KGCO2E_PER_KWH;
-          const baselineTotalKwh = electricityKwh + gasKwh;
-          const baselineKgCo2e =
-            electricityKwh * ELECTRICITY_KGCO2E_PER_KWH +
-            gasKwh * GAS_KGCO2E_PER_KWH;
-          const measuredEnergyCost =
-            electricityKwh * ELECTRICITY_PRICE_GBP_PER_KWH +
-            gasKwh * GAS_PRICE_GBP_PER_KWH;
-          const savedKgCo2e = Math.max(
-            0,
-            baselineKgCo2e - improvedFallbackKgCo2e
-          );
-          const savedKwh = Math.max(
-            0,
-            baselineTotalKwh - improvedFallbackElectricityKwh
-          );
-          const energyCostSavedGbp = valuePhysicalEnergySaved({
-            savedKwh,
-            baselineTotalKwh,
-            measuredEnergyCost,
-          });
-
-          return {
-            timestamp: `${savingDate}T00:00:00.000Z`,
-            saved_kgco2e: savedKgCo2e,
-            saved_kwh: savedKwh,
-            energy_cost_saved_gbp: energyCostSavedGbp,
-            carbon_credits: savedKgCo2e / 1000,
-          };
-        }),
-      ].sort((a, b) => b.timestamp.localeCompare(a.timestamp));
-
-      return { dailyRows: rows, intervalRows, accruedRows };
-    };
-
-    const applyAccruedSavingsSummary = (accruedRows) => {
-      const sortedRows = accruedRows
-        .filter((row) => row.timestamp)
-        .slice()
-        .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
-      const totalSavedKgCo2e = accruedRows.reduce(
-        (sum, row) => sum + (Number(row.saved_kgco2e) || 0),
-        0
-      );
-      const totalSavedKwh = accruedRows.reduce(
-        (sum, row) => sum + (Number(row.saved_kwh) || 0),
-        0
-      );
-      const energyCostSavedGbp = accruedRows.reduce(
-        (sum, row) => sum + (Number(row.energy_cost_saved_gbp) || 0),
-        0
-      );
-      const totalCredits = accruedRows.reduce(
-        (sum, row) => sum + (Number(row.carbon_credits) || 0),
-        0
-      );
-      const latest = sortedRows[sortedRows.length - 1] || accruedRows[0] || null;
-      const first = sortedRows[0] || null;
-      const meteredDays = new Set(
-        accruedRows
-          .map((row) => row.timestamp || row.saving_date)
-          .filter(Boolean)
-          .map((value) => new Date(value).toISOString().slice(0, 10))
-      ).size;
-
-      setCarbonCredits(totalCredits);
-      applyCarbonIntervalSavingsSummary({
-        fromDate: first
-          ? new Date(first.timestamp).toISOString().slice(0, 10)
-          : null,
-        toDate: latest
-          ? new Date(latest.timestamp).toISOString().slice(0, 10)
-          : null,
-        calculatedAt: new Date().toISOString(),
-        dailyRows: meteredDays || accruedRows.length,
-        latestTimestamp: latest?.timestamp || null,
-        latestSavedKgCo2e: latest ? Number(latest.saved_kgco2e) : null,
-        totalSavedKgCo2e,
-        totalSavedKwh,
-        energyCostSavedGbp,
-        carbonCredits: totalCredits,
-      });
-    };
     const applyPersistedSavingsSummary = (summaryRow) => {
       const totalSavedKgCo2e = Number(summaryRow.total_saved_kgco2e);
       const totalSavedKwh = Number(summaryRow.total_saved_kwh);
@@ -3172,98 +2858,27 @@ const BuildingDashboardPanel = ({ building }) => {
           return;
         }
         console.warn(
-          "Carbon savings summary is stale; calculating from EnergyReadings until the tablet refreshes it."
+          "Carbon savings summary is stale; keeping the last good cached CC value until the tablet refreshes it."
         );
+        return;
       }
 
       if (summaryError) {
         console.warn(
-          "Carbon savings summary unavailable; checking daily evidence:",
+          "Carbon savings summary unavailable; keeping the last good cached CC value:",
           summaryError.message
         );
-      }
-
-      const { data, error } = await supabase
-        .from("CarbonSavingsDaily")
-        .select(
-          "saving_date, saved_kgco2e, saved_kwh, energy_cost_saved_gbp, carbon_credits, calculation_version, raw_payload"
-        )
-        .eq("building_id", dataSourceBuildingId)
-        .eq("scenario", "enerphit-certified")
-        .order("saving_date", { ascending: false })
-        .limit(5000);
-
-      if (error) {
-        throw error;
-      }
-
-      const rows = (data || []).filter(isCurrentPersistedSavingsSummary);
-      const totalSavedKgCo2e = rows.reduce(
-        (sum, row) => sum + (Number(row.saved_kgco2e) || 0),
-        0
-      );
-      const totalCredits = rows.reduce(
-        (sum, row) => sum + (Number(row.carbon_credits) || 0),
-        0
-      );
-      const totalSavedKwh = rows.reduce(
-        (sum, row) => sum + (Number(row.saved_kwh) || 0),
-        0
-      );
-      const energyCostSavedGbp = rows.reduce(
-        (sum, row) => sum + (Number(row.energy_cost_saved_gbp) || 0),
-        0
-      );
-      const latest = rows[0] || null;
-
-      setCarbonCredits(totalCredits);
-      applyCarbonSavingsSummary({
-        latestDate: latest?.saving_date || null,
-        latestSavedKgCo2e: latest ? Number(latest.saved_kgco2e) : null,
-        totalSavedKgCo2e,
-      });
-      if (Number.isFinite(totalSavedKwh) && totalSavedKwh > 0) {
-        applyCarbonIntervalSavingsSummary({
-          fromDate: rows[rows.length - 1]?.saving_date || null,
-          toDate: latest?.saving_date || null,
-          calculatedAt: null,
-          dailyRows: rows.length,
-          latestTimestamp: latest?.saving_date || null,
-          latestSavedKgCo2e: latest ? Number(latest.saved_kgco2e) : null,
-          totalSavedKgCo2e,
-          totalSavedKwh,
-          energyCostSavedGbp,
-          carbonCredits: totalCredits,
-        });
         return;
       }
 
-      const { accruedRows } = await buildCarbonSavingsFromEnergyRows();
-      applyAccruedSavingsSummary(accruedRows);
+      console.warn(
+        "Carbon savings summary is not available yet; keeping the current CC display."
+      );
     } catch (err) {
-      console.warn("Carbon savings table unavailable; calculating from EnergyReadings:", err.message);
-      try {
-        const { dailyRows, accruedRows } = await buildCarbonSavingsFromEnergyRows();
-        const totalSavedKgCo2e = dailyRows.reduce(
-          (sum, row) => sum + (Number(row.saved_kgco2e) || 0),
-          0
-        );
-        const totalCredits = dailyRows.reduce(
-          (sum, row) => sum + (Number(row.carbon_credits) || 0),
-          0
-        );
-        const latest = dailyRows[0] || null;
-
-        setCarbonCredits(totalCredits);
-        applyCarbonSavingsSummary({
-          latestDate: latest?.saving_date || null,
-          latestSavedKgCo2e: latest ? Number(latest.saved_kgco2e) : null,
-          totalSavedKgCo2e,
-        });
-        applyAccruedSavingsSummary(accruedRows);
-      } catch (fallbackErr) {
-        console.warn("Carbon savings fallback unavailable:", fallbackErr.message);
-      }
+      console.warn(
+        "Carbon savings summary refresh failed; keeping the current CC display:",
+        err.message
+      );
     }
   };
 
@@ -3399,13 +3014,17 @@ const BuildingDashboardPanel = ({ building }) => {
         : null
     );
     setCarbonSavingsSummary(readCachedCarbonSavingsSummary());
-    const cachedCarbonIntervalSummary = readCachedCarbonIntervalSavingsSummary();
-    setCarbonIntervalSavingsSummary(cachedCarbonIntervalSummary);
-    setCarbonCredits(
-      Number.isFinite(cachedCarbonIntervalSummary.carbonCredits)
-        ? cachedCarbonIntervalSummary.carbonCredits
-        : 0
+    const cachedCarbonIntervalSummary = normaliseCarbonIntervalSummary(
+      readCachedCarbonIntervalSavingsSummary()
     );
+
+    if (hasUsableCarbonIntervalSummary(cachedCarbonIntervalSummary)) {
+      setCarbonIntervalSavingsSummary(cachedCarbonIntervalSummary);
+      setCarbonCredits(cachedCarbonIntervalSummary.carbonCredits);
+    } else {
+      setCarbonIntervalSavingsSummary(defaultCarbonIntervalSavingsSummary);
+      setCarbonCredits(null);
+    }
     setWeeklyTrendData(readCachedWeeklyTrendData());
     setHeatLossSummary(readCachedHeatLossSummary());
     setHeatExclusionSummary(readCachedHeatExclusionSummary());
@@ -3426,8 +3045,6 @@ const BuildingDashboardPanel = ({ building }) => {
     fetchExternalTemp();
     fetchIAQData();
     fetchWeeklyPerformanceTrend();
-    fetchCarbonSavingsSummary();
-    fetchCarbonMarketPrice();
     // Building switch refresh only; polling effect below handles continuing updates.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataSourceBuildingId]);
@@ -3441,8 +3058,6 @@ const BuildingDashboardPanel = ({ building }) => {
       fetchExternalTemp();
       fetchLongTermBuildingPerformance();
       fetchWeeklyPerformanceTrend();
-      fetchCarbonSavingsSummary();
-      fetchCarbonMarketPrice();
     }, 5 * 60 * 1000);
 
     return () => clearInterval(interval);
@@ -3458,6 +3073,24 @@ const BuildingDashboardPanel = ({ building }) => {
     heatExclusionSummary.averageBuffer,
     heatExclusionSummary.overheatingShare,
   ]);
+
+  useEffect(() => {
+    if (!isCarbonCreditTab) {
+      return undefined;
+    }
+
+    fetchCarbonSavingsSummary();
+    fetchCarbonMarketPrice();
+
+    const interval = setInterval(() => {
+      fetchCarbonSavingsSummary();
+      fetchCarbonMarketPrice();
+    }, CARBON_SUMMARY_REFRESH_MS);
+
+    return () => clearInterval(interval);
+    // CC values should refresh from the persisted summary, not raw readings.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dataSourceBuildingId, isCarbonCreditTab]);
 
   const estimatedElectricityDailyKwh = Number.isFinite(
     energySummary.electricityDailyAverage
