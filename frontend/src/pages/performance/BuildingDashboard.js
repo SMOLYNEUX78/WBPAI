@@ -13,6 +13,7 @@ const CARBON_INTERVAL_SAVINGS_CACHE_KEY = "carbonIntervalSavingsSummary:v4";
 const CARBON_SUMMARY_REFRESH_MS = 12 * 60 * 60 * 1000;
 const MIN_BASELINE_METERED_DAYS = 7;
 const MIN_BASELINE_HDD_DAYS = 14;
+const MIN_RELIABLE_HDD_TOTAL = 10;
 const MIN_SEASONAL_BASELINE_DAYS = 90;
 const MIN_FULL_YEAR_BASELINE_DAYS = 365;
 const MIN_FULL_YEAR_METERED_DAYS = 300;
@@ -229,6 +230,7 @@ const BuildingDashboardPanel = ({ building }) => {
     weatherNormalisedEui: null,
     htcEstimate: null,
     hddDays: 0,
+    hddTotal: 0,
     htcSamples: 0,
     hddSource: "current",
     hlaConfidence: "pending",
@@ -1567,6 +1569,7 @@ const BuildingDashboardPanel = ({ building }) => {
           htcEstimate:
             nextHtcSamples > 0 ? nextHtcTotal / nextHtcSamples : null,
           hddDays: nextHddDays,
+          hddTotal: nextHddTotal,
           htcSamples: nextHtcSamples,
           comfortHddDays: nextComfortHddDays,
           averageInternalTemp: nextInsideAverages.length
@@ -1705,6 +1708,7 @@ const BuildingDashboardPanel = ({ building }) => {
         weatherNormalisedEui: liveWeatherNormalisedEui,
         htcEstimate: liveHtcEstimate,
         hddDays: Number.isFinite(currentHdd) && currentHdd > 0 ? 1 : 0,
+        hddTotal: Number.isFinite(currentHdd) && currentHdd > 0 ? currentHdd : 0,
         htcSamples: Number.isFinite(liveHtcEstimate) ? 1 : 0,
         comfortHddDays:
           Number.isFinite(currentHdd) &&
@@ -1772,6 +1776,7 @@ const BuildingDashboardPanel = ({ building }) => {
         weatherNormalisedEui: chosenWeatherNormalisedEui.value,
         htcEstimate: chosenHtc.value,
         hddDays: hddSampleSource.hddDays || 0,
+        hddTotal: hddSampleSource.hddTotal || 0,
         htcSamples: htcSampleSource.htcSamples || 0,
         hddSource:
           lowestConfidenceSource === "live-indicative"
@@ -1793,6 +1798,7 @@ const BuildingDashboardPanel = ({ building }) => {
         weatherNormalisedEui: displayedHeatLoss.weatherNormalisedEui,
         htcEstimate: displayedHeatLoss.htcEstimate,
         hddDays: displayedHeatLoss.hddDays || 0,
+        hddTotal: displayedHeatLoss.hddTotal || 0,
         htcSamples: displayedHeatLoss.htcSamples || 0,
         hddSource: displayedHeatLoss.hddSource || "current",
         hlaConfidence: displayedHeatLoss.hlaConfidence,
@@ -1817,6 +1823,7 @@ const BuildingDashboardPanel = ({ building }) => {
         weatherNormalisedEui: null,
         htcEstimate: null,
         hddDays: 0,
+        hddTotal: 0,
         htcSamples: 0,
         hddSource: "current",
         hlaConfidence: "pending",
@@ -2255,8 +2262,14 @@ const BuildingDashboardPanel = ({ building }) => {
         building.targetEui,
         building.nationalAverageEui
       );
+      const hasReliableHddSampleForScore =
+        heatLossSummary.hddSource === "legacy" ||
+        ((heatLossSummary.hddDays || 0) >= MIN_BASELINE_HDD_DAYS &&
+          (heatLossSummary.hddTotal || 0) >= MIN_RELIABLE_HDD_TOTAL);
       const weatherNormalisedEuiScore = calculateEnergyScore(
-        heatLossSummary.weatherNormalisedEui,
+        hasReliableHddSampleForScore
+          ? heatLossSummary.weatherNormalisedEui
+          : null,
         building.targetEui,
         building.nationalAverageEui
       );
@@ -2299,7 +2312,7 @@ const BuildingDashboardPanel = ({ building }) => {
           ? building.targetEui / annualHddForScore
           : 0.0075;
       const hddScore = lowerIsBetterScore(
-        hddIntensityPerM2ForScore,
+        hasReliableHddSampleForScore ? hddIntensityPerM2ForScore : null,
         targetHddIntensityForScore,
         targetHddIntensityForScore * 6
       );
@@ -3180,6 +3193,12 @@ const BuildingDashboardPanel = ({ building }) => {
     heatLossSummary.hddDays > 0
       ? heatLossSummary.comfortHddDays / heatLossSummary.hddDays
       : null;
+  const hasReliableHddSample =
+    heatLossSummary.hddSource === "legacy" ||
+    ((heatLossSummary.hddDays || 0) >= MIN_BASELINE_HDD_DAYS &&
+      (heatLossSummary.hddTotal || 0) >= MIN_RELIABLE_HDD_TOTAL);
+  const hasWeakSummerHddSample =
+    Number.isFinite(heatLossSummary.kwhPerHdd) && !hasReliableHddSample;
   const hasMatureHddComfortSample =
     heatLossSummary.hddDays >= 14 || heatLossSummary.hddSource === "legacy";
   const liveComfortMaintained =
@@ -3201,6 +3220,11 @@ const BuildingDashboardPanel = ({ building }) => {
       ? "Low energy / unheated"
       : heatLossSummary.flatlineIndoorTemp
       ? "Check indoor sensor"
+      : hasWeakSummerHddSample
+      ? `Low confidence / summer sample (${formatNumber(
+          heatLossSummary.hddTotal || 0,
+          1
+        )} total HDD)`
       : !hasMatureHddComfortSample && liveComfortMaintained
       ? "Early HDD sample / live comfort maintained"
       : Number.isFinite(hddComfortCoverage) && !hddComfortQualified
@@ -3226,7 +3250,11 @@ const BuildingDashboardPanel = ({ building }) => {
       : "poor"
     : "pending";
   const hddStatus =
-    rawHddStatus === "good" && !hddComfortQualified ? "warning" : rawHddStatus;
+    hasWeakSummerHddSample
+      ? "pending"
+      : rawHddStatus === "good" && !hddComfortQualified
+      ? "warning"
+      : rawHddStatus;
   const rawHtcStatus = Number.isFinite(htcPerM2)
     ? htcPerM2 <= 1.5
       ? "good"
@@ -3288,7 +3316,8 @@ const BuildingDashboardPanel = ({ building }) => {
     Number.isFinite(heatLossSummary.kwhPerHdd);
   const hasMatureHddBaseline =
     heatLossSummary.hddSource === "legacy" ||
-    heatLossSummary.hddDays >= MIN_BASELINE_HDD_DAYS;
+    (heatLossSummary.hddDays >= MIN_BASELINE_HDD_DAYS &&
+      (heatLossSummary.hddTotal || 0) >= MIN_RELIABLE_HDD_TOTAL);
   const hddNormalisedBaseline =
     candidateMeteredBaseline &&
     hasWeatherNormalisedBaseline &&
@@ -3337,6 +3366,7 @@ const BuildingDashboardPanel = ({ building }) => {
     `${formatNumber(historicalPerformance, 2)} kWh/day`,
     `${baselineMeteredDays} metered day(s)`,
     `${heatLossSummary.hddDays || 0} HDD day(s)`,
+    `${formatNumber(heatLossSummary.hddTotal || 0, 1)} total HDD`,
     Number.isFinite(heatLossSummary.kwhPerHdd)
       ? `${formatNumber(heatLossSummary.kwhPerHdd, 3)} kWh/HDD`
       : "kWh/HDD pending",
@@ -3353,12 +3383,18 @@ const BuildingDashboardPanel = ({ building }) => {
     {
       label: "Basic HDD calculation",
       complete: hasWeatherNormalisedBaseline,
-      detail: `${heatLossSummary.hddDays || 0} HDD day(s), base ${HDD_BASE_TEMP_C} deg C`,
+      detail: `${heatLossSummary.hddDays || 0} HDD day(s), ${formatNumber(
+        heatLossSummary.hddTotal || 0,
+        1
+      )} total HDD, base ${HDD_BASE_TEMP_C} deg C`,
     },
     {
       label: "Cold-weather HDD",
       complete: hddNormalisedBaseline,
-      detail: `${heatLossSummary.hddDays || 0}/${MIN_BASELINE_HDD_DAYS} HDD day(s)`,
+      detail: `${heatLossSummary.hddDays || 0}/${MIN_BASELINE_HDD_DAYS} HDD day(s), ${formatNumber(
+        heatLossSummary.hddTotal || 0,
+        1
+      )}/${MIN_RELIABLE_HDD_TOTAL} total HDD`,
     },
     {
       label: "Seasonal confidence",
@@ -4006,6 +4042,7 @@ const BuildingDashboardPanel = ({ building }) => {
     kwhPerHdd: 2.6,
     htcEstimate: 125,
     hddDays: 365,
+    hddTotal: 365,
     htcSamples: 90,
     hddSource: "Projected PHPP / EnerPHit retrofit model",
     comfortNote: "20.5 deg C target internal temp / EnerPHit comfort assumed",
@@ -4636,6 +4673,13 @@ const BuildingDashboardPanel = ({ building }) => {
                           displayedHeatLossSummary.htcSamples || 0
                         }`
                       : "No valid overlap yet"}
+                    {!isNewPerformanceDeepDive &&
+                    Number.isFinite(displayedHeatLossSummary.hddTotal)
+                      ? ` / ${formatNumber(
+                          displayedHeatLossSummary.hddTotal,
+                          1
+                        )} total HDD`
+                      : ""}
                   </p>
                   <p
                     className="pt-2 mt-2 border-t border-gray-200 text-[11px] sm:text-xs leading-snug text-gray-600 break-words"
@@ -4653,7 +4697,9 @@ const BuildingDashboardPanel = ({ building }) => {
                   {!isNewPerformanceDeepDive ? (
                     <p className="text-[11px] sm:text-xs leading-snug text-gray-600 break-words">
                       HLA confidence:{" "}
-                      {heatLossSummary.hlaConfidence === "audit-grade"
+                      {hasWeakSummerHddSample
+                        ? "Low confidence / summer HDD sample"
+                        : heatLossSummary.hlaConfidence === "audit-grade"
                         ? "Audit-grade daily baseline"
                         : heatLossSummary.hlaConfidence === "indicative"
                         ? "Indicative interval/weather fallback"
