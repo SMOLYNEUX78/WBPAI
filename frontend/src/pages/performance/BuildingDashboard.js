@@ -14,6 +14,8 @@ const CARBON_SUMMARY_REFRESH_MS = 12 * 60 * 60 * 1000;
 const MIN_BASELINE_METERED_DAYS = 7;
 const MIN_BASELINE_HDD_DAYS = 14;
 const MIN_RELIABLE_HDD_TOTAL = 10;
+const MIN_RELIABLE_HTC_SAMPLES = 7;
+const MIN_RELIABLE_HTC_DELTA_TOTAL = 35;
 const MIN_SEASONAL_BASELINE_DAYS = 90;
 const MIN_FULL_YEAR_BASELINE_DAYS = 365;
 const MIN_FULL_YEAR_METERED_DAYS = 300;
@@ -232,6 +234,7 @@ const BuildingDashboardPanel = ({ building }) => {
     hddDays: 0,
     hddTotal: 0,
     htcSamples: 0,
+    htcDeltaTotal: 0,
     hddSource: "current",
     hlaConfidence: "pending",
     auditKwhPerHdd: null,
@@ -1495,6 +1498,7 @@ const BuildingDashboardPanel = ({ building }) => {
         let nextHtcTotal = 0;
         let nextHddDays = 0;
         let nextHtcSamples = 0;
+        let nextHtcDeltaTotal = 0;
         let nextComfortHddDays = 0;
         const nextInsideAverages = [];
         let nextUsesLegacyMuseumEnergy = false;
@@ -1545,8 +1549,10 @@ const BuildingDashboardPanel = ({ building }) => {
               Number.isFinite(dayEnergy.hours) && dayEnergy.hours > 0
                 ? dayEnergy.hours
                 : 24;
+            const temperatureDelta = insideAverage - outsideAverage;
             const averagePowerWatts = (totalKwh * 1000) / sampleHours;
-            nextHtcTotal += averagePowerWatts / (insideAverage - outsideAverage);
+            nextHtcTotal += averagePowerWatts / temperatureDelta;
+            nextHtcDeltaTotal += temperatureDelta;
             nextHtcSamples += 1;
           }
         });
@@ -1571,6 +1577,7 @@ const BuildingDashboardPanel = ({ building }) => {
           hddDays: nextHddDays,
           hddTotal: nextHddTotal,
           htcSamples: nextHtcSamples,
+          htcDeltaTotal: nextHtcDeltaTotal,
           comfortHddDays: nextComfortHddDays,
           averageInternalTemp: nextInsideAverages.length
             ? average(nextInsideAverages)
@@ -1710,6 +1717,12 @@ const BuildingDashboardPanel = ({ building }) => {
         hddDays: Number.isFinite(currentHdd) && currentHdd > 0 ? 1 : 0,
         hddTotal: Number.isFinite(currentHdd) && currentHdd > 0 ? currentHdd : 0,
         htcSamples: Number.isFinite(liveHtcEstimate) ? 1 : 0,
+        htcDeltaTotal:
+          Number.isFinite(todayInsideAverage) &&
+          Number.isFinite(todayOutsideAverage) &&
+          todayInsideAverage > todayOutsideAverage
+            ? todayInsideAverage - todayOutsideAverage
+            : 0,
         comfortHddDays:
           Number.isFinite(currentHdd) &&
           currentHdd > 0 &&
@@ -1778,6 +1791,7 @@ const BuildingDashboardPanel = ({ building }) => {
         hddDays: hddSampleSource.hddDays || 0,
         hddTotal: hddSampleSource.hddTotal || 0,
         htcSamples: htcSampleSource.htcSamples || 0,
+        htcDeltaTotal: htcSampleSource.htcDeltaTotal || 0,
         hddSource:
           lowestConfidenceSource === "live-indicative"
             ? "live"
@@ -1800,6 +1814,7 @@ const BuildingDashboardPanel = ({ building }) => {
         hddDays: displayedHeatLoss.hddDays || 0,
         hddTotal: displayedHeatLoss.hddTotal || 0,
         htcSamples: displayedHeatLoss.htcSamples || 0,
+        htcDeltaTotal: displayedHeatLoss.htcDeltaTotal || 0,
         hddSource: displayedHeatLoss.hddSource || "current",
         hlaConfidence: displayedHeatLoss.hlaConfidence,
         hddConfidence: displayedHeatLoss.hddConfidence,
@@ -1825,6 +1840,7 @@ const BuildingDashboardPanel = ({ building }) => {
         hddDays: 0,
         hddTotal: 0,
         htcSamples: 0,
+        htcDeltaTotal: 0,
         hddSource: "current",
         hlaConfidence: "pending",
         auditKwhPerHdd: null,
@@ -2322,7 +2338,16 @@ const BuildingDashboardPanel = ({ building }) => {
         estimatedArea > 0
           ? heatLossSummary.htcEstimate / estimatedArea
           : null;
-      const htcScore = lowerIsBetterScore(htcPerM2ForScore, 1.5, 3.5);
+      const hasReliableHtcSampleForScore =
+        heatLossSummary.hddSource === "legacy" ||
+        ((heatLossSummary.htcSamples || 0) >= MIN_RELIABLE_HTC_SAMPLES &&
+          (heatLossSummary.htcDeltaTotal || 0) >=
+            MIN_RELIABLE_HTC_DELTA_TOTAL);
+      const htcScore = lowerIsBetterScore(
+        hasReliableHtcSampleForScore ? htcPerM2ForScore : null,
+        1.5,
+        3.5
+      );
       const heatExclusionScore = Number.isFinite(averageHeatExclusionBuffer)
         ? clampScore(
             averageHeatExclusionBuffer >= 2
@@ -3199,6 +3224,13 @@ const BuildingDashboardPanel = ({ building }) => {
       (heatLossSummary.hddTotal || 0) >= MIN_RELIABLE_HDD_TOTAL);
   const hasWeakSummerHddSample =
     Number.isFinite(heatLossSummary.kwhPerHdd) && !hasReliableHddSample;
+  const hasReliableHtcSample =
+    heatLossSummary.hddSource === "legacy" ||
+    ((heatLossSummary.htcSamples || 0) >= MIN_RELIABLE_HTC_SAMPLES &&
+      (heatLossSummary.htcDeltaTotal || 0) >=
+        MIN_RELIABLE_HTC_DELTA_TOTAL);
+  const hasWeakHtcSample =
+    Number.isFinite(heatLossSummary.htcEstimate) && !hasReliableHtcSample;
   const hasMatureHddComfortSample =
     heatLossSummary.hddDays >= 14 || heatLossSummary.hddSource === "legacy";
   const liveComfortMaintained =
@@ -3262,7 +3294,10 @@ const BuildingDashboardPanel = ({ building }) => {
       ? "warning"
       : "poor"
     : "pending";
-  const htcStatus = heatLossSummary.flatlineIndoorTemp ? "pending" : rawHtcStatus;
+  const htcStatus =
+    heatLossSummary.flatlineIndoorTemp || hasWeakHtcSample
+      ? "pending"
+      : rawHtcStatus;
   const heatExclusionStatus = Number.isFinite(
     heatExclusionSummary.averageBuffer
   )
@@ -4044,6 +4079,7 @@ const BuildingDashboardPanel = ({ building }) => {
     hddDays: 365,
     hddTotal: 365,
     htcSamples: 90,
+    htcDeltaTotal: 450,
     hddSource: "Projected PHPP / EnerPHit retrofit model",
     comfortNote: "20.5 deg C target internal temp / EnerPHit comfort assumed",
   };
@@ -4635,6 +4671,12 @@ const BuildingDashboardPanel = ({ building }) => {
                       : (displayedHeatLossSummary.htcSamples || 0) > 0
                       ? "Pending energy + indoor/outdoor temperature overlap"
                       : "Needs indoor/outdoor temperature and energy overlap"}
+                    {!isNewPerformanceDeepDive && hasWeakHtcSample
+                      ? ` (Low confidence / weak temperature separation, ${formatNumber(
+                          heatLossSummary.htcDeltaTotal || 0,
+                          1
+                        )} total deg C delta)`
+                      : ""}
                   </p>
                   {!isNewPerformanceDeepDive ? (
                     <div className={heatLossStatusClass(heatExclusionStatus)}>
@@ -4680,6 +4722,13 @@ const BuildingDashboardPanel = ({ building }) => {
                           1
                         )} total HDD`
                       : ""}
+                    {!isNewPerformanceDeepDive &&
+                    Number.isFinite(displayedHeatLossSummary.htcDeltaTotal)
+                      ? ` / ${formatNumber(
+                          displayedHeatLossSummary.htcDeltaTotal,
+                          1
+                        )} HTC deg C delta`
+                      : ""}
                   </p>
                   <p
                     className="pt-2 mt-2 border-t border-gray-200 text-[11px] sm:text-xs leading-snug text-gray-600 break-words"
@@ -4699,6 +4748,8 @@ const BuildingDashboardPanel = ({ building }) => {
                       HLA confidence:{" "}
                       {hasWeakSummerHddSample
                         ? "Low confidence / summer HDD sample"
+                        : hasWeakHtcSample
+                        ? "Low confidence / weak HTC sample"
                         : heatLossSummary.hlaConfidence === "audit-grade"
                         ? "Audit-grade daily baseline"
                         : heatLossSummary.hlaConfidence === "indicative"
