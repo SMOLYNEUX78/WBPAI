@@ -854,14 +854,26 @@ const BuildingDashboardPanel = ({ building }) => {
       const inside = Number(row.temperature_inside);
       const outside = Number(row.temperature_outside);
 
-      return !Number.isNaN(inside) && !Number.isNaN(outside) && inside !== 0 && outside >= 24;
+      return (
+        Number.isFinite(inside) &&
+        Number.isFinite(outside) &&
+        inside !== 0 &&
+        outside !== 0 &&
+        outside >= 24
+      );
     });
 
     const coldRows = rows.filter((row) => {
       const inside = Number(row.temperature_inside);
       const outside = Number(row.temperature_outside);
 
-      return !Number.isNaN(inside) && !Number.isNaN(outside) && inside !== 0 && outside <= 10;
+      return (
+        Number.isFinite(inside) &&
+        Number.isFinite(outside) &&
+        inside !== 0 &&
+        outside !== 0 &&
+        outside <= 10
+      );
     });
 
     const hotScore = hotRows.length
