@@ -227,6 +227,8 @@ const BuildingDashboardPanel = ({ building }) => {
     totalSavedKwh: null,
     energyCostSavedGbp: null,
     carbonCredits: null,
+    calculationVersion: null,
+    calculationStatus: "pending",
   };
   const defaultHeatLossSummary = {
     kwhPerHdd: null,
@@ -318,6 +320,8 @@ const BuildingDashboardPanel = ({ building }) => {
           totalSavedKwh: Number(summary.totalSavedKwh),
           energyCostSavedGbp: Number(summary.energyCostSavedGbp),
           carbonCredits: Number(summary.carbonCredits),
+          calculationVersion: summary.calculationVersion || null,
+          calculationStatus: summary.calculationStatus || "current",
         }
       : defaultCarbonIntervalSavingsSummary;
   const readCachedWeeklyTrendData = () =>
@@ -2989,7 +2993,10 @@ const BuildingDashboardPanel = ({ building }) => {
       return;
     }
 
-    const applyPersistedSavingsSummary = (summaryRow) => {
+    const applyPersistedSavingsSummary = (
+      summaryRow,
+      calculationStatus = "current"
+    ) => {
       const totalSavedKgCo2e = Number(summaryRow.total_saved_kgco2e);
       const totalSavedKwh = Number(summaryRow.total_saved_kwh);
       const energyCostSavedGbp = Number(summaryRow.total_energy_cost_saved_gbp);
@@ -3025,6 +3032,8 @@ const BuildingDashboardPanel = ({ building }) => {
           ? energyCostSavedGbp
           : null,
         carbonCredits: Number.isFinite(totalCredits) ? totalCredits : null,
+        calculationVersion: summaryRow.calculation_version || null,
+        calculationStatus,
       });
     };
     const isCurrentPersistedSavingsSummary = (summaryRow) => {
@@ -3052,6 +3061,11 @@ const BuildingDashboardPanel = ({ building }) => {
         hasCurrentValueMethod
       );
     };
+    const hasUsablePersistedSavingsSummary = (summaryRow) =>
+      Number.isFinite(Number(summaryRow?.total_saved_kgco2e)) &&
+      Number.isFinite(Number(summaryRow?.total_saved_kwh)) &&
+      Number.isFinite(Number(summaryRow?.total_energy_cost_saved_gbp)) &&
+      Number.isFinite(Number(summaryRow?.carbon_credits));
 
     try {
       const { data: summaryData, error: summaryError } = await supabase
@@ -3066,6 +3080,13 @@ const BuildingDashboardPanel = ({ building }) => {
       if (!summaryError && summaryData) {
         if (isCurrentPersistedSavingsSummary(summaryData)) {
           applyPersistedSavingsSummary(summaryData);
+          return;
+        }
+        if (hasUsablePersistedSavingsSummary(summaryData)) {
+          applyPersistedSavingsSummary(summaryData, "stale");
+          console.warn(
+            "Carbon savings summary is stale; displaying it until the tablet writes a v3 interval summary."
+          );
           return;
         }
         console.warn(
@@ -3866,6 +3887,14 @@ const BuildingDashboardPanel = ({ building }) => {
           carbonIntervalSavingsSummary.fromDate
         } to ${carbonIntervalSavingsSummary.toDate}`
       : "Awaiting persisted carbon summary";
+  const carbonCalculationStatus =
+    carbonIntervalSavingsSummary.calculationStatus === "stale"
+      ? `stale ${
+          carbonIntervalSavingsSummary.calculationVersion || "legacy"
+        } summary`
+      : carbonIntervalSavingsSummary.calculationVersion
+      ? `${carbonIntervalSavingsSummary.calculationVersion} summary`
+      : "awaiting summary";
   const trendMetrics = [
     {
       key: "electricity",
@@ -5465,7 +5494,7 @@ const BuildingDashboardPanel = ({ building }) => {
               </button>
             </div>
             <p className="mt-3 text-xs font-medium text-gray-600">
-              Calculation: {carbonCalculationWindow}
+              Calculation: {carbonCalculationWindow} / {carbonCalculationStatus}
               {carbonIntervalSavingsSummary.calculatedAt
                 ? ` / updated ${new Date(
                     carbonIntervalSavingsSummary.calculatedAt
