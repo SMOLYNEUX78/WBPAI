@@ -2423,19 +2423,8 @@ const BuildingDashboardPanel = ({ building }) => {
         humidity: humidityStabilityScore,
         resilience: resilienceScore,
       });
-      const measuredIaqCategories = [
-        co2Values,
-        vocValues,
-        pm25Values,
-        pm10Values,
-        hchoValues,
-        no2Values,
-      ].filter((values) => values.length > 0).length;
       const calculatedHealthScore = Number.isFinite(ieqPenaltyFactor)
-        ? Math.min(
-            ieqPenaltyFactor * 100,
-            measuredIaqCategories >= 6 ? 100 : 98
-          )
+        ? clampScore(ieqPenaltyFactor * 100)
         : null;
 
       const estimatedArea =
