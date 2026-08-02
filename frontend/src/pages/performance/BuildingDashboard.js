@@ -6,7 +6,7 @@ import supabase from "../../supabaseClient";
 const DEFAULT_MATTERPORT_URL = "https://my.matterport.com/show/?m=zHm8SwWeHiN";
 const HDD_BASE_TEMP_C = 15.5;
 const FALLBACK_CARBON_PRICE_GBP_PER_TONNE = 65;
-const CARBON_SAVINGS_CALCULATION_VERSION = "enerphit-certified-v2";
+const CARBON_SAVINGS_CALCULATION_VERSION = "enerphit-certified-v3";
 const CARBON_SAVINGS_ENERGY_VALUE_METHOD =
   "saved_kwh_x_measured_baseline_blended_tariff";
 const CARBON_INTERVAL_SAVINGS_CACHE_KEY = "carbonIntervalSavingsSummary:v4";
@@ -3043,7 +3043,7 @@ const BuildingDashboardPanel = ({ building }) => {
         Number.isFinite(Number(summaryRow?.total_saved_kwh)) &&
         Number.isFinite(Number(summaryRow?.total_energy_cost_saved_gbp));
       const hasCurrentValueMethod =
-        rawPayload.energyValueMethod === CARBON_SAVINGS_ENERGY_VALUE_METHOD ||
+        rawPayload.energyValueMethod === CARBON_SAVINGS_ENERGY_VALUE_METHOD &&
         rawPayload.summaryAggregation === "interval_accrued_plus_daily_fallback";
 
       return (

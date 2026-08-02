@@ -34,7 +34,7 @@ const RUN_SCHEDULE =
 const CRON_SCHEDULE = process.env.CARBON_SAVINGS_CRON || "*/15 * * * *";
 const PAGE_SIZE = Number(process.env.CARBON_SAVINGS_PAGE_SIZE || 1000);
 const MAX_PAGES = Number(process.env.CARBON_SAVINGS_MAX_PAGES || 200);
-const CALCULATION_VERSION = "enerphit-certified-v2";
+const CALCULATION_VERSION = "enerphit-certified-v3";
 const ENERGY_VALUE_METHOD = "saved_kwh_x_measured_baseline_blended_tariff";
 let supportsExtendedSavingsColumns = true;
 
