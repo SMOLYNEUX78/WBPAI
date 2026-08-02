@@ -7,6 +7,8 @@ const DEFAULT_MATTERPORT_URL = "https://my.matterport.com/show/?m=zHm8SwWeHiN";
 const HDD_BASE_TEMP_C = 15.5;
 const FALLBACK_CARBON_PRICE_GBP_PER_TONNE = 65;
 const CARBON_SAVINGS_CALCULATION_VERSION = "enerphit-certified-v3";
+const CARBON_SAVINGS_SCENARIO = "enerphit-certified-v3";
+const LEGACY_CARBON_SAVINGS_SCENARIO = "enerphit-certified";
 const CARBON_SAVINGS_ENERGY_VALUE_METHOD =
   "saved_kwh_x_measured_baseline_blended_tariff";
 const CARBON_INTERVAL_SAVINGS_CACHE_KEY = "carbonIntervalSavingsSummary:v4";
@@ -3060,19 +3062,27 @@ const BuildingDashboardPanel = ({ building }) => {
       const { data: summaryData, error: summaryError } = await supabase
         .from("CarbonSavingsSummary")
         .select(
-          "from_date, to_date, calculated_at, daily_rows, total_saved_kgco2e, total_saved_kwh, total_energy_cost_saved_gbp, carbon_credits, latest_date, latest_saved_kgco2e, latest_saved_kwh, latest_energy_cost_saved_gbp, calculation_version, raw_payload"
+          "scenario, from_date, to_date, calculated_at, daily_rows, total_saved_kgco2e, total_saved_kwh, total_energy_cost_saved_gbp, carbon_credits, latest_date, latest_saved_kgco2e, latest_saved_kwh, latest_energy_cost_saved_gbp, calculation_version, raw_payload"
         )
         .eq("building_id", dataSourceBuildingId)
-        .eq("scenario", "enerphit-certified")
-        .maybeSingle();
+        .in("scenario", [
+          CARBON_SAVINGS_SCENARIO,
+          LEGACY_CARBON_SAVINGS_SCENARIO,
+        ]);
 
-      if (!summaryError && summaryData) {
-        if (isCurrentPersistedSavingsSummary(summaryData)) {
-          applyPersistedSavingsSummary(summaryData);
+      if (!summaryError && summaryData?.length) {
+        const currentSummary = summaryData.find(isCurrentPersistedSavingsSummary);
+        const fallbackSummary =
+          summaryData.find(
+            (row) => row.scenario === LEGACY_CARBON_SAVINGS_SCENARIO
+          ) || summaryData.find(hasUsablePersistedSavingsSummary);
+
+        if (currentSummary) {
+          applyPersistedSavingsSummary(currentSummary);
           return;
         }
-        if (hasUsablePersistedSavingsSummary(summaryData)) {
-          applyPersistedSavingsSummary(summaryData, "stale");
+        if (hasUsablePersistedSavingsSummary(fallbackSummary)) {
+          applyPersistedSavingsSummary(fallbackSummary, "stale");
           console.warn(
             "Carbon savings summary is stale; displaying it until the tablet writes a v3 interval summary."
           );

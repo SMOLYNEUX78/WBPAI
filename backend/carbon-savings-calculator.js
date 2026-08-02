@@ -7,7 +7,7 @@ const SUPABASE_KEY = process.env.SUPABASE_KEY;
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const BUILDING_ID = process.env.CARBON_SAVINGS_BUILDING_ID || "home";
-const SCENARIO = process.env.CARBON_SAVINGS_SCENARIO || "enerphit-certified";
+const SCENARIO = process.env.CARBON_SAVINGS_SCENARIO || "enerphit-certified-v3";
 const INTERNAL_AREA_M2 = Number(process.env.CARBON_SAVINGS_AREA_M2 || 99.2);
 const ENERPHIT_EUI_KWH_M2_YEAR = Number(
   process.env.ENERPHIT_EUI_KWH_M2_YEAR ||
