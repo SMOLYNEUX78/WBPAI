@@ -31,7 +31,7 @@ const TO_DATE = process.env.CARBON_SAVINGS_TO;
 const DRY_RUN = process.env.CARBON_SAVINGS_DRY_RUN === "true";
 const RUN_SCHEDULE =
   process.argv.includes("--schedule") || process.env.CARBON_SAVINGS_SCHEDULE === "true";
-const CRON_SCHEDULE = process.env.CARBON_SAVINGS_CRON || "*/15 * * * *";
+const CRON_SCHEDULE = process.env.CARBON_SAVINGS_CRON || "0 * * * *";
 const PAGE_SIZE = Number(process.env.CARBON_SAVINGS_PAGE_SIZE || 1000);
 const MAX_PAGES = Number(process.env.CARBON_SAVINGS_MAX_PAGES || 200);
 const CALCULATION_VERSION = "enerphit-certified-v3";
