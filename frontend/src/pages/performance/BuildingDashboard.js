@@ -1220,7 +1220,20 @@ const BuildingDashboardPanel = ({ building }) => {
 
     const snapshotWeeklyTrend = snapshot.weekly_trend;
     if (Array.isArray(snapshotWeeklyTrend?.data)) {
-      applyWeeklyTrendData(snapshotWeeklyTrend.data);
+      const snapshotHasFloorHumidity = snapshotWeeklyTrend.data.some(
+        (point) =>
+          Number.isFinite(Number(point?.upstairsHumidity)) ||
+          Number.isFinite(Number(point?.downstairsHumidity))
+      );
+      const currentHasFloorHumidity = weeklyTrendData.some(
+        (point) =>
+          Number.isFinite(Number(point?.upstairsHumidity)) ||
+          Number.isFinite(Number(point?.downstairsHumidity))
+      );
+
+      if (snapshotHasFloorHumidity || !currentHasFloorHumidity) {
+        applyWeeklyTrendData(snapshotWeeklyTrend.data);
+      }
     }
 
     return true;
@@ -3682,6 +3695,25 @@ const BuildingDashboardPanel = ({ building }) => {
   }, [dataSourceBuildingId, matterportMetadata.internalArea]);
 
   useEffect(() => {
+    if (dataSourceBuildingId !== "home" || selectedHealthTrendArea === "all") {
+      return;
+    }
+
+    const floorMetricKey =
+      selectedHealthTrendArea === "upstairs"
+        ? "upstairsHumidity"
+        : "downstairsHumidity";
+    const hasFloorTrendData = weeklyTrendData.some((point) =>
+      Number.isFinite(Number(point?.[floorMetricKey]))
+    );
+
+    if (!hasFloorTrendData) {
+      fetchWeeklyPerformanceTrend();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dataSourceBuildingId, selectedHealthTrendArea]);
+
+  useEffect(() => {
     if (!isCarbonCreditTab) {
       return undefined;
     }
@@ -4558,6 +4590,10 @@ const BuildingDashboardPanel = ({ building }) => {
 
     setSelectedHealthTrendArea(areaKey);
     setSelectedTrendMetricKeys(option.metricKeys);
+
+    if (areaKey !== "all") {
+      fetchWeeklyPerformanceTrend();
+    }
   };
   const chartWidth = 980;
   const chartHeight = 340;
