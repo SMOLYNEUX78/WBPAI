@@ -12,6 +12,7 @@ const WEATHER_POLL_INTERVAL_MS = Number(
   process.env.WEATHER_POLL_INTERVAL_MS || 5 * 60 * 1000
 );
 const WEATHER_LOCATIONS = process.env.WEATHER_LOCATIONS || "";
+let supportsRainfallColumns = true;
 
 const defaultLocations = [
   {
@@ -56,13 +57,43 @@ async function fetchExternalTemperature({ buildingId, lat, lon }) {
     );
 
     const externalTemp = response.data.main.temp;
-    const { error } = await supabase.from("Readings").insert([
-      {
-        building_id: buildingId,
-        temperature_outside: externalTemp,
-        timestamp,
-      },
-    ]);
+    const rain1h = Number(response.data.rain?.["1h"] || 0);
+    const rain3h = Number(response.data.rain?.["3h"] || 0);
+    const weatherPayload = {
+      building_id: buildingId,
+      temperature_outside: externalTemp,
+      timestamp,
+      reading_type: "weather:openweather",
+    };
+
+    if (supportsRainfallColumns) {
+      weatherPayload.rainfall_mm = rain1h || rain3h || 0;
+      weatherPayload.rainfall_1h_mm = rain1h;
+      weatherPayload.rainfall_3h_mm = rain3h;
+    }
+
+    let { error } = await supabase.from("Readings").insert([weatherPayload]);
+
+    if (
+      error &&
+      supportsRainfallColumns &&
+      /rainfall|schema cache/i.test(error.message || "")
+    ) {
+      supportsRainfallColumns = false;
+      const {
+        rainfall_mm,
+        rainfall_1h_mm,
+        rainfall_3h_mm,
+        ...fallbackPayload
+      } = weatherPayload;
+      const fallbackResult = await supabase.from("Readings").insert([
+        fallbackPayload,
+      ]);
+      error = fallbackResult.error;
+      console.warn(
+        `[${timestamp}] Readings table is missing rainfall columns; weather rows will save temperature only until the migration is applied.`
+      );
+    }
 
     if (error) {
       console.error(
@@ -73,7 +104,7 @@ async function fetchExternalTemperature({ buildingId, lat, lon }) {
     }
 
     console.log(
-      `[${timestamp}] External temperature for ${buildingId}: ${externalTemp} C`
+      `[${timestamp}] Weather for ${buildingId}: ${externalTemp} C, rain ${rain1h || rain3h || 0} mm`
     );
   } catch (error) {
     console.error(

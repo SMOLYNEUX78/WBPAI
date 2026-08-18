@@ -260,6 +260,17 @@ const BuildingDashboardPanel = ({ building }) => {
     overheatingShare: null,
     hotThreshold: 24,
   };
+  const defaultRainHumiditySummary = {
+    rainySamples: 0,
+    drySamples: 0,
+    averageRainyRh: null,
+    averageDryRh: null,
+    rhUplift: null,
+    correlation: null,
+    maxRainfallMm: null,
+    windowDays: 30,
+    status: "pending",
+  };
   const defaultPerformanceSummary = {
     value: null,
     breakdown: {
@@ -338,6 +349,11 @@ const BuildingDashboardPanel = ({ building }) => {
       `${dataSourceBuildingId}:heatExclusionSummary`,
       defaultHeatExclusionSummary
     );
+  const readCachedRainHumiditySummary = () =>
+    readCachedDashboardState(
+      `${dataSourceBuildingId}:rainHumiditySummary`,
+      defaultRainHumiditySummary
+    );
   const readCachedPerformanceSummary = () =>
     readCachedDashboardState(
       `${dataSourceBuildingId}:performanceSummary:v2`,
@@ -403,6 +419,9 @@ const BuildingDashboardPanel = ({ building }) => {
   );
   const [heatExclusionSummary, setHeatExclusionSummary] = useState(
     readCachedHeatExclusionSummary
+  );
+  const [rainHumiditySummary, setRainHumiditySummary] = useState(
+    readCachedRainHumiditySummary
   );
   const [weeklyTrendData, setWeeklyTrendData] = useState(readCachedWeeklyTrendData);
   const [selectedTrendMetricKeys, setSelectedTrendMetricKeys] = useState([]);
@@ -566,6 +585,30 @@ const BuildingDashboardPanel = ({ building }) => {
     values.length
       ? values.reduce((sum, value) => sum + value, 0) / values.length
       : 0;
+  const pearsonCorrelation = (pairs) => {
+    if (pairs.length < 3) {
+      return null;
+    }
+
+    const averageX = average(pairs.map((pair) => pair.x));
+    const averageY = average(pairs.map((pair) => pair.y));
+    const numerator = pairs.reduce(
+      (sum, pair) => sum + (pair.x - averageX) * (pair.y - averageY),
+      0
+    );
+    const denominatorX = Math.sqrt(
+      pairs.reduce((sum, pair) => sum + (pair.x - averageX) ** 2, 0)
+    );
+    const denominatorY = Math.sqrt(
+      pairs.reduce((sum, pair) => sum + (pair.y - averageY) ** 2, 0)
+    );
+
+    if (denominatorX === 0 || denominatorY === 0) {
+      return null;
+    }
+
+    return numerator / (denominatorX * denominatorY);
+  };
 
   const formatNumber = (value, digits = 4) =>
     Number.isFinite(value) ? value.toFixed(digits) : "No Data";
@@ -2178,6 +2221,152 @@ const BuildingDashboardPanel = ({ building }) => {
     }
   };
 
+  const fetchRainHumiditySummary = async () => {
+    if (dataSourceBuildingId !== "home") {
+      setRainHumiditySummary(defaultRainHumiditySummary);
+      return;
+    }
+
+    try {
+      const timestampFrom = new Date(
+        Date.now() - 30 * 24 * 60 * 60 * 1000
+      ).toISOString();
+      const [rainResult, humidityResult] = await Promise.all([
+        applyBuildingScope(
+          supabase
+            .from("Readings")
+            .select("timestamp, rainfall_mm, rainfall_1h_mm, rainfall_3h_mm")
+            .not("rainfall_mm", "is", null)
+            .gte("timestamp", timestampFrom)
+            .order("timestamp", { ascending: false })
+            .limit(5000)
+        ),
+        applyBuildingScope(
+          supabase
+            .from("Readings")
+            .select("timestamp, reading_type, humidity")
+            .in("reading_type", ["dyson:living_room", "dyson:downstairs"])
+            .not("humidity", "is", null)
+            .gte("timestamp", timestampFrom)
+            .order("timestamp", { ascending: false })
+            .limit(5000)
+        ),
+      ]);
+
+      if (
+        rainResult.error &&
+        /rainfall|schema cache/i.test(rainResult.error.message || "")
+      ) {
+        const nextSummary = {
+          ...defaultRainHumiditySummary,
+          status: "needs-rainfall-columns",
+        };
+        setRainHumiditySummary(nextSummary);
+        localStorage.setItem(
+          `${dataSourceBuildingId}:rainHumiditySummary`,
+          JSON.stringify(nextSummary)
+        );
+        return;
+      }
+
+      if (rainResult.error) throw rainResult.error;
+      if (humidityResult.error) throw humidityResult.error;
+
+      const bucketHour = (timestamp) => {
+        const date = new Date(timestamp);
+        if (Number.isNaN(date.getTime())) {
+          return null;
+        }
+        date.setMinutes(0, 0, 0);
+        return date.toISOString();
+      };
+      const rainByHour = new Map();
+      (rainResult.data || []).forEach((row) => {
+        const bucket = bucketHour(row.timestamp);
+        const rainfall = Math.max(
+          0,
+          Number(row.rainfall_mm ?? row.rainfall_1h_mm ?? row.rainfall_3h_mm ?? 0)
+        );
+
+        if (!bucket || !Number.isFinite(rainfall)) {
+          return;
+        }
+
+        rainByHour.set(bucket, (rainByHour.get(bucket) || 0) + rainfall);
+      });
+
+      const humidityByHour = new Map();
+      (humidityResult.data || []).forEach((row) => {
+        const bucket = bucketHour(row.timestamp);
+        const humidity = Number(row.humidity);
+
+        if (!bucket || !Number.isFinite(humidity)) {
+          return;
+        }
+
+        const values = humidityByHour.get(bucket) || [];
+        values.push(humidity);
+        humidityByHour.set(bucket, values);
+      });
+
+      const rows = Array.from(humidityByHour.entries())
+        .map(([bucket, values]) => {
+          const bucketTime = new Date(bucket).getTime();
+          const recentRainfall = [0, 1, 2, 3].reduce((sum, hoursAgo) => {
+            const rainDate = new Date(bucketTime - hoursAgo * 60 * 60 * 1000);
+            return sum + (rainByHour.get(rainDate.toISOString()) || 0);
+          }, 0);
+
+          return {
+            rainfall: recentRainfall,
+            humidity: average(values),
+          };
+        })
+        .filter(
+          (row) => Number.isFinite(row.rainfall) && Number.isFinite(row.humidity)
+        );
+      const rainyRows = rows.filter((row) => row.rainfall >= 0.1);
+      const dryRows = rows.filter((row) => row.rainfall < 0.1);
+      const averageRainyRh = rainyRows.length
+        ? average(rainyRows.map((row) => row.humidity))
+        : null;
+      const averageDryRh = dryRows.length
+        ? average(dryRows.map((row) => row.humidity))
+        : null;
+      const nextSummary = {
+        rainySamples: rainyRows.length,
+        drySamples: dryRows.length,
+        averageRainyRh,
+        averageDryRh,
+        rhUplift:
+          Number.isFinite(averageRainyRh) && Number.isFinite(averageDryRh)
+            ? averageRainyRh - averageDryRh
+            : null,
+        correlation: pearsonCorrelation(
+          rows.map((row) => ({ x: row.rainfall, y: row.humidity }))
+        ),
+        maxRainfallMm: rows.length
+          ? Math.max(...rows.map((row) => row.rainfall))
+          : null,
+        windowDays: 30,
+        status:
+          rainyRows.length >= 3 && dryRows.length >= 3
+            ? "ready"
+            : rainByHour.size > 0
+            ? "collecting"
+            : "pending-rainfall",
+      };
+
+      setRainHumiditySummary(nextSummary);
+      localStorage.setItem(
+        `${dataSourceBuildingId}:rainHumiditySummary`,
+        JSON.stringify(nextSummary)
+      );
+    } catch (err) {
+      console.error("Error fetching rain/RH summary:", err.message);
+    }
+  };
+
   const fetchExternalTemp = async () => {
     try {
       const { data, error } = await applyBuildingScope(
@@ -3259,6 +3448,7 @@ const BuildingDashboardPanel = ({ building }) => {
     setWeeklyTrendData(readCachedWeeklyTrendData());
     setHeatLossSummary(readCachedHeatLossSummary());
     setHeatExclusionSummary(readCachedHeatExclusionSummary());
+    setRainHumiditySummary(readCachedRainHumiditySummary());
     const cachedPerformanceSummary = readCachedPerformanceSummary();
     setPerformanceValue(
       Number.isFinite(cachedPerformanceSummary.value)
@@ -3273,6 +3463,7 @@ const BuildingDashboardPanel = ({ building }) => {
     fetchLongTermAverage();
     fetchHeatLossSummary();
     fetchHeatExclusionSummary();
+    fetchRainHumiditySummary();
     fetchExternalTemp();
     fetchIAQData();
     fetchWeeklyPerformanceTrend();
@@ -3289,6 +3480,7 @@ const BuildingDashboardPanel = ({ building }) => {
       fetchExternalTemp();
       fetchLongTermBuildingPerformance();
       fetchWeeklyPerformanceTrend();
+      fetchRainHumiditySummary();
     }, 5 * 60 * 1000);
 
     return () => clearInterval(interval);
@@ -3515,6 +3707,34 @@ const BuildingDashboardPanel = ({ building }) => {
       ? "warning"
       : "poor"
     : "pending";
+  const rainHumidityStatus =
+    rainHumiditySummary.status === "ready" &&
+    Number.isFinite(rainHumiditySummary.rhUplift)
+      ? rainHumiditySummary.rhUplift >= 8
+        ? "poor"
+        : rainHumiditySummary.rhUplift >= 4
+        ? "warning"
+        : "good"
+      : "pending";
+  const formatCorrelation = (value) => {
+    if (!Number.isFinite(value)) {
+      return "correlation pending";
+    }
+
+    if (value >= 0.6) {
+      return `strong correlation (${formatNumber(value, 2)})`;
+    }
+
+    if (value >= 0.35) {
+      return `moderate correlation (${formatNumber(value, 2)})`;
+    }
+
+    if (value >= 0.15) {
+      return `weak correlation (${formatNumber(value, 2)})`;
+    }
+
+    return `little correlation (${formatNumber(value, 2)})`;
+  };
   const formatHeatExclusionBuffer = (value) => {
     if (!Number.isFinite(value)) {
       return "Pending indoor/outdoor overlap";
@@ -4936,27 +5156,69 @@ const BuildingDashboardPanel = ({ building }) => {
                       : ""}
                   </p>
                   {!isNewPerformanceDeepDive ? (
-                    <div className={heatLossStatusClass(heatExclusionStatus)}>
-                      <p>
-                        <HeatLossStatusDot status={heatExclusionStatus} />{" "}
-                        <strong>Heat Exclusion:</strong>{" "}
-                        {formatHeatExclusionBuffer(
-                          heatExclusionSummary.averageBuffer
-                        )}
-                      </p>
-                      {heatExclusionSummary.sampleCount > 0 ? (
-                        <p className="pl-4 text-xs">
-                          {heatExclusionSummary.sampleCount} hot-weather sample(s)
-                          above {heatExclusionSummary.hotThreshold} deg C outside
-                          {Number.isFinite(heatExclusionSummary.overheatingShare)
-                            ? ` / ${formatNumber(
-                                heatExclusionSummary.overheatingShare * 100,
-                                0
-                              )}% at 28 deg C+ indoors`
-                            : ""}
+                    <>
+                      <div className={heatLossStatusClass(heatExclusionStatus)}>
+                        <p>
+                          <HeatLossStatusDot status={heatExclusionStatus} />{" "}
+                          <strong>Heat Exclusion:</strong>{" "}
+                          {formatHeatExclusionBuffer(
+                            heatExclusionSummary.averageBuffer
+                          )}
                         </p>
-                      ) : null}
-                    </div>
+                        {heatExclusionSummary.sampleCount > 0 ? (
+                          <p className="pl-4 text-xs">
+                            {heatExclusionSummary.sampleCount} hot-weather sample(s)
+                            above {heatExclusionSummary.hotThreshold} deg C outside
+                            {Number.isFinite(heatExclusionSummary.overheatingShare)
+                              ? ` / ${formatNumber(
+                                  heatExclusionSummary.overheatingShare * 100,
+                                  0
+                                )}% at 28 deg C+ indoors`
+                              : ""}
+                          </p>
+                        ) : null}
+                      </div>
+                      <div className={heatLossStatusClass(rainHumidityStatus)}>
+                        <p>
+                          <HeatLossStatusDot status={rainHumidityStatus} />{" "}
+                          <strong>Rain / Downstairs RH:</strong>{" "}
+                          {rainHumiditySummary.status === "needs-rainfall-columns"
+                            ? "Needs rainfall columns in Supabase"
+                            : rainHumiditySummary.status === "pending-rainfall"
+                            ? "Waiting for rainfall readings"
+                            : rainHumiditySummary.status === "collecting"
+                            ? "Collecting rain/dry comparison samples"
+                            : Number.isFinite(rainHumiditySummary.rhUplift)
+                            ? `${formatNumber(
+                                rainHumiditySummary.rhUplift,
+                                1
+                              )}% RH uplift after rain`
+                            : "Pending rain/RH overlap"}
+                        </p>
+                        {rainHumiditySummary.rainySamples > 0 ||
+                        rainHumiditySummary.drySamples > 0 ? (
+                          <p className="pl-4 text-xs">
+                            {rainHumiditySummary.rainySamples} rainy hour(s) /{" "}
+                            {rainHumiditySummary.drySamples} dry hour(s)
+                            {Number.isFinite(rainHumiditySummary.averageRainyRh) &&
+                            Number.isFinite(rainHumiditySummary.averageDryRh)
+                              ? ` / rainy ${formatNumber(
+                                  rainHumiditySummary.averageRainyRh,
+                                  1
+                                )}% vs dry ${formatNumber(
+                                  rainHumiditySummary.averageDryRh,
+                                  1
+                                )}%`
+                              : ""}
+                            {rainHumiditySummary.status === "ready"
+                              ? ` / ${formatCorrelation(
+                                  rainHumiditySummary.correlation
+                                )}`
+                              : ""}
+                          </p>
+                        ) : null}
+                      </div>
+                    </>
                   ) : (
                     <p className="text-emerald-700">
                       <HeatLossStatusDot status="good" />{" "}
