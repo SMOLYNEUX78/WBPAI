@@ -427,6 +427,7 @@ const BuildingDashboardPanel = ({ building }) => {
   );
   const [weeklyTrendData, setWeeklyTrendData] = useState(readCachedWeeklyTrendData);
   const [selectedTrendMetricKeys, setSelectedTrendMetricKeys] = useState([]);
+  const [selectedHealthTrendArea, setSelectedHealthTrendArea] = useState("all");
   const [hoveredTrendSlot, setHoveredTrendSlot] = useState(null);
 
   const matterportModelId = useMemo(
@@ -2996,6 +2997,8 @@ const BuildingDashboardPanel = ({ building }) => {
           internalTemp: [],
           externalTemp: [],
           humidity: [],
+          upstairsHumidity: [],
+          downstairsHumidity: [],
           pm25: [],
           vocs: [],
         };
@@ -3198,6 +3201,15 @@ const BuildingDashboardPanel = ({ building }) => {
         pushMetric("internalTemp", row.temperature_inside);
         pushMetric("externalTemp", row.temperature_outside);
         pushMetric("humidity", row.humidity);
+        if (row.reading_type === "dyson:upstairs") {
+          pushMetric("upstairsHumidity", row.humidity);
+        }
+        if (
+          row.reading_type === "dyson:downstairs" ||
+          row.reading_type === "dyson:living_room"
+        ) {
+          pushMetric("downstairsHumidity", row.humidity);
+        }
         pushMetric("pm25", row.pm25);
         pushMetric("vocs", row.vocs);
       });
@@ -3232,6 +3244,12 @@ const BuildingDashboardPanel = ({ building }) => {
           ? average(bucket.externalTemp)
           : null,
         humidity: bucket.humidity.length ? average(bucket.humidity) : null,
+        upstairsHumidity: bucket.upstairsHumidity.length
+          ? average(bucket.upstairsHumidity)
+          : null,
+        downstairsHumidity: bucket.downstairsHumidity.length
+          ? average(bucket.downstairsHumidity)
+          : null,
         pm25: bucket.pm25.length ? average(bucket.pm25) : null,
         vocs: bucket.vocs.length ? average(bucket.vocs) : null,
       }));
@@ -3294,6 +3312,8 @@ const BuildingDashboardPanel = ({ building }) => {
         "internalTemp",
         "externalTemp",
         "humidity",
+        "upstairsHumidity",
+        "downstairsHumidity",
         "pm25",
         "vocs",
       ];
@@ -3610,13 +3630,13 @@ const BuildingDashboardPanel = ({ building }) => {
 
       fetchExternalTemp();
       fetchIAQData();
+      fetchWeeklyPerformanceTrend();
 
       if (!hasSnapshot) {
         fetchLongTermAverage();
         fetchHeatLossSummary();
         fetchHeatExclusionSummary();
         fetchRainHumiditySummary();
-        fetchWeeklyPerformanceTrend();
       }
     };
 
@@ -4331,6 +4351,42 @@ const BuildingDashboardPanel = ({ building }) => {
       ],
     },
     {
+      key: "upstairsHumidity",
+      label: "Upstairs RH",
+      unit: "%",
+      color: "#4f46e5",
+      displayRange: { min: 20, max: 90 },
+      healthyLimits: [
+        { value: 40, label: "40 min" },
+        { value: 60, label: "60 max" },
+      ],
+      healthBands: [
+        { min: 70, max: 90, color: "#fee2e2", label: "High RH risk" },
+        { min: 60, max: 70, color: "#fef3c7", label: "High RH" },
+        { min: 40, max: 60, color: "#dcfce7", label: "Healthy" },
+        { min: 30, max: 40, color: "#fef3c7", label: "Low RH" },
+        { min: 20, max: 30, color: "#fee2e2", label: "Low RH risk" },
+      ],
+    },
+    {
+      key: "downstairsHumidity",
+      label: "Downstairs RH",
+      unit: "%",
+      color: "#9333ea",
+      displayRange: { min: 20, max: 90 },
+      healthyLimits: [
+        { value: 40, label: "40 min" },
+        { value: 60, label: "60 max" },
+      ],
+      healthBands: [
+        { min: 70, max: 90, color: "#fee2e2", label: "High RH risk" },
+        { min: 60, max: 70, color: "#fef3c7", label: "High RH" },
+        { min: 40, max: 60, color: "#dcfce7", label: "Healthy" },
+        { min: 30, max: 40, color: "#fef3c7", label: "Low RH" },
+        { min: 20, max: 30, color: "#fee2e2", label: "Low RH risk" },
+      ],
+    },
+    {
       key: "pm25",
       label: "PM2.5",
       unit: "ug/m3",
@@ -4394,7 +4450,55 @@ const BuildingDashboardPanel = ({ building }) => {
         selectedTrendMetricKeys.includes(metric.key)
       )
     : activeTrendMetrics;
-  const visibleTrendMetrics = selectedActiveTrendMetrics.length
+  const healthTrendAreaOptions = [
+    {
+      key: "all",
+      label: "All",
+      metricKeys: ["internalTemp", "externalTemp", "humidity", "pm25", "vocs"],
+    },
+    {
+      key: "upstairs",
+      label: "Upstairs",
+      metricKeys: ["upstairsHumidity", "internalTemp", "externalTemp"],
+    },
+    {
+      key: "downstairs",
+      label: "Downstairs",
+      metricKeys: ["downstairsHumidity", "internalTemp", "externalTemp"],
+    },
+  ]
+    .map((option) => ({
+      ...option,
+      metricKeys: option.metricKeys.filter((key) =>
+        activeTrendMetricKeys.includes(key)
+      ),
+    }))
+    .filter((option) => option.metricKeys.length > 0);
+  const healthTrendSelected =
+    selectedTrendMetricGroupKey === "health" ||
+    selectedTrendMetricKeys.some((key) =>
+      [
+        "internalTemp",
+        "externalTemp",
+        "humidity",
+        "upstairsHumidity",
+        "downstairsHumidity",
+        "pm25",
+        "vocs",
+      ].includes(key)
+    );
+  const activeHealthTrendArea =
+    healthTrendAreaOptions.find((option) => option.key === selectedHealthTrendArea) ||
+    healthTrendAreaOptions[0];
+  const areaFilteredTrendMetrics =
+    healthTrendSelected && activeHealthTrendArea
+      ? activeTrendMetrics.filter((metric) =>
+          activeHealthTrendArea.metricKeys.includes(metric.key)
+        )
+      : selectedActiveTrendMetrics;
+  const visibleTrendMetrics = areaFilteredTrendMetrics.length
+    ? areaFilteredTrendMetrics
+    : selectedActiveTrendMetrics.length
     ? selectedActiveTrendMetrics
     : activeTrendMetrics;
   const toggleTrendMetric = (metricKey) => {
@@ -4416,9 +4520,37 @@ const BuildingDashboardPanel = ({ building }) => {
     });
   };
   const selectTrendMetricGroup = (metricKeys) => {
-    setSelectedTrendMetricKeys(
-      metricKeys.filter((key) => activeTrendMetricKeys.includes(key))
+    const filteredKeys = metricKeys.filter((key) =>
+      activeTrendMetricKeys.includes(key)
     );
+    const healthKeys = ["internalTemp", "externalTemp", "humidity", "pm25", "vocs"];
+    const isHealthGroup =
+      filteredKeys.length === healthKeys.filter((key) =>
+        activeTrendMetricKeys.includes(key)
+      ).length &&
+      filteredKeys.every((key) => healthKeys.includes(key));
+
+    if (isHealthGroup && selectedHealthTrendArea !== "all") {
+      const areaKeys =
+        healthTrendAreaOptions.find((option) => option.key === selectedHealthTrendArea)
+          ?.metricKeys || filteredKeys;
+      setSelectedTrendMetricKeys(areaKeys);
+      return;
+    }
+
+    setSelectedTrendMetricKeys(
+      filteredKeys
+    );
+  };
+  const selectHealthTrendArea = (areaKey) => {
+    const option = healthTrendAreaOptions.find((item) => item.key === areaKey);
+
+    if (!option) {
+      return;
+    }
+
+    setSelectedHealthTrendArea(areaKey);
+    setSelectedTrendMetricKeys(option.metricKeys);
   };
   const chartWidth = 980;
   const chartHeight = 340;
@@ -4511,7 +4643,11 @@ const BuildingDashboardPanel = ({ building }) => {
       ]);
     }
 
-    if (metric.key === "humidity") {
+    if (
+      metric.key === "humidity" ||
+      metric.key === "upstairsHumidity" ||
+      metric.key === "downstairsHumidity"
+    ) {
       if (value >= 40 && value <= 60) {
         return linearScore(value, [
           { min: 40, max: 60, startScore: 30, endScore: 70 },
@@ -5510,6 +5646,29 @@ const BuildingDashboardPanel = ({ building }) => {
                   );
                 })}
               </div>
+              {healthTrendSelected && healthTrendAreaOptions.length > 1 ? (
+                <div className="flex flex-wrap gap-2 text-xs">
+                  {healthTrendAreaOptions.map((option) => {
+                    const optionSelected =
+                      (activeHealthTrendArea?.key || "all") === option.key;
+
+                    return (
+                      <button
+                        type="button"
+                        key={option.key}
+                        onClick={() => selectHealthTrendArea(option.key)}
+                        className={`rounded border px-3 py-1.5 font-semibold transition ${
+                          optionSelected
+                            ? "border-purple-600 bg-purple-600 text-white"
+                            : "border-gray-300 bg-white text-gray-700"
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
 
               <div className="w-full overflow-x-auto">
                 <svg
