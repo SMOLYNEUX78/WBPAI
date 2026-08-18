@@ -14,6 +14,7 @@ const allProcesses = [
   { name: "mqtt", script: "mqtt-handler.js" },
   { name: "glow-api", script: "glow-api-handler.js" },
   { name: "carbon-savings", script: "carbon-savings-calculator.js", args: ["--schedule"] },
+  { name: "dashboard-summary", script: "dashboard-summary-calculator.js", args: ["--schedule"] },
   { name: "milesight", script: "milesight-handler.js" },
   { name: "dyson", script: "dyson-handler.js" },
   { name: "thingsboard", script: "thingsboard-handler.js" },

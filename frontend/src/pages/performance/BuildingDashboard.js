@@ -13,6 +13,8 @@ const CARBON_SAVINGS_ENERGY_VALUE_METHOD =
   "saved_kwh_x_measured_baseline_blended_tariff";
 const CARBON_INTERVAL_SAVINGS_CACHE_KEY = "carbonIntervalSavingsSummary:v4";
 const CARBON_SUMMARY_REFRESH_MS = 12 * 60 * 60 * 1000;
+const DASHBOARD_SNAPSHOT_REFRESH_MS = 5 * 60 * 1000;
+const HEAVY_DASHBOARD_REFRESH_EVERY = 6;
 const MIN_BASELINE_METERED_DAYS = 7;
 const MIN_BASELINE_HDD_DAYS = 14;
 const MIN_RELIABLE_HDD_TOTAL = 10;
@@ -1112,6 +1114,144 @@ const BuildingDashboardPanel = ({ building }) => {
       `${dataSourceBuildingId}:weeklyTrendData`,
       JSON.stringify(nextWeeklyTrendData)
     );
+  };
+  const applyDashboardSnapshot = (snapshot) => {
+    if (!snapshot) {
+      return false;
+    }
+
+    const snapshotEnergySummary = snapshot.energy_summary;
+    if (snapshotEnergySummary && typeof snapshotEnergySummary === "object") {
+      const nextEnergySummary = {
+        ...defaultEnergySummary,
+        ...snapshotEnergySummary,
+      };
+      applyEnergySummary(nextEnergySummary, nextEnergySummary.totalDailyAverage);
+    }
+
+    const snapshotIaqSummary = snapshot.iaq_summary;
+    if (snapshotIaqSummary && typeof snapshotIaqSummary === "object") {
+      if (
+        snapshotIaqSummary.latestIaq &&
+        typeof snapshotIaqSummary.latestIaq === "object"
+      ) {
+        setSensorData((prev) => {
+          const nextSensorData = {
+            ...prev,
+            ...snapshotIaqSummary.latestIaq,
+          };
+
+          localStorage.setItem(
+            `${dataSourceBuildingId}:latestIaq`,
+            JSON.stringify(nextSensorData)
+          );
+          return nextSensorData;
+        });
+      }
+
+      if (Array.isArray(snapshotIaqSummary.roomIaq)) {
+        setRoomIaqData(snapshotIaqSummary.roomIaq);
+        localStorage.setItem(
+          `${dataSourceBuildingId}:roomIaq`,
+          JSON.stringify(snapshotIaqSummary.roomIaq)
+        );
+      }
+    }
+
+    const snapshotWeatherSummary = snapshot.weather_summary;
+    if (
+      snapshotWeatherSummary &&
+      typeof snapshotWeatherSummary === "object" &&
+      Number.isFinite(Number(snapshotWeatherSummary.externalTemp))
+    ) {
+      setSensorData((prev) => {
+        const nextSensorData = {
+          ...prev,
+          externalTemp: Number(snapshotWeatherSummary.externalTemp),
+        };
+
+        localStorage.setItem(
+          `${dataSourceBuildingId}:latestIaq`,
+          JSON.stringify(nextSensorData)
+        );
+        return nextSensorData;
+      });
+    }
+
+    const snapshotRainHumiditySummary = snapshot.rain_humidity_summary;
+    if (
+      snapshotRainHumiditySummary &&
+      typeof snapshotRainHumiditySummary === "object" &&
+      Object.keys(snapshotRainHumiditySummary).length > 0
+    ) {
+      const nextRainHumiditySummary = {
+        ...defaultRainHumiditySummary,
+        ...snapshotRainHumiditySummary,
+      };
+      setRainHumiditySummary(nextRainHumiditySummary);
+      localStorage.setItem(
+        `${dataSourceBuildingId}:rainHumiditySummary`,
+        JSON.stringify(nextRainHumiditySummary)
+      );
+    }
+
+    const snapshotPerformanceSummary = snapshot.performance_summary;
+    if (
+      snapshotPerformanceSummary &&
+      typeof snapshotPerformanceSummary === "object" &&
+      Number.isFinite(Number(snapshotPerformanceSummary.value))
+    ) {
+      const nextPerformanceSummary = {
+        ...defaultPerformanceSummary,
+        ...snapshotPerformanceSummary,
+        breakdown: {
+          ...defaultPerformanceSummary.breakdown,
+          ...(snapshotPerformanceSummary.breakdown || {}),
+        },
+      };
+      setPerformanceValue(Number(nextPerformanceSummary.value));
+      setPerformanceBreakdown(nextPerformanceSummary.breakdown);
+      localStorage.setItem(
+        `${dataSourceBuildingId}:performanceSummary:v2`,
+        JSON.stringify(nextPerformanceSummary)
+      );
+    }
+
+    const snapshotWeeklyTrend = snapshot.weekly_trend;
+    if (Array.isArray(snapshotWeeklyTrend?.data)) {
+      applyWeeklyTrendData(snapshotWeeklyTrend.data);
+    }
+
+    return true;
+  };
+  const fetchDashboardSnapshot = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("BuildingLatestSnapshot")
+        .select(
+          "calculated_at, energy_summary, iaq_summary, weather_summary, rain_humidity_summary, performance_summary, weekly_trend"
+        )
+        .eq("building_id", dataSourceBuildingId)
+        .maybeSingle();
+
+      if (
+        error &&
+        /BuildingLatestSnapshot|schema cache|does not exist/i.test(
+          error.message || ""
+        )
+      ) {
+        return false;
+      }
+
+      if (error) {
+        throw error;
+      }
+
+      return applyDashboardSnapshot(data);
+    } catch (err) {
+      console.error("Error fetching dashboard snapshot:", err.message);
+      return false;
+    }
   };
   const updateMrvEvidence = (updates) => {
     setMrvEvidence((currentEvidence) => {
@@ -3460,42 +3600,56 @@ const BuildingDashboardPanel = ({ building }) => {
       ...(cachedPerformanceSummary.breakdown || {}),
     });
     setMrvEvidence(readCachedMrvEvidence());
-    fetchLongTermAverage();
-    fetchHeatLossSummary();
-    fetchHeatExclusionSummary();
-    fetchRainHumiditySummary();
-    fetchExternalTemp();
-    fetchIAQData();
-    fetchWeeklyPerformanceTrend();
+    let cancelled = false;
+    const refreshBuilding = async () => {
+      const hasSnapshot = await fetchDashboardSnapshot();
+
+      if (cancelled) {
+        return;
+      }
+
+      fetchExternalTemp();
+      fetchIAQData();
+
+      if (!hasSnapshot) {
+        fetchLongTermAverage();
+        fetchHeatLossSummary();
+        fetchHeatExclusionSummary();
+        fetchRainHumiditySummary();
+        fetchWeeklyPerformanceTrend();
+      }
+    };
+
+    refreshBuilding();
+    return () => {
+      cancelled = true;
+    };
     // Building switch refresh only; polling effect below handles continuing updates.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataSourceBuildingId]);
 
   useEffect(() => {
     fetchLongTermBuildingPerformance();
+    let refreshCount = 0;
 
     const interval = setInterval(() => {
-      fetchLongTermAverage();
+      refreshCount += 1;
+      fetchDashboardSnapshot();
       fetchIAQData();
       fetchExternalTemp();
-      fetchLongTermBuildingPerformance();
-      fetchWeeklyPerformanceTrend();
-      fetchRainHumiditySummary();
-    }, 5 * 60 * 1000);
+
+      if (refreshCount % HEAVY_DASHBOARD_REFRESH_EVERY === 0) {
+        fetchLongTermAverage();
+        fetchLongTermBuildingPerformance();
+        fetchWeeklyPerformanceTrend();
+        fetchRainHumiditySummary();
+      }
+    }, DASHBOARD_SNAPSHOT_REFRESH_MS);
 
     return () => clearInterval(interval);
     // The interval should reset only when the selected building or area source changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    dataSourceBuildingId,
-    historicalPerformance,
-    matterportMetadata.internalArea,
-    heatLossSummary.weatherNormalisedEui,
-    heatLossSummary.kwhPerHdd,
-    heatLossSummary.htcEstimate,
-    heatExclusionSummary.averageBuffer,
-    heatExclusionSummary.overheatingShare,
-  ]);
+  }, [dataSourceBuildingId, matterportMetadata.internalArea]);
 
   useEffect(() => {
     if (!isCarbonCreditTab) {

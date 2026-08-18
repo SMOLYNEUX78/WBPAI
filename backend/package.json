@@ -13,6 +13,8 @@
     "backfill:rain-history": "node rain-history-backfill.js",
     "calculate:carbon-savings": "node carbon-savings-calculator.js",
     "start:carbon-savings": "node carbon-savings-calculator.js --schedule",
+    "calculate:dashboard-summary": "node dashboard-summary-calculator.js",
+    "start:dashboard-summary": "node dashboard-summary-calculator.js --schedule",
     "start:milesight": "node milesight-handler.js",
     "start:dyson": "node dyson-handler.js",
     "start:thingsboard": "node thingsboard-handler.js"
