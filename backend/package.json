@@ -10,6 +10,7 @@
     "start:mqtt": "node mqtt-handler.js",
     "start:glow-api": "node glow-api-handler.js",
     "backfill:glow-history": "node glow-history-backfill.js",
+    "backfill:rain-history": "node rain-history-backfill.js",
     "calculate:carbon-savings": "node carbon-savings-calculator.js",
     "start:carbon-savings": "node carbon-savings-calculator.js --schedule",
     "start:milesight": "node milesight-handler.js",
