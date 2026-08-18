@@ -4476,27 +4476,19 @@ const BuildingDashboardPanel = ({ building }) => {
       label: "Downstairs",
       metricKeys: ["downstairsHumidity"],
     },
-  ]
-    .map((option) => ({
-      ...option,
-      metricKeys: option.metricKeys.filter((key) =>
-        activeTrendMetricKeys.includes(key)
-      ),
-    }))
-    .filter((option) => option.metricKeys.length > 0);
+  ];
+  const healthTrendKeys = [
+    "internalTemp",
+    "externalTemp",
+    "humidity",
+    "upstairsHumidity",
+    "downstairsHumidity",
+    "pm25",
+    "vocs",
+  ];
   const healthTrendSelected =
     selectedTrendMetricGroupKey === "health" ||
-    selectedTrendMetricKeys.some((key) =>
-      [
-        "internalTemp",
-        "externalTemp",
-        "humidity",
-        "upstairsHumidity",
-        "downstairsHumidity",
-        "pm25",
-        "vocs",
-      ].includes(key)
-    );
+    selectedTrendMetricKeys.some((key) => healthTrendKeys.includes(key));
   const activeHealthTrendArea =
     healthTrendAreaOptions.find((option) => option.key === selectedHealthTrendArea) ||
     healthTrendAreaOptions[0];
@@ -4506,11 +4498,16 @@ const BuildingDashboardPanel = ({ building }) => {
           activeHealthTrendArea.metricKeys.includes(metric.key)
         )
       : selectedActiveTrendMetrics;
-  const visibleTrendMetrics = areaFilteredTrendMetrics.length
-    ? areaFilteredTrendMetrics
-    : selectedActiveTrendMetrics.length
-    ? selectedActiveTrendMetrics
-    : activeTrendMetrics;
+  const visibleTrendMetrics =
+    healthTrendSelected &&
+    activeHealthTrendArea &&
+    activeHealthTrendArea.key !== "all"
+      ? areaFilteredTrendMetrics
+      : areaFilteredTrendMetrics.length
+      ? areaFilteredTrendMetrics
+      : selectedActiveTrendMetrics.length
+      ? selectedActiveTrendMetrics
+      : activeTrendMetrics;
   const toggleTrendMetric = (metricKey) => {
     setSelectedTrendMetricKeys((currentKeys) => {
       const activeKeys = activeTrendMetrics.map((metric) => metric.key);
@@ -5638,7 +5635,9 @@ const BuildingDashboardPanel = ({ building }) => {
             <>
               <div className="flex flex-wrap gap-2 text-xs">
                 {activeTrendMetricGroups.map((group) => {
-                  const groupSelected = selectedTrendMetricGroupKey === group.key;
+                  const groupSelected =
+                    selectedTrendMetricGroupKey === group.key ||
+                    (group.key === "health" && healthTrendSelected);
 
                   return (
                     <button
@@ -5656,7 +5655,7 @@ const BuildingDashboardPanel = ({ building }) => {
                   );
                 })}
               </div>
-              {healthTrendSelected && healthTrendAreaOptions.length > 1 ? (
+              {dataSourceBuildingId === "home" && healthTrendSelected ? (
                 <div className="flex flex-wrap gap-2 text-xs">
                   {healthTrendAreaOptions.map((option) => {
                     const optionSelected =
