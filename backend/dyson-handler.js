@@ -118,29 +118,7 @@ function mapEnvironmentalData(data) {
   };
 }
 
-function normalisedDeviceName(value) {
-  return String(value || "")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
-}
-
 function applyDeviceCapabilities(device, values) {
-  const deviceName = normalisedDeviceName(device.name);
-
-  if (deviceName === "living_room" || deviceName === "downstairs") {
-    return {
-      temperature_inside: values.temperature_inside,
-      humidity: values.humidity,
-      pm25: null,
-      pm10: null,
-      vocs: null,
-      hcho: null,
-      no2: null,
-    };
-  }
-
   return values;
 }
 

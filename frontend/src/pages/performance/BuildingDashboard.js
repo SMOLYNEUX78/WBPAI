@@ -5365,7 +5365,6 @@ const BuildingDashboardPanel = ({ building }) => {
                 ) : roomIaqData.length > 0 ? (
                   <div className="pt-3 mt-3 border-t border-gray-200 space-y-2">
                     {roomIaqData.map((room, roomIndex) => {
-                      const comfortOnlyRoom = room.label === "Downstairs";
                       const roomMetrics = [
                         {
                           label: "Temp",
@@ -5373,15 +5372,11 @@ const BuildingDashboardPanel = ({ building }) => {
                           unit: "deg C",
                         },
                         { label: "RH", value: room.humidity, unit: "%" },
-                        ...(comfortOnlyRoom
-                          ? []
-                          : [
-                              { label: "VOC", value: room.vocs, unit: "ppb" },
-                              { label: "PM2.5", value: room.pm25, unit: "ug/m3" },
-                              { label: "PM10", value: room.pm10, unit: "ug/m3" },
-                              { label: "HCHO", value: room.hcho, unit: "ppb" },
-                              { label: "NO2", value: room.no2, unit: "ppb" },
-                            ]),
+                        { label: "VOC", value: room.vocs, unit: "ppb" },
+                        { label: "PM2.5", value: room.pm25, unit: "ug/m3" },
+                        { label: "PM10", value: room.pm10, unit: "ug/m3" },
+                        { label: "HCHO", value: room.hcho, unit: "ppb" },
+                        { label: "NO2", value: room.no2, unit: "ppb" },
                       ].filter((metric) => Number.isFinite(metric.value));
 
                       return (
