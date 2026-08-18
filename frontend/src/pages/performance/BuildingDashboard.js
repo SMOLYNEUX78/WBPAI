@@ -5609,7 +5609,7 @@ const BuildingDashboardPanel = ({ building }) => {
           )}
         </div>
 
-        {!shouldShowDeepDive || isCarbonCreditTab ? null : (
+        {!shouldShowDeepDive ? null : (
         <div className="mt-4 bg-white rounded border p-3 sm:p-4 space-y-3 overflow-hidden">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
