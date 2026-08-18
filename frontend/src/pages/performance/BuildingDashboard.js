@@ -2956,10 +2956,20 @@ const BuildingDashboardPanel = ({ building }) => {
         for (let day = 0; day <= trendLookbackDays; day += 1) {
           const fromDate = new Date(dayStart.getTime() + day * 24 * 60 * 60 * 1000);
           const toDate = new Date(fromDate.getTime() + 24 * 60 * 60 * 1000);
+          const homeTrendReadingTypes =
+            dataSourceBuildingId === "home"
+              ? [
+                  "dyson:whole_home",
+                  "dyson:upstairs",
+                  "dyson:living_room",
+                  "dyson:downstairs",
+                ]
+              : null;
           const result = await fetchScopedIaqRows({
             includeTimestamp: true,
             includeReadingType: true,
-            limit: 240,
+            limit: dataSourceBuildingId === "home" ? 1500 : 240,
+            readingTypes: homeTrendReadingTypes,
             timestampFrom: fromDate.toISOString(),
             timestampTo: toDate.toISOString(),
           });
@@ -4459,12 +4469,12 @@ const BuildingDashboardPanel = ({ building }) => {
     {
       key: "upstairs",
       label: "Upstairs",
-      metricKeys: ["upstairsHumidity", "internalTemp", "externalTemp"],
+      metricKeys: ["upstairsHumidity"],
     },
     {
       key: "downstairs",
       label: "Downstairs",
-      metricKeys: ["downstairsHumidity", "internalTemp", "externalTemp"],
+      metricKeys: ["downstairsHumidity"],
     },
   ]
     .map((option) => ({
