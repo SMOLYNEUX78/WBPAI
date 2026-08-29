@@ -8,8 +8,14 @@ const BUILDING_IDS = (process.env.DASHBOARD_SUMMARY_BUILDING_IDS || "home,museum
 const CRON_SCHEDULE = process.env.DASHBOARD_SUMMARY_CRON || "*/30 * * * *";
 const ENERGY_LOOKBACK_DAYS = Number(process.env.DASHBOARD_SUMMARY_ENERGY_DAYS || 120);
 const SENSOR_LOOKBACK_DAYS = Number(process.env.DASHBOARD_SUMMARY_SENSOR_DAYS || 35);
+const RAIN_HUMIDITY_LOOKBACK_DAYS = Number(
+  process.env.DASHBOARD_SUMMARY_RAIN_HUMIDITY_DAYS || 180
+);
 const MAX_ENERGY_ROWS = Number(process.env.DASHBOARD_SUMMARY_MAX_ENERGY_ROWS || 5000);
 const MAX_SENSOR_ROWS = Number(process.env.DASHBOARD_SUMMARY_MAX_SENSOR_ROWS || 5000);
+const MAX_RAIN_HUMIDITY_ROWS = Number(
+  process.env.DASHBOARD_SUMMARY_MAX_RAIN_HUMIDITY_ROWS || 10000
+);
 
 const average = (values) => {
   const finiteValues = values.filter((value) => Number.isFinite(value));
@@ -114,6 +120,41 @@ async function fetchSensorRows(buildingId) {
 
   if (error) throw error;
   return data || [];
+}
+
+async function fetchRainHumidityRows(buildingId) {
+  if (buildingId !== "home") {
+    return { rainRows: [], humidityRows: [] };
+  }
+
+  const timestampFrom = isoDaysAgo(RAIN_HUMIDITY_LOOKBACK_DAYS);
+  const [rainResult, humidityResult] = await Promise.all([
+    supabase
+      .from("Readings")
+      .select("timestamp, rainfall_mm, rainfall_1h_mm, rainfall_3h_mm")
+      .eq("building_id", buildingId)
+      .not("rainfall_mm", "is", null)
+      .gte("timestamp", timestampFrom)
+      .order("timestamp", { ascending: false })
+      .limit(MAX_RAIN_HUMIDITY_ROWS),
+    supabase
+      .from("Readings")
+      .select("timestamp, reading_type, humidity")
+      .eq("building_id", buildingId)
+      .in("reading_type", ["dyson:living_room", "dyson:downstairs"])
+      .not("humidity", "is", null)
+      .gte("timestamp", timestampFrom)
+      .order("timestamp", { ascending: false })
+      .limit(MAX_RAIN_HUMIDITY_ROWS),
+  ]);
+
+  if (rainResult.error) throw rainResult.error;
+  if (humidityResult.error) throw humidityResult.error;
+
+  return {
+    rainRows: rainResult.data || [],
+    humidityRows: humidityResult.data || [],
+  };
 }
 
 function buildEnergySummary(energyRows) {
@@ -295,13 +336,20 @@ function buildWeatherSummary(sensorRows) {
   };
 }
 
-function buildRainHumiditySummary(sensorRows, buildingId) {
+function buildRainHumiditySummary({ sensorRows = [], rainRows, humidityRows, buildingId }) {
   if (buildingId !== "home") {
     return {};
   }
 
   const rainByHour = new Map();
-  sensorRows.forEach((row) => {
+  const rainSourceRows = Array.isArray(rainRows) ? rainRows : sensorRows;
+  const humiditySourceRows = Array.isArray(humidityRows)
+    ? humidityRows
+    : sensorRows.filter((row) =>
+        ["dyson:living_room", "dyson:downstairs"].includes(row.reading_type)
+      );
+
+  rainSourceRows.forEach((row) => {
     const bucket = bucketHour(row.timestamp);
     const rainfall = Number(row.rainfall_mm ?? row.rainfall_1h_mm ?? row.rainfall_3h_mm);
     if (!bucket || !Number.isFinite(rainfall)) {
@@ -311,11 +359,7 @@ function buildRainHumiditySummary(sensorRows, buildingId) {
   });
 
   const humidityByHour = new Map();
-  sensorRows
-    .filter((row) =>
-      ["dyson:living_room", "dyson:downstairs"].includes(row.reading_type)
-    )
-    .forEach((row) => {
+  humiditySourceRows.forEach((row) => {
       const bucket = bucketHour(row.timestamp);
       const humidity = Number(row.humidity);
       if (!bucket || !Number.isFinite(humidity)) {
@@ -358,7 +402,7 @@ function buildRainHumiditySummary(sensorRows, buildingId) {
       rows.map((row) => ({ x: row.rainfall, y: row.humidity }))
     ),
     maxRainfallMm: rows.length ? Math.max(...rows.map((row) => row.rainfall)) : null,
-    windowDays: SENSOR_LOOKBACK_DAYS,
+    windowDays: RAIN_HUMIDITY_LOOKBACK_DAYS,
     status:
       rainyRows.length >= 3 && dryRows.length >= 3
         ? "ready"
@@ -369,15 +413,21 @@ function buildRainHumiditySummary(sensorRows, buildingId) {
 }
 
 async function upsertSummary(buildingId) {
-  const [energyRows, sensorRows] = await Promise.all([
+  const [energyRows, sensorRows, rainHumidityRows] = await Promise.all([
     fetchEnergyRows(buildingId),
     fetchSensorRows(buildingId),
+    fetchRainHumidityRows(buildingId),
   ]);
   const calculatedAt = new Date().toISOString();
   const energySummary = buildEnergySummary(energyRows);
   const iaqSummary = buildSensorSummary(sensorRows);
   const weatherSummary = buildWeatherSummary(sensorRows);
-  const rainHumiditySummary = buildRainHumiditySummary(sensorRows, buildingId);
+  const rainHumiditySummary = buildRainHumiditySummary({
+    sensorRows,
+    rainRows: rainHumidityRows.rainRows,
+    humidityRows: rainHumidityRows.humidityRows,
+    buildingId,
+  });
   const snapshot = {
     building_id: buildingId,
     calculated_at: calculatedAt,
@@ -390,8 +440,11 @@ async function upsertSummary(buildingId) {
     raw_payload: {
       energy_rows: energyRows.length,
       sensor_rows: sensorRows.length,
+      rain_rows: rainHumidityRows.rainRows.length,
+      rain_humidity_rows: rainHumidityRows.humidityRows.length,
       energy_lookback_days: ENERGY_LOOKBACK_DAYS,
       sensor_lookback_days: SENSOR_LOOKBACK_DAYS,
+      rain_humidity_lookback_days: RAIN_HUMIDITY_LOOKBACK_DAYS,
     },
   };
   const today = calculatedAt.slice(0, 10);

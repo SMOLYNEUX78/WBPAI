@@ -15,6 +15,7 @@ const CARBON_INTERVAL_SAVINGS_CACHE_KEY = "carbonIntervalSavingsSummary:v4";
 const CARBON_SUMMARY_REFRESH_MS = 12 * 60 * 60 * 1000;
 const DASHBOARD_SNAPSHOT_REFRESH_MS = 5 * 60 * 1000;
 const HEAVY_DASHBOARD_REFRESH_EVERY = 6;
+const RAIN_HUMIDITY_LOOKBACK_DAYS = 180;
 const MIN_BASELINE_METERED_DAYS = 7;
 const MIN_BASELINE_HDD_DAYS = 14;
 const MIN_RELIABLE_HDD_TOTAL = 10;
@@ -2383,7 +2384,7 @@ const BuildingDashboardPanel = ({ building }) => {
 
     try {
       const timestampFrom = new Date(
-        Date.now() - 30 * 24 * 60 * 60 * 1000
+        Date.now() - RAIN_HUMIDITY_LOOKBACK_DAYS * 24 * 60 * 60 * 1000
       ).toISOString();
       const [rainResult, humidityResult] = await Promise.all([
         applyBuildingScope(
@@ -2502,7 +2503,7 @@ const BuildingDashboardPanel = ({ building }) => {
         maxRainfallMm: rows.length
           ? Math.max(...rows.map((row) => row.rainfall))
           : null,
-        windowDays: 30,
+        windowDays: RAIN_HUMIDITY_LOOKBACK_DAYS,
         status:
           rainyRows.length >= 3 && dryRows.length >= 3
             ? "ready"
@@ -3653,13 +3654,13 @@ const BuildingDashboardPanel = ({ building }) => {
 
       fetchExternalTemp();
       fetchIAQData();
+      fetchRainHumiditySummary();
       fetchWeeklyPerformanceTrend();
 
       if (!hasSnapshot) {
         fetchLongTermAverage();
         fetchHeatLossSummary();
         fetchHeatExclusionSummary();
-        fetchRainHumiditySummary();
       }
     };
 
