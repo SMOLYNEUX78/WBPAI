@@ -141,7 +141,7 @@ async function fetchRainHumidityRows(buildingId) {
       .from("Readings")
       .select("timestamp, reading_type, humidity")
       .eq("building_id", buildingId)
-      .in("reading_type", ["dyson:living_room", "dyson:downstairs"])
+      .in("reading_type", ["dyson:living_room", "dyson:downstairs", "dyson:upstairs"])
       .not("humidity", "is", null)
       .gte("timestamp", timestampFrom)
       .order("timestamp", { ascending: false })
@@ -336,39 +336,18 @@ function buildWeatherSummary(sensorRows) {
   };
 }
 
-function buildRainHumiditySummary({ sensorRows = [], rainRows, humidityRows, buildingId }) {
-  if (buildingId !== "home") {
-    return {};
-  }
-
-  const rainByHour = new Map();
-  const rainSourceRows = Array.isArray(rainRows) ? rainRows : sensorRows;
-  const humiditySourceRows = Array.isArray(humidityRows)
-    ? humidityRows
-    : sensorRows.filter((row) =>
-        ["dyson:living_room", "dyson:downstairs"].includes(row.reading_type)
-      );
-
-  rainSourceRows.forEach((row) => {
+function buildRainHumidityAreaSummary({ rainByHour, humidityRows, windowDays }) {
+  const humidityByHour = new Map();
+  humidityRows.forEach((row) => {
     const bucket = bucketHour(row.timestamp);
-    const rainfall = Number(row.rainfall_mm ?? row.rainfall_1h_mm ?? row.rainfall_3h_mm);
-    if (!bucket || !Number.isFinite(rainfall)) {
+    const humidity = Number(row.humidity);
+    if (!bucket || !Number.isFinite(humidity)) {
       return;
     }
-    rainByHour.set(bucket, (rainByHour.get(bucket) || 0) + Math.max(0, rainfall));
+    const values = humidityByHour.get(bucket) || [];
+    values.push(humidity);
+    humidityByHour.set(bucket, values);
   });
-
-  const humidityByHour = new Map();
-  humiditySourceRows.forEach((row) => {
-      const bucket = bucketHour(row.timestamp);
-      const humidity = Number(row.humidity);
-      if (!bucket || !Number.isFinite(humidity)) {
-        return;
-      }
-      const values = humidityByHour.get(bucket) || [];
-      values.push(humidity);
-      humidityByHour.set(bucket, values);
-    });
 
   const rows = Array.from(humidityByHour.entries())
     .map(([bucket, values]) => {
@@ -402,13 +381,62 @@ function buildRainHumiditySummary({ sensorRows = [], rainRows, humidityRows, bui
       rows.map((row) => ({ x: row.rainfall, y: row.humidity }))
     ),
     maxRainfallMm: rows.length ? Math.max(...rows.map((row) => row.rainfall)) : null,
-    windowDays: RAIN_HUMIDITY_LOOKBACK_DAYS,
+    windowDays,
     status:
       rainyRows.length >= 3 && dryRows.length >= 3
         ? "ready"
         : rainByHour.size > 0
         ? "collecting"
         : "pending-rainfall",
+  };
+}
+
+function buildRainHumiditySummary({ sensorRows = [], rainRows, humidityRows, buildingId }) {
+  if (buildingId !== "home") {
+    return {};
+  }
+
+  const rainByHour = new Map();
+  const rainSourceRows = Array.isArray(rainRows) ? rainRows : sensorRows;
+  const humiditySourceRows = Array.isArray(humidityRows)
+    ? humidityRows
+    : sensorRows.filter((row) =>
+        ["dyson:living_room", "dyson:downstairs", "dyson:upstairs"].includes(
+          row.reading_type
+        )
+      );
+
+  rainSourceRows.forEach((row) => {
+    const bucket = bucketHour(row.timestamp);
+    const rainfall = Number(row.rainfall_mm ?? row.rainfall_1h_mm ?? row.rainfall_3h_mm);
+    if (!bucket || !Number.isFinite(rainfall)) {
+      return;
+    }
+    rainByHour.set(bucket, (rainByHour.get(bucket) || 0) + Math.max(0, rainfall));
+  });
+
+  const downstairsSummary = buildRainHumidityAreaSummary({
+    rainByHour,
+    humidityRows: humiditySourceRows.filter((row) =>
+      ["dyson:living_room", "dyson:downstairs"].includes(row.reading_type)
+    ),
+    windowDays: RAIN_HUMIDITY_LOOKBACK_DAYS,
+  });
+  const upstairsSummary = buildRainHumidityAreaSummary({
+    rainByHour,
+    humidityRows: humiditySourceRows.filter((row) => row.reading_type === "dyson:upstairs"),
+    windowDays: RAIN_HUMIDITY_LOOKBACK_DAYS,
+  });
+
+  return {
+    ...downstairsSummary,
+    area: "downstairs",
+    downstairs: downstairsSummary,
+    upstairs: upstairsSummary,
+    areas: {
+      downstairs: downstairsSummary,
+      upstairs: upstairsSummary,
+    },
   };
 }
 

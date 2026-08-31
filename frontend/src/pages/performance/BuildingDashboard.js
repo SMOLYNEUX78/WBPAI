@@ -271,7 +271,7 @@ const BuildingDashboardPanel = ({ building }) => {
     rhUplift: null,
     correlation: null,
     maxRainfallMm: null,
-    windowDays: 30,
+    windowDays: RAIN_HUMIDITY_LOOKBACK_DAYS,
     status: "pending",
   };
   const defaultPerformanceSummary = {
@@ -2400,7 +2400,11 @@ const BuildingDashboardPanel = ({ building }) => {
           supabase
             .from("Readings")
             .select("timestamp, reading_type, humidity")
-            .in("reading_type", ["dyson:living_room", "dyson:downstairs"])
+            .in("reading_type", [
+              "dyson:living_room",
+              "dyson:downstairs",
+              "dyson:upstairs",
+            ])
             .not("humidity", "is", null)
             .gte("timestamp", timestampFrom)
             .order("timestamp", { ascending: false })
@@ -2450,66 +2454,88 @@ const BuildingDashboardPanel = ({ building }) => {
         rainByHour.set(bucket, (rainByHour.get(bucket) || 0) + rainfall);
       });
 
-      const humidityByHour = new Map();
-      (humidityResult.data || []).forEach((row) => {
-        const bucket = bucketHour(row.timestamp);
-        const humidity = Number(row.humidity);
+      const buildRainHumidityAreaSummary = (humidityRows) => {
+        const humidityByHour = new Map();
+        humidityRows.forEach((row) => {
+          const bucket = bucketHour(row.timestamp);
+          const humidity = Number(row.humidity);
 
-        if (!bucket || !Number.isFinite(humidity)) {
-          return;
-        }
+          if (!bucket || !Number.isFinite(humidity)) {
+            return;
+          }
 
-        const values = humidityByHour.get(bucket) || [];
-        values.push(humidity);
-        humidityByHour.set(bucket, values);
-      });
+          const values = humidityByHour.get(bucket) || [];
+          values.push(humidity);
+          humidityByHour.set(bucket, values);
+        });
 
-      const rows = Array.from(humidityByHour.entries())
-        .map(([bucket, values]) => {
-          const bucketTime = new Date(bucket).getTime();
-          const recentRainfall = [0, 1, 2, 3].reduce((sum, hoursAgo) => {
-            const rainDate = new Date(bucketTime - hoursAgo * 60 * 60 * 1000);
-            return sum + (rainByHour.get(rainDate.toISOString()) || 0);
-          }, 0);
+        const rows = Array.from(humidityByHour.entries())
+          .map(([bucket, values]) => {
+            const bucketTime = new Date(bucket).getTime();
+            const recentRainfall = [0, 1, 2, 3].reduce((sum, hoursAgo) => {
+              const rainDate = new Date(bucketTime - hoursAgo * 60 * 60 * 1000);
+              return sum + (rainByHour.get(rainDate.toISOString()) || 0);
+            }, 0);
 
-          return {
-            rainfall: recentRainfall,
-            humidity: average(values),
-          };
-        })
-        .filter(
-          (row) => Number.isFinite(row.rainfall) && Number.isFinite(row.humidity)
-        );
-      const rainyRows = rows.filter((row) => row.rainfall >= 0.1);
-      const dryRows = rows.filter((row) => row.rainfall < 0.1);
-      const averageRainyRh = rainyRows.length
-        ? average(rainyRows.map((row) => row.humidity))
-        : null;
-      const averageDryRh = dryRows.length
-        ? average(dryRows.map((row) => row.humidity))
-        : null;
-      const nextSummary = {
-        rainySamples: rainyRows.length,
-        drySamples: dryRows.length,
-        averageRainyRh,
-        averageDryRh,
-        rhUplift:
-          Number.isFinite(averageRainyRh) && Number.isFinite(averageDryRh)
-            ? averageRainyRh - averageDryRh
+            return {
+              rainfall: recentRainfall,
+              humidity: average(values),
+            };
+          })
+          .filter(
+            (row) => Number.isFinite(row.rainfall) && Number.isFinite(row.humidity)
+          );
+        const rainyRows = rows.filter((row) => row.rainfall >= 0.1);
+        const dryRows = rows.filter((row) => row.rainfall < 0.1);
+        const averageRainyRh = rainyRows.length
+          ? average(rainyRows.map((row) => row.humidity))
+          : null;
+        const averageDryRh = dryRows.length
+          ? average(dryRows.map((row) => row.humidity))
+          : null;
+
+        return {
+          rainySamples: rainyRows.length,
+          drySamples: dryRows.length,
+          averageRainyRh,
+          averageDryRh,
+          rhUplift:
+            Number.isFinite(averageRainyRh) && Number.isFinite(averageDryRh)
+              ? averageRainyRh - averageDryRh
+              : null,
+          correlation: pearsonCorrelation(
+            rows.map((row) => ({ x: row.rainfall, y: row.humidity }))
+          ),
+          maxRainfallMm: rows.length
+            ? Math.max(...rows.map((row) => row.rainfall))
             : null,
-        correlation: pearsonCorrelation(
-          rows.map((row) => ({ x: row.rainfall, y: row.humidity }))
-        ),
-        maxRainfallMm: rows.length
-          ? Math.max(...rows.map((row) => row.rainfall))
-          : null,
-        windowDays: RAIN_HUMIDITY_LOOKBACK_DAYS,
-        status:
-          rainyRows.length >= 3 && dryRows.length >= 3
-            ? "ready"
-            : rainByHour.size > 0
-            ? "collecting"
-            : "pending-rainfall",
+          windowDays: RAIN_HUMIDITY_LOOKBACK_DAYS,
+          status:
+            rainyRows.length >= 3 && dryRows.length >= 3
+              ? "ready"
+              : rainByHour.size > 0
+              ? "collecting"
+              : "pending-rainfall",
+        };
+      };
+      const humidityRows = humidityResult.data || [];
+      const downstairsSummary = buildRainHumidityAreaSummary(
+        humidityRows.filter((row) =>
+          ["dyson:living_room", "dyson:downstairs"].includes(row.reading_type)
+        )
+      );
+      const upstairsSummary = buildRainHumidityAreaSummary(
+        humidityRows.filter((row) => row.reading_type === "dyson:upstairs")
+      );
+      const nextSummary = {
+        ...downstairsSummary,
+        area: "downstairs",
+        downstairs: downstairsSummary,
+        upstairs: upstairsSummary,
+        areas: {
+          downstairs: downstairsSummary,
+          upstairs: upstairsSummary,
+        },
       };
 
       setRainHumiditySummary(nextSummary);
@@ -3924,15 +3950,17 @@ const BuildingDashboardPanel = ({ building }) => {
       ? "warning"
       : "poor"
     : "pending";
-  const rainHumidityStatus =
-    rainHumiditySummary.status === "ready" &&
-    Number.isFinite(rainHumiditySummary.rhUplift)
-      ? rainHumiditySummary.rhUplift >= 8
+  const getRainHumidityStatus = (summary = rainHumiditySummary) =>
+    summary?.status === "ready" && Number.isFinite(summary.rhUplift)
+      ? summary.rhUplift >= 8
         ? "poor"
-        : rainHumiditySummary.rhUplift >= 4
+        : summary.rhUplift >= 4
         ? "warning"
         : "good"
       : "pending";
+  const rainHumidityStatus = getRainHumidityStatus(
+    rainHumiditySummary.downstairs || rainHumiditySummary
+  );
   const formatCorrelation = (value) => {
     if (!Number.isFinite(value)) {
       return "correlation pending";
@@ -3952,6 +3980,39 @@ const BuildingDashboardPanel = ({ building }) => {
 
     return `little correlation (${formatNumber(value, 2)})`;
   };
+  const describeRainHumiditySummary = (summary) => {
+    if (!summary) {
+      return "Pending rain/RH overlap";
+    }
+
+    if (summary.status === "needs-rainfall-columns") {
+      return "Needs rainfall columns in Supabase";
+    }
+
+    if (summary.status === "pending-rainfall") {
+      return "Waiting for rainfall readings";
+    }
+
+    if (summary.status === "collecting") {
+      return "Collecting rain/dry comparison samples";
+    }
+
+    if (Number.isFinite(summary.rhUplift)) {
+      return `${formatNumber(summary.rhUplift, 1)}% RH uplift after rain`;
+    }
+
+    return "Pending rain/RH overlap";
+  };
+  const rainHumidityAreas = [
+    {
+      label: "Downstairs",
+      summary: rainHumiditySummary.downstairs || rainHumiditySummary,
+    },
+    {
+      label: "Upstairs",
+      summary: rainHumiditySummary.upstairs || rainHumiditySummary.areas?.upstairs,
+    },
+  ].filter((area) => area.summary && Object.keys(area.summary).length > 0);
   const formatHeatExclusionBuffer = (value) => {
     if (!Number.isFinite(value)) {
       return "Pending indoor/outdoor overlap";
@@ -5508,44 +5569,42 @@ const BuildingDashboardPanel = ({ building }) => {
                         ) : null}
                       </div>
                       <div className={heatLossStatusClass(rainHumidityStatus)}>
-                        <p>
-                          <HeatLossStatusDot status={rainHumidityStatus} />{" "}
-                          <strong>Rain / Downstairs RH:</strong>{" "}
-                          {rainHumiditySummary.status === "needs-rainfall-columns"
-                            ? "Needs rainfall columns in Supabase"
-                            : rainHumiditySummary.status === "pending-rainfall"
-                            ? "Waiting for rainfall readings"
-                            : rainHumiditySummary.status === "collecting"
-                            ? "Collecting rain/dry comparison samples"
-                            : Number.isFinite(rainHumiditySummary.rhUplift)
-                            ? `${formatNumber(
-                                rainHumiditySummary.rhUplift,
-                                1
-                              )}% RH uplift after rain`
-                            : "Pending rain/RH overlap"}
-                        </p>
-                        {rainHumiditySummary.rainySamples > 0 ||
-                        rainHumiditySummary.drySamples > 0 ? (
-                          <p className="pl-4 text-xs">
-                            {rainHumiditySummary.rainySamples} rainy hour(s) /{" "}
-                            {rainHumiditySummary.drySamples} dry hour(s)
-                            {Number.isFinite(rainHumiditySummary.averageRainyRh) &&
-                            Number.isFinite(rainHumiditySummary.averageDryRh)
-                              ? ` / rainy ${formatNumber(
-                                  rainHumiditySummary.averageRainyRh,
-                                  1
-                                )}% vs dry ${formatNumber(
-                                  rainHumiditySummary.averageDryRh,
-                                  1
-                                )}%`
-                              : ""}
-                            {rainHumiditySummary.status === "ready"
-                              ? ` / ${formatCorrelation(
-                                  rainHumiditySummary.correlation
-                                )}`
-                              : ""}
-                          </p>
-                        ) : null}
+                        {(rainHumidityAreas.length
+                          ? rainHumidityAreas
+                          : [{ label: "Downstairs", summary: rainHumiditySummary }]
+                        ).map(({ label, summary }) => {
+                          const areaStatus = getRainHumidityStatus(summary);
+
+                          return (
+                            <div key={label} className="mb-2 last:mb-0">
+                              <p>
+                                <HeatLossStatusDot status={areaStatus} />{" "}
+                                <strong>Rain / {label} RH:</strong>{" "}
+                                {describeRainHumiditySummary(summary)}
+                              </p>
+                              {summary.rainySamples > 0 ||
+                              summary.drySamples > 0 ? (
+                                <p className="pl-4 text-xs">
+                                  {summary.rainySamples} rainy hour(s) /{" "}
+                                  {summary.drySamples} dry hour(s)
+                                  {Number.isFinite(summary.averageRainyRh) &&
+                                  Number.isFinite(summary.averageDryRh)
+                                    ? ` / rainy ${formatNumber(
+                                        summary.averageRainyRh,
+                                        1
+                                      )}% vs dry ${formatNumber(
+                                        summary.averageDryRh,
+                                        1
+                                      )}%`
+                                    : ""}
+                                  {summary.status === "ready"
+                                    ? ` / ${formatCorrelation(summary.correlation)}`
+                                    : ""}
+                                </p>
+                              ) : null}
+                            </div>
+                          );
+                        })}
                       </div>
                     </>
                   ) : (
