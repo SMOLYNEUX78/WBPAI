@@ -25,6 +25,60 @@ const NIGHT_COOLDOWN_HEAT_CAPACITY_KJ_PER_M2K = 165;
 const MIN_SEASONAL_BASELINE_DAYS = 90;
 const MIN_FULL_YEAR_BASELINE_DAYS = 365;
 const MIN_FULL_YEAR_METERED_DAYS = 300;
+const SEASON_NAMES = ["Summer", "Autumn", "Winter", "Spring"];
+
+const getMeteorologicalSeason = (date = new Date()) => {
+  const month = date.getUTCMonth();
+  const year = date.getUTCFullYear();
+
+  if (month >= 5 && month <= 7) {
+    return {
+      name: "Summer",
+      key: `Summer-${year}`,
+      year,
+      startDate: `${year}-06-01`,
+      endDate: `${year}-08-31`,
+    };
+  }
+
+  if (month >= 8 && month <= 10) {
+    return {
+      name: "Autumn",
+      key: `Autumn-${year}`,
+      year,
+      startDate: `${year}-09-01`,
+      endDate: `${year}-11-30`,
+    };
+  }
+
+  if (month <= 1) {
+    return {
+      name: "Winter",
+      key: `Winter-${year}`,
+      year,
+      startDate: `${year - 1}-12-01`,
+      endDate: `${year}-02-${year % 4 === 0 ? "29" : "28"}`,
+    };
+  }
+
+  if (month === 11) {
+    return {
+      name: "Winter",
+      key: `Winter-${year + 1}`,
+      year: year + 1,
+      startDate: `${year}-12-01`,
+      endDate: `${year + 1}-02-${(year + 1) % 4 === 0 ? "29" : "28"}`,
+    };
+  }
+
+  return {
+    name: "Spring",
+    key: `Spring-${year}`,
+    year,
+    startDate: `${year}-03-01`,
+    endDate: `${year}-05-31`,
+  };
+};
 
 const HOME_BUILDING = {
   id: "home",
@@ -142,6 +196,7 @@ const getEstimatedInternalArea = (modelId, building) => {
 const BuildingDashboardPanel = ({ building }) => {
   const dataSourceBuildingId = building.dataSourceId || building.id;
   const isCarbonCreditTab = building.id === "cc";
+  const activeSeasonInfo = useMemo(() => getMeteorologicalSeason(), []);
   const [deepDivePanel, setDeepDivePanel] = useState(null);
   const [standardDeepDiveOpen, setStandardDeepDiveOpen] = useState(true);
   const [activeMrvEvidenceField, setActiveMrvEvidenceField] = useState(null);
@@ -342,6 +397,19 @@ const BuildingDashboardPanel = ({ building }) => {
       : defaultCarbonIntervalSavingsSummary;
   const readCachedWeeklyTrendData = () =>
     readCachedDashboardState(`${dataSourceBuildingId}:weeklyTrendData`, []);
+  const readCachedSeasonalTrendArchive = () => {
+    const cachedArchive = readCachedDashboardState(
+      `${dataSourceBuildingId}:seasonalTrendArchive:v1`,
+      { seasons: {} }
+    );
+
+    return {
+      seasons:
+        cachedArchive && typeof cachedArchive.seasons === "object"
+          ? cachedArchive.seasons
+          : {},
+    };
+  };
   const readCachedHeatLossSummary = () =>
     readCachedDashboardState(
       `${dataSourceBuildingId}:heatLossSummary`,
@@ -427,9 +495,63 @@ const BuildingDashboardPanel = ({ building }) => {
     readCachedRainHumiditySummary
   );
   const [weeklyTrendData, setWeeklyTrendData] = useState(readCachedWeeklyTrendData);
+  const [seasonalTrendArchive, setSeasonalTrendArchive] = useState(
+    readCachedSeasonalTrendArchive
+  );
+  const [selectedTrendSeason, setSelectedTrendSeason] = useState(
+    activeSeasonInfo.name
+  );
   const [selectedTrendMetricKeys, setSelectedTrendMetricKeys] = useState([]);
   const [selectedHealthTrendArea, setSelectedHealthTrendArea] = useState("all");
   const [hoveredTrendSlot, setHoveredTrendSlot] = useState(null);
+
+  useEffect(() => {
+    if (!weeklyTrendData.length || activeSeasonInfo.name !== "Summer") {
+      return;
+    }
+
+    setSeasonalTrendArchive((currentArchive) => {
+      const currentSeason = currentArchive?.seasons?.[activeSeasonInfo.key];
+
+      if (Array.isArray(currentSeason?.data) && currentSeason.data.length > 0) {
+        return currentArchive;
+      }
+
+      const capturedAt = new Date().toISOString();
+      const nextArchive = {
+        seasons: {
+          ...(currentArchive?.seasons || {}),
+          [activeSeasonInfo.key]: {
+            ...activeSeasonInfo,
+            capturedAt,
+            status:
+              new Date(`${activeSeasonInfo.endDate}T23:59:59.999Z`) < new Date()
+                ? "complete"
+                : "active",
+            data: weeklyTrendData,
+          },
+        },
+      };
+
+      localStorage.setItem(
+        `${dataSourceBuildingId}:seasonalTrendArchive:v1`,
+        JSON.stringify(nextArchive)
+      );
+      supabase
+        .from("BuildingLatestSnapshot")
+        .update({
+          weekly_trend: nextArchive,
+          updated_at: capturedAt,
+        })
+        .eq("building_id", dataSourceBuildingId)
+        .then(({ error }) => {
+          if (error) {
+            console.error("Error persisting seasonal trend archive:", error.message);
+          }
+        });
+      return nextArchive;
+    });
+  }, [activeSeasonInfo, dataSourceBuildingId, weeklyTrendData]);
 
   const matterportModelId = useMemo(
     () => extractMatterportModelId(matterportInput),
@@ -1110,12 +1232,50 @@ const BuildingDashboardPanel = ({ building }) => {
     localStorage.removeItem(`${dataSourceBuildingId}:carbonIntervalSavingsSummary:v2`);
     localStorage.removeItem(`${dataSourceBuildingId}:carbonIntervalSavingsSummary`);
   };
-  const applyWeeklyTrendData = (nextWeeklyTrendData) => {
+  const applyWeeklyTrendData = (
+    nextWeeklyTrendData,
+    seasonInfo = getMeteorologicalSeason()
+  ) => {
     setWeeklyTrendData(nextWeeklyTrendData);
     localStorage.setItem(
       `${dataSourceBuildingId}:weeklyTrendData`,
       JSON.stringify(nextWeeklyTrendData)
     );
+    setSeasonalTrendArchive((currentArchive) => {
+      const capturedAt = new Date().toISOString();
+      const nextArchive = {
+        seasons: {
+          ...(currentArchive?.seasons || {}),
+          [seasonInfo.key]: {
+            ...seasonInfo,
+            capturedAt,
+            status:
+              new Date(`${seasonInfo.endDate}T23:59:59.999Z`) < new Date()
+                ? "complete"
+                : "active",
+            data: nextWeeklyTrendData,
+          },
+        },
+      };
+
+      localStorage.setItem(
+        `${dataSourceBuildingId}:seasonalTrendArchive:v1`,
+        JSON.stringify(nextArchive)
+      );
+      supabase
+        .from("BuildingLatestSnapshot")
+        .update({
+          weekly_trend: nextArchive,
+          updated_at: capturedAt,
+        })
+        .eq("building_id", dataSourceBuildingId)
+        .then(({ error }) => {
+          if (error) {
+            console.error("Error persisting seasonal trend archive:", error.message);
+          }
+        });
+      return nextArchive;
+    });
   };
   const applyDashboardSnapshot = (snapshot) => {
     if (!snapshot) {
@@ -1220,7 +1380,23 @@ const BuildingDashboardPanel = ({ building }) => {
     }
 
     const snapshotWeeklyTrend = snapshot.weekly_trend;
-    if (Array.isArray(snapshotWeeklyTrend?.data)) {
+    if (
+      snapshotWeeklyTrend?.seasons &&
+      typeof snapshotWeeklyTrend.seasons === "object"
+    ) {
+      const nextArchive = { seasons: snapshotWeeklyTrend.seasons };
+      const activeSeasonRecord = snapshotWeeklyTrend.seasons[activeSeasonInfo.key];
+
+      setSeasonalTrendArchive(nextArchive);
+      localStorage.setItem(
+        `${dataSourceBuildingId}:seasonalTrendArchive:v1`,
+        JSON.stringify(nextArchive)
+      );
+
+      if (Array.isArray(activeSeasonRecord?.data)) {
+        applyWeeklyTrendData(activeSeasonRecord.data, activeSeasonRecord);
+      }
+    } else if (Array.isArray(snapshotWeeklyTrend?.data)) {
       const snapshotHasFloorHumidity = snapshotWeeklyTrend.data.some(
         (point) =>
           Number.isFinite(Number(point?.upstairsHumidity)) ||
@@ -2953,10 +3129,21 @@ const BuildingDashboardPanel = ({ building }) => {
 
   const fetchWeeklyPerformanceTrend = async () => {
     try {
-      const trendLookbackDays = 35;
       const trendWindowEnd = new Date();
-      const trendWindowStart = new Date(
-        trendWindowEnd.getTime() - trendLookbackDays * 24 * 60 * 60 * 1000
+      const rollingTrendWindowStart = new Date(
+        trendWindowEnd.getTime() - 35 * 24 * 60 * 60 * 1000
+      );
+      const activeSeasonStart = new Date(`${activeSeasonInfo.startDate}T00:00:00.000Z`);
+      const trendWindowStart =
+        activeSeasonStart > rollingTrendWindowStart
+          ? activeSeasonStart
+          : rollingTrendWindowStart;
+      const trendLookbackDays = Math.max(
+        0,
+        Math.ceil(
+          (trendWindowEnd.getTime() - trendWindowStart.getTime()) /
+            (24 * 60 * 60 * 1000)
+        )
       );
 
       const fetchEnergyIntervalRows = async () => {
@@ -3377,7 +3564,7 @@ const BuildingDashboardPanel = ({ building }) => {
         averagedWeeklyTrend
       );
 
-      applyWeeklyTrendData(displayWeeklyTrend);
+      applyWeeklyTrendData(displayWeeklyTrend, activeSeasonInfo);
     } catch (err) {
       console.error("Error fetching weekly performance trend:", err.message);
     }
@@ -4522,8 +4709,31 @@ const BuildingDashboardPanel = ({ building }) => {
       ],
     },
   ];
+  const seasonalTrendRecords = Object.values(
+    seasonalTrendArchive?.seasons || {}
+  );
+  const selectedSeasonRecord =
+    seasonalTrendRecords.find((record) => record.name === selectedTrendSeason) ||
+    (selectedTrendSeason === activeSeasonInfo.name
+      ? seasonalTrendArchive?.seasons?.[activeSeasonInfo.key]
+      : null);
+  const selectedSeasonTrendData = Array.isArray(selectedSeasonRecord?.data)
+    ? selectedSeasonRecord.data
+    : selectedTrendSeason === activeSeasonInfo.name
+    ? weeklyTrendData
+    : [];
+  const availableSeasonNames = SEASON_NAMES.filter(
+    (seasonName) =>
+      seasonName === activeSeasonInfo.name ||
+      seasonalTrendRecords.some((record) => record.name === seasonName)
+  );
+  const seasonalTrendLabel = selectedSeasonRecord
+    ? `${selectedSeasonRecord.name} ${
+        selectedSeasonRecord.status === "complete" ? "snapshot" : "season so far"
+      }: historical weekly hourly averages, Monday to Sunday`
+    : `${selectedTrendSeason} data will appear once that season has readings`;
   const activeTrendMetrics = trendMetrics.filter((metric) =>
-    weeklyTrendData.some((day) => Number.isFinite(day[metric.key]))
+    selectedSeasonTrendData.some((day) => Number.isFinite(day[metric.key]))
   );
   const trendMetricGroups = [
     {
@@ -4677,9 +4887,9 @@ const BuildingDashboardPanel = ({ building }) => {
       ranges[metric.key] = { min: 0, max: 100 };
       return ranges;
     }, {});
-  const metricRanges = buildMetricRanges(weeklyTrendData, visibleTrendMetrics);
+  const metricRanges = buildMetricRanges(selectedSeasonTrendData, visibleTrendMetrics);
   const rawMetricRanges = activeTrendMetrics.reduce((ranges, metric) => {
-    const values = weeklyTrendData
+    const values = selectedSeasonTrendData
       .map((point) => point[metric.key])
       .filter((value) => Number.isFinite(value));
     const min = values.length ? Math.min(...values) : 0;
@@ -4688,12 +4898,13 @@ const BuildingDashboardPanel = ({ building }) => {
     return ranges;
   }, {});
   const hoveredTrendPoint = Number.isInteger(hoveredTrendSlot)
-    ? weeklyTrendData[hoveredTrendSlot]
+    ? selectedSeasonTrendData[hoveredTrendSlot]
     : null;
   const hoveredTrendX =
-    hoveredTrendPoint && weeklyTrendData.length > 1
+    hoveredTrendPoint && selectedSeasonTrendData.length > 1
       ? chartPadding.left +
-        (hoveredTrendPoint.slot / (weeklyTrendData.length - 1)) * plotWidth
+        (hoveredTrendPoint.slot / (selectedSeasonTrendData.length - 1)) *
+          plotWidth
       : null;
   const trendY = (range, value) => {
     if (!range || !Number.isFinite(value)) {
@@ -4808,7 +5019,7 @@ const BuildingDashboardPanel = ({ building }) => {
     return clampScore(100 - normalised * 100);
   };
   const updateHoveredTrendSlot = (event) => {
-    if (!weeklyTrendData.length) {
+    if (!selectedSeasonTrendData.length) {
       return;
     }
 
@@ -4822,7 +5033,9 @@ const BuildingDashboardPanel = ({ building }) => {
       0,
       Math.min(plotWidth, svgX - chartPadding.left)
     );
-    const nextSlot = Math.round((plotX / plotWidth) * (weeklyTrendData.length - 1));
+    const nextSlot = Math.round(
+      (plotX / plotWidth) * (selectedSeasonTrendData.length - 1)
+    );
 
     setHoveredTrendSlot(nextSlot);
   };
@@ -5708,22 +5921,37 @@ const BuildingDashboardPanel = ({ building }) => {
             <div>
               <h3 className="font-semibold">Seasonal Performance Trends</h3>
               <p className="text-xs text-gray-600">
-                Summer chart: historical weekly hourly averages, Monday to Sunday
+                {seasonalTrendLabel}
               </p>
             </div>
             <div className="flex flex-wrap gap-1 text-xs">
-              {["Summer", "Autumn", "Winter", "Spring"].map((season) => (
-                <span
-                  key={season}
-                  className={`rounded border px-2 py-1 ${
-                    season === "Summer"
-                      ? "border-emerald-300 bg-emerald-50 text-emerald-800"
-                      : "border-gray-200 bg-gray-50 text-gray-500"
-                  }`}
-                >
-                  {season}
-                </span>
-              ))}
+              {SEASON_NAMES.map((season) => {
+                const seasonAvailable = availableSeasonNames.includes(season);
+                const seasonSelected = selectedTrendSeason === season;
+
+                return (
+                  <button
+                    type="button"
+                    key={season}
+                    onClick={() => {
+                      if (seasonAvailable) {
+                        setSelectedTrendSeason(season);
+                        setHoveredTrendSlot(null);
+                      }
+                    }}
+                    disabled={!seasonAvailable}
+                    className={`rounded border px-2 py-1 ${
+                      seasonSelected
+                        ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+                        : seasonAvailable
+                        ? "border-gray-300 bg-white text-gray-700"
+                        : "border-gray-200 bg-gray-50 text-gray-500"
+                    }`}
+                  >
+                    {season}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -5844,12 +6072,13 @@ const BuildingDashboardPanel = ({ building }) => {
                       />
                     );
                   })}
-                  {weeklyTrendData
+                  {selectedSeasonTrendData
                     .filter((point) => point.hour === 0)
                     .map((point) => {
                       const x =
                         chartPadding.left +
-                        (point.slot / (weeklyTrendData.length - 1)) * plotWidth;
+                        (point.slot / (selectedSeasonTrendData.length - 1)) *
+                          plotWidth;
                       return (
                         <line
                           key={`day-line-${point.dayLabel}`}
@@ -5862,12 +6091,13 @@ const BuildingDashboardPanel = ({ building }) => {
                         />
                       );
                     })}
-                  {weeklyTrendData
+                  {selectedSeasonTrendData
                     .filter((point) => point.hour % 6 === 0)
                     .map((point) => {
                       const x =
                         chartPadding.left +
-                        (point.slot / (weeklyTrendData.length - 1)) * plotWidth;
+                        (point.slot / (selectedSeasonTrendData.length - 1)) *
+                          plotWidth;
                       return (
                         <line
                           key={`hour-line-${point.slot}`}
@@ -5885,7 +6115,8 @@ const BuildingDashboardPanel = ({ building }) => {
                       const midpointSlot = dayIndex * 24 + 11.5;
                       const x =
                         chartPadding.left +
-                        (midpointSlot / (weeklyTrendData.length - 1)) * plotWidth;
+                        (midpointSlot / (selectedSeasonTrendData.length - 1)) *
+                          plotWidth;
                       return (
                         <text
                           key={dayLabel}
@@ -5900,12 +6131,13 @@ const BuildingDashboardPanel = ({ building }) => {
                       );
                     }
                   )}
-                  {weeklyTrendData
+                  {selectedSeasonTrendData
                     .filter((point) => point.dayIndex === 0 && point.hour % 6 === 0)
                     .map((point) => {
                     const x =
                       chartPadding.left +
-                      (point.slot / (weeklyTrendData.length - 1)) * plotWidth;
+                      (point.slot / (selectedSeasonTrendData.length - 1)) *
+                        plotWidth;
                     return (
                       <text
                         key={`hour-label-${point.hour}`}
@@ -5939,7 +6171,7 @@ const BuildingDashboardPanel = ({ building }) => {
                   {visibleTrendMetrics.map((metric) => (
                     <path
                       key={metric.key}
-                      d={trendPath(weeklyTrendData, metricRanges, metric)}
+                      d={trendPath(selectedSeasonTrendData, metricRanges, metric)}
                       fill="none"
                       stroke={metric.color}
                       strokeWidth="2.5"
@@ -6052,7 +6284,10 @@ const BuildingDashboardPanel = ({ building }) => {
 
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 text-xs">
                 {activeTrendMetrics.map((metric) => {
-                  const averageValue = averageMetricValue(weeklyTrendData, metric);
+                  const averageValue = averageMetricValue(
+                    selectedSeasonTrendData,
+                    metric
+                  );
                   const metricSelected =
                     selectedTrendMetricKeys.length === 0 ||
                     selectedTrendMetricKeys.includes(metric.key);
