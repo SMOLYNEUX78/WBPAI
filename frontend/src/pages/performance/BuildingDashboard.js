@@ -2386,31 +2386,38 @@ const BuildingDashboardPanel = ({ building }) => {
       const timestampFrom = new Date(
         Date.now() - RAIN_HUMIDITY_LOOKBACK_DAYS * 24 * 60 * 60 * 1000
       ).toISOString();
-      const [rainResult, humidityResult] = await Promise.all([
-        applyBuildingScope(
-          supabase
-            .from("Readings")
-            .select("timestamp, rainfall_mm, rainfall_1h_mm, rainfall_3h_mm")
-            .not("rainfall_mm", "is", null)
-            .gte("timestamp", timestampFrom)
-            .order("timestamp", { ascending: false })
-            .limit(5000)
-        ),
-        applyBuildingScope(
-          supabase
-            .from("Readings")
-            .select("timestamp, reading_type, humidity")
-            .in("reading_type", [
-              "dyson:living_room",
-              "dyson:downstairs",
-              "dyson:upstairs",
-            ])
-            .not("humidity", "is", null)
-            .gte("timestamp", timestampFrom)
-            .order("timestamp", { ascending: false })
-            .limit(5000)
-        ),
-      ]);
+      const [rainResult, downstairsHumidityResult, upstairsHumidityResult] =
+        await Promise.all([
+          applyBuildingScope(
+            supabase
+              .from("Readings")
+              .select("timestamp, rainfall_mm, rainfall_1h_mm, rainfall_3h_mm")
+              .not("rainfall_mm", "is", null)
+              .gte("timestamp", timestampFrom)
+              .order("timestamp", { ascending: false })
+              .limit(5000)
+          ),
+          applyBuildingScope(
+            supabase
+              .from("Readings")
+              .select("timestamp, reading_type, humidity")
+              .in("reading_type", ["dyson:living_room", "dyson:downstairs"])
+              .not("humidity", "is", null)
+              .gte("timestamp", timestampFrom)
+              .order("timestamp", { ascending: false })
+              .limit(5000)
+          ),
+          applyBuildingScope(
+            supabase
+              .from("Readings")
+              .select("timestamp, reading_type, humidity")
+              .eq("reading_type", "dyson:upstairs")
+              .not("humidity", "is", null)
+              .gte("timestamp", timestampFrom)
+              .order("timestamp", { ascending: false })
+              .limit(5000)
+          ),
+        ]);
 
       if (
         rainResult.error &&
@@ -2429,7 +2436,8 @@ const BuildingDashboardPanel = ({ building }) => {
       }
 
       if (rainResult.error) throw rainResult.error;
-      if (humidityResult.error) throw humidityResult.error;
+      if (downstairsHumidityResult.error) throw downstairsHumidityResult.error;
+      if (upstairsHumidityResult.error) throw upstairsHumidityResult.error;
 
       const bucketHour = (timestamp) => {
         const date = new Date(timestamp);
@@ -2518,14 +2526,11 @@ const BuildingDashboardPanel = ({ building }) => {
               : "pending-rainfall",
         };
       };
-      const humidityRows = humidityResult.data || [];
       const downstairsSummary = buildRainHumidityAreaSummary(
-        humidityRows.filter((row) =>
-          ["dyson:living_room", "dyson:downstairs"].includes(row.reading_type)
-        )
+        downstairsHumidityResult.data || []
       );
       const upstairsSummary = buildRainHumidityAreaSummary(
-        humidityRows.filter((row) => row.reading_type === "dyson:upstairs")
+        upstairsHumidityResult.data || []
       );
       const nextSummary = {
         ...downstairsSummary,

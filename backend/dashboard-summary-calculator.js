@@ -16,6 +16,7 @@ const MAX_SENSOR_ROWS = Number(process.env.DASHBOARD_SUMMARY_MAX_SENSOR_ROWS || 
 const MAX_RAIN_HUMIDITY_ROWS = Number(
   process.env.DASHBOARD_SUMMARY_MAX_RAIN_HUMIDITY_ROWS || 10000
 );
+const SUPABASE_PAGE_SIZE = Number(process.env.SUPABASE_PAGE_SIZE || 1000);
 
 const average = (values) => {
   const finiteValues = values.filter((value) => Number.isFinite(value));
@@ -122,38 +123,72 @@ async function fetchSensorRows(buildingId) {
   return data || [];
 }
 
+async function fetchPagedRows(buildQuery, maxRows) {
+  const rows = [];
+  const pageSize = Math.min(SUPABASE_PAGE_SIZE, maxRows);
+
+  for (let offset = 0; offset < maxRows; offset += pageSize) {
+    const { data, error } = await buildQuery().range(offset, offset + pageSize - 1);
+    if (error) throw error;
+
+    const pageRows = data || [];
+    rows.push(...pageRows);
+
+    if (pageRows.length < pageSize) {
+      break;
+    }
+  }
+
+  return rows;
+}
+
 async function fetchRainHumidityRows(buildingId) {
   if (buildingId !== "home") {
     return { rainRows: [], humidityRows: [] };
   }
 
   const timestampFrom = isoDaysAgo(RAIN_HUMIDITY_LOOKBACK_DAYS);
-  const [rainResult, humidityResult] = await Promise.all([
-    supabase
-      .from("Readings")
-      .select("timestamp, rainfall_mm, rainfall_1h_mm, rainfall_3h_mm")
-      .eq("building_id", buildingId)
-      .not("rainfall_mm", "is", null)
-      .gte("timestamp", timestampFrom)
-      .order("timestamp", { ascending: false })
-      .limit(MAX_RAIN_HUMIDITY_ROWS),
-    supabase
-      .from("Readings")
-      .select("timestamp, reading_type, humidity")
-      .eq("building_id", buildingId)
-      .in("reading_type", ["dyson:living_room", "dyson:downstairs", "dyson:upstairs"])
-      .not("humidity", "is", null)
-      .gte("timestamp", timestampFrom)
-      .order("timestamp", { ascending: false })
-      .limit(MAX_RAIN_HUMIDITY_ROWS),
+  const [rainRows, downstairsHumidityRows, upstairsHumidityRows] = await Promise.all([
+    fetchPagedRows(
+      () =>
+        supabase
+          .from("Readings")
+          .select("timestamp, rainfall_mm, rainfall_1h_mm, rainfall_3h_mm")
+          .eq("building_id", buildingId)
+          .not("rainfall_mm", "is", null)
+          .gte("timestamp", timestampFrom)
+          .order("timestamp", { ascending: false }),
+      MAX_RAIN_HUMIDITY_ROWS
+    ),
+    fetchPagedRows(
+      () =>
+        supabase
+          .from("Readings")
+          .select("timestamp, reading_type, humidity")
+          .eq("building_id", buildingId)
+          .in("reading_type", ["dyson:living_room", "dyson:downstairs"])
+          .not("humidity", "is", null)
+          .gte("timestamp", timestampFrom)
+          .order("timestamp", { ascending: false }),
+      MAX_RAIN_HUMIDITY_ROWS
+    ),
+    fetchPagedRows(
+      () =>
+        supabase
+          .from("Readings")
+          .select("timestamp, reading_type, humidity")
+          .eq("building_id", buildingId)
+          .eq("reading_type", "dyson:upstairs")
+          .not("humidity", "is", null)
+          .gte("timestamp", timestampFrom)
+          .order("timestamp", { ascending: false }),
+      MAX_RAIN_HUMIDITY_ROWS
+    ),
   ]);
 
-  if (rainResult.error) throw rainResult.error;
-  if (humidityResult.error) throw humidityResult.error;
-
   return {
-    rainRows: rainResult.data || [],
-    humidityRows: humidityResult.data || [],
+    rainRows,
+    humidityRows: [...downstairsHumidityRows, ...upstairsHumidityRows],
   };
 }
 
