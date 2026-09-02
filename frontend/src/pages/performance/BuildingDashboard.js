@@ -4737,14 +4737,24 @@ const BuildingDashboardPanel = ({ building }) => {
   );
   const trendMetricGroups = [
     {
+      key: "all",
+      label: "Full Picture",
+      metricKeys: [],
+    },
+    {
       key: "energy",
       label: "Energy",
       metricKeys: ["electricity", "gas"],
     },
     {
+      key: "comfort",
+      label: "Comfort",
+      metricKeys: ["internalTemp", "externalTemp"],
+    },
+    {
       key: "health",
       label: "Health",
-      metricKeys: ["internalTemp", "externalTemp", "humidity", "pm25", "vocs"],
+      metricKeys: ["humidity", "pm25", "vocs"],
     },
   ];
   const activeTrendMetricKeys = activeTrendMetrics.map((metric) => metric.key);
@@ -4755,9 +4765,11 @@ const BuildingDashboardPanel = ({ building }) => {
         activeTrendMetricKeys.includes(key)
       ),
     }))
-    .filter((group) => group.metricKeys.length > 0);
+    .filter((group) => group.key === "all" || group.metricKeys.length > 0);
   const selectedTrendMetricGroupKey =
-    selectedTrendMetricKeys.length > 0
+    selectedTrendMetricKeys.length === 0
+      ? "all"
+      : selectedTrendMetricKeys.length > 0
       ? activeTrendMetricGroups.find(
           (group) =>
             group.metricKeys.length === selectedTrendMetricKeys.length &&
@@ -4836,10 +4848,16 @@ const BuildingDashboardPanel = ({ building }) => {
     });
   };
   const selectTrendMetricGroup = (metricKeys) => {
+    if (metricKeys.length === 0) {
+      setSelectedTrendMetricKeys([]);
+      setSelectedHealthTrendArea("all");
+      return;
+    }
+
     const filteredKeys = metricKeys.filter((key) =>
       activeTrendMetricKeys.includes(key)
     );
-    const healthKeys = ["internalTemp", "externalTemp", "humidity", "pm25", "vocs"];
+    const healthKeys = ["humidity", "pm25", "vocs"];
     const isHealthGroup =
       filteredKeys.length === healthKeys.filter((key) =>
         activeTrendMetricKeys.includes(key)
