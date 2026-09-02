@@ -4785,7 +4785,7 @@ const BuildingDashboardPanel = ({ building }) => {
     {
       key: "all",
       label: "All",
-      metricKeys: ["internalTemp", "externalTemp", "humidity", "pm25", "vocs"],
+      metricKeys: ["humidity", "pm25", "vocs"],
     },
     {
       key: "upstairs",
@@ -4799,8 +4799,6 @@ const BuildingDashboardPanel = ({ building }) => {
     },
   ];
   const healthTrendKeys = [
-    "internalTemp",
-    "externalTemp",
     "humidity",
     "upstairsHumidity",
     "downstairsHumidity",
