@@ -3214,9 +3214,26 @@ const BuildingDashboardPanel = ({ building }) => {
         return rows;
       };
 
-      const [energyIntervalRows, iaqTrendRows] = await Promise.all([
+      const fetchOutdoorTrendRows = async () => {
+        const { data, error } = await applyBuildingScope(
+          supabase
+            .from("Readings")
+            .select("timestamp, temperature_outside")
+            .not("temperature_outside", "is", null)
+            .gte("timestamp", trendWindowStart.toISOString())
+            .lte("timestamp", trendWindowEnd.toISOString())
+            .order("timestamp", { ascending: true })
+            .limit(5000)
+        );
+
+        if (error) throw error;
+        return data || [];
+      };
+
+      const [energyIntervalRows, iaqTrendRows, outdoorTrendRows] = await Promise.all([
         fetchEnergyIntervalRows(),
         fetchIaqTrendRows(),
+        fetchOutdoorTrendRows(),
       ]);
 
       const weekdayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -3238,6 +3255,7 @@ const BuildingDashboardPanel = ({ building }) => {
           gasUnregulated: [],
           internalTemp: [],
           externalTemp: [],
+          warmthBuffer: [],
           humidity: [],
           upstairsHumidity: [],
           downstairsHumidity: [],
@@ -3456,6 +3474,19 @@ const BuildingDashboardPanel = ({ building }) => {
         pushMetric("vocs", row.vocs);
       });
 
+      outdoorTrendRows.forEach((row) => {
+        const slot = getWeeklySlot(row.timestamp);
+
+        if (slot === null || !weeklyBuckets[slot]) {
+          return;
+        }
+
+        const outside = Number(row.temperature_outside);
+        if (Number.isFinite(outside)) {
+          weeklyBuckets[slot].externalTemp.push(outside);
+        }
+      });
+
       const averagedWeeklyTrend = weeklyBuckets.map((bucket) => ({
         slot: bucket.slot,
         dayIndex: bucket.dayIndex,
@@ -3485,6 +3516,10 @@ const BuildingDashboardPanel = ({ building }) => {
         externalTemp: bucket.externalTemp.length
           ? average(bucket.externalTemp)
           : null,
+        warmthBuffer:
+          bucket.internalTemp.length && bucket.externalTemp.length
+            ? average(bucket.internalTemp) - average(bucket.externalTemp)
+            : null,
         humidity: bucket.humidity.length ? average(bucket.humidity) : null,
         upstairsHumidity: bucket.upstairsHumidity.length
           ? average(bucket.upstairsHumidity)
@@ -3553,6 +3588,7 @@ const BuildingDashboardPanel = ({ building }) => {
         "gasUnregulated",
         "internalTemp",
         "externalTemp",
+        "warmthBuffer",
         "humidity",
         "upstairsHumidity",
         "downstairsHumidity",
@@ -4629,6 +4665,19 @@ const BuildingDashboardPanel = ({ building }) => {
       displayRange: { min: -5, max: 35 },
     },
     {
+      key: "warmthBuffer",
+      label: "Warmth Buffer",
+      unit: "deg C",
+      color: "#f59e0b",
+      displayRange: { min: -5, max: 25 },
+      healthyLimits: [{ value: 5, label: "5 deg C hold" }],
+      healthBands: [
+        { min: 12, max: 25, color: "#dcfce7", label: "Holding warmth" },
+        { min: 5, max: 12, color: "#fef3c7", label: "Moderate hold" },
+        { min: -5, max: 5, color: "#fee2e2", label: "Low buffer" },
+      ],
+    },
+    {
       key: "humidity",
       label: "Humidity",
       unit: "%",
@@ -4749,7 +4798,7 @@ const BuildingDashboardPanel = ({ building }) => {
     {
       key: "comfort",
       label: "Comfort",
-      metricKeys: ["internalTemp", "externalTemp"],
+      metricKeys: ["internalTemp", "externalTemp", "warmthBuffer"],
     },
     {
       key: "health",
@@ -4977,6 +5026,23 @@ const BuildingDashboardPanel = ({ building }) => {
       return linearScore(value, [
         { min: 24, max: 28, startScore: 70, endScore: 85 },
         { min: 28, max: 35, startScore: 85, endScore: 100 },
+      ]);
+    }
+
+    if (metric.key === "warmthBuffer") {
+      if (value >= 5 && value <= 12) {
+        return linearScore(value, [
+          { min: 5, max: 12, startScore: 40, endScore: 65 },
+        ]);
+      }
+      if (value > 12) {
+        return linearScore(value, [
+          { min: 12, max: 25, startScore: 65, endScore: 80 },
+        ]);
+      }
+      return linearScore(value, [
+        { min: -5, max: 0, startScore: 10, endScore: 20 },
+        { min: 0, max: 5, startScore: 20, endScore: 40 },
       ]);
     }
 
