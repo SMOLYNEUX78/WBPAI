@@ -395,6 +395,41 @@ const BuildingDashboardPanel = ({ building }) => {
           calculationStatus: summary.calculationStatus || "current",
         }
       : defaultCarbonIntervalSavingsSummary;
+  const carbonIntervalSummaryTime = (summary) => {
+    const candidates = [
+      summary?.calculatedAt,
+      summary?.latestTimestamp,
+      summary?.toDate,
+    ];
+
+    for (const candidate of candidates) {
+      const parsedTime = Date.parse(candidate);
+      if (Number.isFinite(parsedTime)) {
+        return parsedTime;
+      }
+    }
+
+    return null;
+  };
+  const isOlderCarbonIntervalSummary = (nextSummary, currentSummary) => {
+    if (!hasUsableCarbonIntervalSummary(currentSummary)) {
+      return false;
+    }
+
+    const nextTime = carbonIntervalSummaryTime(nextSummary);
+    const currentTime = carbonIntervalSummaryTime(currentSummary);
+
+    if (Number.isFinite(nextTime) && Number.isFinite(currentTime)) {
+      return nextTime < currentTime;
+    }
+
+    const nextRows = Number(nextSummary?.dailyRows);
+    const currentRows = Number(currentSummary?.dailyRows);
+
+    return Number.isFinite(nextRows) &&
+      Number.isFinite(currentRows) &&
+      nextRows < currentRows;
+  };
   const readCachedWeeklyTrendData = () =>
     readCachedDashboardState(`${dataSourceBuildingId}:weeklyTrendData`, []);
   const readCachedSeasonalTrendArchive = () => {
@@ -458,6 +493,7 @@ const BuildingDashboardPanel = ({ building }) => {
   const [carbonIntervalSavingsSummary, setCarbonIntervalSavingsSummary] = useState(
     () => normaliseCarbonIntervalSummary(readCachedCarbonIntervalSavingsSummary())
   );
+  const carbonIntervalSavingsSummaryRef = useRef(carbonIntervalSavingsSummary);
   const [carbonCredits, setCarbonCredits] = useState(() => {
     const cachedCarbonIntervalSummary = normaliseCarbonIntervalSummary(
       readCachedCarbonIntervalSavingsSummary()
@@ -1223,7 +1259,18 @@ const BuildingDashboardPanel = ({ building }) => {
       return;
     }
 
+    if (
+      isOlderCarbonIntervalSummary(
+        safeCarbonIntervalSummary,
+        carbonIntervalSavingsSummaryRef.current
+      )
+    ) {
+      return;
+    }
+
+    carbonIntervalSavingsSummaryRef.current = safeCarbonIntervalSummary;
     setCarbonIntervalSavingsSummary(safeCarbonIntervalSummary);
+    setCarbonCredits(safeCarbonIntervalSummary.carbonCredits);
     localStorage.setItem(
       `${dataSourceBuildingId}:${CARBON_INTERVAL_SAVINGS_CACHE_KEY}`,
       JSON.stringify(safeCarbonIntervalSummary)
@@ -3621,7 +3668,6 @@ const BuildingDashboardPanel = ({ building }) => {
       const totalCredits = Number(summaryRow.carbon_credits);
       const latestSavedKgCo2e = Number(summaryRow.latest_saved_kgco2e);
 
-      setCarbonCredits(Number.isFinite(totalCredits) ? totalCredits : null);
       applyCarbonSavingsSummary({
         latestDate: summaryRow.latest_date || summaryRow.to_date || null,
         latestSavedKgCo2e: Number.isFinite(latestSavedKgCo2e)
@@ -3695,14 +3741,24 @@ const BuildingDashboardPanel = ({ building }) => {
         .in("scenario", [
           CARBON_SAVINGS_SCENARIO,
           LEGACY_CARBON_SAVINGS_SCENARIO,
-        ]);
+        ])
+        .order("calculated_at", { ascending: false });
 
       if (!summaryError && summaryData?.length) {
-        const currentSummary = summaryData.find(isCurrentPersistedSavingsSummary);
+        const newestSummaryData = summaryData.slice().sort((a, b) => {
+          const aTime = Date.parse(a?.calculated_at);
+          const bTime = Date.parse(b?.calculated_at);
+
+          return (Number.isFinite(bTime) ? bTime : 0) -
+            (Number.isFinite(aTime) ? aTime : 0);
+        });
+        const currentSummary = newestSummaryData.find(
+          isCurrentPersistedSavingsSummary
+        );
         const fallbackSummary =
-          summaryData.find(
+          newestSummaryData.find(
             (row) => row.scenario === LEGACY_CARBON_SAVINGS_SCENARIO
-          ) || summaryData.find(hasUsablePersistedSavingsSummary);
+          ) || newestSummaryData.find(hasUsablePersistedSavingsSummary);
 
         if (currentSummary) {
           applyPersistedSavingsSummary(currentSummary);
@@ -3877,9 +3933,11 @@ const BuildingDashboardPanel = ({ building }) => {
     );
 
     if (hasUsableCarbonIntervalSummary(cachedCarbonIntervalSummary)) {
+      carbonIntervalSavingsSummaryRef.current = cachedCarbonIntervalSummary;
       setCarbonIntervalSavingsSummary(cachedCarbonIntervalSummary);
       setCarbonCredits(cachedCarbonIntervalSummary.carbonCredits);
     } else {
+      carbonIntervalSavingsSummaryRef.current = defaultCarbonIntervalSavingsSummary;
       setCarbonIntervalSavingsSummary(defaultCarbonIntervalSavingsSummary);
       setCarbonCredits(null);
     }
