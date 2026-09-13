@@ -790,10 +790,17 @@ const BuildingDashboardPanel = ({ building }) => {
   const formatMeasurement = (value, digits = 1) =>
     Number.isFinite(value) ? value.toFixed(digits) : "No Data";
 
-  const normaliseRoomLabel = (readingType) => {
-    const roomKey = String(readingType || "").replace(/^dyson:/, "");
+  const dysonRoomKey = (readingType) =>
+    String(readingType || "").replace(/^dyson:/, "");
+  const isDownstairsDysonReading = (readingType) => {
+    const roomKey = dysonRoomKey(readingType);
 
-    if (roomKey === "living_room" || roomKey === "downstairs") {
+    return roomKey === "living_room" || roomKey === "downstairs";
+  };
+  const normaliseRoomLabel = (readingType) => {
+    const roomKey = dysonRoomKey(readingType);
+
+    if (isDownstairsDysonReading(readingType)) {
       return "Downstairs";
     }
 
@@ -806,6 +813,13 @@ const BuildingDashboardPanel = ({ building }) => {
       .filter(Boolean)
       .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
       .join(" ");
+  };
+  const roomSupportsIaqMetric = (room, metricKey) => {
+    if (!room || !isDownstairsDysonReading(room.key)) {
+      return true;
+    }
+
+    return metricKey === "internalTemp" || metricKey === "humidity";
   };
 
   const numericOrNull = (value) => {
@@ -2848,11 +2862,21 @@ const BuildingDashboardPanel = ({ building }) => {
             internalTemp: numericOrNull(row.temperature_inside),
             humidity: numericOrNull(row.humidity),
             co2: numericOrNull(row.co2),
-            vocs: dysonAppDisplayValue(row.reading_type, "vocs", row.vocs),
-            pm25: numericOrNull(row.pm25),
-            pm10: numericOrNull(row.pm10),
-            hcho: numericOrNull(row.hcho),
-            no2: dysonAppDisplayValue(row.reading_type, "no2", row.no2),
+            vocs: isDownstairsDysonReading(row.reading_type)
+              ? null
+              : dysonAppDisplayValue(row.reading_type, "vocs", row.vocs),
+            pm25: isDownstairsDysonReading(row.reading_type)
+              ? null
+              : numericOrNull(row.pm25),
+            pm10: isDownstairsDysonReading(row.reading_type)
+              ? null
+              : numericOrNull(row.pm10),
+            hcho: isDownstairsDysonReading(row.reading_type)
+              ? null
+              : numericOrNull(row.hcho),
+            no2: isDownstairsDysonReading(row.reading_type)
+              ? null
+              : dysonAppDisplayValue(row.reading_type, "no2", row.no2),
           });
           return rooms;
         }, [])
@@ -2973,7 +2997,7 @@ const BuildingDashboardPanel = ({ building }) => {
       const ieqRows = data.map((row) => {
         if (
           dataSourceBuildingId === "home" &&
-          row.reading_type === "dyson:living_room"
+          isDownstairsDysonReading(row.reading_type)
         ) {
           return {
             ...row,
@@ -5787,17 +5811,52 @@ const BuildingDashboardPanel = ({ building }) => {
                     {roomIaqData.map((room, roomIndex) => {
                       const roomMetrics = [
                         {
+                          key: "internalTemp",
                           label: "Temp",
                           value: room.internalTemp,
                           unit: "deg C",
                         },
-                        { label: "RH", value: room.humidity, unit: "%" },
-                        { label: "VOC", value: room.vocs, unit: "ppb" },
-                        { label: "PM2.5", value: room.pm25, unit: "ug/m3" },
-                        { label: "PM10", value: room.pm10, unit: "ug/m3" },
-                        { label: "HCHO", value: room.hcho, unit: "ppb" },
-                        { label: "NO2", value: room.no2, unit: "ppb" },
-                      ].filter((metric) => Number.isFinite(metric.value));
+                        {
+                          key: "humidity",
+                          label: "RH",
+                          value: room.humidity,
+                          unit: "%",
+                        },
+                        {
+                          key: "vocs",
+                          label: "VOC",
+                          value: room.vocs,
+                          unit: "ppb",
+                        },
+                        {
+                          key: "pm25",
+                          label: "PM2.5",
+                          value: room.pm25,
+                          unit: "ug/m3",
+                        },
+                        {
+                          key: "pm10",
+                          label: "PM10",
+                          value: room.pm10,
+                          unit: "ug/m3",
+                        },
+                        {
+                          key: "hcho",
+                          label: "HCHO",
+                          value: room.hcho,
+                          unit: "ppb",
+                        },
+                        {
+                          key: "no2",
+                          label: "NO2",
+                          value: room.no2,
+                          unit: "ppb",
+                        },
+                      ].filter(
+                        (metric) =>
+                          roomSupportsIaqMetric(room, metric.key) &&
+                          Number.isFinite(metric.value)
+                      );
 
                       return (
                         <div
