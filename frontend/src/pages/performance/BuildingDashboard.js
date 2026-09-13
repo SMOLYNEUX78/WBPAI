@@ -819,7 +819,7 @@ const BuildingDashboardPanel = ({ building }) => {
       return true;
     }
 
-    return metricKey === "internalTemp" || metricKey === "humidity";
+    return ["internalTemp", "humidity", "vocs", "pm25"].includes(metricKey);
   };
 
   const numericOrNull = (value) => {
@@ -2862,12 +2862,8 @@ const BuildingDashboardPanel = ({ building }) => {
             internalTemp: numericOrNull(row.temperature_inside),
             humidity: numericOrNull(row.humidity),
             co2: numericOrNull(row.co2),
-            vocs: isDownstairsDysonReading(row.reading_type)
-              ? null
-              : dysonAppDisplayValue(row.reading_type, "vocs", row.vocs),
-            pm25: isDownstairsDysonReading(row.reading_type)
-              ? null
-              : numericOrNull(row.pm25),
+            vocs: dysonAppDisplayValue(row.reading_type, "vocs", row.vocs),
+            pm25: numericOrNull(row.pm25),
             pm10: isDownstairsDysonReading(row.reading_type)
               ? null
               : numericOrNull(row.pm10),
@@ -3002,8 +2998,8 @@ const BuildingDashboardPanel = ({ building }) => {
           return {
             ...row,
             co2: null,
-            vocs: null,
-            pm25: null,
+            vocs: row.vocs,
+            pm25: row.pm25,
             pm10: null,
             hcho: null,
             no2: null,
