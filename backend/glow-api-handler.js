@@ -24,6 +24,9 @@ const GLOW_API_INTERVAL_TOTAL_INTERVAL_MS = Number(
 const GLOW_API_INTERVAL_LOOKBACK_HOURS = Number(
   process.env.GLOW_API_INTERVAL_LOOKBACK_HOURS || 72
 );
+const GLOW_API_STARTUP_CATCHUP_DAYS = Number(
+  process.env.GLOW_API_STARTUP_CATCHUP_DAYS || 14
+);
 const GLOW_API_INSTANT_POWER_INTERVAL_MS = Number(
   process.env.GLOW_API_INSTANT_POWER_INTERVAL_MS || 30 * 60 * 1000
 );
@@ -71,6 +74,7 @@ const defaultResources = [
 ];
 
 const resources = parseResourceConfig(GLOW_API_RESOURCES);
+const startupCatchupComplete = new Set();
 
 function parseResourceConfig(value) {
   if (!value.trim()) {
@@ -149,11 +153,51 @@ function buildDailyQuery() {
   return params.toString();
 }
 
-function buildIntervalQuery() {
+function resourceKey(resource) {
+  return `${resource.buildingId}:${resource.fuelType}:${resource.resourceId}`;
+}
+
+async function latestStoredIntervalTimestamp(resource, since) {
+  const { data, error } = await supabase
+    .from("EnergyReadings")
+    .select("timestamp")
+    .eq("building_id", resource.buildingId)
+    .eq("fuel_type", resource.fuelType)
+    .eq("reading_type", "interval_30m")
+    .eq("topic", resource.resourceId)
+    .gte("timestamp", since.toISOString())
+    .order("timestamp", { ascending: false })
+    .limit(1);
+
+  if (error) {
+    throw error;
+  }
+
+  const timestamp = data?.[0]?.timestamp;
+  const parsed = timestamp ? new Date(timestamp) : null;
+  return parsed && !Number.isNaN(parsed.getTime()) ? parsed : null;
+}
+
+async function buildIntervalQuery(resource, startupCatchup) {
   const now = new Date();
-  const start = new Date(
+  const regularStart = new Date(
     now.getTime() - GLOW_API_INTERVAL_LOOKBACK_HOURS * 60 * 60 * 1000
   );
+  let start = regularStart;
+
+  if (startupCatchup) {
+    const catchupFloor = new Date(
+      now.getTime() - GLOW_API_STARTUP_CATCHUP_DAYS * 24 * 60 * 60 * 1000
+    );
+    const latestStored = await latestStoredIntervalTimestamp(resource, catchupFloor);
+
+    if (latestStored) {
+      start = new Date(Math.max(catchupFloor.getTime(), latestStored.getTime()));
+    } else {
+      start = catchupFloor;
+    }
+  }
+
   start.setUTCMinutes(start.getUTCMinutes() < 30 ? 0 : 30, 0, 0);
 
   const params = new URLSearchParams({
@@ -198,11 +242,16 @@ function shouldPollDailyTotal(resource, nowMs) {
 }
 
 function shouldPollIntervalTotal(resource, nowMs) {
-  if (!GLOW_API_INTERVAL_FUELS.has(String(resource.fuelType).toLowerCase())) {
+  const key = resourceKey(resource);
+  const startupCatchup = !startupCatchupComplete.has(key);
+
+  if (
+    !startupCatchup &&
+    !GLOW_API_INTERVAL_FUELS.has(String(resource.fuelType).toLowerCase())
+  ) {
     return false;
   }
 
-  const key = `${resource.buildingId}:${resource.fuelType}:${resource.resourceId}`;
   const lastPoll = lastIntervalTotalPollByResource.get(key);
 
   if (!lastPoll || nowMs - lastPoll >= GLOW_API_INTERVAL_TOTAL_INTERVAL_MS) {
@@ -289,7 +338,9 @@ async function collectResource(resource) {
   }
 
   if (shouldPollIntervalTotal(resource, nowMs)) {
-    const intervalQuery = buildIntervalQuery();
+    const key = resourceKey(resource);
+    const startupCatchup = !startupCatchupComplete.has(key);
+    const intervalQuery = await buildIntervalQuery(resource, startupCatchup);
     const intervalData = await glowFetch(
       `/resource/${resource.resourceId}/readings?${intervalQuery.query}`
     );
@@ -324,6 +375,14 @@ async function collectResource(resource) {
           raw_payload: GLOW_API_STORE_RAW_PAYLOAD ? intervalData : null,
         });
       });
+    }
+
+    startupCatchupComplete.add(key);
+
+    if (startupCatchup) {
+      console.log(
+        `[glow-api] Startup catch-up checked ${resource.buildingId}/${resource.fuelType} from ${intervalQuery.from.toISOString()}`
+      );
     }
   }
 
@@ -419,7 +478,7 @@ if (!GLOW_USERNAME || !GLOW_PASSWORD) {
 }
 
 console.log(
-  `Starting Glow API collector (${COLLECTOR_INSTANCE}) for ${resources.length} resource(s) every ${GLOW_API_POLL_INTERVAL_MS}ms; daily totals every ${GLOW_API_DAILY_TOTAL_INTERVAL_MS}ms; interval totals every ${GLOW_API_INTERVAL_TOTAL_INTERVAL_MS}ms; instant power every ${GLOW_API_INSTANT_POWER_INTERVAL_MS}ms`
+  `Starting Glow API collector (${COLLECTOR_INSTANCE}) for ${resources.length} resource(s) every ${GLOW_API_POLL_INTERVAL_MS}ms; startup catch-up ${GLOW_API_STARTUP_CATCHUP_DAYS} day(s); daily totals every ${GLOW_API_DAILY_TOTAL_INTERVAL_MS}ms; interval totals every ${GLOW_API_INTERVAL_TOTAL_INTERVAL_MS}ms; instant power every ${GLOW_API_INSTANT_POWER_INTERVAL_MS}ms`
 );
 
 pollGlowApi();
