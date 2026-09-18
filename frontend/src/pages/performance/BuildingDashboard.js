@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import AnalogGauge from "../../components/AnalogGauge";
+import RetrofitPublicBenefit from "../../components/RetrofitPublicBenefit";
 import supabase from "../../supabaseClient";
 
 const DEFAULT_MATTERPORT_URL = "https://my.matterport.com/show/?m=zHm8SwWeHiN";
@@ -6616,6 +6617,8 @@ const BuildingDashboardPanel = ({ building }) => {
                 : ""}
             </p>
           </div>
+
+          <RetrofitPublicBenefit />
 
           <button
             type="button"
