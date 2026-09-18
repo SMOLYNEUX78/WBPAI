@@ -1,4 +1,6 @@
 const mqtt = require("mqtt");
+const fs = require("fs");
+const path = require("path");
 const supabase = require("./supabaseClient");
 require("dotenv").config();
 
@@ -13,6 +15,9 @@ const DYSON_TELEMETRY_STALE_MS = Number(
   process.env.DYSON_TELEMETRY_STALE_MS || 10 * 60 * 1000
 );
 const DYSON_DEVICES = parseDevices(process.env.DYSON_DEVICES || "");
+const DYSON_HEARTBEAT_FILE =
+  process.env.DYSON_HEARTBEAT_FILE ||
+  path.join(__dirname, "..", "logs", "dyson-heartbeat");
 
 const latestByDevice = new Map();
 
@@ -222,6 +227,15 @@ function withoutExtendedIaqColumns(rows) {
   return rows.map(({ pm10, hcho, no2, ...row }) => row);
 }
 
+function recordHeartbeat() {
+  try {
+    fs.mkdirSync(path.dirname(DYSON_HEARTBEAT_FILE), { recursive: true });
+    fs.writeFileSync(DYSON_HEARTBEAT_FILE, new Date().toISOString());
+  } catch (error) {
+    console.warn("[dyson] Could not update collector heartbeat:", error.message);
+  }
+}
+
 async function insertReadingRows(rows) {
   const { error } = await supabase.from("Readings").insert(rows);
 
@@ -291,6 +305,7 @@ async function persistReadings() {
   console.log(
     `[dyson] Inserted ${rows.length} purifier telemetry row(s) for ${BUILDING_ID}`
   );
+  recordHeartbeat();
 }
 
 if (DYSON_DEVICES.length === 0) {

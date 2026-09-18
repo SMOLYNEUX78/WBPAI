@@ -65,6 +65,7 @@ if ! grep -q "^WBP=" "$ENV_FILE"; then
 fi
 
 tmux kill-session -t wbpai 2>/dev/null || true
+sh "${REPO_DIR}/scripts/termux-install-boot.sh"
 "${REPO_DIR}/scripts/termux-start.sh"
 
 echo "Home tablet configured and WBPAI collectors restarted."

@@ -22,6 +22,8 @@ if tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
   exit 0
 fi
 
+rm -f "$REPO_DIR/logs/dyson-heartbeat"
+
 tmux new-session -d -s "$SESSION_NAME" "
   cd '$REPO_DIR/backend' || exit 1
   while true; do
@@ -32,6 +34,8 @@ tmux new-session -d -s "$SESSION_NAME" "
     sleep 10
   done | tee -a '$REPO_DIR/logs/collectors.log'
 "
+
+touch "$REPO_DIR/logs/collectors-started"
 
 echo "WBPAI collectors started directly in tmux."
 echo "Attach with: tmux attach -t $SESSION_NAME"
