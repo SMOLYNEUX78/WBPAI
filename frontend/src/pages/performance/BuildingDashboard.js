@@ -7926,13 +7926,13 @@ const ExchangeDashboardPanel = ({
         ))}
       </section>
 
-      <section className="grid border-b border-gray-200 md:grid-cols-[minmax(0,1.2fr)_minmax(240px,0.8fr)]">
+      <section className="grid grid-cols-[minmax(0,1fr)_140px] border-b border-gray-200 min-[430px]:grid-cols-[minmax(0,1.2fr)_180px] sm:grid-cols-[minmax(0,1.2fr)_220px] lg:grid-cols-[minmax(0,1.2fr)_minmax(240px,0.8fr)]">
         <div className="min-w-0 px-3 py-5 sm:px-5">
           <div>
             <h2 className="text-lg font-bold">WBP value split</h2>
             <p className="mt-1 text-sm text-gray-600">Assumed one-year value from the two Good / Verified projects.</p>
           </div>
-          <div className="mt-4 grid grid-cols-3 gap-px border border-gray-200 bg-gray-200">
+          <div className="mt-4 grid grid-cols-1 gap-px border border-gray-200 bg-gray-200 sm:grid-cols-3">
             {[
               ["Carbon rights", annualCarbonValue, "bg-emerald-700", "One retirement claim"],
               ["Monitoring data", annualMonitoringValue, "bg-blue-600", "Annual licence"],
@@ -7946,16 +7946,16 @@ const ExchangeDashboardPanel = ({
             ))}
           </div>
         </div>
-        <div className="flex items-center justify-center border-t border-gray-200 px-3 py-5 md:border-l md:border-t-0 sm:px-5">
+        <div className="flex items-center justify-center border-l border-gray-200 px-2 py-5 sm:px-5">
           <div
-            className="relative h-40 w-40 shrink-0 rounded-full"
+            className="relative h-28 w-28 shrink-0 rounded-full min-[430px]:h-32 min-[430px]:w-32 sm:h-40 sm:w-40"
             style={{ background: `conic-gradient(#047857 0 ${carbonValueShare}%, #2563eb ${carbonValueShare}% ${carbonValueShare + monitoringValueShare}%, #d97706 ${carbonValueShare + monitoringValueShare}% 100%)` }}
             role="img"
             aria-label={`Annual assumed value: carbon £${annualCarbonValue.toFixed(2)}, monitoring £${annualMonitoringValue.toFixed(2)}, evidence £${annualEvidenceValue.toFixed(2)}`}
           >
-            <div className="absolute inset-7 flex flex-col items-center justify-center rounded-full bg-white text-center">
-              <span className="text-xs uppercase text-gray-500">Annual</span>
-              <strong className="text-lg">£{annualPortfolioValue.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+            <div className="absolute inset-5 flex flex-col items-center justify-center rounded-full bg-white text-center sm:inset-7">
+              <span className="text-[9px] uppercase text-gray-500 sm:text-xs">Annual</span>
+              <strong className="text-xs sm:text-lg">£{annualPortfolioValue.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
             </div>
           </div>
         </div>
@@ -7994,13 +7994,13 @@ const ExchangeDashboardPanel = ({
                   <div><span className="block text-xs uppercase text-gray-500">Spread</span><strong>£{bidAskSpread}</strong></div>
                 </div>
               </div>
-              <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_220px] lg:grid-cols-[minmax(0,1fr)_240px]">
+              <div className="grid grid-cols-[minmax(0,1fr)_130px] gap-2 min-[430px]:grid-cols-[minmax(0,1fr)_160px] sm:grid-cols-[minmax(0,1fr)_200px] sm:gap-4 lg:grid-cols-[minmax(0,1fr)_240px]">
                 <div className="min-w-0 border border-gray-200">
                   <div className="flex items-center justify-between gap-3 border-b border-gray-200 px-3 py-2">
-                    <div><span className="text-xl font-bold">£84.00</span><span className="ml-2 text-xs font-semibold text-emerald-700">+7.69%</span></div>
+                    <div><span className="text-base font-bold sm:text-xl">£84.00</span><span className="ml-1 text-[10px] font-semibold text-emerald-700 sm:ml-2 sm:text-xs">+7.69%</span></div>
                     <div className="flex rounded border border-gray-300 bg-white p-0.5" aria-label="Trading timeframe">
                       {["4H", "1D", "1W", "1M"].map((timeframe) => (
-                        <button key={timeframe} type="button" onClick={() => setTradeTimeframe(timeframe)} className={`px-2.5 py-1 text-xs font-semibold ${tradeTimeframe === timeframe ? "bg-black text-white" : "text-gray-600 hover:bg-gray-100"}`}>{timeframe}</button>
+                        <button key={timeframe} type="button" onClick={() => setTradeTimeframe(timeframe)} className={`px-1.5 py-1 text-[10px] font-semibold sm:px-2.5 sm:text-xs ${tradeTimeframe === timeframe ? "bg-black text-white" : "text-gray-600 hover:bg-gray-100"}`}>{timeframe}</button>
                       ))}
                     </div>
                   </div>
@@ -8023,15 +8023,15 @@ const ExchangeDashboardPanel = ({
                     <div className="absolute inset-x-12 bottom-1 flex justify-between text-[10px] text-gray-500"><span>{tradeSeries[0][0]}</span><span>{tradeSeries[Math.floor(tradeSeries.length / 2)][0]}</span><span>{tradeSeries[tradeSeries.length - 1][0]}</span></div>
                   </div>
                 </div>
-                <aside className="border border-gray-200">
-                  <div className="grid grid-cols-2 bg-gray-100 px-3 py-2 text-xs font-semibold uppercase text-gray-600"><span>Price</span><span className="text-right">WBP-C</span></div>
-                  <div className="flex justify-between border-t border-gray-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-900"><span>Asks</span><span>Sell</span></div>
+                <aside className="min-w-0 border border-gray-200">
+                  <div className="grid grid-cols-2 bg-gray-100 px-2 py-2 text-[9px] font-semibold uppercase text-gray-600 sm:px-3 sm:text-xs"><span>Price</span><span className="text-right">WBP-C</span></div>
+                  <div className="flex justify-between border-t border-gray-200 bg-red-50 px-2 py-1.5 text-[10px] font-semibold text-red-900 sm:px-3 sm:text-xs"><span>Asks</span><span>Sell</span></div>
                   {[{ price: 88, volume: 25 }, { price: 92, volume: 60 }, { price: 105, volume: 120 }].map((order) => (
-                    <div key={`ask-${order.price}`} className="grid grid-cols-2 border-t border-gray-100 px-3 py-1.5 text-sm"><strong>£{order.price}/t</strong><span className="text-right">{order.volume}</span></div>
+                    <div key={`ask-${order.price}`} className="grid grid-cols-2 border-t border-gray-100 px-2 py-1.5 text-[10px] sm:px-3 sm:text-sm"><strong>£{order.price}/t</strong><span className="text-right">{order.volume}</span></div>
                   ))}
-                  <div className="flex justify-between border-t border-gray-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-900"><span>Bids</span><span>Buy</span></div>
+                  <div className="flex justify-between border-t border-gray-200 bg-emerald-50 px-2 py-1.5 text-[10px] font-semibold text-emerald-900 sm:px-3 sm:text-xs"><span>Bids</span><span>Buy</span></div>
                   {[{ price: 76, volume: 40 }, { price: 72, volume: 100 }, { price: 68, volume: 250 }].map((order) => (
-                    <div key={`bid-${order.price}`} className="grid grid-cols-2 border-t border-gray-100 px-3 py-1.5 text-sm"><strong>£{order.price}/t</strong><span className="text-right">{order.volume}</span></div>
+                    <div key={`bid-${order.price}`} className="grid grid-cols-2 border-t border-gray-100 px-2 py-1.5 text-[10px] sm:px-3 sm:text-sm"><strong>£{order.price}/t</strong><span className="text-right">{order.volume}</span></div>
                   ))}
                   <div className="border-y border-gray-300 bg-amber-50 px-3 py-2 text-center">
                     <p className="text-[10px] font-semibold uppercase text-amber-800">Spread £{bidAskSpread}</p>
