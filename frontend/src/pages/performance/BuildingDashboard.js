@@ -7832,6 +7832,13 @@ const ExchangeDashboardPanel = ({
 }) => {
   const [marketView, setMarketView] = useState("carbon");
   const [tradeTimeframe, setTradeTimeframe] = useState("1D");
+  const [salePanelOpen, setSalePanelOpen] = useState(false);
+  const [saleMode, setSaleMode] = useState("simple");
+  const [carbonSaleAction, setCarbonSaleAction] = useState("market");
+  const [carbonAskPrice, setCarbonAskPrice] = useState(95);
+  const [carbonSalePercent, setCarbonSalePercent] = useState(100);
+  const [dataLicenceAction, setDataLicenceAction] = useState("auto");
+  const [salePrepared, setSalePrepared] = useState(false);
   const carbonPrice = FALLBACK_CARBON_PRICE_GBP_PER_TONNE;
   const sellerReservePrice = 85;
   const bestBidPrice = 76;
@@ -7872,6 +7879,24 @@ const ExchangeDashboardPanel = ({
     (sum, lot) => sum + lot.target * lot.coverage,
     0
   );
+  const dataLicenceValue = annualMonitoringValue + annualHealthDataValue + annualGridDataValue + annualEvidenceValue;
+  const selectedCarbonPrice = carbonSaleAction === "ask" ? Number(carbonAskPrice) || 0 : bestBidPrice;
+  const selectedCarbonValue = carbonSaleAction === "hold"
+    ? 0
+    : projectedAnnualCredits * selectedCarbonPrice * carbonSalePercent / 100;
+  const selectedDataValue = dataLicenceAction === "hold" ? 0 : dataLicenceValue;
+  const openSalePanel = (mode, carbonAction = null) => {
+    setSaleMode(mode);
+    if (mode === "simple") {
+      setCarbonSalePercent(100);
+      setDataLicenceAction("auto");
+    }
+    if (carbonAction) {
+      setCarbonSaleAction(carbonAction);
+    }
+    setSalePrepared(false);
+    setSalePanelOpen(true);
+  };
   const dataProducts = [
     { name: "Monitoring data", supplier: "Council / housing provider", buyer: "Homes England / lender / insurer / researcher", product: "Consented portfolio performance and retrofit-prioritisation dataset", price: "£12 / property / month", route: "Annual licence" },
     { name: "Evidence", supplier: "Council / housing provider", buyer: "Funder / verifier", product: "Evidence-pack status, provenance and verified performance records", price: "From £2,400 / year", route: "Evidence service" },
@@ -7946,9 +7971,9 @@ const ExchangeDashboardPanel = ({
           </div>
         </div>
         <div className="grid gap-2 border-t border-gray-200 px-3 py-3 sm:grid-cols-[minmax(220px,1fr)_auto_auto] sm:px-5">
-          <button type="button" disabled className="cursor-not-allowed border border-emerald-300 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800">Offer complete basket</button>
-          <button type="button" disabled className="cursor-not-allowed border border-gray-300 bg-gray-100 px-4 py-2.5 text-sm font-semibold text-gray-500">Market sell carbon</button>
-          <button type="button" disabled className="cursor-not-allowed border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-500">Set higher ask</button>
+          <button type="button" onClick={() => openSalePanel("simple", "market")} className="border border-emerald-700 bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800">Sell available value</button>
+          <button type="button" onClick={() => openSalePanel("advanced")} className="border border-gray-400 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 hover:bg-gray-50">Manage sale</button>
+          <button type="button" onClick={() => openSalePanel("advanced", "ask")} className="border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50">Set carbon ask</button>
           <p className="text-[10px] text-gray-500 sm:col-span-full">One basket offer can match separate buyers to compatible rights. Carbon is transferred and retired once; data and evidence are supplied through defined licences or services.</p>
         </div>
       </section>
@@ -8198,6 +8223,118 @@ const ExchangeDashboardPanel = ({
         <section className="border-b border-gray-200 px-5 py-6">
           <p className="text-xs uppercase text-gray-500">Health data</p><p className="mt-2 text-2xl font-bold">£{annualHealthDataValue.toFixed(2)} modelled</p><p className="mt-1 max-w-3xl text-sm text-gray-600">A consented, aggregated outcomes licence for an agreed commissioner. Value remains modelled until the health measures, attribution method and purchasing route are contracted.</p>
         </section>
+      ) : null}
+
+      {salePanelOpen ? (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-3" role="presentation" onMouseDown={(event) => {
+          if (event.target === event.currentTarget) {
+            setSalePanelOpen(false);
+          }
+        }}>
+          <section className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-lg border border-gray-300 bg-white shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="sale-panel-title">
+            <header className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-gray-200 bg-white px-4 py-4 sm:px-6">
+              <div>
+                <p className="text-[10px] font-semibold uppercase text-emerald-700">Prototype order ticket</p>
+                <h2 id="sale-panel-title" className="mt-1 text-xl font-bold">{saleMode === "simple" ? "Sell available value" : "Manage sale"}</h2>
+                <p className="mt-1 text-xs text-gray-600">Current portfolio vintage · independently settling rights</p>
+              </div>
+              <button type="button" onClick={() => setSalePanelOpen(false)} className="h-9 w-9 shrink-0 rounded border border-gray-300 text-xl leading-none text-gray-600 hover:bg-gray-50" aria-label="Close sale ticket">×</button>
+            </header>
+
+            {salePrepared ? (
+              <div className="px-4 py-8 text-center sm:px-6">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-2xl font-bold text-emerald-800">✓</div>
+                <h3 className="mt-4 text-xl font-bold">Basket offer prepared</h3>
+                <p className="mx-auto mt-2 max-w-lg text-sm text-gray-600">No real order has been submitted. In production, eligible carbon would route to an approved venue while data lots enter controlled buyer matching under their selected licence terms.</p>
+                <div className="mx-auto mt-5 grid max-w-md grid-cols-2 border border-gray-200 text-left text-sm">
+                  <div className="border-r border-gray-200 p-3"><p className="text-xs text-gray-500">Carbon order</p><p className="mt-1 font-semibold">{carbonSaleAction === "hold" ? "Held" : `£${selectedCarbonValue.toFixed(2)} estimated`}</p></div>
+                  <div className="p-3"><p className="text-xs text-gray-500">Data licences</p><p className="mt-1 font-semibold">{dataLicenceAction === "hold" ? "Held" : "Buyer matching"}</p></div>
+                </div>
+                <button type="button" onClick={() => setSalePanelOpen(false)} className="mt-6 border border-gray-900 bg-gray-900 px-6 py-2.5 text-sm font-semibold text-white">Done</button>
+              </div>
+            ) : (
+              <>
+                <div className="grid border-b border-gray-200 sm:grid-cols-[1.25fr_0.75fr]">
+                  <div className="space-y-6 px-4 py-5 sm:px-6">
+                    {saleMode === "simple" ? (
+                      <div className="space-y-3">
+                        <div className="border border-emerald-200 bg-emerald-50 p-4">
+                          <p className="text-xs font-semibold uppercase text-emerald-800">Carbon</p>
+                          <p className="mt-1 text-base font-bold">Sell 100% at the best approved market price</p>
+                          <p className="mt-1 text-xs text-emerald-900">Estimated £{selectedCarbonValue.toFixed(2)} when an eligible market bid is available.</p>
+                        </div>
+                        <div className="border border-blue-200 bg-blue-50 p-4">
+                          <p className="text-xs font-semibold uppercase text-blue-800">Data and evidence</p>
+                          <p className="mt-1 text-base font-bold">Offer non-exclusive licences</p>
+                          <p className="mt-1 text-xs text-blue-900">Match approved buyers to monitoring, health, grid and evidence rights. Source data stays with the portfolio.</p>
+                        </div>
+                        <button type="button" onClick={() => setSaleMode("advanced")} className="w-full border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50">Change sale options</button>
+                      </div>
+                    ) : (
+                      <>
+                    <fieldset>
+                      <legend className="text-sm font-bold">Carbon</legend>
+                      <p className="mt-1 text-xs text-gray-600">Choose what happens to the exclusive carbon rights in this vintage.</p>
+                      <div className="mt-3 grid grid-cols-3 gap-2">
+                        {[["market", "Sell now"], ["ask", "Set ask"], ["hold", "Hold"]].map(([value, label]) => (
+                          <button key={value} type="button" onClick={() => setCarbonSaleAction(value)} className={`border px-2 py-2 text-xs font-semibold sm:text-sm ${carbonSaleAction === value ? "border-black bg-black text-white" : "border-gray-300 bg-white text-gray-700"}`}>{label}</button>
+                        ))}
+                      </div>
+                      {carbonSaleAction === "ask" ? (
+                        <label className="mt-4 block text-xs font-semibold text-gray-700">Minimum price per tonne
+                          <div className="mt-1 flex items-center border border-gray-300 bg-white px-3"><span>£</span><input type="number" min="1" step="1" value={carbonAskPrice} onChange={(event) => setCarbonAskPrice(event.target.value)} className="min-w-0 flex-1 px-2 py-2 text-sm outline-none" /><span className="text-gray-500">/t</span></div>
+                        </label>
+                      ) : null}
+                      {carbonSaleAction !== "hold" ? (
+                        <label className="mt-4 block text-xs font-semibold text-gray-700">Sell {carbonSalePercent}% of available carbon
+                          <input type="range" min="10" max="100" step="10" value={carbonSalePercent} onChange={(event) => setCarbonSalePercent(Number(event.target.value))} className="mt-2 w-full accent-emerald-700" />
+                        </label>
+                      ) : null}
+                    </fieldset>
+
+                    <fieldset>
+                      <legend className="text-sm font-bold">Data and evidence</legend>
+                      <p className="mt-1 text-xs text-gray-600">These remain owned by the portfolio and are offered as controlled, non-exclusive licences.</p>
+                      <div className="mt-3 space-y-2">
+                        {[
+                          ["auto", "Auto-license", "Accept eligible offers that meet approved terms and reserves."],
+                          ["review", "Review every offer", "Keep each offer pending until the portfolio owner approves it."],
+                          ["hold", "Do not license", "Keep all monitoring, health, grid and evidence rights off market."],
+                        ].map(([value, label, detail]) => (
+                          <label key={value} className={`flex cursor-pointer items-start gap-3 border p-3 ${dataLicenceAction === value ? "border-emerald-700 bg-emerald-50" : "border-gray-200"}`}>
+                            <input type="radio" name="data-licence-action" value={value} checked={dataLicenceAction === value} onChange={() => setDataLicenceAction(value)} className="mt-1 accent-emerald-700" />
+                            <span><strong className="block text-sm">{label}</strong><span className="block text-xs text-gray-600">{detail}</span></span>
+                          </label>
+                        ))}
+                      </div>
+                    </fieldset>
+                      </>
+                    )}
+                  </div>
+
+                  <aside className="border-t border-gray-200 bg-gray-50 px-4 py-5 sm:border-l sm:border-t-0 sm:px-5">
+                    <h3 className="text-sm font-bold">Sale summary</h3>
+                    <dl className="mt-4 space-y-3 text-sm">
+                      <div className="flex justify-between gap-3"><dt className="text-gray-600">Carbon</dt><dd className="text-right font-semibold">{carbonSaleAction === "hold" ? "Hold" : `£${selectedCarbonValue.toFixed(2)}`}</dd></div>
+                      <div className="flex justify-between gap-3"><dt className="text-gray-600">Carbon route</dt><dd className="text-right font-semibold">{carbonSaleAction === "market" ? "Best approved market" : carbonSaleAction === "ask" ? `Ask £${Number(carbonAskPrice || 0).toFixed(0)}/t` : "Not listed"}</dd></div>
+                      <div className="flex justify-between gap-3 border-t border-gray-200 pt-3"><dt className="text-gray-600">Data potential</dt><dd className="text-right font-semibold">{dataLicenceAction === "hold" ? "Hold" : `£${selectedDataValue.toFixed(2)}`}</dd></div>
+                      <div className="flex justify-between gap-3"><dt className="text-gray-600">Data route</dt><dd className="text-right font-semibold">{dataLicenceAction === "auto" ? "Approved buyer pool" : dataLicenceAction === "review" ? "Manual approval" : "Not offered"}</dd></div>
+                    </dl>
+                    <div className="mt-5 border border-amber-200 bg-amber-50 p-3 text-[10px] leading-relaxed text-amber-950">Carbon may produce immediate proceeds when an eligible bid exists. Data values remain modelled until an approved buyer accepts a licence; they are not guaranteed sale proceeds.</div>
+                    <div className="mt-4 border-t border-gray-200 pt-4">
+                      <p className="text-[10px] font-semibold uppercase text-gray-500">Included vintage</p>
+                      <p className="mt-1 text-xs text-gray-700">All currently eligible portfolio evidence accrued to date. Future readings remain outside this offer unless recurring licensing is enabled.</p>
+                    </div>
+                  </aside>
+                </div>
+                <footer className="flex flex-col-reverse gap-2 px-4 py-4 sm:flex-row sm:justify-end sm:px-6">
+                  <button type="button" onClick={() => setSalePanelOpen(false)} className="border border-gray-300 bg-white px-5 py-2.5 text-sm font-semibold text-gray-700">Cancel</button>
+                  <button type="button" onClick={() => setSalePrepared(true)} className="border border-emerald-700 bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800">Prepare basket offer</button>
+                </footer>
+              </>
+            )}
+          </section>
+        </div>
       ) : null}
     </main>
   );
