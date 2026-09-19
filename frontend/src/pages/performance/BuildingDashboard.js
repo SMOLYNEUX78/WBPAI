@@ -4537,23 +4537,15 @@ const BuildingDashboardPanel = ({ building }) => {
     },
     {
       category: "Retrofit works",
-      label: "Intervention completion",
+      label: "Retrofit delivery record",
       fieldKey: "intervention",
-      detail: interventionComplete
-        ? `${mrvEvidence.interventionDate}: ${mrvEvidence.interventionEvidence}`
-        : "Needs retrofit completion date and evidence",
-      complete: interventionComplete,
-    },
-    {
-      category: "Retrofit works",
-      label: "Delivery team and assurance",
-      fieldKey: "intervention",
-      detail: deliveryTeamComplete
-        ? `${mrvEvidence.principalContractorName} / ${
-            mrvEvidence.retrofitCoordinatorName || mrvEvidence.architectName
-          }`
-        : "Needs contractor plus architect or retrofit coordinator details",
-      complete: deliveryTeamComplete,
+      detail:
+        interventionComplete && deliveryTeamComplete
+          ? `${mrvEvidence.interventionDate}: ${mrvEvidence.principalContractorName} / ${
+              mrvEvidence.retrofitCoordinatorName || mrvEvidence.architectName
+            }`
+          : "Needs completion evidence, contractor, and architect or retrofit coordinator details",
+      complete: interventionComplete && deliveryTeamComplete,
     },
     {
       category: "Retrofit works",
