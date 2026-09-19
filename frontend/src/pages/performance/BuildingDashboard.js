@@ -7905,14 +7905,12 @@ const ExchangeDashboardPanel = ({
           </div>
           <div className="flex min-w-0 flex-col items-center">
             <div
-              className="relative aspect-square w-full max-w-[220px] rounded-full sm:max-w-[240px]"
+              className="relative h-[120px] w-[120px] rounded-full sm:h-[150px] sm:w-[150px]"
               style={{ background: `conic-gradient(#047857 0 ${carbonValueShare}%, #2563eb ${carbonValueShare}% ${carbonValueShare + monitoringValueShare}%, #d97706 ${carbonValueShare + monitoringValueShare}% 100%)` }}
               role="img"
               aria-label={`Annual assumed value: carbon £${annualCarbonValue.toFixed(2)}, monitoring £${annualMonitoringValue.toFixed(2)}, evidence £${annualEvidenceValue.toFixed(2)}`}
             >
-              <div className="absolute inset-[18%] flex items-center justify-center rounded-full bg-white">
-                <span className="text-xs font-bold uppercase text-gray-700 sm:text-sm">WBP</span>
-              </div>
+              <div className="absolute inset-[18%] rounded-full bg-white" />
             </div>
             <div className="mt-3 w-full space-y-1.5 border-t border-gray-200 pt-2">
               {[
