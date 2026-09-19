@@ -7844,6 +7844,16 @@ const ExchangeDashboardPanel = ({
   const projectedLots = PORTFOLIO_PROPERTIES.filter((property) =>
     Number.isFinite(property.projectedAnnualCredits)
   );
+  const projectedAnnualCredits = projectedLots.reduce(
+    (sum, property) => sum + property.projectedAnnualCredits,
+    0
+  );
+  const annualCarbonValue = projectedAnnualCredits * sellerReservePrice;
+  const annualMonitoringValue = projectedLots.length * 144;
+  const annualEvidenceValue = projectedLots.length * 300;
+  const annualPortfolioValue = annualCarbonValue + annualMonitoringValue + annualEvidenceValue;
+  const carbonValueShare = annualPortfolioValue > 0 ? annualCarbonValue / annualPortfolioValue * 100 : 0;
+  const monitoringValueShare = annualPortfolioValue > 0 ? annualMonitoringValue / annualPortfolioValue * 100 : 0;
   const bridgewoodValue = Number.isFinite(bridgewoodTokens)
     ? bridgewoodTokens * carbonPrice
     : null;
@@ -7878,10 +7888,10 @@ const ExchangeDashboardPanel = ({
 
       <section className="grid grid-cols-2 border-b border-gray-200 md:grid-cols-4">
         {[
-          ["Candidate balance", Number.isFinite(bridgewoodTokens) ? `${bridgewoodTokens.toFixed(4)} WBP-C` : "--", Number.isFinite(bridgewoodValue) ? `£${bridgewoodValue.toFixed(2)} at reference` : "Awaiting summary"],
+          ["Portfolio accrued WBP-C", Number.isFinite(bridgewoodTokens) ? `${bridgewoodTokens.toFixed(4)} WBP-C` : "--", Number.isFinite(bridgewoodValue) ? `£${bridgewoodValue.toFixed(2)} live value` : "Awaiting summary"],
           ["Reference price", `£${carbonPrice.toFixed(2)}`, "Per tCO2e"],
           ["Seller reserve", `£${sellerReservePrice.toFixed(2)}`, "High-integrity minimum"],
-          ["Issued inventory", "0 WBP-C", "Verification required"],
+          ["Annual value pipeline", `£${annualPortfolioValue.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, `${projectedLots.length} Good / Verified homes · assumed`],
         ].map(([label, value, detail]) => (
           <div key={label} className="border-r border-gray-200 px-3 py-4 last:border-r-0 sm:px-5">
             <p className="text-xs uppercase text-gray-500">{label}</p>
@@ -7889,6 +7899,40 @@ const ExchangeDashboardPanel = ({
             <p className="text-xs text-gray-600">{detail}</p>
           </div>
         ))}
+      </section>
+
+      <section className="grid border-b border-gray-200 lg:grid-cols-[minmax(280px,0.8fr)_minmax(0,1.2fr)]">
+        <div className="flex items-center gap-5 px-3 py-5 sm:px-5">
+          <div
+            className="relative h-40 w-40 shrink-0 rounded-full"
+            style={{ background: `conic-gradient(#047857 0 ${carbonValueShare}%, #2563eb ${carbonValueShare}% ${carbonValueShare + monitoringValueShare}%, #d97706 ${carbonValueShare + monitoringValueShare}% 100%)` }}
+            role="img"
+            aria-label={`Annual assumed value: carbon £${annualCarbonValue.toFixed(2)}, monitoring £${annualMonitoringValue.toFixed(2)}, evidence £${annualEvidenceValue.toFixed(2)}`}
+          >
+            <div className="absolute inset-7 flex flex-col items-center justify-center rounded-full bg-white text-center">
+              <span className="text-xs uppercase text-gray-500">Annual</span>
+              <strong className="text-lg">£{annualPortfolioValue.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+            </div>
+          </div>
+          <div className="min-w-0">
+            <h2 className="text-lg font-bold">WBP value split</h2>
+            <p className="mt-1 text-sm text-gray-600">Assumed one-year value from the two Good / Verified projects.</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-px bg-gray-200">
+          {[
+            ["Carbon rights", annualCarbonValue, "bg-emerald-700", "One retirement claim"],
+            ["Monitoring data", annualMonitoringValue, "bg-blue-600", "Annual licence"],
+            ["Evidence service", annualEvidenceValue, "bg-amber-600", "Verifier/funder pack"],
+          ].map(([label, value, colour, detail]) => (
+            <div key={label} className="min-w-0 bg-white px-3 py-5 sm:px-5">
+              <div className="flex items-center gap-2 text-xs font-semibold sm:text-sm"><span className={`h-3 w-3 shrink-0 ${colour}`} />{label}</div>
+              <p className="mt-2 text-lg font-bold sm:text-xl">£{Number(value).toFixed(2)}</p>
+              <p className="text-xs text-gray-500">{detail}</p>
+            </div>
+          ))}
+        </div>
+        <p className="col-span-full border-t border-gray-200 px-3 py-2 text-xs text-gray-500 sm:px-5">Each tranche grants different rights. Selling monitoring or evidence access does not transfer or duplicate the carbon retirement claim.</p>
       </section>
 
       <section className="border-b border-gray-200 px-3 py-3 sm:px-5">
@@ -7927,13 +7971,19 @@ const ExchangeDashboardPanel = ({
                 <div className="border border-gray-200">
                   <div className="flex justify-between bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-900"><span>Bids</span><span>Buy interest</span></div>
                   {[{ price: 76, volume: 40 }, { price: 72, volume: 100 }, { price: 68, volume: 250 }].map((order) => (
-                    <div key={order.price} className="grid grid-cols-2 border-t border-gray-100 px-3 py-2 text-sm"><strong>£{order.price}/t</strong><span className="text-right">{order.volume} WBP-C</span></div>
+                    <div key={order.price} className="relative grid grid-cols-2 overflow-hidden border-t border-gray-100 px-3 py-2 text-sm">
+                      <span className="absolute bottom-0 right-0 top-0 bg-emerald-100" style={{ width: `${order.volume / 250 * 100}%` }} />
+                      <strong className="relative">£{order.price}/t</strong><span className="relative text-right">{order.volume} WBP-C</span>
+                    </div>
                   ))}
                 </div>
                 <div className="border border-gray-200">
                   <div className="flex justify-between bg-red-50 px-3 py-2 text-sm font-semibold text-red-900"><span>Asks</span><span>Sell interest</span></div>
                   {[{ price: 88, volume: 25 }, { price: 92, volume: 60 }, { price: 105, volume: 120 }].map((order) => (
-                    <div key={order.price} className="grid grid-cols-2 border-t border-gray-100 px-3 py-2 text-sm"><strong>£{order.price}/t</strong><span className="text-right">{order.volume} WBP-C</span></div>
+                    <div key={order.price} className="relative grid grid-cols-2 overflow-hidden border-t border-gray-100 px-3 py-2 text-sm">
+                      <span className="absolute bottom-0 left-0 top-0 bg-red-100" style={{ width: `${order.volume / 250 * 100}%` }} />
+                      <strong className="relative">£{order.price}/t</strong><span className="relative text-right">{order.volume} WBP-C</span>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -7960,7 +8010,7 @@ const ExchangeDashboardPanel = ({
             <table className="w-full min-w-[680px] border-collapse text-left text-sm">
               <thead className="bg-gray-100 text-xs uppercase text-gray-600">
                 <tr>
-                  {['Lot', 'Property', 'Status', 'Annual WBP-C', 'Indicative value', 'Market state'].map((heading) => (
+                  {['Project', 'Annual WBP-C', 'Carbon rights', 'Monitoring data', 'Evidence service', 'Annual total'].map((heading) => (
                     <th key={heading} className="border-b border-gray-200 px-3 py-2 font-semibold">{heading}</th>
                   ))}
                 </tr>
@@ -7968,12 +8018,12 @@ const ExchangeDashboardPanel = ({
               <tbody>
                 {projectedLots.map((property) => (
                   <tr key={property.id} className="border-b border-gray-100 last:border-b-0">
-                    <td className="px-3 py-3 font-semibold">LOT-{property.id.slice(-3)}</td>
-                    <td className="px-3 py-3">{property.estate}</td>
-                    <td className="px-3 py-3"><span className="rounded border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-800">Good / Verified</span></td>
+                    <td className="px-3 py-3"><span className="font-semibold">{property.estate}</span><br /><span className="text-xs text-emerald-700">Good / Verified</span></td>
                     <td className="px-3 py-3 font-semibold">{property.projectedAnnualCredits.toFixed(2)}</td>
-                    <td className="px-3 py-3">£{(property.projectedAnnualCredits * carbonPrice).toFixed(2)}</td>
-                    <td className="px-3 py-3 text-amber-700">Forecast</td>
+                    <td className="px-3 py-3">£{(property.projectedAnnualCredits * sellerReservePrice).toFixed(2)}</td>
+                    <td className="px-3 py-3">£144.00</td>
+                    <td className="px-3 py-3">£300.00</td>
+                    <td className="px-3 py-3 font-bold">£{(property.projectedAnnualCredits * sellerReservePrice + 444).toFixed(2)}</td>
                   </tr>
                 ))}
               </tbody>
