@@ -7619,16 +7619,21 @@ const PORTFOLIO_PROPERTIES = [
   { id: "WBP-008", estate: "Melton", archetype: "Flat", health: 83, energy: 81, risk: "Good", retrofit: "Verified", evidence: 96, collector: "Live", projectedAnnualCredits: 0.92 },
 ];
 
-const readCachedBridgewoodCredits = () => {
+const readCachedBridgewoodValue = () => {
   try {
     const cached = JSON.parse(
       localStorage.getItem(`home:${CARBON_INTERVAL_SAVINGS_CACHE_KEY}`) || "null"
     );
-    return Number.isFinite(Number(cached?.carbonCredits))
-      ? Number(cached.carbonCredits)
-      : null;
+    return {
+      credits: Number.isFinite(Number(cached?.carbonCredits))
+        ? Number(cached.carbonCredits)
+        : null,
+      energyValue: Number.isFinite(Number(cached?.energyCostSavedGbp))
+        ? Number(cached.energyCostSavedGbp)
+        : null,
+    };
   } catch (error) {
-    return null;
+    return { credits: null, energyValue: null };
   }
 };
 
@@ -7824,7 +7829,11 @@ const PortfolioDashboardPanel = ({
   );
 };
 
-const ExchangeDashboardPanel = ({ bridgewoodTokens, onOpenPortfolio }) => {
+const ExchangeDashboardPanel = ({
+  bridgewoodEnergyValue,
+  bridgewoodTokens,
+  onOpenPortfolio,
+}) => {
   const carbonPrice = FALLBACK_CARBON_PRICE_GBP_PER_TONNE;
   const projectedLots = PORTFOLIO_PROPERTIES.filter((property) =>
     Number.isFinite(property.projectedAnnualCredits)
@@ -7837,6 +7846,14 @@ const ExchangeDashboardPanel = ({ bridgewoodTokens, onOpenPortfolio }) => {
   const bridgewoodValue = Number.isFinite(bridgewoodTokens)
     ? bridgewoodTokens * carbonPrice
     : null;
+  const accruedCarbonValue = Number.isFinite(bridgewoodValue) ? bridgewoodValue : 0;
+  const accruedEnergyValue = Number.isFinite(bridgewoodEnergyValue)
+    ? bridgewoodEnergyValue
+    : 0;
+  const totalAccruedValue = accruedCarbonValue + accruedEnergyValue;
+  const carbonShare = totalAccruedValue > 0
+    ? (accruedCarbonValue / totalAccruedValue) * 100
+    : 0;
 
   return (
     <main className="min-h-screen bg-white p-3 sm:p-5">
@@ -7868,6 +7885,47 @@ const ExchangeDashboardPanel = ({ bridgewoodTokens, onOpenPortfolio }) => {
             <p className="text-xs text-gray-600">{detail}</p>
           </div>
         ))}
+      </section>
+
+      <section className="grid border-b border-gray-200 lg:grid-cols-[minmax(280px,0.8fr)_minmax(0,1.2fr)]">
+        <div className="flex items-center gap-5 px-3 py-5 sm:px-5">
+          <div
+            className="relative h-40 w-40 shrink-0 rounded-full"
+            style={{
+              background: totalAccruedValue > 0
+                ? `conic-gradient(#047857 0 ${carbonShare}%, #2563eb ${carbonShare}% 100%)`
+                : "#e5e7eb",
+            }}
+            role="img"
+            aria-label={`Accrued value: carbon £${accruedCarbonValue.toFixed(2)}, energy £${accruedEnergyValue.toFixed(2)}`}
+          >
+            <div className="absolute inset-7 flex flex-col items-center justify-center rounded-full bg-white text-center">
+              <span className="text-xs uppercase text-gray-500">Accrued</span>
+              <strong className="text-xl">£{totalAccruedValue.toFixed(2)}</strong>
+            </div>
+          </div>
+          <div className="min-w-0">
+            <h2 className="text-lg font-bold">Accrued value composition</h2>
+            <p className="mt-1 text-sm text-gray-600">Measured Bridgewood value currently represented in the exchange.</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-px bg-gray-200 sm:grid-cols-4">
+          {[
+            ["Carbon", accruedCarbonValue, "bg-emerald-700", "Candidate"],
+            ["Energy", accruedEnergyValue, "bg-blue-600", "Measured saving"],
+            ["Health", 56.44, "bg-amber-500", "Modelled only"],
+            ["Grid", 0, "bg-gray-400", "Pending"],
+          ].map(([label, value, colour, status]) => (
+            <div key={label} className="bg-white px-4 py-5">
+              <div className="flex items-center gap-2 text-sm font-semibold">
+                <span className={`h-3 w-3 ${colour}`} />
+                {label}
+              </div>
+              <p className="mt-2 text-xl font-bold">£{Number(value).toFixed(2)}</p>
+              <p className="text-xs text-gray-500">{status}</p>
+            </div>
+          ))}
+        </div>
       </section>
 
       <section className="grid border-b border-gray-200 lg:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
@@ -7934,7 +7992,8 @@ const ExchangeDashboardPanel = ({ bridgewoodTokens, onOpenPortfolio }) => {
 const BuildingDashboard = () => {
   const defaultIndex = BUILDINGS.findIndex((building) => building.id === "cc");
   const [activeIndex, setActiveIndex] = useState(defaultIndex >= 0 ? defaultIndex : 0);
-  const [bridgewoodTokens, setBridgewoodTokens] = useState(readCachedBridgewoodCredits);
+  const [bridgewoodValue, setBridgewoodValue] = useState(readCachedBridgewoodValue);
+  const bridgewoodTokens = bridgewoodValue.credits;
   const touchStartX = useRef(null);
   const [dragOffset, setDragOffset] = useState(0);
 
@@ -7965,14 +8024,20 @@ const BuildingDashboard = () => {
     const loadBridgewoodTokens = async () => {
       const { data, error } = await supabase
         .from("CarbonSavingsSummary")
-        .select("carbon_credits, calculated_at")
+        .select("carbon_credits, total_energy_cost_saved_gbp, calculated_at")
         .eq("building_id", "home")
         .eq("scenario", CARBON_SAVINGS_SCENARIO)
         .order("calculated_at", { ascending: false })
         .limit(1);
       const credits = Number(data?.[0]?.carbon_credits);
       if (!cancelled && !error && Number.isFinite(credits) && credits >= 0) {
-        setBridgewoodTokens(credits);
+        const energyValue = Number(data?.[0]?.total_energy_cost_saved_gbp);
+        setBridgewoodValue({
+          credits,
+          energyValue: Number.isFinite(energyValue) && energyValue >= 0
+            ? energyValue
+            : null,
+        });
       }
     };
 
@@ -8075,6 +8140,7 @@ const BuildingDashboard = () => {
                   />
                 ) : building.exchangeOnly ? (
                   <ExchangeDashboardPanel
+                    bridgewoodEnergyValue={bridgewoodValue.energyValue}
                     bridgewoodTokens={bridgewoodTokens}
                     onOpenPortfolio={() => openSectionById("portfolio")}
                   />
