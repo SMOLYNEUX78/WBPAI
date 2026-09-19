@@ -7911,12 +7911,10 @@ const ExchangeDashboardPanel = ({
         </button>
       </header>
 
-      <section className="grid grid-cols-2 border-b border-gray-200 md:grid-cols-4">
+      <section className="grid grid-cols-2 border-b border-gray-200">
         {[
-          ["Portfolio accrued WBP value", `£${annualPortfolioValue.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, "Carbon + monitoring + evidence rights"],
+          ["Portfolio accrued WBP value", `£${annualPortfolioValue.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, `${projectedLots.length} Good / Verified homes · modelled`],
           ["Accrued carbon", Number.isFinite(bridgewoodTokens) ? `${bridgewoodTokens.toFixed(4)} WBP-C` : "--", Number.isFinite(bridgewoodValue) ? `£${bridgewoodValue.toFixed(2)} live reference value` : "Awaiting summary"],
-          ["Reference price", `£${carbonPrice.toFixed(2)}`, "Per tCO2e"],
-          ["Seller reserve", `£${sellerReservePrice.toFixed(2)}`, `${projectedLots.length} Good / Verified homes · modelled`],
         ].map(([label, value, detail]) => (
           <div key={label} className="border-r border-gray-200 px-3 py-4 last:border-r-0 sm:px-5">
             <p className="text-xs uppercase text-gray-500">{label}</p>
@@ -7934,7 +7932,7 @@ const ExchangeDashboardPanel = ({
           </div>
           <div className="mt-4 grid grid-cols-1 gap-px border border-gray-200 bg-gray-200 sm:grid-cols-3">
             {[
-              ["Carbon rights", annualCarbonValue, "bg-emerald-700", "One retirement claim"],
+              ["Carbon rights", annualCarbonValue, "bg-emerald-700", `Reference £${carbonPrice}/t · reserve £${sellerReservePrice}/t`],
               ["Monitoring data", annualMonitoringValue, "bg-blue-600", "Annual licence"],
               ["Evidence service", annualEvidenceValue, "bg-amber-600", "Verifier/funder pack"],
             ].map(([label, value, colour, detail]) => (
