@@ -4352,18 +4352,27 @@ const BuildingDashboardPanel = ({ building }) => {
   );
   const hasConfirmedArea = matterportMetadata.internalArea !== "--";
   const hasEnergyBaseline = Number.isFinite(historicalPerformance);
-  const baselineMeteredDays = Number(energySummary.baselineMeteredDays) || 0;
+  const recentSummaryMeteredDays = Number(energySummary.baselineMeteredDays) || 0;
+  const persistedHistoryMeteredDays = Number(
+    carbonIntervalSavingsSummary.dailyRows
+  );
+  const baselineMeteredDays = Number.isFinite(persistedHistoryMeteredDays)
+    ? Math.max(recentSummaryMeteredDays, persistedHistoryMeteredDays)
+    : recentSummaryMeteredDays;
+  const baselineStartDate =
+    carbonIntervalSavingsSummary.fromDate || energySummary.baselineStartDate;
+  const baselineEndDate =
+    carbonIntervalSavingsSummary.toDate || energySummary.baselineEndDate;
   const baselineDateRange =
-    energySummary.baselineStartDate && energySummary.baselineEndDate
-      ? `${energySummary.baselineStartDate} to ${energySummary.baselineEndDate}`
+    baselineStartDate && baselineEndDate
+      ? `${baselineStartDate} to ${baselineEndDate}`
       : null;
   const baselineCoverageDays =
-    energySummary.baselineStartDate && energySummary.baselineEndDate
+    baselineStartDate && baselineEndDate
       ? Math.max(
           1,
           Math.round(
-            (new Date(energySummary.baselineEndDate) -
-              new Date(energySummary.baselineStartDate)) /
+            (new Date(baselineEndDate) - new Date(baselineStartDate)) /
               86400000
           ) + 1
         )
@@ -4637,8 +4646,8 @@ const BuildingDashboardPanel = ({ building }) => {
         minimumSeasonalDays: MIN_SEASONAL_BASELINE_DAYS,
         minimumFullYearCoverageDays: MIN_FULL_YEAR_BASELINE_DAYS,
         minimumFullYearMeteredDays: MIN_FULL_YEAR_METERED_DAYS,
-        startDate: energySummary.baselineStartDate,
-        endDate: energySummary.baselineEndDate,
+        startDate: baselineStartDate,
+        endDate: baselineEndDate,
         historicalPerformanceKwhPerDay: historicalPerformance,
         weatherNormalisedEui: heatLossSummary.weatherNormalisedEui,
         kwhPerHdd: heatLossSummary.kwhPerHdd,
