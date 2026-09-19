@@ -7828,7 +7828,6 @@ const PortfolioDashboardPanel = ({
 };
 
 const ExchangeDashboardPanel = ({
-  bridgewoodEnergyValue,
   bridgewoodTokens,
 }) => {
   const [marketView, setMarketView] = useState("carbon");
@@ -8036,11 +8035,6 @@ const ExchangeDashboardPanel = ({
                   {[{ price: 76, volume: 40 }, { price: 72, volume: 100 }, { price: 68, volume: 250 }].map((order) => (
                     <div key={`bid-${order.price}`} className="grid grid-cols-2 border-t border-gray-100 px-2 py-1.5 text-[10px] sm:px-3 sm:text-sm"><strong>£{order.price}/t</strong><span className="text-right">{order.volume}</span></div>
                   ))}
-                  <div className="px-3 py-3">
-                    <p className="text-xs uppercase text-gray-500">Property benefit</p>
-                    <p className="mt-1 text-xl font-bold">{Number.isFinite(bridgewoodEnergyValue) ? `£${bridgewoodEnergyValue.toFixed(2)}` : "--"}</p>
-                    <p className="text-xs text-gray-600">Avoided energy cost, not traded.</p>
-                  </div>
                 </aside>
               </div>
               <div className="mt-4 border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-950">
@@ -8330,7 +8324,6 @@ const BuildingDashboard = () => {
                   />
                 ) : building.exchangeOnly ? (
                   <ExchangeDashboardPanel
-                    bridgewoodEnergyValue={bridgewoodValue.energyValue}
                     bridgewoodTokens={bridgewoodTokens}
                     onOpenPortfolio={() => openSectionById("portfolio")}
                   />
