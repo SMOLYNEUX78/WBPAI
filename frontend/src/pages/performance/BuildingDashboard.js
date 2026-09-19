@@ -7897,35 +7897,39 @@ const ExchangeDashboardPanel = ({
   return (
     <main className="min-h-screen bg-white p-3 sm:p-5">
       <section className="border-b border-gray-200">
-        <div className="flex flex-col items-center justify-center px-3 py-5 text-center sm:px-5 sm:py-7">
-          <div
-            className="relative h-52 w-52 shrink-0 rounded-full sm:h-60 sm:w-60"
-            style={{ background: `conic-gradient(#047857 0 ${carbonValueShare}%, #2563eb ${carbonValueShare}% ${carbonValueShare + monitoringValueShare}%, #d97706 ${carbonValueShare + monitoringValueShare}% 100%)` }}
-            role="img"
-            aria-label={`Annual assumed value: carbon £${annualCarbonValue.toFixed(2)}, monitoring £${annualMonitoringValue.toFixed(2)}, evidence £${annualEvidenceValue.toFixed(2)}`}
-          >
-            <div className="absolute inset-9 flex items-center justify-center rounded-full bg-white sm:inset-11">
-              <span className="text-sm font-bold uppercase text-gray-700">WBP</span>
-            </div>
-          </div>
-          <div className="mt-4">
+        <div className="grid grid-cols-[minmax(0,1fr)_minmax(148px,42%)] items-center gap-4 px-3 py-5 sm:grid-cols-[minmax(0,1fr)_240px] sm:gap-8 sm:px-5 sm:py-7">
+          <div className="min-w-0">
             <h1 className="text-base font-bold sm:text-xl">WBP portfolio accrued value</h1>
             <p className="mt-1 text-3xl font-bold">£{annualPortfolioValue.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
             <p className="mt-1 text-[10px] text-gray-600 sm:text-xs">{projectedLots.length} Good / Verified homes · modelled</p>
           </div>
-        </div>
-        <div className="grid grid-cols-3 gap-px border-y border-gray-200 bg-gray-200">
-          {[
-            ["Annual carbon rights", annualCarbonValue, "bg-emerald-700", Number.isFinite(bridgewoodValue) ? `Live £${bridgewoodValue.toFixed(2)} · reference £${carbonPrice}/t` : `Reference £${carbonPrice}/t`],
-            ["Monitoring data", annualMonitoringValue, "bg-blue-600", "Annual licence"],
-            ["Evidence service", annualEvidenceValue, "bg-amber-600", "Verifier/funder pack"],
-          ].map(([label, value, colour, detail]) => (
-            <div key={label} className="min-w-0 bg-white px-2 py-2.5 sm:px-4 sm:py-4">
-              <div className="flex items-center gap-1.5 text-[10px] font-semibold sm:gap-2 sm:text-sm"><span className={`h-2.5 w-2.5 shrink-0 sm:h-3 sm:w-3 ${colour}`} />{label}</div>
-              <p className="mt-1 text-base font-bold sm:mt-2 sm:text-xl">£{Number(value).toFixed(2)}</p>
-              <p className="text-[10px] leading-tight text-gray-500 sm:text-xs">{detail}</p>
+          <div className="flex min-w-0 flex-col items-center">
+            <div
+              className="relative aspect-square w-full max-w-[220px] rounded-full sm:max-w-[240px]"
+              style={{ background: `conic-gradient(#047857 0 ${carbonValueShare}%, #2563eb ${carbonValueShare}% ${carbonValueShare + monitoringValueShare}%, #d97706 ${carbonValueShare + monitoringValueShare}% 100%)` }}
+              role="img"
+              aria-label={`Annual assumed value: carbon £${annualCarbonValue.toFixed(2)}, monitoring £${annualMonitoringValue.toFixed(2)}, evidence £${annualEvidenceValue.toFixed(2)}`}
+            >
+              <div className="absolute inset-[18%] flex items-center justify-center rounded-full bg-white">
+                <span className="text-xs font-bold uppercase text-gray-700 sm:text-sm">WBP</span>
+              </div>
             </div>
-          ))}
+            <div className="mt-3 w-full space-y-1.5 border-t border-gray-200 pt-2">
+              {[
+                ["Annual carbon rights", annualCarbonValue, "bg-emerald-700", Number.isFinite(bridgewoodValue) ? `Live £${bridgewoodValue.toFixed(2)} · ref £${carbonPrice}/t` : `Ref £${carbonPrice}/t`],
+                ["Monitoring data", annualMonitoringValue, "bg-blue-600", "Annual licence"],
+                ["Evidence service", annualEvidenceValue, "bg-amber-600", "Verifier/funder pack"],
+              ].map(([label, value, colour, detail]) => (
+                <div key={label} className="min-w-0 text-[9px] leading-tight sm:text-[11px]">
+                  <div className="flex items-start gap-1.5">
+                    <span className={`mt-0.5 h-2 w-2 shrink-0 ${colour}`} />
+                    <span className="min-w-0 font-semibold">{label}: £{Number(value).toFixed(2)}</span>
+                  </div>
+                  <p className="pl-3.5 text-gray-500">{detail}</p>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
         <div className="grid gap-2 border-t border-gray-200 px-3 py-3 sm:grid-cols-[minmax(220px,1fr)_auto_auto] sm:px-5">
           <button type="button" disabled className="cursor-not-allowed border border-emerald-300 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800">Sell complete WBP value</button>
