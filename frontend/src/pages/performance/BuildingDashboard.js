@@ -7926,8 +7926,27 @@ const ExchangeDashboardPanel = ({
         ))}
       </section>
 
-      <section className="grid border-b border-gray-200 lg:grid-cols-[minmax(280px,0.8fr)_minmax(0,1.2fr)]">
-        <div className="flex items-center gap-5 px-3 py-5 sm:px-5">
+      <section className="grid border-b border-gray-200 md:grid-cols-[minmax(0,1.2fr)_minmax(240px,0.8fr)]">
+        <div className="min-w-0 px-3 py-5 sm:px-5">
+          <div>
+            <h2 className="text-lg font-bold">WBP value split</h2>
+            <p className="mt-1 text-sm text-gray-600">Assumed one-year value from the two Good / Verified projects.</p>
+          </div>
+          <div className="mt-4 grid grid-cols-3 gap-px border border-gray-200 bg-gray-200">
+            {[
+              ["Carbon rights", annualCarbonValue, "bg-emerald-700", "One retirement claim"],
+              ["Monitoring data", annualMonitoringValue, "bg-blue-600", "Annual licence"],
+              ["Evidence service", annualEvidenceValue, "bg-amber-600", "Verifier/funder pack"],
+            ].map(([label, value, colour, detail]) => (
+              <div key={label} className="min-w-0 bg-white px-3 py-4 sm:px-4">
+                <div className="flex items-center gap-2 text-xs font-semibold sm:text-sm"><span className={`h-3 w-3 shrink-0 ${colour}`} />{label}</div>
+                <p className="mt-2 text-lg font-bold sm:text-xl">£{Number(value).toFixed(2)}</p>
+                <p className="text-xs text-gray-500">{detail}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="flex items-center justify-center border-t border-gray-200 px-3 py-5 md:border-l md:border-t-0 sm:px-5">
           <div
             className="relative h-40 w-40 shrink-0 rounded-full"
             style={{ background: `conic-gradient(#047857 0 ${carbonValueShare}%, #2563eb ${carbonValueShare}% ${carbonValueShare + monitoringValueShare}%, #d97706 ${carbonValueShare + monitoringValueShare}% 100%)` }}
@@ -7939,23 +7958,6 @@ const ExchangeDashboardPanel = ({
               <strong className="text-lg">£{annualPortfolioValue.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
             </div>
           </div>
-          <div className="min-w-0">
-            <h2 className="text-lg font-bold">WBP value split</h2>
-            <p className="mt-1 text-sm text-gray-600">Assumed one-year value from the two Good / Verified projects.</p>
-          </div>
-        </div>
-        <div className="grid grid-cols-3 gap-px bg-gray-200">
-          {[
-            ["Carbon rights", annualCarbonValue, "bg-emerald-700", "One retirement claim"],
-            ["Monitoring data", annualMonitoringValue, "bg-blue-600", "Annual licence"],
-            ["Evidence service", annualEvidenceValue, "bg-amber-600", "Verifier/funder pack"],
-          ].map(([label, value, colour, detail]) => (
-            <div key={label} className="min-w-0 bg-white px-3 py-5 sm:px-5">
-              <div className="flex items-center gap-2 text-xs font-semibold sm:text-sm"><span className={`h-3 w-3 shrink-0 ${colour}`} />{label}</div>
-              <p className="mt-2 text-lg font-bold sm:text-xl">£{Number(value).toFixed(2)}</p>
-              <p className="text-xs text-gray-500">{detail}</p>
-            </div>
-          ))}
         </div>
         <p className="col-span-full border-t border-gray-200 px-3 py-2 text-xs text-gray-500 sm:px-5">Each tranche grants different rights. Selling monitoring or evidence access does not transfer or duplicate the carbon retirement claim.</p>
       </section>
@@ -7992,7 +7994,7 @@ const ExchangeDashboardPanel = ({
                   <div><span className="block text-xs uppercase text-gray-500">Spread</span><strong>£{bidAskSpread}</strong></div>
                 </div>
               </div>
-              <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_240px]">
+              <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_220px] lg:grid-cols-[minmax(0,1fr)_240px]">
                 <div className="min-w-0 border border-gray-200">
                   <div className="flex items-center justify-between gap-3 border-b border-gray-200 px-3 py-2">
                     <div><span className="text-xl font-bold">£84.00</span><span className="ml-2 text-xs font-semibold text-emerald-700">+7.69%</span></div>
