@@ -7836,6 +7836,7 @@ const ExchangeDashboardPanel = ({
   onOpenPortfolio,
 }) => {
   const [marketView, setMarketView] = useState("carbon");
+  const [tradeTimeframe, setTradeTimeframe] = useState("1D");
   const carbonPrice = FALLBACK_CARBON_PRICE_GBP_PER_TONNE;
   const sellerReservePrice = 85;
   const bestBidPrice = 76;
@@ -7868,6 +7869,30 @@ const ExchangeDashboardPanel = ({
     ["flexibility", "Flexibility"],
     ["outcomes", "Outcomes"],
   ];
+  const tradeSeriesByTimeframe = {
+    "4H": [
+      ["09:00", 78, 34], ["09:20", 79, 42], ["09:40", 78, 29], ["10:00", 81, 64], ["10:20", 80, 48], ["10:40", 82, 71],
+      ["11:00", 83, 54], ["11:20", 82, 38], ["11:40", 84, 76], ["12:00", 83, 51], ["12:20", 85, 82], ["12:40", 84, 44],
+    ],
+    "1D": [
+      ["00:00", 75, 42], ["02:00", 77, 55], ["04:00", 76, 37], ["06:00", 79, 68], ["08:00", 81, 91], ["10:00", 80, 59],
+      ["12:00", 82, 73], ["14:00", 84, 110], ["16:00", 83, 65], ["18:00", 86, 126], ["20:00", 85, 82], ["22:00", 84, 61],
+    ],
+    "1W": [
+      ["Mon", 68, 95], ["Tue", 70, 112], ["Wed", 69, 76], ["Thu", 73, 134], ["Fri", 75, 147], ["Sat", 74, 83], ["Sun", 76, 71],
+      ["Mon", 78, 128], ["Tue", 77, 102], ["Wed", 80, 159], ["Thu", 82, 141], ["Fri", 81, 118], ["Sat", 83, 87], ["Sun", 84, 106],
+    ],
+    "1M": [
+      ["1", 62, 180], ["3", 64, 142], ["5", 63, 126], ["7", 67, 211], ["9", 69, 175], ["11", 68, 137], ["13", 72, 238], ["15", 74, 196],
+      ["17", 73, 154], ["19", 76, 221], ["21", 78, 205], ["23", 77, 168], ["25", 81, 246], ["27", 83, 194], ["29", 84, 218],
+    ],
+  };
+  const tradeSeries = tradeSeriesByTimeframe[tradeTimeframe];
+  const tradePrices = tradeSeries.map(([, price]) => price);
+  const tradeMinPrice = Math.min(...tradePrices) - 2;
+  const tradeMaxPrice = Math.max(...tradePrices) + 2;
+  const tradePriceRange = Math.max(1, tradeMaxPrice - tradeMinPrice);
+  const tradeMaxVolume = Math.max(...tradeSeries.map(([, , volume]) => volume));
 
   return (
     <main className="min-h-screen bg-white p-3 sm:p-5">
@@ -7954,12 +7979,12 @@ const ExchangeDashboardPanel = ({
 
       {marketView === "carbon" ? (
         <>
-          <section className="grid border-b border-gray-200 lg:grid-cols-[minmax(0,1.35fr)_minmax(300px,0.65fr)]">
+          <section className="border-b border-gray-200">
             <div className="px-3 py-5 sm:px-5">
               <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
                 <div>
-                  <h2 className="text-lg font-bold">Indicative WBP-C order book</h2>
-                  <p className="text-sm text-gray-600">Market-design simulation. No executable or issued units.</p>
+                  <h2 className="text-lg font-bold">WBP-C / GBP</h2>
+                  <p className="text-sm text-gray-600">Simulated trading view. No executable or issued units.</p>
                 </div>
                 <div className="grid grid-cols-3 gap-4 text-right text-sm">
                   <div><span className="block text-xs uppercase text-gray-500">Best bid</span><strong>£{bestBidPrice}</strong></div>
@@ -7967,9 +7992,37 @@ const ExchangeDashboardPanel = ({
                   <div><span className="block text-xs uppercase text-gray-500">Spread</span><strong>£{bidAskSpread}</strong></div>
                 </div>
               </div>
-              <div className="grid gap-4 md:grid-cols-[220px_minmax(0,1fr)]">
-                <div className="border border-gray-200">
-                  <div className="grid grid-cols-2 bg-gray-100 px-3 py-2 text-xs font-semibold uppercase text-gray-600"><span>Price</span><span className="text-right">Volume</span></div>
+              <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_240px]">
+                <div className="min-w-0 border border-gray-200">
+                  <div className="flex items-center justify-between gap-3 border-b border-gray-200 px-3 py-2">
+                    <div><span className="text-xl font-bold">£84.00</span><span className="ml-2 text-xs font-semibold text-emerald-700">+7.69%</span></div>
+                    <div className="flex rounded border border-gray-300 bg-white p-0.5" aria-label="Trading timeframe">
+                      {["4H", "1D", "1W", "1M"].map((timeframe) => (
+                        <button key={timeframe} type="button" onClick={() => setTradeTimeframe(timeframe)} className={`px-2.5 py-1 text-xs font-semibold ${tradeTimeframe === timeframe ? "bg-black text-white" : "text-gray-600 hover:bg-gray-100"}`}>{timeframe}</button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="relative h-72 overflow-hidden px-3 pb-7 pt-4" role="img" aria-label={`${tradeTimeframe} simulated WBP-C price and volume chart`}>
+                    <div className="pointer-events-none absolute inset-x-3 bottom-[76px] top-4 flex flex-col justify-between text-[10px] text-gray-400">
+                      {[tradeMaxPrice, tradeMinPrice + tradePriceRange * 0.66, tradeMinPrice + tradePriceRange * 0.33, tradeMinPrice].map((price) => (
+                        <div key={price} className="flex items-center gap-2"><span className="w-7">£{price.toFixed(0)}</span><span className="h-px flex-1 bg-gray-100" /></div>
+                      ))}
+                    </div>
+                    <div className="absolute inset-x-12 bottom-[76px] top-4 flex items-end gap-1 sm:gap-2">
+                      {tradeSeries.map(([label, price], index) => {
+                        const previousPrice = index > 0 ? tradeSeries[index - 1][1] : price;
+                        const rising = price >= previousPrice;
+                        return <span key={`${label}-${index}`} title={`${label}: £${price}/t`} className={`min-w-0 flex-1 ${rising ? "bg-emerald-600" : "bg-red-500"}`} style={{ height: `${20 + ((price - tradeMinPrice) / tradePriceRange) * 75}%` }} />;
+                      })}
+                    </div>
+                    <div className="absolute inset-x-12 bottom-7 flex h-10 items-end gap-1 border-t border-gray-200 pt-1 sm:gap-2">
+                      {tradeSeries.map(([label, , volume], index) => <span key={`volume-${label}-${index}`} className="min-w-0 flex-1 bg-gray-300" title={`${volume} WBP-C`} style={{ height: `${Math.max(12, volume / tradeMaxVolume * 100)}%` }} />)}
+                    </div>
+                    <div className="absolute inset-x-12 bottom-1 flex justify-between text-[10px] text-gray-500"><span>{tradeSeries[0][0]}</span><span>{tradeSeries[Math.floor(tradeSeries.length / 2)][0]}</span><span>{tradeSeries[tradeSeries.length - 1][0]}</span></div>
+                  </div>
+                </div>
+                <aside className="border border-gray-200">
+                  <div className="grid grid-cols-2 bg-gray-100 px-3 py-2 text-xs font-semibold uppercase text-gray-600"><span>Price</span><span className="text-right">WBP-C</span></div>
                   <div className="flex justify-between border-t border-gray-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-900"><span>Asks</span><span>Sell</span></div>
                   {[{ price: 88, volume: 25 }, { price: 92, volume: 60 }, { price: 105, volume: 120 }].map((order) => (
                     <div key={`ask-${order.price}`} className="grid grid-cols-2 border-t border-gray-100 px-3 py-1.5 text-sm"><strong>£{order.price}/t</strong><span className="text-right">{order.volume}</span></div>
@@ -7978,50 +8031,21 @@ const ExchangeDashboardPanel = ({
                   {[{ price: 76, volume: 40 }, { price: 72, volume: 100 }, { price: 68, volume: 250 }].map((order) => (
                     <div key={`bid-${order.price}`} className="grid grid-cols-2 border-t border-gray-100 px-3 py-1.5 text-sm"><strong>£{order.price}/t</strong><span className="text-right">{order.volume}</span></div>
                   ))}
-                </div>
-                <div className="min-w-0 border border-gray-200 px-3 pb-3 pt-4" role="img" aria-label="Carbon market volume chart showing bids at £68, £72 and £76, the seller reserve at £85, and asks at £88, £92 and £105 per tonne">
-                  <div className="mb-2 flex items-center justify-between gap-3 text-xs text-gray-500">
-                    <span>Available volume (WBP-C)</span>
-                    <span><span className="mr-3 inline-block h-2.5 w-2.5 bg-emerald-600" />Bid <span className="ml-3 mr-1 inline-block h-2.5 w-2.5 bg-red-500" />Ask</span>
+                  <div className="border-y border-gray-300 bg-amber-50 px-3 py-2 text-center">
+                    <p className="text-[10px] font-semibold uppercase text-amber-800">Spread £{bidAskSpread}</p>
+                    <p className="text-sm font-bold">Reserve £{sellerReservePrice}/t</p>
                   </div>
-                  <div className="grid h-48 grid-cols-7 items-end gap-2 border-b border-l border-gray-300 px-2 pt-3 sm:gap-3">
-                    {[
-                      { price: 68, volume: 250, side: "bid" },
-                      { price: 72, volume: 100, side: "bid" },
-                      { price: 76, volume: 40, side: "bid" },
-                      { price: sellerReservePrice, volume: null, side: "reserve" },
-                      { price: 88, volume: 25, side: "ask" },
-                      { price: 92, volume: 60, side: "ask" },
-                      { price: 105, volume: 120, side: "ask" },
-                    ].map((order) => (
-                      <div key={`${order.side}-${order.price}`} className="flex h-full min-w-0 flex-col items-center justify-end">
-                        {order.side === "reserve" ? (
-                          <div className="relative h-full w-full border-x-2 border-dashed border-amber-500 bg-amber-50/70"><span className="absolute left-1/2 top-1 -translate-x-1/2 whitespace-nowrap text-[10px] font-semibold text-amber-800">Reserve</span></div>
-                        ) : (
-                          <>
-                            <span className="mb-1 text-[10px] font-semibold text-gray-600">{order.volume}</span>
-                            <span className={`w-full max-w-12 ${order.side === "bid" ? "bg-emerald-600" : "bg-red-500"}`} style={{ height: `${Math.max(10, order.volume / 250 * 100)}%` }} />
-                          </>
-                        )}
-                      </div>
-                    ))}
+                  <div className="px-3 py-3">
+                    <p className="text-xs uppercase text-gray-500">Property benefit</p>
+                    <p className="mt-1 text-xl font-bold">{Number.isFinite(bridgewoodEnergyValue) ? `£${bridgewoodEnergyValue.toFixed(2)}` : "--"}</p>
+                    <p className="text-xs text-gray-600">Avoided energy cost, not traded.</p>
                   </div>
-                  <div className="grid grid-cols-7 gap-2 px-2 pt-1 text-center text-[10px] font-semibold text-gray-600 sm:gap-3">
-                    {[68, 72, 76, sellerReservePrice, 88, 92, 105].map((price) => <span key={price}>£{price}</span>)}
-                  </div>
-                </div>
+                </aside>
               </div>
               <div className="mt-4 border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-950">
                 The £{sellerReservePrice} reserve is the portfolio's minimum acceptable price, not a guaranteed value. Orders remain illustrative until methodology approval, verification, issuance and buyer onboarding are complete.
               </div>
             </div>
-            <aside className="border-t border-gray-200 px-3 py-5 sm:px-5 lg:border-l lg:border-t-0">
-              <h2 className="text-lg font-bold">Property benefit</h2>
-              <p className="mt-3 text-2xl font-bold">{Number.isFinite(bridgewoodEnergyValue) ? `£${bridgewoodEnergyValue.toFixed(2)}` : "--"}</p>
-              <p className="text-sm text-gray-600">Avoided energy cost retained by the home or landlord.</p>
-              <p className="mt-3 border-t border-gray-200 pt-3 text-sm font-semibold text-gray-800">Not listed, tokenised or included in exchange inventory.</p>
-              <button type="button" disabled className="mt-5 w-full cursor-not-allowed rounded border border-gray-300 bg-gray-100 px-4 py-2.5 text-sm font-semibold text-gray-500">Place order - Locked</button>
-            </aside>
           </section>
 
           <section className="grid border-b border-gray-200 lg:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
