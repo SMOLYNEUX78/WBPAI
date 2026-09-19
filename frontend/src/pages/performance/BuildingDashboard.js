@@ -8026,6 +8026,7 @@ const ExchangeDashboardPanel = ({
         <p className="mt-4 border-t border-gray-200 pt-3 text-[10px] text-gray-500 sm:text-xs">Settled lots close without waiting for the rest of the basket. Open lots remain available to eligible bidders until their reserve or expiry condition is reached.</p>
       </section>
 
+      {false ? <>
       <section className="border-b border-gray-200 px-3 py-3 sm:px-5">
         <div className="flex gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Exchange markets">
           {marketViews.map(([key, label]) => (
@@ -8237,6 +8238,7 @@ const ExchangeDashboardPanel = ({
           <p className="text-xs uppercase text-gray-500">Health data</p><p className="mt-2 text-2xl font-bold">£{annualHealthDataValue.toFixed(2)} modelled</p><p className="mt-1 max-w-3xl text-sm text-gray-600">A consented, aggregated outcomes licence for an agreed commissioner. Value remains modelled until the health measures, attribution method and purchasing route are contracted.</p>
         </section>
       ) : null}
+      </> : null}
 
       {salePanelOpen ? (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-3" role="presentation" onMouseDown={(event) => {
@@ -8304,6 +8306,55 @@ const ExchangeDashboardPanel = ({
                         </label>
                       ) : null}
                     </fieldset>
+
+                    <section className="border border-gray-200" aria-label="Carbon market">
+                      <div className="flex items-center justify-between gap-3 border-b border-gray-200 px-3 py-2">
+                        <div><p className="text-[10px] font-semibold uppercase text-gray-500">WBP-C / GBP</p><span className="text-lg font-bold">£{tradeCurrentPrice.toFixed(2)}</span><span className={`ml-2 text-[10px] font-semibold ${tradePriceChange >= 0 ? "text-emerald-700" : "text-red-600"}`}>{tradePriceChange >= 0 ? "+" : ""}{tradePriceChange.toFixed(2)}%</span></div>
+                        <div className="flex border border-gray-300 bg-white p-0.5" aria-label="Trading timeframe">
+                          {["4H", "1D", "1W", "1M"].map((timeframe) => (
+                            <button key={timeframe} type="button" onClick={() => setTradeTimeframe(timeframe)} className={`px-1.5 py-1 text-[9px] font-semibold sm:px-2 ${tradeTimeframe === timeframe ? "bg-black text-white" : "text-gray-600"}`}>{timeframe}</button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-[minmax(0,1fr)_116px] sm:grid-cols-[minmax(0,1fr)_150px]">
+                        <div className="h-52 min-w-0 overflow-hidden border-r border-gray-200" role="img" aria-label={`${tradeTimeframe} simulated WBP-C candlestick price and volume chart`}>
+                          <svg viewBox="0 0 720 250" className="h-full w-full" preserveAspectRatio="none" aria-hidden="true">
+                            {[0, 1, 2, 3].map((gridIndex) => {
+                              const price = tradeMaxPrice - tradePriceRange * gridIndex / 3;
+                              const y = 16 + gridIndex * 49;
+                              return <g key={`manage-grid-${gridIndex}`}><line x1="42" y1={y} x2="706" y2={y} stroke="#e5e7eb" strokeWidth="1" /><text x="4" y={y + 3} fontSize="10" fill="#6b7280">£{price.toFixed(0)}</text></g>;
+                            })}
+                            {tradeSeries.map(([label, close, volume], index) => {
+                              const open = index > 0 ? tradeSeries[index - 1][1] : close - 1;
+                              const high = Math.max(open, close) + 0.7 + index % 3 * 0.25;
+                              const low = Math.min(open, close) - 0.6 - index % 2 * 0.25;
+                              const xStep = 660 / tradeSeries.length;
+                              const x = 46 + xStep * index + xStep / 2;
+                              const priceY = (price) => 16 + (tradeMaxPrice - price) / tradePriceRange * 147;
+                              const openY = priceY(open);
+                              const closeY = priceY(close);
+                              const rising = close >= open;
+                              const colour = rising ? "#059669" : "#ef4444";
+                              const candleWidth = Math.max(4, Math.min(18, xStep * 0.55));
+                              const volumeHeight = Math.max(3, volume / tradeMaxVolume * 42);
+                              return <g key={`manage-${label}-${index}`}><line x1={x} y1={priceY(high)} x2={x} y2={priceY(low)} stroke={colour} strokeWidth="1.5" /><rect x={x - candleWidth / 2} y={Math.min(openY, closeY)} width={candleWidth} height={Math.max(3, Math.abs(closeY - openY))} fill={colour} /><rect x={x - candleWidth / 2} y={222 - volumeHeight} width={candleWidth} height={volumeHeight} fill={rising ? "#a7f3d0" : "#fecaca"} /></g>;
+                            })}
+                            <line x1="42" y1="174" x2="706" y2="174" stroke="#d1d5db" strokeWidth="1" />
+                            <line x1="42" y1="222" x2="706" y2="222" stroke="#d1d5db" strokeWidth="1" />
+                            <text x="46" y="242" fontSize="10" fill="#6b7280">{tradeSeries[0][0]}</text>
+                            <text x="706" y="242" textAnchor="end" fontSize="10" fill="#6b7280">{tradeSeries[tradeSeries.length - 1][0]}</text>
+                          </svg>
+                        </div>
+                        <aside className="min-w-0 text-[9px] sm:text-[10px]">
+                          <div className="grid grid-cols-2 bg-red-50 px-2 py-1.5 font-semibold text-red-900"><span>Asks</span><span className="text-right">WBP-C</span></div>
+                          {[{ price: 105, volume: 120 }, { price: 92, volume: 60 }, { price: 88, volume: 25 }].map((order) => <div key={`manage-ask-${order.price}`} className="grid grid-cols-2 border-t border-gray-100 px-2 py-1.5"><strong>£{order.price}/t</strong><span className="text-right">{order.volume}</span></div>)}
+                          <div className="border-y border-gray-300 bg-gray-900 px-2 py-2 text-center text-white"><p className="text-[8px] uppercase text-gray-300">Midpoint</p><strong>£{marketMidPrice.toFixed(2)}/t</strong></div>
+                          <div className="grid grid-cols-2 bg-emerald-50 px-2 py-1.5 font-semibold text-emerald-900"><span>Bids</span><span className="text-right">Buy</span></div>
+                          {[{ price: 76, volume: 40 }, { price: 72, volume: 100 }, { price: 68, volume: 250 }].map((order) => <div key={`manage-bid-${order.price}`} className="grid grid-cols-2 border-t border-gray-100 px-2 py-1.5"><strong>£{order.price}/t</strong><span className="text-right">{order.volume}</span></div>)}
+                        </aside>
+                      </div>
+                      <p className="border-t border-gray-200 px-3 py-2 text-[9px] text-gray-500">Simulated market view. No executable or issued units.</p>
+                    </section>
 
                     <fieldset>
                       <legend className="text-sm font-bold">Data and evidence</legend>
