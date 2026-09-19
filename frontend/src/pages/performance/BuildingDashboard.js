@@ -7930,7 +7930,7 @@ const ExchangeDashboardPanel = ({
           </div>
           <div className="mt-3 grid grid-cols-1 gap-px border border-gray-200 bg-gray-200 sm:mt-4 sm:grid-cols-3">
             {[
-              ["Carbon rights", annualCarbonValue, "bg-emerald-700", Number.isFinite(bridgewoodTokens) ? `${bridgewoodTokens.toFixed(4)} WBP-C accrued · £${bridgewoodValue.toFixed(2)} live · ref £${carbonPrice}/t · reserve £${sellerReservePrice}/t` : `Reference £${carbonPrice}/t · reserve £${sellerReservePrice}/t`],
+              ["Annual carbon rights", annualCarbonValue, "bg-emerald-700", Number.isFinite(bridgewoodValue) ? `Live £${bridgewoodValue.toFixed(2)} · reference £${carbonPrice}/t` : `Reference £${carbonPrice}/t`],
               ["Monitoring data", annualMonitoringValue, "bg-blue-600", "Annual licence"],
               ["Evidence service", annualEvidenceValue, "bg-amber-600", "Verifier/funder pack"],
             ].map(([label, value, colour, detail]) => (
