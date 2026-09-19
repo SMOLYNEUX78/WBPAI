@@ -7913,10 +7913,10 @@ const ExchangeDashboardPanel = ({
 
       <section className="grid grid-cols-2 border-b border-gray-200 md:grid-cols-4">
         {[
-          ["Portfolio accrued WBP-C", Number.isFinite(bridgewoodTokens) ? `${bridgewoodTokens.toFixed(4)} WBP-C` : "--", Number.isFinite(bridgewoodValue) ? `£${bridgewoodValue.toFixed(2)} live value` : "Awaiting summary"],
+          ["Portfolio accrued WBP value", `£${annualPortfolioValue.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, "Carbon + monitoring + evidence rights"],
+          ["Accrued carbon", Number.isFinite(bridgewoodTokens) ? `${bridgewoodTokens.toFixed(4)} WBP-C` : "--", Number.isFinite(bridgewoodValue) ? `£${bridgewoodValue.toFixed(2)} live reference value` : "Awaiting summary"],
           ["Reference price", `£${carbonPrice.toFixed(2)}`, "Per tCO2e"],
-          ["Seller reserve", `£${sellerReservePrice.toFixed(2)}`, "High-integrity minimum"],
-          ["Annual value pipeline", `£${annualPortfolioValue.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, `${projectedLots.length} Good / Verified homes · assumed`],
+          ["Seller reserve", `£${sellerReservePrice.toFixed(2)}`, `${projectedLots.length} Good / Verified homes · modelled`],
         ].map(([label, value, detail]) => (
           <div key={label} className="border-r border-gray-200 px-3 py-4 last:border-r-0 sm:px-5">
             <p className="text-xs uppercase text-gray-500">{label}</p>
@@ -7929,8 +7929,8 @@ const ExchangeDashboardPanel = ({
       <section className="grid grid-cols-[minmax(0,1fr)_140px] border-b border-gray-200 min-[430px]:grid-cols-[minmax(0,1.2fr)_180px] sm:grid-cols-[minmax(0,1.2fr)_220px] lg:grid-cols-[minmax(0,1.2fr)_minmax(240px,0.8fr)]">
         <div className="min-w-0 px-3 py-5 sm:px-5">
           <div>
-            <h2 className="text-lg font-bold">WBP value split</h2>
-            <p className="mt-1 text-sm text-gray-600">Assumed one-year value from the two Good / Verified projects.</p>
+            <h2 className="text-lg font-bold">Portfolio WBP value split</h2>
+            <p className="mt-1 text-sm text-gray-600">The component rights making up the combined portfolio value above.</p>
           </div>
           <div className="mt-4 grid grid-cols-1 gap-px border border-gray-200 bg-gray-200 sm:grid-cols-3">
             {[
@@ -7954,7 +7954,7 @@ const ExchangeDashboardPanel = ({
             aria-label={`Annual assumed value: carbon £${annualCarbonValue.toFixed(2)}, monitoring £${annualMonitoringValue.toFixed(2)}, evidence £${annualEvidenceValue.toFixed(2)}`}
           >
             <div className="absolute inset-5 flex flex-col items-center justify-center rounded-full bg-white text-center sm:inset-7">
-              <span className="text-[9px] uppercase text-gray-500 sm:text-xs">Annual</span>
+              <span className="text-[9px] uppercase text-gray-500 sm:text-xs">WBP value</span>
               <strong className="text-xs sm:text-lg">£{annualPortfolioValue.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
             </div>
           </div>
