@@ -7830,7 +7830,6 @@ const PortfolioDashboardPanel = ({
 const ExchangeDashboardPanel = ({
   bridgewoodEnergyValue,
   bridgewoodTokens,
-  onOpenPortfolio,
 }) => {
   const [marketView, setMarketView] = useState("carbon");
   const [tradeTimeframe, setTradeTimeframe] = useState("1D");
@@ -7839,6 +7838,7 @@ const ExchangeDashboardPanel = ({
   const bestBidPrice = 76;
   const bestAskPrice = 88;
   const bidAskSpread = bestAskPrice - bestBidPrice;
+  const marketMidPrice = (bestBidPrice + bestAskPrice) / 2;
   const projectedLots = PORTFOLIO_PROPERTIES.filter((property) =>
     Number.isFinite(property.projectedAnnualCredits)
   );
@@ -7896,37 +7896,12 @@ const ExchangeDashboardPanel = ({
 
   return (
     <main className="min-h-screen bg-white p-3 sm:p-5">
-      <header className="flex flex-wrap items-end justify-between gap-3 border-b border-gray-200 pb-4">
-        <div>
-          <p className="text-xs font-semibold uppercase text-gray-500">Exchange prototype</p>
-          <h1 className="text-2xl font-bold">WBP Data Exchange</h1>
-          <p className="text-sm text-gray-600">Carbon, evidence products, flexibility and retrofit outcomes</p>
-        </div>
-        <button
-          type="button"
-          onClick={onOpenPortfolio}
-          className="rounded border border-gray-300 bg-white px-4 py-2 text-sm font-semibold hover:bg-gray-50"
-        >
-          Back to portfolio
-        </button>
-      </header>
-
-      <section className="flex items-center justify-between gap-4 border-b border-gray-200 px-3 py-4 sm:px-5">
-        <div>
-          <p className="text-2xl font-bold leading-none">WBP</p>
-          <p className="mt-1 text-xs uppercase text-gray-500">Portfolio accrued value</p>
-        </div>
-        <div className="text-right">
-          <p className="text-2xl font-bold">£{annualPortfolioValue.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-          <p className="text-xs text-gray-600">{projectedLots.length} Good / Verified homes · modelled</p>
-        </div>
-      </section>
-
       <section className="grid grid-cols-[minmax(0,1fr)_165px] border-b border-gray-200 min-[430px]:grid-cols-[minmax(0,1fr)_190px] sm:grid-cols-[minmax(0,1.2fr)_220px] lg:grid-cols-[minmax(0,1.2fr)_minmax(240px,0.8fr)]">
         <div className="min-w-0 px-2 py-4 sm:px-5 sm:py-5">
           <div>
-            <h2 className="text-sm font-bold sm:text-lg">Portfolio WBP value split</h2>
-            <p className="mt-1 text-xs text-gray-600 sm:text-sm">The rights making up the combined value.</p>
+            <h1 className="text-base font-bold sm:text-xl">WBP portfolio accrued value</h1>
+            <p className="mt-1 text-2xl font-bold sm:text-3xl">£{annualPortfolioValue.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+            <p className="mt-1 text-[10px] text-gray-600 sm:text-xs">{projectedLots.length} Good / Verified homes · modelled</p>
           </div>
           <div className="mt-3 grid grid-cols-1 gap-px border border-gray-200 bg-gray-200 sm:mt-4 sm:grid-cols-3">
             {[
@@ -7955,7 +7930,12 @@ const ExchangeDashboardPanel = ({
             </div>
           </div>
         </div>
-        <p className="col-span-full border-t border-gray-200 px-3 py-2 text-xs text-gray-500 sm:px-5">Each tranche grants different rights. Selling monitoring or evidence access does not transfer or duplicate the carbon retirement claim.</p>
+        <div className="col-span-full grid gap-2 border-t border-gray-200 px-3 py-3 sm:grid-cols-[minmax(220px,1fr)_auto_auto] sm:px-5">
+          <button type="button" disabled className="cursor-not-allowed border border-emerald-300 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800">Sell complete WBP value</button>
+          <button type="button" disabled className="cursor-not-allowed border border-gray-300 bg-gray-100 px-4 py-2.5 text-sm font-semibold text-gray-500">Market sell carbon</button>
+          <button type="button" disabled className="cursor-not-allowed border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-500">Set higher ask</button>
+          <p className="text-[10px] text-gray-500 sm:col-span-full">Trading unlocks after verification and issuance. Complete WBP sales transfer the available package of rights; carbon-only sales remain separately retired.</p>
+        </div>
       </section>
 
       <section className="border-b border-gray-200 px-3 py-3 sm:px-5">
@@ -8048,17 +8028,17 @@ const ExchangeDashboardPanel = ({
                 <aside className="min-w-0 border border-gray-200">
                   <div className="grid grid-cols-2 bg-gray-100 px-2 py-2 text-[9px] font-semibold uppercase text-gray-600 sm:px-3 sm:text-xs"><span>Price</span><span className="text-right">WBP-C</span></div>
                   <div className="flex justify-between border-t border-gray-200 bg-red-50 px-2 py-1.5 text-[10px] font-semibold text-red-900 sm:px-3 sm:text-xs"><span>Asks</span><span>Sell</span></div>
-                  {[{ price: 88, volume: 25 }, { price: 92, volume: 60 }, { price: 105, volume: 120 }].map((order) => (
+                  {[{ price: 105, volume: 120 }, { price: 92, volume: 60 }, { price: 88, volume: 25 }].map((order) => (
                     <div key={`ask-${order.price}`} className="grid grid-cols-2 border-t border-gray-100 px-2 py-1.5 text-[10px] sm:px-3 sm:text-sm"><strong>£{order.price}/t</strong><span className="text-right">{order.volume}</span></div>
                   ))}
+                  <div className="border-y border-gray-300 bg-gray-900 px-2 py-2 text-center text-white">
+                    <p className="text-[9px] font-semibold uppercase text-gray-300">Market midpoint · spread £{bidAskSpread}</p>
+                    <p className="text-sm font-bold">£{marketMidPrice.toFixed(2)}/t</p>
+                  </div>
                   <div className="flex justify-between border-t border-gray-200 bg-emerald-50 px-2 py-1.5 text-[10px] font-semibold text-emerald-900 sm:px-3 sm:text-xs"><span>Bids</span><span>Buy</span></div>
                   {[{ price: 76, volume: 40 }, { price: 72, volume: 100 }, { price: 68, volume: 250 }].map((order) => (
                     <div key={`bid-${order.price}`} className="grid grid-cols-2 border-t border-gray-100 px-2 py-1.5 text-[10px] sm:px-3 sm:text-sm"><strong>£{order.price}/t</strong><span className="text-right">{order.volume}</span></div>
                   ))}
-                  <div className="border-y border-gray-300 bg-amber-50 px-3 py-2 text-center">
-                    <p className="text-[10px] font-semibold uppercase text-amber-800">Spread £{bidAskSpread}</p>
-                    <p className="text-sm font-bold">Reserve £{sellerReservePrice}/t</p>
-                  </div>
                   <div className="px-3 py-3">
                     <p className="text-xs uppercase text-gray-500">Property benefit</p>
                     <p className="mt-1 text-xl font-bold">{Number.isFinite(bridgewoodEnergyValue) ? `£${bridgewoodEnergyValue.toFixed(2)}` : "--"}</p>
