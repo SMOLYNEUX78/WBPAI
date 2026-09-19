@@ -7603,7 +7603,7 @@ const NewBuildingSetupPanel = () => {
 };
 
 const PORTFOLIO_PROPERTIES = [
-  { id: "WBP-001", estate: "14 Bridgewood Road", archetype: "Semi-detached", health: 87, energy: 88, risk: "Monitor", retrofit: "Baseline", evidence: 63, collector: "Live", buildingId: "home", token: 0.2621 },
+  { id: "WBP-001", estate: "14 Bridgewood Road", archetype: "Semi-detached", health: 87, energy: 88, risk: "Monitor", retrofit: "Baseline", evidence: 63, collector: "Live", buildingId: "home" },
   { id: "WBP-002", estate: "Bridgewood", archetype: "Terrace", health: 61, energy: 54, risk: "Damp", retrofit: "Assessment", evidence: 42, collector: "Live" },
   { id: "WBP-003", estate: "Kyson", archetype: "Flat", health: 72, energy: 47, risk: "Cold", retrofit: "Planned", evidence: 78, collector: "Live" },
   { id: "WBP-004", estate: "Kyson", archetype: "Maisonette", health: 58, energy: 69, risk: "IAQ", retrofit: "In works", evidence: 86, collector: "Attention" },
@@ -7616,6 +7616,18 @@ const PORTFOLIO_PROPERTIES = [
 const PortfolioDashboardPanel = ({ onOpenBuilding }) => {
   const [riskFilter, setRiskFilter] = useState("All");
   const [search, setSearch] = useState("");
+  const [bridgewoodTokens, setBridgewoodTokens] = useState(() => {
+    try {
+      const cached = JSON.parse(
+        localStorage.getItem(`home:${CARBON_INTERVAL_SAVINGS_CACHE_KEY}`) || "null"
+      );
+      return Number.isFinite(Number(cached?.carbonCredits))
+        ? Number(cached.carbonCredits)
+        : null;
+    } catch (error) {
+      return null;
+    }
+  });
   const riskOptions = ["All", "Damp", "Cold", "IAQ", "Heat loss", "Overheat", "Good"];
   const filteredProperties = PORTFOLIO_PROPERTIES.filter((property) => {
     const matchesRisk = riskFilter === "All" || property.risk === riskFilter;
@@ -7627,12 +7639,11 @@ const PortfolioDashboardPanel = ({ onOpenBuilding }) => {
   const liveCount = PORTFOLIO_PROPERTIES.filter((property) => property.collector === "Live").length;
   const priorityCount = PORTFOLIO_PROPERTIES.filter((property) => !["Good", "Monitor"].includes(property.risk)).length;
   const verifiedCount = PORTFOLIO_PROPERTIES.filter((property) => property.retrofit === "Verified").length;
-  const portfolioTokens = PORTFOLIO_PROPERTIES.reduce(
-    (sum, property) => sum + (property.token || 0),
-    0
-  );
-  const indicativeCarbonPrice = 65;
-  const portfolioTokenValue = portfolioTokens * indicativeCarbonPrice;
+  const portfolioTokens = bridgewoodTokens;
+  const indicativeCarbonPrice = FALLBACK_CARBON_PRICE_GBP_PER_TONNE;
+  const portfolioTokenValue = Number.isFinite(portfolioTokens)
+    ? portfolioTokens * indicativeCarbonPrice
+    : null;
   const average = (key) => Math.round(
     PORTFOLIO_PROPERTIES.reduce((sum, property) => sum + property[key], 0) /
       PORTFOLIO_PROPERTIES.length
@@ -7643,6 +7654,30 @@ const PortfolioDashboardPanel = ({ onOpenBuilding }) => {
     if (["Damp", "Cold", "IAQ", "Heat loss", "Overheat", "Attention"].includes(value)) return "bg-red-50 text-red-800 border-red-200";
     return "bg-amber-50 text-amber-800 border-amber-200";
   };
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadPortfolioTokens = async () => {
+      const { data, error } = await supabase
+        .from("CarbonSavingsSummary")
+        .select("carbon_credits, calculated_at")
+        .eq("building_id", "home")
+        .eq("scenario", CARBON_SAVINGS_SCENARIO)
+        .order("calculated_at", { ascending: false })
+        .limit(1);
+
+      const credits = Number(data?.[0]?.carbon_credits);
+      if (!cancelled && !error && Number.isFinite(credits) && credits >= 0) {
+        setBridgewoodTokens(credits);
+      }
+    };
+
+    loadPortfolioTokens();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <main className="min-h-screen bg-white p-3 sm:p-5">
@@ -7659,12 +7694,16 @@ const PortfolioDashboardPanel = ({ onOpenBuilding }) => {
       <section className="grid grid-cols-2 gap-px border-b border-gray-200 bg-emerald-200/70 lg:grid-cols-[repeat(3,minmax(0,1fr))_auto]">
         <div className="min-w-0 bg-emerald-50 px-4 py-4 sm:px-5">
           <p className="text-xs font-semibold uppercase text-emerald-800">Portfolio tokens</p>
-          <p className="mt-1 text-2xl font-bold text-emerald-950">{portfolioTokens.toFixed(4)} WBP-C</p>
+            <p className="mt-1 text-2xl font-bold text-emerald-950">
+              {Number.isFinite(portfolioTokens) ? portfolioTokens.toFixed(4) : "--"} WBP-C
+            </p>
           <p className="text-xs text-emerald-800">Candidate credits accrued</p>
         </div>
         <div className="min-w-0 bg-emerald-50 px-4 py-4 sm:px-5">
           <p className="text-xs font-semibold uppercase text-emerald-800">Indicative value</p>
-          <p className="mt-1 text-2xl font-bold text-emerald-950">£{portfolioTokenValue.toFixed(2)}</p>
+          <p className="mt-1 text-2xl font-bold text-emerald-950">
+            {Number.isFinite(portfolioTokenValue) ? `£${portfolioTokenValue.toFixed(2)}` : "--"}
+          </p>
           <p className="text-xs text-emerald-800">At £{indicativeCarbonPrice}/tCO2e</p>
         </div>
         <div className="min-w-0 bg-emerald-50 px-4 py-4 sm:px-5">
