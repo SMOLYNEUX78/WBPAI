@@ -15,7 +15,7 @@ const SplashScreen = () => {
   useEffect(() => {
     const timer = setTimeout(() => {
       setFadeOut(true); // Start fade-out animation
-      setTimeout(() => navigate("/dashboard"), 500); // Wait for fade-out to complete before navigating
+      setTimeout(() => navigate("/dashboard/cc"), 500); // Wait for fade-out to complete before navigating
     }, 2000);
     return () => clearTimeout(timer);
   }, [navigate]);
@@ -46,7 +46,7 @@ const App = () => {
     <Router>
       <Routes>
         <Route path="/" element={<SplashScreen />} />
-<Route path="/dashboard" element={<BuildingDashboard />} />
+        <Route path="/dashboard/*" element={<BuildingDashboard />} />
       </Routes>
     </Router>
   );

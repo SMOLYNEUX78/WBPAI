@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import AnalogGauge from "../../components/AnalogGauge";
 import RetrofitPublicBenefit from "../../components/RetrofitPublicBenefit";
 import supabase from "../../supabaseClient";
@@ -7990,7 +7991,13 @@ const ExchangeDashboardPanel = ({
 };
 
 const BuildingDashboard = () => {
-  const defaultIndex = BUILDINGS.findIndex((building) => building.id === "cc");
+  const location = useLocation();
+  const navigate = useNavigate();
+  const routeSection = location.pathname.split("/").filter(Boolean)[1] || "cc";
+  const routeIndex = BUILDINGS.findIndex((building) => building.id === routeSection);
+  const defaultIndex = routeIndex >= 0
+    ? routeIndex
+    : BUILDINGS.findIndex((building) => building.id === "cc");
   const [activeIndex, setActiveIndex] = useState(defaultIndex >= 0 ? defaultIndex : 0);
   const [bridgewoodValue, setBridgewoodValue] = useState(readCachedBridgewoodValue);
   const bridgewoodTokens = bridgewoodValue.credits;
@@ -8002,7 +8009,25 @@ const BuildingDashboard = () => {
   const goToBuilding = (nextIndex) => {
     const wrappedIndex = (nextIndex + BUILDINGS.length) % BUILDINGS.length;
     setActiveIndex(wrappedIndex);
+    const nextPath = `/dashboard/${BUILDINGS[wrappedIndex].id}`;
+    if (location.pathname !== nextPath) {
+      navigate(nextPath);
+    }
   };
+
+  useEffect(() => {
+    const currentSection = location.pathname.split("/").filter(Boolean)[1];
+    const currentIndex = BUILDINGS.findIndex(
+      (building) => building.id === currentSection
+    );
+
+    if (currentIndex >= 0) {
+      setActiveIndex(currentIndex);
+      return;
+    }
+
+    navigate("/dashboard/cc", { replace: true });
+  }, [location.pathname, navigate]);
 
   const openBuildingById = (buildingId) => {
     const buildingIndex = BUILDINGS.findIndex((building) => building.id === buildingId);
