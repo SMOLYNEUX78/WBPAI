@@ -7603,7 +7603,7 @@ const NewBuildingSetupPanel = () => {
 };
 
 const PORTFOLIO_PROPERTIES = [
-  { id: "WBP-001", estate: "Bridgewood", archetype: "Semi-detached", health: 87, energy: 88, risk: "Monitor", retrofit: "Baseline", evidence: 63, collector: "Live" },
+  { id: "WBP-001", estate: "14 Bridgewood Road", archetype: "Semi-detached", health: 87, energy: 88, risk: "Monitor", retrofit: "Baseline", evidence: 63, collector: "Live", buildingId: "home", token: 0.2621 },
   { id: "WBP-002", estate: "Bridgewood", archetype: "Terrace", health: 61, energy: 54, risk: "Damp", retrofit: "Assessment", evidence: 42, collector: "Live" },
   { id: "WBP-003", estate: "Kyson", archetype: "Flat", health: 72, energy: 47, risk: "Cold", retrofit: "Planned", evidence: 78, collector: "Live" },
   { id: "WBP-004", estate: "Kyson", archetype: "Maisonette", health: 58, energy: 69, risk: "IAQ", retrofit: "In works", evidence: 86, collector: "Attention" },
@@ -7613,7 +7613,7 @@ const PORTFOLIO_PROPERTIES = [
   { id: "WBP-008", estate: "Melton", archetype: "Flat", health: 83, energy: 81, risk: "Good", retrofit: "Verified", evidence: 96, collector: "Live" },
 ];
 
-const PortfolioDashboardPanel = () => {
+const PortfolioDashboardPanel = ({ onOpenBuilding }) => {
   const [riskFilter, setRiskFilter] = useState("All");
   const [search, setSearch] = useState("");
   const riskOptions = ["All", "Damp", "Cold", "IAQ", "Heat loss", "Overheat", "Good"];
@@ -7627,6 +7627,12 @@ const PortfolioDashboardPanel = () => {
   const liveCount = PORTFOLIO_PROPERTIES.filter((property) => property.collector === "Live").length;
   const priorityCount = PORTFOLIO_PROPERTIES.filter((property) => !["Good", "Monitor"].includes(property.risk)).length;
   const verifiedCount = PORTFOLIO_PROPERTIES.filter((property) => property.retrofit === "Verified").length;
+  const portfolioTokens = PORTFOLIO_PROPERTIES.reduce(
+    (sum, property) => sum + (property.token || 0),
+    0
+  );
+  const indicativeCarbonPrice = 65;
+  const portfolioTokenValue = portfolioTokens * indicativeCarbonPrice;
   const average = (key) => Math.round(
     PORTFOLIO_PROPERTIES.reduce((sum, property) => sum + property[key], 0) /
       PORTFOLIO_PROPERTIES.length
@@ -7649,6 +7655,34 @@ const PortfolioDashboardPanel = () => {
           </div>
         </div>
       </header>
+
+      <section className="grid grid-cols-2 gap-px border-b border-gray-200 bg-emerald-200/70 lg:grid-cols-[repeat(3,minmax(0,1fr))_auto]">
+        <div className="min-w-0 bg-emerald-50 px-4 py-4 sm:px-5">
+          <p className="text-xs font-semibold uppercase text-emerald-800">Portfolio tokens</p>
+          <p className="mt-1 text-2xl font-bold text-emerald-950">{portfolioTokens.toFixed(4)} WBP-C</p>
+          <p className="text-xs text-emerald-800">Candidate credits accrued</p>
+        </div>
+        <div className="min-w-0 bg-emerald-50 px-4 py-4 sm:px-5">
+          <p className="text-xs font-semibold uppercase text-emerald-800">Indicative value</p>
+          <p className="mt-1 text-2xl font-bold text-emerald-950">£{portfolioTokenValue.toFixed(2)}</p>
+          <p className="text-xs text-emerald-800">At £{indicativeCarbonPrice}/tCO2e</p>
+        </div>
+        <div className="min-w-0 bg-emerald-50 px-4 py-4 sm:px-5">
+          <p className="text-xs font-semibold uppercase text-emerald-800">Eligible properties</p>
+          <p className="mt-1 text-2xl font-bold text-emerald-950">1 / {PORTFOLIO_PROPERTIES.length}</p>
+          <p className="text-xs text-emerald-800">Evidence review required</p>
+        </div>
+        <div className="flex min-w-0 items-center justify-end bg-emerald-50 px-4 py-4 sm:px-5">
+          <button
+            type="button"
+            disabled
+            title="Marketplace trading will be enabled after verification and issuance"
+            className="w-full cursor-not-allowed rounded border border-emerald-300 bg-emerald-100 px-5 py-2.5 text-sm font-semibold text-emerald-800 opacity-70 lg:w-auto"
+          >
+            Sell on marketplace - Locked
+          </button>
+        </div>
+      </section>
 
       <section className="grid grid-cols-2 border-b border-gray-200 md:grid-cols-4">
         {[
@@ -7700,8 +7734,25 @@ const PortfolioDashboardPanel = () => {
               </thead>
               <tbody>
                 {filteredProperties.map((property) => (
-                  <tr key={property.id} className="border-b border-gray-100 last:border-b-0 hover:bg-gray-50">
-                    <td className="px-3 py-3 font-semibold">{property.id}</td>
+                  <tr
+                    key={property.id}
+                    className={`border-b border-gray-100 last:border-b-0 ${property.buildingId ? "cursor-pointer hover:bg-emerald-50" : "hover:bg-gray-50"}`}
+                    onClick={property.buildingId ? () => onOpenBuilding(property.buildingId) : undefined}
+                  >
+                    <td className="px-3 py-3 font-semibold">
+                      {property.buildingId ? (
+                        <button
+                          type="button"
+                          className="text-left text-emerald-800 underline decoration-emerald-300 underline-offset-4"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onOpenBuilding(property.buildingId);
+                          }}
+                        >
+                          {property.id}
+                        </button>
+                      ) : property.id}
+                    </td>
                     <td className="px-3 py-3">{property.estate}</td>
                     <td className="px-3 py-3">{property.archetype}</td>
                     <td className="px-3 py-3">{property.health}/100</td>
@@ -7759,6 +7810,13 @@ const BuildingDashboard = () => {
   const goToBuilding = (nextIndex) => {
     const wrappedIndex = (nextIndex + BUILDINGS.length) % BUILDINGS.length;
     setActiveIndex(wrappedIndex);
+  };
+
+  const openBuildingById = (buildingId) => {
+    const buildingIndex = BUILDINGS.findIndex((building) => building.id === buildingId);
+    if (buildingIndex >= 0) {
+      goToBuilding(buildingIndex);
+    }
   };
 
   const handleTouchStart = (event) => {
@@ -7847,7 +7905,7 @@ const BuildingDashboard = () => {
                 {building.setupOnly ? (
                   <NewBuildingSetupPanel />
                 ) : building.portfolioOnly ? (
-                  <PortfolioDashboardPanel />
+                  <PortfolioDashboardPanel onOpenBuilding={openBuildingById} />
                 ) : (
                   <BuildingDashboardPanel building={building} />
                 )}
