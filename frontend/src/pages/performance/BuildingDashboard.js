@@ -7838,6 +7838,7 @@ const ExchangeDashboardPanel = ({
   const [carbonAskPrice, setCarbonAskPrice] = useState(95);
   const [carbonSalePercent, setCarbonSalePercent] = useState(100);
   const [dataLicenceAction, setDataLicenceAction] = useState("auto");
+  const [selectedDataLots, setSelectedDataLots] = useState(["Monitoring", "Health", "Grid", "Evidence"]);
   const [salePrepared, setSalePrepared] = useState(false);
   const carbonPrice = FALLBACK_CARBON_PRICE_GBP_PER_TONNE;
   const sellerReservePrice = 85;
@@ -7879,17 +7880,30 @@ const ExchangeDashboardPanel = ({
     (sum, lot) => sum + lot.target * lot.coverage,
     0
   );
-  const dataLicenceValue = annualMonitoringValue + annualHealthDataValue + annualGridDataValue + annualEvidenceValue;
+  const dataRights = [
+    { name: "Monitoring", value: annualMonitoringValue, detail: "Building performance and retrofit trends" },
+    { name: "Health", value: annualHealthDataValue, detail: "Aggregated IAQ and outcomes analysis" },
+    { name: "Grid", value: annualGridDataValue, detail: "Demand, peak and heat-pump readiness" },
+    { name: "Evidence", value: annualEvidenceValue, detail: "Verified provenance and performance records" },
+  ];
   const selectedCarbonPrice = carbonSaleAction === "ask" ? Number(carbonAskPrice) || 0 : bestBidPrice;
   const selectedCarbonValue = carbonSaleAction === "hold"
     ? 0
     : projectedAnnualCredits * selectedCarbonPrice * carbonSalePercent / 100;
-  const selectedDataValue = dataLicenceAction === "hold" ? 0 : dataLicenceValue;
+  const selectedDataValue = dataLicenceAction === "hold"
+    ? 0
+    : dataRights.reduce((sum, right) => selectedDataLots.includes(right.name) ? sum + right.value : sum, 0);
+  const toggleDataLot = (name) => {
+    setSelectedDataLots((current) => current.includes(name)
+      ? current.filter((item) => item !== name)
+      : [...current, name]);
+  };
   const openSalePanel = (mode, carbonAction = null) => {
     setSaleMode(mode);
     if (mode === "simple") {
       setCarbonSalePercent(100);
       setDataLicenceAction("auto");
+      setSelectedDataLots(["Monitoring", "Health", "Grid", "Evidence"]);
     }
     if (carbonAction) {
       setCarbonSaleAction(carbonAction);
@@ -7970,10 +7984,9 @@ const ExchangeDashboardPanel = ({
             ))}
           </div>
         </div>
-        <div className="grid gap-2 border-t border-gray-200 px-3 py-3 sm:grid-cols-[minmax(220px,1fr)_auto_auto] sm:px-5">
+        <div className="grid gap-2 border-t border-gray-200 px-3 py-3 sm:grid-cols-[minmax(220px,1fr)_auto] sm:px-5">
           <button type="button" onClick={() => openSalePanel("simple", "market")} className="border border-emerald-700 bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800">Sell available value</button>
           <button type="button" onClick={() => openSalePanel("advanced")} className="border border-gray-400 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 hover:bg-gray-50">Manage sale</button>
-          <button type="button" onClick={() => openSalePanel("advanced", "ask")} className="border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50">Set carbon ask</button>
           <p className="text-[10px] text-gray-500 sm:col-span-full">One basket offer can match separate buyers to compatible rights. Carbon is transferred and retired once; data and evidence are supplied through defined licences or services.</p>
         </div>
       </section>
@@ -8231,7 +8244,7 @@ const ExchangeDashboardPanel = ({
             setSalePanelOpen(false);
           }
         }}>
-          <section className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-lg border border-gray-300 bg-white shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="sale-panel-title">
+          <section className="max-h-[94vh] w-full max-w-5xl overflow-y-auto rounded-lg border border-gray-300 bg-white shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="sale-panel-title">
             <header className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-gray-200 bg-white px-4 py-4 sm:px-6">
               <div>
                 <p className="text-[10px] font-semibold uppercase text-emerald-700">Prototype order ticket</p>
@@ -8294,12 +8307,12 @@ const ExchangeDashboardPanel = ({
 
                     <fieldset>
                       <legend className="text-sm font-bold">Data and evidence</legend>
-                      <p className="mt-1 text-xs text-gray-600">These remain owned by the portfolio and are offered as controlled, non-exclusive licences.</p>
+                      <p className="mt-1 text-xs text-gray-600">Choose how approved buyers can bid for controlled, non-exclusive licences. The portfolio keeps the source data.</p>
                       <div className="mt-3 space-y-2">
                         {[
-                          ["auto", "Auto-license", "Accept eligible offers that meet approved terms and reserves."],
-                          ["review", "Review every offer", "Keep each offer pending until the portfolio owner approves it."],
-                          ["hold", "Do not license", "Keep all monitoring, health, grid and evidence rights off market."],
+                          ["auto", "Auto-match buyers", "Accept eligible offers that meet your approved terms and minimum values."],
+                          ["review", "Open for offers", "Invite bids, then review each buyer, purpose and price before accepting."],
+                          ["hold", "Keep data private", "Do not offer any monitoring, health, grid or evidence licences."],
                         ].map(([value, label, detail]) => (
                           <label key={value} className={`flex cursor-pointer items-start gap-3 border p-3 ${dataLicenceAction === value ? "border-emerald-700 bg-emerald-50" : "border-gray-200"}`}>
                             <input type="radio" name="data-licence-action" value={value} checked={dataLicenceAction === value} onChange={() => setDataLicenceAction(value)} className="mt-1 accent-emerald-700" />
@@ -8307,6 +8320,21 @@ const ExchangeDashboardPanel = ({
                           </label>
                         ))}
                       </div>
+                      {dataLicenceAction !== "hold" ? (
+                        <div className="mt-4">
+                          <p className="text-xs font-semibold text-gray-700">Licences to include</p>
+                          <div className="mt-2 grid grid-cols-2 gap-2">
+                            {dataRights.map((right) => (
+                              <label key={right.name} className={`cursor-pointer border p-3 ${selectedDataLots.includes(right.name) ? "border-blue-600 bg-blue-50" : "border-gray-200 bg-white"}`}>
+                                <span className="flex items-start gap-2">
+                                  <input type="checkbox" checked={selectedDataLots.includes(right.name)} onChange={() => toggleDataLot(right.name)} className="mt-0.5 accent-blue-700" />
+                                  <span className="min-w-0"><strong className="block text-xs sm:text-sm">{right.name}</strong><span className="block text-[10px] leading-tight text-gray-600 sm:text-xs">{right.detail}</span><span className="mt-1 block text-[10px] font-semibold text-blue-800">£{right.value.toFixed(2)} modelled</span></span>
+                                </span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
                     </fieldset>
                       </>
                     )}
@@ -8318,7 +8346,8 @@ const ExchangeDashboardPanel = ({
                       <div className="flex justify-between gap-3"><dt className="text-gray-600">Carbon</dt><dd className="text-right font-semibold">{carbonSaleAction === "hold" ? "Hold" : `£${selectedCarbonValue.toFixed(2)}`}</dd></div>
                       <div className="flex justify-between gap-3"><dt className="text-gray-600">Carbon route</dt><dd className="text-right font-semibold">{carbonSaleAction === "market" ? "Best approved market" : carbonSaleAction === "ask" ? `Ask £${Number(carbonAskPrice || 0).toFixed(0)}/t` : "Not listed"}</dd></div>
                       <div className="flex justify-between gap-3 border-t border-gray-200 pt-3"><dt className="text-gray-600">Data potential</dt><dd className="text-right font-semibold">{dataLicenceAction === "hold" ? "Hold" : `£${selectedDataValue.toFixed(2)}`}</dd></div>
-                      <div className="flex justify-between gap-3"><dt className="text-gray-600">Data route</dt><dd className="text-right font-semibold">{dataLicenceAction === "auto" ? "Approved buyer pool" : dataLicenceAction === "review" ? "Manual approval" : "Not offered"}</dd></div>
+                      <div className="flex justify-between gap-3"><dt className="text-gray-600">Data route</dt><dd className="text-right font-semibold">{dataLicenceAction === "auto" ? "Auto-match buyers" : dataLicenceAction === "review" ? "Open for offers" : "Keep private"}</dd></div>
+                      {dataLicenceAction !== "hold" ? <div className="flex justify-between gap-3"><dt className="text-gray-600">Licences listed</dt><dd className="text-right font-semibold">{selectedDataLots.length} of {dataRights.length}</dd></div> : null}
                     </dl>
                     <div className="mt-5 border border-amber-200 bg-amber-50 p-3 text-[10px] leading-relaxed text-amber-950">Carbon may produce immediate proceeds when an eligible bid exists. Data values remain modelled until an approved buyer accepts a licence; they are not guaranteed sale proceeds.</div>
                     <div className="mt-4 border-t border-gray-200 pt-4">
@@ -8329,7 +8358,7 @@ const ExchangeDashboardPanel = ({
                 </div>
                 <footer className="flex flex-col-reverse gap-2 px-4 py-4 sm:flex-row sm:justify-end sm:px-6">
                   <button type="button" onClick={() => setSalePanelOpen(false)} className="border border-gray-300 bg-white px-5 py-2.5 text-sm font-semibold text-gray-700">Cancel</button>
-                  <button type="button" onClick={() => setSalePrepared(true)} className="border border-emerald-700 bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800">Prepare basket offer</button>
+                  <button type="button" onClick={() => setSalePrepared(true)} disabled={carbonSaleAction === "hold" && (dataLicenceAction === "hold" || selectedDataLots.length === 0)} className="border border-emerald-700 bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:border-gray-300 disabled:bg-gray-200 disabled:text-gray-500">{saleMode === "simple" ? "Offer available value" : dataLicenceAction === "review" ? "Open selected rights for offers" : "Create selected listings"}</button>
                 </footer>
               </>
             )}
