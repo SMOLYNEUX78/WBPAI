@@ -7897,36 +7897,34 @@ const ExchangeDashboardPanel = ({
   return (
     <main className="min-h-screen bg-white p-3 sm:p-5">
       <section className="border-b border-gray-200">
-        <div className="grid grid-cols-[minmax(0,1fr)_minmax(148px,42%)] items-center gap-4 px-3 py-5 sm:grid-cols-[minmax(0,1fr)_240px] sm:gap-8 sm:px-5 sm:py-7">
+        <div className="grid grid-cols-[minmax(0,1fr)_88px_minmax(112px,0.9fr)] items-center gap-2 px-3 py-5 sm:grid-cols-[minmax(0,1fr)_150px_minmax(180px,0.8fr)] sm:gap-6 sm:px-5 sm:py-7">
           <div className="min-w-0">
             <h1 className="text-base font-bold sm:text-xl">WBP portfolio accrued value</h1>
             <p className="mt-1 text-3xl font-bold">£{annualPortfolioValue.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
             <p className="mt-1 text-[10px] text-gray-600 sm:text-xs">{projectedLots.length} Good / Verified homes · modelled</p>
           </div>
-          <div className="flex min-w-0 flex-col items-center">
-            <div
-              className="relative h-[120px] w-[120px] rounded-full sm:h-[150px] sm:w-[150px]"
-              style={{ background: `conic-gradient(#047857 0 ${carbonValueShare}%, #2563eb ${carbonValueShare}% ${carbonValueShare + monitoringValueShare}%, #d97706 ${carbonValueShare + monitoringValueShare}% 100%)` }}
-              role="img"
-              aria-label={`Annual assumed value: carbon £${annualCarbonValue.toFixed(2)}, monitoring £${annualMonitoringValue.toFixed(2)}, evidence £${annualEvidenceValue.toFixed(2)}`}
-            >
-              <div className="absolute inset-[18%] rounded-full bg-white" />
-            </div>
-            <div className="mt-3 w-full space-y-1.5 border-t border-gray-200 pt-2">
-              {[
-                ["Annual carbon rights", annualCarbonValue, "bg-emerald-700", Number.isFinite(bridgewoodValue) ? `Live £${bridgewoodValue.toFixed(2)} · ref £${carbonPrice}/t` : `Ref £${carbonPrice}/t`],
-                ["Monitoring data", annualMonitoringValue, "bg-blue-600", "Annual licence"],
-                ["Evidence service", annualEvidenceValue, "bg-amber-600", "Verifier/funder pack"],
-              ].map(([label, value, colour, detail]) => (
-                <div key={label} className="min-w-0 text-[9px] leading-tight sm:text-[11px]">
-                  <div className="flex items-start gap-1.5">
-                    <span className={`mt-0.5 h-2 w-2 shrink-0 ${colour}`} />
-                    <span className="min-w-0 font-semibold">{label}: £{Number(value).toFixed(2)}</span>
-                  </div>
-                  <p className="pl-3.5 text-gray-500">{detail}</p>
+          <div
+            className="relative h-[88px] w-[88px] rounded-full sm:h-[150px] sm:w-[150px]"
+            style={{ background: `conic-gradient(#047857 0 ${carbonValueShare}%, #2563eb ${carbonValueShare}% ${carbonValueShare + monitoringValueShare}%, #d97706 ${carbonValueShare + monitoringValueShare}% 100%)` }}
+            role="img"
+            aria-label={`Annual assumed value: carbon £${annualCarbonValue.toFixed(2)}, monitoring £${annualMonitoringValue.toFixed(2)}, evidence £${annualEvidenceValue.toFixed(2)}`}
+          >
+            <div className="absolute inset-[18%] rounded-full bg-white" />
+          </div>
+          <div className="min-w-0 space-y-2 border-l border-gray-200 pl-2 sm:pl-4">
+            {[
+              ["Annual carbon rights", annualCarbonValue, "bg-emerald-700", Number.isFinite(bridgewoodValue) ? `Live £${bridgewoodValue.toFixed(2)} · ref £${carbonPrice}/t` : `Ref £${carbonPrice}/t`],
+              ["Monitoring data", annualMonitoringValue, "bg-blue-600", "Annual licence"],
+              ["Evidence service", annualEvidenceValue, "bg-amber-600", "Verifier/funder pack"],
+            ].map(([label, value, colour, detail]) => (
+              <div key={label} className="min-w-0 text-[8px] leading-tight sm:text-[11px]">
+                <div className="flex items-start gap-1 sm:gap-1.5">
+                  <span className={`mt-0.5 h-2 w-2 shrink-0 ${colour}`} />
+                  <span className="min-w-0 font-semibold">{label}: £{Number(value).toFixed(2)}</span>
                 </div>
-              ))}
-            </div>
+                <p className="pl-3 text-gray-500 sm:pl-3.5">{detail}</p>
+              </div>
+            ))}
           </div>
         </div>
         <div className="grid gap-2 border-t border-gray-200 px-3 py-3 sm:grid-cols-[minmax(220px,1fr)_auto_auto] sm:px-5">
