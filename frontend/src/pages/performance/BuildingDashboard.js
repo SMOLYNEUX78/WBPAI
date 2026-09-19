@@ -7899,7 +7899,7 @@ const ExchangeDashboardPanel = ({
       <header className="flex flex-wrap items-end justify-between gap-3 border-b border-gray-200 pb-4">
         <div>
           <p className="text-xs font-semibold uppercase text-gray-500">Exchange prototype</p>
-          <h1 className="text-2xl font-bold">WBP Retrofit Exchange</h1>
+          <h1 className="text-2xl font-bold">WBP Data Exchange</h1>
           <p className="text-sm text-gray-600">Carbon, evidence products, flexibility and retrofit outcomes</p>
         </div>
         <button
@@ -7911,49 +7911,47 @@ const ExchangeDashboardPanel = ({
         </button>
       </header>
 
-      <section className="grid grid-cols-2 border-b border-gray-200">
-        {[
-          ["Portfolio accrued WBP value", `£${annualPortfolioValue.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, `${projectedLots.length} Good / Verified homes · modelled`],
-          ["Accrued carbon", Number.isFinite(bridgewoodTokens) ? `${bridgewoodTokens.toFixed(4)} WBP-C` : "--", Number.isFinite(bridgewoodValue) ? `£${bridgewoodValue.toFixed(2)} live reference value` : "Awaiting summary"],
-        ].map(([label, value, detail]) => (
-          <div key={label} className="border-r border-gray-200 px-3 py-4 last:border-r-0 sm:px-5">
-            <p className="text-xs uppercase text-gray-500">{label}</p>
-            <p className="mt-1 text-xl font-bold sm:text-2xl">{value}</p>
-            <p className="text-xs text-gray-600">{detail}</p>
-          </div>
-        ))}
+      <section className="flex items-center justify-between gap-4 border-b border-gray-200 px-3 py-4 sm:px-5">
+        <div>
+          <p className="text-2xl font-bold leading-none">WBP</p>
+          <p className="mt-1 text-xs uppercase text-gray-500">Portfolio accrued value</p>
+        </div>
+        <div className="text-right">
+          <p className="text-2xl font-bold">£{annualPortfolioValue.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+          <p className="text-xs text-gray-600">{projectedLots.length} Good / Verified homes · modelled</p>
+        </div>
       </section>
 
-      <section className="grid grid-cols-[minmax(0,1fr)_140px] border-b border-gray-200 min-[430px]:grid-cols-[minmax(0,1.2fr)_180px] sm:grid-cols-[minmax(0,1.2fr)_220px] lg:grid-cols-[minmax(0,1.2fr)_minmax(240px,0.8fr)]">
-        <div className="min-w-0 px-3 py-5 sm:px-5">
+      <section className="grid grid-cols-[minmax(0,1fr)_165px] border-b border-gray-200 min-[430px]:grid-cols-[minmax(0,1fr)_190px] sm:grid-cols-[minmax(0,1.2fr)_220px] lg:grid-cols-[minmax(0,1.2fr)_minmax(240px,0.8fr)]">
+        <div className="min-w-0 px-2 py-4 sm:px-5 sm:py-5">
           <div>
-            <h2 className="text-lg font-bold">Portfolio WBP value split</h2>
-            <p className="mt-1 text-sm text-gray-600">The component rights making up the combined portfolio value above.</p>
+            <h2 className="text-sm font-bold sm:text-lg">Portfolio WBP value split</h2>
+            <p className="mt-1 text-xs text-gray-600 sm:text-sm">The rights making up the combined value.</p>
           </div>
-          <div className="mt-4 grid grid-cols-1 gap-px border border-gray-200 bg-gray-200 sm:grid-cols-3">
+          <div className="mt-3 grid grid-cols-1 gap-px border border-gray-200 bg-gray-200 sm:mt-4 sm:grid-cols-3">
             {[
-              ["Carbon rights", annualCarbonValue, "bg-emerald-700", `Reference £${carbonPrice}/t · reserve £${sellerReservePrice}/t`],
+              ["Carbon rights", annualCarbonValue, "bg-emerald-700", Number.isFinite(bridgewoodTokens) ? `${bridgewoodTokens.toFixed(4)} WBP-C accrued · £${bridgewoodValue.toFixed(2)} live · ref £${carbonPrice}/t · reserve £${sellerReservePrice}/t` : `Reference £${carbonPrice}/t · reserve £${sellerReservePrice}/t`],
               ["Monitoring data", annualMonitoringValue, "bg-blue-600", "Annual licence"],
               ["Evidence service", annualEvidenceValue, "bg-amber-600", "Verifier/funder pack"],
             ].map(([label, value, colour, detail]) => (
-              <div key={label} className="min-w-0 bg-white px-3 py-4 sm:px-4">
-                <div className="flex items-center gap-2 text-xs font-semibold sm:text-sm"><span className={`h-3 w-3 shrink-0 ${colour}`} />{label}</div>
-                <p className="mt-2 text-lg font-bold sm:text-xl">£{Number(value).toFixed(2)}</p>
-                <p className="text-xs text-gray-500">{detail}</p>
+              <div key={label} className="min-w-0 bg-white px-2 py-2.5 sm:px-4 sm:py-4">
+                <div className="flex items-center gap-1.5 text-[10px] font-semibold sm:gap-2 sm:text-sm"><span className={`h-2.5 w-2.5 shrink-0 sm:h-3 sm:w-3 ${colour}`} />{label}</div>
+                <p className="mt-1 text-base font-bold sm:mt-2 sm:text-xl">£{Number(value).toFixed(2)}</p>
+                <p className="text-[10px] leading-tight text-gray-500 sm:text-xs">{detail}</p>
               </div>
             ))}
           </div>
         </div>
-        <div className="flex items-center justify-center border-l border-gray-200 px-2 py-5 sm:px-5">
+        <div className="flex items-center justify-center border-l border-gray-200 px-2 py-4 sm:px-5 sm:py-5">
           <div
-            className="relative h-28 w-28 shrink-0 rounded-full min-[430px]:h-32 min-[430px]:w-32 sm:h-40 sm:w-40"
+            className="relative h-36 w-36 shrink-0 rounded-full min-[430px]:h-40 min-[430px]:w-40"
             style={{ background: `conic-gradient(#047857 0 ${carbonValueShare}%, #2563eb ${carbonValueShare}% ${carbonValueShare + monitoringValueShare}%, #d97706 ${carbonValueShare + monitoringValueShare}% 100%)` }}
             role="img"
             aria-label={`Annual assumed value: carbon £${annualCarbonValue.toFixed(2)}, monitoring £${annualMonitoringValue.toFixed(2)}, evidence £${annualEvidenceValue.toFixed(2)}`}
           >
-            <div className="absolute inset-5 flex flex-col items-center justify-center rounded-full bg-white text-center sm:inset-7">
+            <div className="absolute inset-6 flex flex-col items-center justify-center rounded-full bg-white text-center sm:inset-7">
               <span className="text-[9px] uppercase text-gray-500 sm:text-xs">WBP value</span>
-              <strong className="text-xs sm:text-lg">£{annualPortfolioValue.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+              <strong className="text-sm sm:text-lg">£{annualPortfolioValue.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
             </div>
           </div>
         </div>
