@@ -7847,23 +7847,29 @@ const ExchangeDashboardPanel = ({
   );
   const annualCarbonValue = projectedAnnualCredits * sellerReservePrice;
   const annualMonitoringValue = projectedLots.length * 144;
+  const annualHealthDataValue = projectedLots.length * 120;
+  const annualGridDataValue = projectedLots.length * 180;
   const annualEvidenceValue = projectedLots.length * 300;
-  const annualPortfolioValue = annualCarbonValue + annualMonitoringValue + annualEvidenceValue;
+  const annualPortfolioValue = annualCarbonValue + annualMonitoringValue + annualHealthDataValue + annualGridDataValue + annualEvidenceValue;
   const carbonValueShare = annualPortfolioValue > 0 ? annualCarbonValue / annualPortfolioValue * 100 : 0;
   const monitoringValueShare = annualPortfolioValue > 0 ? annualMonitoringValue / annualPortfolioValue * 100 : 0;
+  const healthDataValueShare = annualPortfolioValue > 0 ? annualHealthDataValue / annualPortfolioValue * 100 : 0;
+  const gridDataValueShare = annualPortfolioValue > 0 ? annualGridDataValue / annualPortfolioValue * 100 : 0;
+  const monitoringShareEnd = carbonValueShare + monitoringValueShare;
+  const healthShareEnd = monitoringShareEnd + healthDataValueShare;
+  const gridShareEnd = healthShareEnd + gridDataValueShare;
   const bridgewoodValue = Number.isFinite(bridgewoodTokens)
     ? bridgewoodTokens * carbonPrice
     : null;
   const dataProducts = [
-    { name: "Portfolio intelligence", buyer: "Council / housing provider", product: "Risk, retrofit and funding prioritisation dashboard", price: "£12 / property / month", route: "Software subscription" },
-    { name: "Network planning study", buyer: "DNO / DSO", product: "Aggregated peak, heat-pump readiness and reinforcement analysis", price: "From £7,500 / study", route: "Commissioned analysis" },
-    { name: "Performance evidence API", buyer: "Funder / verifier", product: "Consented, aggregated outcomes and evidence-pack status", price: "From £2,400 / year", route: "Data licence" },
+    { name: "Monitoring data", buyer: "Council / housing provider", product: "Consented portfolio performance and retrofit-prioritisation dataset", price: "£12 / property / month", route: "Annual licence" },
+    { name: "Evidence", buyer: "Funder / verifier", product: "Evidence-pack status, provenance and verified performance records", price: "From £2,400 / year", route: "Evidence service" },
   ];
   const marketViews = [
     ["carbon", "Carbon market"],
-    ["data", "Data products"],
-    ["flexibility", "Flexibility"],
-    ["outcomes", "Outcomes"],
+    ["data", "Data licences"],
+    ["flexibility", "Grid services"],
+    ["outcomes", "Health outcomes"],
   ];
   const tradeSeriesByTimeframe = {
     "4H": [
@@ -7904,17 +7910,19 @@ const ExchangeDashboardPanel = ({
           </div>
           <div
             className="relative h-[88px] w-[88px] rounded-full sm:h-[150px] sm:w-[150px]"
-            style={{ background: `conic-gradient(#047857 0 ${carbonValueShare}%, #2563eb ${carbonValueShare}% ${carbonValueShare + monitoringValueShare}%, #d97706 ${carbonValueShare + monitoringValueShare}% 100%)` }}
+            style={{ background: `conic-gradient(#047857 0 ${carbonValueShare}%, #2563eb ${carbonValueShare}% ${monitoringShareEnd}%, #be123c ${monitoringShareEnd}% ${healthShareEnd}%, #0891b2 ${healthShareEnd}% ${gridShareEnd}%, #d97706 ${gridShareEnd}% 100%)` }}
             role="img"
-            aria-label={`Annual assumed value: carbon £${annualCarbonValue.toFixed(2)}, monitoring £${annualMonitoringValue.toFixed(2)}, evidence £${annualEvidenceValue.toFixed(2)}`}
+            aria-label={`Annual assumed value: carbon £${annualCarbonValue.toFixed(2)}, monitoring data £${annualMonitoringValue.toFixed(2)}, health data £${annualHealthDataValue.toFixed(2)}, grid data £${annualGridDataValue.toFixed(2)}, evidence £${annualEvidenceValue.toFixed(2)}`}
           >
             <div className="absolute inset-[18%] rounded-full bg-white" />
           </div>
           <div className="min-w-0 space-y-2 border-l border-gray-200 pl-2 sm:pl-4">
             {[
-              ["Annual carbon rights", annualCarbonValue, "bg-emerald-700", Number.isFinite(bridgewoodValue) ? `Live £${bridgewoodValue.toFixed(2)} · ref £${carbonPrice}/t` : `Ref £${carbonPrice}/t`],
+              ["Carbon", annualCarbonValue, "bg-emerald-700", Number.isFinite(bridgewoodValue) ? `Live £${bridgewoodValue.toFixed(2)} · ref £${carbonPrice}/t` : `Ref £${carbonPrice}/t`],
               ["Monitoring data", annualMonitoringValue, "bg-blue-600", "Annual licence"],
-              ["Evidence service", annualEvidenceValue, "bg-amber-600", "Verifier/funder pack"],
+              ["Health data", annualHealthDataValue, "bg-rose-700", "Outcomes licence"],
+              ["Grid data", annualGridDataValue, "bg-cyan-600", "Planning licence"],
+              ["Evidence", annualEvidenceValue, "bg-amber-600", "Verifier/funder pack"],
             ].map(([label, value, colour, detail]) => (
               <div key={label} className="min-w-0 text-[8px] leading-tight sm:text-[11px]">
                 <div className="flex items-start gap-1 sm:gap-1.5">
@@ -7927,10 +7935,10 @@ const ExchangeDashboardPanel = ({
           </div>
         </div>
         <div className="grid gap-2 border-t border-gray-200 px-3 py-3 sm:grid-cols-[minmax(220px,1fr)_auto_auto] sm:px-5">
-          <button type="button" disabled className="cursor-not-allowed border border-emerald-300 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800">Sell complete WBP value</button>
+          <button type="button" disabled className="cursor-not-allowed border border-emerald-300 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800">Offer complete basket</button>
           <button type="button" disabled className="cursor-not-allowed border border-gray-300 bg-gray-100 px-4 py-2.5 text-sm font-semibold text-gray-500">Market sell carbon</button>
           <button type="button" disabled className="cursor-not-allowed border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-500">Set higher ask</button>
-          <p className="text-[10px] text-gray-500 sm:col-span-full">Trading unlocks after verification and issuance. Complete WBP sales transfer the available package of rights; carbon-only sales remain separately retired.</p>
+          <p className="text-[10px] text-gray-500 sm:col-span-full">One basket offer can match separate buyers to compatible rights. Carbon is transferred and retired once; data and evidence are supplied through defined licences or services.</p>
         </div>
       </section>
 
@@ -8128,8 +8136,9 @@ const ExchangeDashboardPanel = ({
       ) : null}
 
       {marketView === "flexibility" ? (
-        <section className="grid border-b border-gray-200 md:grid-cols-3">
+        <section className="grid border-b border-gray-200 md:grid-cols-4">
           {[
+            ["Grid data", `£${annualGridDataValue.toFixed(2)} modelled`, "Aggregated demand, peak and heat-pump readiness licence"],
             ["Available capacity", "Pending", "Requires controllable load and an aggregator route"],
             ["Dispatch evidence", "Not tested", "Baseline, event response and settlement measurements"],
             ["Revenue", "£0.00", "Earned only when an accepted service is delivered"],
@@ -8140,9 +8149,8 @@ const ExchangeDashboardPanel = ({
       ) : null}
 
       {marketView === "outcomes" ? (
-        <section className="grid border-b border-gray-200 md:grid-cols-2">
-          <div className="border-r border-gray-200 px-5 py-6"><p className="text-xs uppercase text-gray-500">Health outcome case</p><p className="mt-2 text-2xl font-bold">£56.44 modelled</p><p className="mt-1 text-sm text-gray-600">Illustrative investment case only. Requires an agreed commissioner, outcome definition and attribution method.</p></div>
-          <div className="px-5 py-6"><p className="text-xs uppercase text-gray-500">Network outcome case</p><p className="mt-2 text-2xl font-bold">Pending</p><p className="mt-1 text-sm text-gray-600">Could become a contracted study or flexibility payment; infrastructure savings are not presently owned by the household.</p></div>
+        <section className="border-b border-gray-200 px-5 py-6">
+          <p className="text-xs uppercase text-gray-500">Health data</p><p className="mt-2 text-2xl font-bold">£{annualHealthDataValue.toFixed(2)} modelled</p><p className="mt-1 max-w-3xl text-sm text-gray-600">A consented, aggregated outcomes licence for an agreed commissioner. Value remains modelled until the health measures, attribution method and purchasing route are contracted.</p>
         </section>
       ) : null}
     </main>
