@@ -7893,6 +7893,9 @@ const ExchangeDashboardPanel = ({
   const tradeMaxPrice = Math.max(...tradePrices) + 2;
   const tradePriceRange = Math.max(1, tradeMaxPrice - tradeMinPrice);
   const tradeMaxVolume = Math.max(...tradeSeries.map(([, , volume]) => volume));
+  const tradeCurrentPrice = tradeSeries[tradeSeries.length - 1][1];
+  const tradeOpeningPrice = tradeSeries[0][1];
+  const tradePriceChange = (tradeCurrentPrice - tradeOpeningPrice) / tradeOpeningPrice * 100;
 
   return (
     <main className="min-h-screen bg-white p-3 sm:p-5">
@@ -7995,30 +7998,56 @@ const ExchangeDashboardPanel = ({
               <div className="grid grid-cols-[minmax(0,1fr)_130px] gap-2 min-[430px]:grid-cols-[minmax(0,1fr)_160px] sm:grid-cols-[minmax(0,1fr)_200px] sm:gap-4 lg:grid-cols-[minmax(0,1fr)_240px]">
                 <div className="min-w-0 border border-gray-200">
                   <div className="flex items-center justify-between gap-3 border-b border-gray-200 px-3 py-2">
-                    <div><span className="text-base font-bold sm:text-xl">£84.00</span><span className="ml-1 text-[10px] font-semibold text-emerald-700 sm:ml-2 sm:text-xs">+7.69%</span></div>
+                    <div><span className="text-base font-bold sm:text-xl">£{tradeCurrentPrice.toFixed(2)}</span><span className={`ml-1 text-[10px] font-semibold sm:ml-2 sm:text-xs ${tradePriceChange >= 0 ? "text-emerald-700" : "text-red-600"}`}>{tradePriceChange >= 0 ? "+" : ""}{tradePriceChange.toFixed(2)}%</span></div>
                     <div className="flex rounded border border-gray-300 bg-white p-0.5" aria-label="Trading timeframe">
                       {["4H", "1D", "1W", "1M"].map((timeframe) => (
                         <button key={timeframe} type="button" onClick={() => setTradeTimeframe(timeframe)} className={`px-1.5 py-1 text-[10px] font-semibold sm:px-2.5 sm:text-xs ${tradeTimeframe === timeframe ? "bg-black text-white" : "text-gray-600 hover:bg-gray-100"}`}>{timeframe}</button>
                       ))}
                     </div>
                   </div>
-                  <div className="relative h-72 overflow-hidden px-3 pb-7 pt-4" role="img" aria-label={`${tradeTimeframe} simulated WBP-C price and volume chart`}>
-                    <div className="pointer-events-none absolute inset-x-3 bottom-[76px] top-4 flex flex-col justify-between text-[10px] text-gray-400">
-                      {[tradeMaxPrice, tradeMinPrice + tradePriceRange * 0.66, tradeMinPrice + tradePriceRange * 0.33, tradeMinPrice].map((price) => (
-                        <div key={price} className="flex items-center gap-2"><span className="w-7">£{price.toFixed(0)}</span><span className="h-px flex-1 bg-gray-100" /></div>
-                      ))}
-                    </div>
-                    <div className="absolute inset-x-12 bottom-[76px] top-4 flex items-end gap-1 sm:gap-2">
-                      {tradeSeries.map(([label, price], index) => {
-                        const previousPrice = index > 0 ? tradeSeries[index - 1][1] : price;
-                        const rising = price >= previousPrice;
-                        return <span key={`${label}-${index}`} title={`${label}: £${price}/t`} className={`min-w-0 flex-1 ${rising ? "bg-emerald-600" : "bg-red-500"}`} style={{ height: `${20 + ((price - tradeMinPrice) / tradePriceRange) * 75}%` }} />;
+                  <div className="h-72 overflow-hidden" role="img" aria-label={`${tradeTimeframe} simulated WBP-C candlestick price and volume chart`}>
+                    <svg viewBox="0 0 720 250" className="h-full w-full" preserveAspectRatio="none" aria-hidden="true">
+                      {[0, 1, 2, 3].map((gridIndex) => {
+                        const price = tradeMaxPrice - tradePriceRange * gridIndex / 3;
+                        const y = 16 + gridIndex * 49;
+                        return <g key={`grid-${gridIndex}`}><line x1="42" y1={y} x2="706" y2={y} stroke="#e5e7eb" strokeWidth="1" /><text x="4" y={y + 3} fontSize="10" fill="#6b7280">£{price.toFixed(0)}</text></g>;
                       })}
-                    </div>
-                    <div className="absolute inset-x-12 bottom-7 flex h-10 items-end gap-1 border-t border-gray-200 pt-1 sm:gap-2">
-                      {tradeSeries.map(([label, , volume], index) => <span key={`volume-${label}-${index}`} className="min-w-0 flex-1 bg-gray-300" title={`${volume} WBP-C`} style={{ height: `${Math.max(12, volume / tradeMaxVolume * 100)}%` }} />)}
-                    </div>
-                    <div className="absolute inset-x-12 bottom-1 flex justify-between text-[10px] text-gray-500"><span>{tradeSeries[0][0]}</span><span>{tradeSeries[Math.floor(tradeSeries.length / 2)][0]}</span><span>{tradeSeries[tradeSeries.length - 1][0]}</span></div>
+                      {tradeSeries.map(([label, close, volume], index) => {
+                        const open = index > 0 ? tradeSeries[index - 1][1] : close - 1;
+                        const high = Math.max(open, close) + 0.7 + index % 3 * 0.25;
+                        const low = Math.min(open, close) - 0.6 - index % 2 * 0.25;
+                        const xStep = 660 / tradeSeries.length;
+                        const x = 46 + xStep * index + xStep / 2;
+                        const priceY = (price) => 16 + (tradeMaxPrice - price) / tradePriceRange * 147;
+                        const openY = priceY(open);
+                        const closeY = priceY(close);
+                        const highY = priceY(high);
+                        const lowY = priceY(low);
+                        const rising = close >= open;
+                        const colour = rising ? "#059669" : "#ef4444";
+                        const bodyY = Math.min(openY, closeY);
+                        const bodyHeight = Math.max(3, Math.abs(closeY - openY));
+                        const candleWidth = Math.max(4, Math.min(18, xStep * 0.55));
+                        const volumeHeight = Math.max(3, volume / tradeMaxVolume * 42);
+                        return (
+                          <g key={`${label}-${index}`}>
+                            <title>{label}: open £{open.toFixed(2)}, high £{high.toFixed(2)}, low £{low.toFixed(2)}, close £{close.toFixed(2)}, volume {volume} WBP-C</title>
+                            <line x1={x} y1={highY} x2={x} y2={lowY} stroke={colour} strokeWidth="1.5" />
+                            <rect x={x - candleWidth / 2} y={bodyY} width={candleWidth} height={bodyHeight} fill={colour} />
+                            <rect x={x - candleWidth / 2} y={222 - volumeHeight} width={candleWidth} height={volumeHeight} fill={rising ? "#a7f3d0" : "#fecaca"} />
+                          </g>
+                        );
+                      })}
+                      <line x1="42" y1="174" x2="706" y2="174" stroke="#d1d5db" strokeWidth="1" />
+                      <line x1="42" y1="222" x2="706" y2="222" stroke="#d1d5db" strokeWidth="1" />
+                      {(() => {
+                        const currentY = 16 + (tradeMaxPrice - tradeCurrentPrice) / tradePriceRange * 147;
+                        return <g><line x1="42" y1={currentY} x2="706" y2={currentY} stroke="#111827" strokeWidth="1" strokeDasharray="4 4" /><rect x="660" y={currentY - 8} width="46" height="16" fill="#111827" /><text x="683" y={currentY + 3} textAnchor="middle" fontSize="9" fill="white">£{tradeCurrentPrice.toFixed(2)}</text></g>;
+                      })()}
+                      <text x="46" y="242" fontSize="10" fill="#6b7280">{tradeSeries[0][0]}</text>
+                      <text x="374" y="242" textAnchor="middle" fontSize="10" fill="#6b7280">{tradeSeries[Math.floor(tradeSeries.length / 2)][0]}</text>
+                      <text x="706" y="242" textAnchor="end" fontSize="10" fill="#6b7280">{tradeSeries[tradeSeries.length - 1][0]}</text>
+                    </svg>
                   </div>
                 </div>
                 <aside className="min-w-0 border border-gray-200">
