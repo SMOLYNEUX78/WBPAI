@@ -7873,8 +7873,8 @@ const ExchangeDashboardPanel = ({
     0
   );
   const dataProducts = [
-    { name: "Monitoring data", buyer: "Council / housing provider", product: "Consented portfolio performance and retrofit-prioritisation dataset", price: "£12 / property / month", route: "Annual licence" },
-    { name: "Evidence", buyer: "Funder / verifier", product: "Evidence-pack status, provenance and verified performance records", price: "From £2,400 / year", route: "Evidence service" },
+    { name: "Monitoring data", supplier: "Council / housing provider", buyer: "Homes England / lender / insurer / researcher", product: "Consented portfolio performance and retrofit-prioritisation dataset", price: "£12 / property / month", route: "Annual licence" },
+    { name: "Evidence", supplier: "Council / housing provider", buyer: "Funder / verifier", product: "Evidence-pack status, provenance and verified performance records", price: "From £2,400 / year", route: "Evidence service" },
   ];
   const marketViews = [
     ["carbon", "Carbon market"],
@@ -8160,18 +8160,18 @@ const ExchangeDashboardPanel = ({
       {marketView === "data" ? (
         <section className="px-3 py-5 sm:px-5">
           <div className="mb-4">
-            <h2 className="text-lg font-bold">Data products</h2>
-            <p className="text-sm text-gray-600">Commercial products built from consented, minimised and appropriately aggregated evidence.</p>
+            <h2 className="text-lg font-bold">Data licences</h2>
+            <p className="text-sm text-gray-600">The portfolio owner supplies consented, minimised and appropriately aggregated evidence to approved buyers.</p>
           </div>
           <div className="overflow-x-auto border border-gray-200">
-            <table className="w-full min-w-[780px] border-collapse text-left text-sm">
+            <table className="w-full min-w-[980px] border-collapse text-left text-sm">
               <thead className="bg-gray-100 text-xs uppercase text-gray-600">
-                <tr>{['Product', 'Likely buyer', 'Deliverable', 'Illustrative pricing', 'Contract route'].map((heading) => <th key={heading} className="border-b border-gray-200 px-3 py-2 font-semibold">{heading}</th>)}</tr>
+                <tr>{['Product', 'Supplier', 'Likely buyer', 'Deliverable', 'Illustrative pricing', 'Contract route'].map((heading) => <th key={heading} className="border-b border-gray-200 px-3 py-2 font-semibold">{heading}</th>)}</tr>
               </thead>
               <tbody>
                 {dataProducts.map((product) => (
                   <tr key={product.name} className="border-b border-gray-100 last:border-b-0">
-                    <td className="px-3 py-3 font-semibold">{product.name}</td><td className="px-3 py-3">{product.buyer}</td><td className="px-3 py-3">{product.product}</td><td className="px-3 py-3 font-semibold">{product.price}</td><td className="px-3 py-3">{product.route}</td>
+                    <td className="px-3 py-3 font-semibold">{product.name}</td><td className="px-3 py-3">{product.supplier}</td><td className="px-3 py-3">{product.buyer}</td><td className="px-3 py-3">{product.product}</td><td className="px-3 py-3 font-semibold">{product.price}</td><td className="px-3 py-3">{product.route}</td>
                   </tr>
                 ))}
               </tbody>
