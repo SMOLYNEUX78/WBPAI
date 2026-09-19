@@ -351,6 +351,14 @@ const BuildingDashboardPanel = ({ building }) => {
     baselineLocked: false,
     interventionDate: "",
     interventionEvidence: "",
+    architectName: "",
+    retrofitCoordinatorName: "",
+    principalContractorName: "",
+    installerNames: "",
+    pasReference: "",
+    trustMarkReference: "",
+    warrantyReference: "",
+    defectsAndRemediation: "",
     ownershipConsent: false,
     ownershipRecordReference: "",
     ownershipRecordFileName: "",
@@ -4466,6 +4474,11 @@ const BuildingDashboardPanel = ({ building }) => {
   const interventionComplete = Boolean(
     mrvEvidence.interventionDate && mrvEvidence.interventionEvidence?.trim()
   );
+  const deliveryTeamComplete = Boolean(
+    mrvEvidence.principalContractorName?.trim() &&
+      (mrvEvidence.architectName?.trim() ||
+        mrvEvidence.retrofitCoordinatorName?.trim())
+  );
   const ownershipRecordComplete = Boolean(
     mrvEvidence.ownershipRecordReference?.trim() ||
       mrvEvidence.ownershipRecordFileName
@@ -4530,6 +4543,17 @@ const BuildingDashboardPanel = ({ building }) => {
         ? `${mrvEvidence.interventionDate}: ${mrvEvidence.interventionEvidence}`
         : "Needs retrofit completion date and evidence",
       complete: interventionComplete,
+    },
+    {
+      category: "Retrofit works",
+      label: "Delivery team and assurance",
+      fieldKey: "intervention",
+      detail: deliveryTeamComplete
+        ? `${mrvEvidence.principalContractorName} / ${
+            mrvEvidence.retrofitCoordinatorName || mrvEvidence.architectName
+          }`
+        : "Needs contractor plus architect or retrofit coordinator details",
+      complete: deliveryTeamComplete,
     },
     {
       category: "Retrofit works",
@@ -4639,6 +4663,14 @@ const BuildingDashboardPanel = ({ building }) => {
       intervention: {
         completionDate: mrvEvidence.interventionDate,
         evidence: mrvEvidence.interventionEvidence,
+        architect: mrvEvidence.architectName,
+        retrofitCoordinator: mrvEvidence.retrofitCoordinatorName,
+        principalContractor: mrvEvidence.principalContractorName,
+        installers: mrvEvidence.installerNames,
+        pasReference: mrvEvidence.pasReference,
+        trustMarkReference: mrvEvidence.trustMarkReference,
+        warrantyReference: mrvEvidence.warrantyReference,
+        defectsAndRemediation: mrvEvidence.defectsAndRemediation,
       },
       declarations: {
         ownershipConsent: mrvEvidence.ownershipConsent,
@@ -6969,6 +7001,41 @@ const BuildingDashboardPanel = ({ building }) => {
                       className="min-h-28 w-full rounded border border-gray-300 px-3 py-2"
                     />
                   </label>
+                  <div className="border-t border-gray-200 pt-4">
+                    <h4 className="font-semibold text-gray-900">Delivery team</h4>
+                    <p className="mt-1 text-xs text-gray-600">Links measured outcomes to the organisations responsible for design, coordination and installation.</p>
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                      {[
+                        ["Architect / practice", "architectName", "Practice or lead architect"],
+                        ["Retrofit coordinator", "retrofitCoordinatorName", "Coordinator name and organisation"],
+                        ["Principal contractor", "principalContractorName", "Contractor responsible for delivery"],
+                        ["Installers / specialists", "installerNames", "Names or organisations, separated by commas"],
+                        ["PAS 2035 / 2030 reference", "pasReference", "Project or lodgement reference"],
+                        ["TrustMark reference", "trustMarkReference", "Business or project reference"],
+                        ["Warranty / guarantee", "warrantyReference", "Provider and reference"],
+                      ].map(([label, key, placeholder]) => (
+                        <label key={key} className="block space-y-1">
+                          <span className="text-xs font-semibold text-gray-700">{label}</span>
+                          <input
+                            type="text"
+                            value={mrvEvidence[key] || ""}
+                            onChange={(event) => updateMrvEvidence({ [key]: event.target.value })}
+                            placeholder={placeholder}
+                            className="w-full rounded border border-gray-300 px-3 py-2"
+                          />
+                        </label>
+                      ))}
+                    </div>
+                    <label className="mt-3 block space-y-1">
+                      <span className="text-xs font-semibold text-gray-700">Defects and remedial work</span>
+                      <textarea
+                        value={mrvEvidence.defectsAndRemediation || ""}
+                        onChange={(event) => updateMrvEvidence({ defectsAndRemediation: event.target.value })}
+                        placeholder="Record defects, responsible party, corrective work and closure date"
+                        className="min-h-20 w-full rounded border border-gray-300 px-3 py-2"
+                      />
+                    </label>
+                  </div>
                 </>
               ) : null}
 
@@ -7607,14 +7674,20 @@ const NewBuildingSetupPanel = () => {
 };
 
 const PORTFOLIO_PROPERTIES = [
-  { id: "WBP-001", estate: "14 Bridgewood Road", archetype: "Semi-detached", health: 87, energy: 88, risk: "Monitor", retrofit: "Baseline", evidence: 63, collector: "Live", buildingId: "home" },
-  { id: "WBP-002", estate: "Bridgewood", archetype: "Terrace", health: 61, energy: 54, risk: "Damp", retrofit: "Assessment", evidence: 42, collector: "Live" },
-  { id: "WBP-003", estate: "Kyson", archetype: "Flat", health: 72, energy: 47, risk: "Cold", retrofit: "Planned", evidence: 78, collector: "Live" },
-  { id: "WBP-004", estate: "Kyson", archetype: "Maisonette", health: 58, energy: 69, risk: "IAQ", retrofit: "In works", evidence: 86, collector: "Attention" },
-  { id: "WBP-005", estate: "Rendlesham", archetype: "Bungalow", health: 91, energy: 76, risk: "Good", retrofit: "Verified", evidence: 100, collector: "Live", projectedAnnualCredits: 1.35 },
-  { id: "WBP-006", estate: "Rendlesham", archetype: "Semi-detached", health: 67, energy: 51, risk: "Heat loss", retrofit: "Assessment", evidence: 55, collector: "Live" },
-  { id: "WBP-007", estate: "Melton", archetype: "Terrace", health: 76, energy: 64, risk: "Overheat", retrofit: "Planned", evidence: 71, collector: "Live" },
-  { id: "WBP-008", estate: "Melton", archetype: "Flat", health: 83, energy: 81, risk: "Good", retrofit: "Verified", evidence: 96, collector: "Live", projectedAnnualCredits: 0.92 },
+  { id: "WBP-001", estate: "14 Bridgewood Road", archetype: "Semi-detached", health: 87, energy: 88, risk: "Monitor", retrofit: "Baseline", evidence: 63, qa: "Monitoring", supplier: "Pending appointment", collector: "Live", buildingId: "home" },
+  { id: "WBP-002", estate: "Bridgewood", archetype: "Terrace", health: 61, energy: 54, risk: "Damp", retrofit: "Assessment", evidence: 42, qa: "Action needed", supplier: "EastBuild Retrofit", collector: "Live" },
+  { id: "WBP-003", estate: "Kyson", archetype: "Flat", health: 72, energy: 47, risk: "Cold", retrofit: "Planned", evidence: 78, qa: "Pre-works", supplier: "Suffolk Whole House", collector: "Live" },
+  { id: "WBP-004", estate: "Kyson", archetype: "Maisonette", health: 58, energy: 69, risk: "IAQ", retrofit: "In works", evidence: 86, qa: "Action needed", supplier: "EastBuild Retrofit", collector: "Attention" },
+  { id: "WBP-005", estate: "Rendlesham", archetype: "Bungalow", health: 91, energy: 76, risk: "Good", retrofit: "Verified", evidence: 100, qa: "Verified", supplier: "Suffolk Whole House", collector: "Live", projectedAnnualCredits: 1.35 },
+  { id: "WBP-006", estate: "Rendlesham", archetype: "Semi-detached", health: 67, energy: 51, risk: "Heat loss", retrofit: "Assessment", evidence: 55, qa: "Action needed", supplier: "Coastal Energy Works", collector: "Live" },
+  { id: "WBP-007", estate: "Melton", archetype: "Terrace", health: 76, energy: 64, risk: "Overheat", retrofit: "Planned", evidence: 71, qa: "Pre-works", supplier: "Coastal Energy Works", collector: "Live" },
+  { id: "WBP-008", estate: "Melton", archetype: "Flat", health: 83, energy: 81, risk: "Good", retrofit: "Verified", evidence: 96, qa: "Verified", supplier: "Suffolk Whole House", collector: "Live", projectedAnnualCredits: 0.92 },
+];
+
+const PORTFOLIO_SUPPLIERS = [
+  { name: "Suffolk Whole House", projects: 3, verified: 2, outcome: 89, defects: 1 },
+  { name: "Coastal Energy Works", projects: 2, verified: 0, outcome: 74, defects: 2 },
+  { name: "EastBuild Retrofit", projects: 2, verified: 0, outcome: 62, defects: 3 },
 ];
 
 const readCachedBridgewoodValue = () => {
@@ -7665,7 +7738,7 @@ const PortfolioDashboardPanel = ({
 
   const statusClass = (value) => {
     if (["Good", "Verified", "Live"].includes(value)) return "bg-emerald-50 text-emerald-800 border-emerald-200";
-    if (["Damp", "Cold", "IAQ", "Heat loss", "Overheat", "Attention"].includes(value)) return "bg-red-50 text-red-800 border-red-200";
+    if (["Damp", "Cold", "IAQ", "Heat loss", "Overheat", "Attention", "Action needed"].includes(value)) return "bg-red-50 text-red-800 border-red-200";
     return "bg-amber-50 text-amber-800 border-amber-200";
   };
 
@@ -7752,10 +7825,10 @@ const PortfolioDashboardPanel = ({
             ))}
           </div>
           <div className="w-full max-w-full overflow-x-auto overscroll-x-contain border border-gray-200" style={{ WebkitOverflowScrolling: "touch" }}>
-            <table className="w-full min-w-[820px] whitespace-nowrap border-collapse text-left text-sm">
+            <table className="w-full min-w-[1080px] whitespace-nowrap border-collapse text-left text-sm">
               <thead className="bg-gray-100 text-xs uppercase text-gray-600">
                 <tr>
-                  {['Property', 'Estate', 'Archetype', 'Health', 'Energy', 'Risk', 'Retrofit', 'Evidence'].map((heading) => (
+                  {['Property', 'Estate', 'Archetype', 'Health', 'Energy', 'Risk', 'Retrofit', 'QA status', 'Delivery partner', 'Evidence'].map((heading) => (
                     <th key={heading} className="border-b border-gray-200 px-3 py-2 font-semibold">{heading}</th>
                   ))}
                 </tr>
@@ -7787,6 +7860,8 @@ const PortfolioDashboardPanel = ({
                     <td className="px-3 py-3">{property.energy}/100</td>
                     <td className="px-3 py-3"><span className={`rounded border px-2 py-1 text-xs font-semibold ${statusClass(property.risk)}`}>{property.risk}</span></td>
                     <td className="px-3 py-3">{property.retrofit}</td>
+                    <td className="px-3 py-3"><span className={`rounded border px-2 py-1 text-xs font-semibold ${statusClass(property.qa)}`}>{property.qa}</span></td>
+                    <td className="px-3 py-3">{property.supplier}</td>
                     <td className="px-3 py-3">{property.evidence}%</td>
                   </tr>
                 ))}
@@ -7797,7 +7872,14 @@ const PortfolioDashboardPanel = ({
         </div>
 
         <aside className="border-t border-gray-200 px-3 py-5 sm:px-5 lg:border-l lg:border-t-0">
-          <h2 className="text-lg font-bold">Retrofit programme</h2>
+          <h2 className="text-lg font-bold">Quality assurance</h2>
+          <div className="mt-4 grid grid-cols-2 gap-px border border-gray-200 bg-gray-200 text-sm">
+            <div className="bg-white p-3"><p className="text-xs uppercase text-gray-500">Verified outcomes</p><p className="mt-1 text-xl font-bold">2</p></div>
+            <div className="bg-white p-3"><p className="text-xs uppercase text-gray-500">Action needed</p><p className="mt-1 text-xl font-bold text-red-700">3</p></div>
+            <div className="bg-white p-3"><p className="text-xs uppercase text-gray-500">Open defects</p><p className="mt-1 text-xl font-bold text-amber-700">6</p></div>
+            <div className="bg-white p-3"><p className="text-xs uppercase text-gray-500">Retention ready</p><p className="mt-1 text-xl font-bold text-emerald-700">2</p></div>
+          </div>
+          <h3 className="mt-6 font-semibold">Retrofit programme</h3>
           <div className="mt-4 space-y-4">
             {[
               ["Baseline", 1, "bg-gray-500"],
@@ -7822,6 +7904,38 @@ const PortfolioDashboardPanel = ({
             </dl>
           </div>
         </aside>
+      </section>
+
+      <section className="border-b border-gray-200 px-3 py-5 sm:px-5">
+        <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold">Delivery partner outcomes</h2>
+            <p className="text-sm text-gray-600">Measured project results support procurement, remediation and performance-linked retention decisions.</p>
+          </div>
+          <p className="text-xs text-gray-500">Indicative prototype · verified evidence only at award stage</p>
+        </div>
+        <div className="w-full overflow-x-auto border border-gray-200">
+          <table className="w-full min-w-[680px] border-collapse text-left text-sm">
+            <thead className="bg-gray-100 text-xs uppercase text-gray-600">
+              <tr>{["Delivery partner", "Projects", "Verified", "Outcome score", "Open defects", "Procurement signal"].map((heading) => <th key={heading} className="border-b border-gray-200 px-3 py-2 font-semibold">{heading}</th>)}</tr>
+            </thead>
+            <tbody>
+              {PORTFOLIO_SUPPLIERS.map((supplier) => {
+                const signal = supplier.outcome >= 85 ? "Preferred" : supplier.outcome >= 70 ? "Monitor" : "Remediation";
+                return (
+                  <tr key={supplier.name} className="border-b border-gray-100 last:border-b-0">
+                    <td className="px-3 py-3 font-semibold">{supplier.name}</td>
+                    <td className="px-3 py-3">{supplier.projects}</td>
+                    <td className="px-3 py-3">{supplier.verified}</td>
+                    <td className="px-3 py-3 font-semibold">{supplier.outcome}/100</td>
+                    <td className="px-3 py-3">{supplier.defects}</td>
+                    <td className="px-3 py-3"><span className={`rounded border px-2 py-1 text-xs font-semibold ${statusClass(signal === "Remediation" ? "Action needed" : signal === "Preferred" ? "Verified" : "Monitor")}`}>{signal}</span></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </section>
     </main>
   );
