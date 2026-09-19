@@ -8240,13 +8240,13 @@ const ExchangeDashboardPanel = ({
       ) : null}
       </> : null}
 
-      {salePanelOpen ? (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-3" role="presentation" onMouseDown={(event) => {
+      {salePanelOpen && typeof document !== "undefined" ? createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center overflow-y-auto bg-black/50 p-3 sm:p-6" role="presentation" onMouseDown={(event) => {
           if (event.target === event.currentTarget) {
             setSalePanelOpen(false);
           }
         }}>
-          <section className="max-h-[94vh] w-full max-w-5xl overflow-y-auto rounded-lg border border-gray-300 bg-white shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="sale-panel-title">
+          <section className="my-auto max-h-[calc(100vh-1.5rem)] w-full max-w-5xl overflow-y-auto rounded-lg border border-gray-300 bg-white shadow-2xl sm:max-h-[calc(100vh-3rem)]" role="dialog" aria-modal="true" aria-labelledby="sale-panel-title">
             <header className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-gray-200 bg-white px-4 py-4 sm:px-6">
               <div>
                 <p className="text-[10px] font-semibold uppercase text-emerald-700">Prototype order ticket</p>
@@ -8414,7 +8414,8 @@ const ExchangeDashboardPanel = ({
               </>
             )}
           </section>
-        </div>
+        </div>,
+        document.body
       ) : null}
     </main>
   );
