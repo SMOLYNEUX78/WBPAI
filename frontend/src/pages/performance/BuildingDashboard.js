@@ -119,6 +119,12 @@ const BUILDINGS = [
     portfolioOnly: true,
   },
   {
+    id: "exchange",
+    name: "Exchange",
+    subtitle: "Portfolio credit marketplace",
+    exchangeOnly: true,
+  },
+  {
     id: "museum",
     name: "Museum",
     subtitle: "CAD monitor, smart meter and IAQ tablet collector",
@@ -7607,27 +7613,32 @@ const PORTFOLIO_PROPERTIES = [
   { id: "WBP-002", estate: "Bridgewood", archetype: "Terrace", health: 61, energy: 54, risk: "Damp", retrofit: "Assessment", evidence: 42, collector: "Live" },
   { id: "WBP-003", estate: "Kyson", archetype: "Flat", health: 72, energy: 47, risk: "Cold", retrofit: "Planned", evidence: 78, collector: "Live" },
   { id: "WBP-004", estate: "Kyson", archetype: "Maisonette", health: 58, energy: 69, risk: "IAQ", retrofit: "In works", evidence: 86, collector: "Attention" },
-  { id: "WBP-005", estate: "Rendlesham", archetype: "Bungalow", health: 91, energy: 76, risk: "Good", retrofit: "Verified", evidence: 100, collector: "Live" },
+  { id: "WBP-005", estate: "Rendlesham", archetype: "Bungalow", health: 91, energy: 76, risk: "Good", retrofit: "Verified", evidence: 100, collector: "Live", projectedAnnualCredits: 1.35 },
   { id: "WBP-006", estate: "Rendlesham", archetype: "Semi-detached", health: 67, energy: 51, risk: "Heat loss", retrofit: "Assessment", evidence: 55, collector: "Live" },
   { id: "WBP-007", estate: "Melton", archetype: "Terrace", health: 76, energy: 64, risk: "Overheat", retrofit: "Planned", evidence: 71, collector: "Live" },
-  { id: "WBP-008", estate: "Melton", archetype: "Flat", health: 83, energy: 81, risk: "Good", retrofit: "Verified", evidence: 96, collector: "Live" },
+  { id: "WBP-008", estate: "Melton", archetype: "Flat", health: 83, energy: 81, risk: "Good", retrofit: "Verified", evidence: 96, collector: "Live", projectedAnnualCredits: 0.92 },
 ];
 
-const PortfolioDashboardPanel = ({ onOpenBuilding }) => {
+const readCachedBridgewoodCredits = () => {
+  try {
+    const cached = JSON.parse(
+      localStorage.getItem(`home:${CARBON_INTERVAL_SAVINGS_CACHE_KEY}`) || "null"
+    );
+    return Number.isFinite(Number(cached?.carbonCredits))
+      ? Number(cached.carbonCredits)
+      : null;
+  } catch (error) {
+    return null;
+  }
+};
+
+const PortfolioDashboardPanel = ({
+  bridgewoodTokens,
+  onOpenBuilding,
+  onOpenExchange,
+}) => {
   const [riskFilter, setRiskFilter] = useState("All");
   const [search, setSearch] = useState("");
-  const [bridgewoodTokens, setBridgewoodTokens] = useState(() => {
-    try {
-      const cached = JSON.parse(
-        localStorage.getItem(`home:${CARBON_INTERVAL_SAVINGS_CACHE_KEY}`) || "null"
-      );
-      return Number.isFinite(Number(cached?.carbonCredits))
-        ? Number(cached.carbonCredits)
-        : null;
-    } catch (error) {
-      return null;
-    }
-  });
   const riskOptions = ["All", "Damp", "Cold", "IAQ", "Heat loss", "Overheat", "Good"];
   const filteredProperties = PORTFOLIO_PROPERTIES.filter((property) => {
     const matchesRisk = riskFilter === "All" || property.risk === riskFilter;
@@ -7654,30 +7665,6 @@ const PortfolioDashboardPanel = ({ onOpenBuilding }) => {
     if (["Damp", "Cold", "IAQ", "Heat loss", "Overheat", "Attention"].includes(value)) return "bg-red-50 text-red-800 border-red-200";
     return "bg-amber-50 text-amber-800 border-amber-200";
   };
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadPortfolioTokens = async () => {
-      const { data, error } = await supabase
-        .from("CarbonSavingsSummary")
-        .select("carbon_credits, calculated_at")
-        .eq("building_id", "home")
-        .eq("scenario", CARBON_SAVINGS_SCENARIO)
-        .order("calculated_at", { ascending: false })
-        .limit(1);
-
-      const credits = Number(data?.[0]?.carbon_credits);
-      if (!cancelled && !error && Number.isFinite(credits) && credits >= 0) {
-        setBridgewoodTokens(credits);
-      }
-    };
-
-    loadPortfolioTokens();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   return (
     <main className="min-h-screen bg-white p-3 sm:p-5">
@@ -7714,11 +7701,10 @@ const PortfolioDashboardPanel = ({ onOpenBuilding }) => {
         <div className="flex min-w-0 items-center justify-end bg-emerald-50 px-4 py-4 sm:px-5">
           <button
             type="button"
-            disabled
-            title="Marketplace trading will be enabled after verification and issuance"
-            className="w-full cursor-not-allowed rounded border border-emerald-300 bg-emerald-100 px-5 py-2.5 text-sm font-semibold text-emerald-800 opacity-70 lg:w-auto"
+            onClick={onOpenExchange}
+            className="w-full rounded border border-emerald-700 bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800 lg:w-auto"
           >
-            Sell on marketplace - Locked
+            Explore exchange
           </button>
         </div>
       </section>
@@ -7838,9 +7824,117 @@ const PortfolioDashboardPanel = ({ onOpenBuilding }) => {
   );
 };
 
+const ExchangeDashboardPanel = ({ bridgewoodTokens, onOpenPortfolio }) => {
+  const carbonPrice = FALLBACK_CARBON_PRICE_GBP_PER_TONNE;
+  const projectedLots = PORTFOLIO_PROPERTIES.filter((property) =>
+    Number.isFinite(property.projectedAnnualCredits)
+  );
+  const projectedAnnualCredits = projectedLots.reduce(
+    (sum, property) => sum + property.projectedAnnualCredits,
+    0
+  );
+  const projectedAnnualValue = projectedAnnualCredits * carbonPrice;
+  const bridgewoodValue = Number.isFinite(bridgewoodTokens)
+    ? bridgewoodTokens * carbonPrice
+    : null;
+
+  return (
+    <main className="min-h-screen bg-white p-3 sm:p-5">
+      <header className="flex flex-wrap items-end justify-between gap-3 border-b border-gray-200 pb-4">
+        <div>
+          <p className="text-xs font-semibold uppercase text-gray-500">Exchange prototype</p>
+          <h1 className="text-2xl font-bold">WBP Retrofit Exchange</h1>
+          <p className="text-sm text-gray-600">Verified housing performance and candidate carbon lots</p>
+        </div>
+        <button
+          type="button"
+          onClick={onOpenPortfolio}
+          className="rounded border border-gray-300 bg-white px-4 py-2 text-sm font-semibold hover:bg-gray-50"
+        >
+          Back to portfolio
+        </button>
+      </header>
+
+      <section className="grid grid-cols-2 border-b border-gray-200 md:grid-cols-4">
+        {[
+          ["Candidate balance", Number.isFinite(bridgewoodTokens) ? `${bridgewoodTokens.toFixed(4)} WBP-C` : "--", Number.isFinite(bridgewoodValue) ? `£${bridgewoodValue.toFixed(2)} accrued` : "Awaiting summary"],
+          ["Annual pipeline", `${projectedAnnualCredits.toFixed(2)} WBP-C`, `£${projectedAnnualValue.toFixed(2)} indicative`],
+          ["Forecast lots", projectedLots.length, "Illustrative only"],
+          ["Issued lots", 0, "Verification required"],
+        ].map(([label, value, detail]) => (
+          <div key={label} className="border-r border-gray-200 px-3 py-4 last:border-r-0 sm:px-5">
+            <p className="text-xs uppercase text-gray-500">{label}</p>
+            <p className="mt-1 text-xl font-bold sm:text-2xl">{value}</p>
+            <p className="text-xs text-gray-600">{detail}</p>
+          </div>
+        ))}
+      </section>
+
+      <section className="grid border-b border-gray-200 lg:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
+        <div className="px-3 py-5 sm:px-5">
+          <div className="mb-4">
+            <h2 className="text-lg font-bold">Projected annual lots</h2>
+            <p className="text-sm text-gray-600">Example outcomes for Good, verified retrofit projects over a full year.</p>
+          </div>
+          <div className="overflow-x-auto border border-gray-200">
+            <table className="w-full min-w-[680px] border-collapse text-left text-sm">
+              <thead className="bg-gray-100 text-xs uppercase text-gray-600">
+                <tr>
+                  {['Lot', 'Property', 'Status', 'Annual WBP-C', 'Indicative value', 'Market state'].map((heading) => (
+                    <th key={heading} className="border-b border-gray-200 px-3 py-2 font-semibold">{heading}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {projectedLots.map((property) => (
+                  <tr key={property.id} className="border-b border-gray-100 last:border-b-0">
+                    <td className="px-3 py-3 font-semibold">LOT-{property.id.slice(-3)}</td>
+                    <td className="px-3 py-3">{property.estate}</td>
+                    <td className="px-3 py-3"><span className="rounded border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-800">Good / Verified</span></td>
+                    <td className="px-3 py-3 font-semibold">{property.projectedAnnualCredits.toFixed(2)}</td>
+                    <td className="px-3 py-3">£{(property.projectedAnnualCredits * carbonPrice).toFixed(2)}</td>
+                    <td className="px-3 py-3 text-amber-700">Forecast</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-3 text-xs text-gray-500">Illustrative forecasts are not issued credits and cannot be traded.</p>
+        </div>
+
+        <aside className="border-t border-gray-200 px-3 py-5 sm:px-5 lg:border-l lg:border-t-0">
+          <h2 className="text-lg font-bold">Marketplace route</h2>
+          <ol className="mt-4 space-y-4 text-sm">
+            {[
+              ["1", "Evidence complete", "Monitoring, baseline, works and ownership records"],
+              ["2", "Independent verification", "Portfolio batch reviewed against an accepted methodology"],
+              ["3", "Issue WBP-C lots", "Serialised units with vintage and evidence references"],
+              ["4", "List for buyers", "Price, quantity, retirement and co-benefit terms"],
+            ].map(([number, title, detail]) => (
+              <li key={number} className="grid grid-cols-[28px_1fr] gap-3">
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gray-900 text-xs font-bold text-white">{number}</span>
+                <div><strong>{title}</strong><p className="text-gray-600">{detail}</p></div>
+              </li>
+            ))}
+          </ol>
+          <button
+            type="button"
+            disabled
+            title="Enabled once verified credits have been issued"
+            className="mt-6 w-full cursor-not-allowed rounded border border-emerald-300 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 opacity-70"
+          >
+            Create sell order - Locked
+          </button>
+        </aside>
+      </section>
+    </main>
+  );
+};
+
 const BuildingDashboard = () => {
   const defaultIndex = BUILDINGS.findIndex((building) => building.id === "cc");
   const [activeIndex, setActiveIndex] = useState(defaultIndex >= 0 ? defaultIndex : 0);
+  const [bridgewoodTokens, setBridgewoodTokens] = useState(readCachedBridgewoodCredits);
   const touchStartX = useRef(null);
   const [dragOffset, setDragOffset] = useState(0);
 
@@ -7857,6 +7951,36 @@ const BuildingDashboard = () => {
       goToBuilding(buildingIndex);
     }
   };
+
+  const openSectionById = (sectionId) => {
+    const sectionIndex = BUILDINGS.findIndex((building) => building.id === sectionId);
+    if (sectionIndex >= 0) {
+      goToBuilding(sectionIndex);
+    }
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadBridgewoodTokens = async () => {
+      const { data, error } = await supabase
+        .from("CarbonSavingsSummary")
+        .select("carbon_credits, calculated_at")
+        .eq("building_id", "home")
+        .eq("scenario", CARBON_SAVINGS_SCENARIO)
+        .order("calculated_at", { ascending: false })
+        .limit(1);
+      const credits = Number(data?.[0]?.carbon_credits);
+      if (!cancelled && !error && Number.isFinite(credits) && credits >= 0) {
+        setBridgewoodTokens(credits);
+      }
+    };
+
+    loadBridgewoodTokens();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleTouchStart = (event) => {
     touchStartX.current = event.touches[0].clientX;
@@ -7944,7 +8068,16 @@ const BuildingDashboard = () => {
                 {building.setupOnly ? (
                   <NewBuildingSetupPanel />
                 ) : building.portfolioOnly ? (
-                  <PortfolioDashboardPanel onOpenBuilding={openBuildingById} />
+                  <PortfolioDashboardPanel
+                    bridgewoodTokens={bridgewoodTokens}
+                    onOpenBuilding={openBuildingById}
+                    onOpenExchange={() => openSectionById("exchange")}
+                  />
+                ) : building.exchangeOnly ? (
+                  <ExchangeDashboardPanel
+                    bridgewoodTokens={bridgewoodTokens}
+                    onOpenPortfolio={() => openSectionById("portfolio")}
+                  />
                 ) : (
                   <BuildingDashboardPanel building={building} />
                 )}
