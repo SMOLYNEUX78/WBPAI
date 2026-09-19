@@ -7903,19 +7903,6 @@ const ExchangeDashboardPanel = ({
             <p className="mt-1 text-2xl font-bold sm:text-3xl">£{annualPortfolioValue.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
             <p className="mt-1 text-[10px] text-gray-600 sm:text-xs">{projectedLots.length} Good / Verified homes · modelled</p>
           </div>
-          <div className="mt-3 grid grid-cols-1 gap-px border border-gray-200 bg-gray-200 sm:mt-4 sm:grid-cols-3">
-            {[
-              ["Annual carbon rights", annualCarbonValue, "bg-emerald-700", Number.isFinite(bridgewoodValue) ? `Live £${bridgewoodValue.toFixed(2)} · reference £${carbonPrice}/t` : `Reference £${carbonPrice}/t`],
-              ["Monitoring data", annualMonitoringValue, "bg-blue-600", "Annual licence"],
-              ["Evidence service", annualEvidenceValue, "bg-amber-600", "Verifier/funder pack"],
-            ].map(([label, value, colour, detail]) => (
-              <div key={label} className="min-w-0 bg-white px-2 py-2.5 sm:px-4 sm:py-4">
-                <div className="flex items-center gap-1.5 text-[10px] font-semibold sm:gap-2 sm:text-sm"><span className={`h-2.5 w-2.5 shrink-0 sm:h-3 sm:w-3 ${colour}`} />{label}</div>
-                <p className="mt-1 text-base font-bold sm:mt-2 sm:text-xl">£{Number(value).toFixed(2)}</p>
-                <p className="text-[10px] leading-tight text-gray-500 sm:text-xs">{detail}</p>
-              </div>
-            ))}
-          </div>
         </div>
         <div className="flex items-center justify-center border-l border-gray-200 px-2 py-4 sm:px-5 sm:py-5">
           <div
@@ -7929,6 +7916,19 @@ const ExchangeDashboardPanel = ({
               <strong className="text-sm sm:text-lg">£{annualPortfolioValue.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
             </div>
           </div>
+        </div>
+        <div className="col-span-full grid grid-cols-3 gap-px border-y border-gray-200 bg-gray-200">
+          {[
+            ["Annual carbon rights", annualCarbonValue, "bg-emerald-700", Number.isFinite(bridgewoodValue) ? `Live £${bridgewoodValue.toFixed(2)} · reference £${carbonPrice}/t` : `Reference £${carbonPrice}/t`],
+            ["Monitoring data", annualMonitoringValue, "bg-blue-600", "Annual licence"],
+            ["Evidence service", annualEvidenceValue, "bg-amber-600", "Verifier/funder pack"],
+          ].map(([label, value, colour, detail]) => (
+            <div key={label} className="min-w-0 bg-white px-2 py-2.5 sm:px-4 sm:py-4">
+              <div className="flex items-center gap-1.5 text-[10px] font-semibold sm:gap-2 sm:text-sm"><span className={`h-2.5 w-2.5 shrink-0 sm:h-3 sm:w-3 ${colour}`} />{label}</div>
+              <p className="mt-1 text-base font-bold sm:mt-2 sm:text-xl">£{Number(value).toFixed(2)}</p>
+              <p className="text-[10px] leading-tight text-gray-500 sm:text-xs">{detail}</p>
+            </div>
+          ))}
         </div>
         <div className="col-span-full grid gap-2 border-t border-gray-200 px-3 py-3 sm:grid-cols-[minmax(220px,1fr)_auto_auto] sm:px-5">
           <button type="button" disabled className="cursor-not-allowed border border-emerald-300 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800">Sell complete WBP value</button>
