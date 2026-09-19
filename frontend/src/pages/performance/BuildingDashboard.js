@@ -7896,28 +7896,25 @@ const ExchangeDashboardPanel = ({
 
   return (
     <main className="min-h-screen bg-white p-3 sm:p-5">
-      <section className="grid grid-cols-[minmax(0,1fr)_165px] border-b border-gray-200 min-[430px]:grid-cols-[minmax(0,1fr)_190px] sm:grid-cols-[minmax(0,1.2fr)_220px] lg:grid-cols-[minmax(0,1.2fr)_minmax(240px,0.8fr)]">
-        <div className="min-w-0 px-2 py-4 sm:px-5 sm:py-5">
-          <div>
-            <h1 className="text-base font-bold sm:text-xl">WBP portfolio accrued value</h1>
-            <p className="mt-1 text-2xl font-bold sm:text-3xl">£{annualPortfolioValue.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-            <p className="mt-1 text-[10px] text-gray-600 sm:text-xs">{projectedLots.length} Good / Verified homes · modelled</p>
-          </div>
-        </div>
-        <div className="flex items-center justify-center border-l border-gray-200 px-2 py-4 sm:px-5 sm:py-5">
+      <section className="border-b border-gray-200">
+        <div className="flex flex-col items-center justify-center px-3 py-5 text-center sm:px-5 sm:py-7">
           <div
-            className="relative h-36 w-36 shrink-0 rounded-full min-[430px]:h-40 min-[430px]:w-40"
+            className="relative h-52 w-52 shrink-0 rounded-full sm:h-60 sm:w-60"
             style={{ background: `conic-gradient(#047857 0 ${carbonValueShare}%, #2563eb ${carbonValueShare}% ${carbonValueShare + monitoringValueShare}%, #d97706 ${carbonValueShare + monitoringValueShare}% 100%)` }}
             role="img"
             aria-label={`Annual assumed value: carbon £${annualCarbonValue.toFixed(2)}, monitoring £${annualMonitoringValue.toFixed(2)}, evidence £${annualEvidenceValue.toFixed(2)}`}
           >
-            <div className="absolute inset-6 flex flex-col items-center justify-center rounded-full bg-white text-center sm:inset-7">
-              <span className="text-[9px] uppercase text-gray-500 sm:text-xs">WBP value</span>
-              <strong className="text-sm sm:text-lg">£{annualPortfolioValue.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+            <div className="absolute inset-9 flex items-center justify-center rounded-full bg-white sm:inset-11">
+              <span className="text-sm font-bold uppercase text-gray-700">WBP</span>
             </div>
           </div>
+          <div className="mt-4">
+            <h1 className="text-base font-bold sm:text-xl">WBP portfolio accrued value</h1>
+            <p className="mt-1 text-3xl font-bold">£{annualPortfolioValue.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+            <p className="mt-1 text-[10px] text-gray-600 sm:text-xs">{projectedLots.length} Good / Verified homes · modelled</p>
+          </div>
         </div>
-        <div className="col-span-full grid grid-cols-3 gap-px border-y border-gray-200 bg-gray-200">
+        <div className="grid grid-cols-3 gap-px border-y border-gray-200 bg-gray-200">
           {[
             ["Annual carbon rights", annualCarbonValue, "bg-emerald-700", Number.isFinite(bridgewoodValue) ? `Live £${bridgewoodValue.toFixed(2)} · reference £${carbonPrice}/t` : `Reference £${carbonPrice}/t`],
             ["Monitoring data", annualMonitoringValue, "bg-blue-600", "Annual licence"],
@@ -7930,7 +7927,7 @@ const ExchangeDashboardPanel = ({
             </div>
           ))}
         </div>
-        <div className="col-span-full grid gap-2 border-t border-gray-200 px-3 py-3 sm:grid-cols-[minmax(220px,1fr)_auto_auto] sm:px-5">
+        <div className="grid gap-2 border-t border-gray-200 px-3 py-3 sm:grid-cols-[minmax(220px,1fr)_auto_auto] sm:px-5">
           <button type="button" disabled className="cursor-not-allowed border border-emerald-300 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800">Sell complete WBP value</button>
           <button type="button" disabled className="cursor-not-allowed border border-gray-300 bg-gray-100 px-4 py-2.5 text-sm font-semibold text-gray-500">Market sell carbon</button>
           <button type="button" disabled className="cursor-not-allowed border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-500">Set higher ask</button>
