@@ -107,6 +107,18 @@ const BUILDINGS = [
   },
   HOME_BUILDING,
   {
+    id: "new",
+    name: "New",
+    subtitle: "New building setup",
+    setupOnly: true,
+  },
+  {
+    id: "portfolio",
+    name: "Portfolio",
+    subtitle: "Social housing portfolio management",
+    portfolioOnly: true,
+  },
+  {
     id: "museum",
     name: "Museum",
     subtitle: "CAD monitor, smart meter and IAQ tablet collector",
@@ -121,21 +133,6 @@ const BUILDINGS = [
     heatingSystem: "none",
     regulatedElectricFraction: 0.05,
     showGas: false,
-  },
-  {
-    id: "new",
-    name: "New",
-    subtitle: "New building setup",
-    setupOnly: true,
-    defaultMatterportUrl: "",
-    latitude: "",
-    longitude: "",
-    estimatedInternalArea: "",
-    targetEui: 65,
-    nationalAverageEui: 200,
-    legacyUnscopedData: false,
-    regulatedElectricFraction: 0.35,
-    showGas: true,
   },
 ];
 
@@ -7605,6 +7602,152 @@ const NewBuildingSetupPanel = () => {
   );
 };
 
+const PORTFOLIO_PROPERTIES = [
+  { id: "WBP-001", estate: "Bridgewood", archetype: "Semi-detached", health: 87, energy: 88, risk: "Monitor", retrofit: "Baseline", evidence: 63, collector: "Live" },
+  { id: "WBP-002", estate: "Bridgewood", archetype: "Terrace", health: 61, energy: 54, risk: "Damp", retrofit: "Assessment", evidence: 42, collector: "Live" },
+  { id: "WBP-003", estate: "Kyson", archetype: "Flat", health: 72, energy: 47, risk: "Cold", retrofit: "Planned", evidence: 78, collector: "Live" },
+  { id: "WBP-004", estate: "Kyson", archetype: "Maisonette", health: 58, energy: 69, risk: "IAQ", retrofit: "In works", evidence: 86, collector: "Attention" },
+  { id: "WBP-005", estate: "Rendlesham", archetype: "Bungalow", health: 91, energy: 76, risk: "Good", retrofit: "Verified", evidence: 100, collector: "Live" },
+  { id: "WBP-006", estate: "Rendlesham", archetype: "Semi-detached", health: 67, energy: 51, risk: "Heat loss", retrofit: "Assessment", evidence: 55, collector: "Live" },
+  { id: "WBP-007", estate: "Melton", archetype: "Terrace", health: 76, energy: 64, risk: "Overheat", retrofit: "Planned", evidence: 71, collector: "Live" },
+  { id: "WBP-008", estate: "Melton", archetype: "Flat", health: 83, energy: 81, risk: "Good", retrofit: "Verified", evidence: 96, collector: "Live" },
+];
+
+const PortfolioDashboardPanel = () => {
+  const [riskFilter, setRiskFilter] = useState("All");
+  const [search, setSearch] = useState("");
+  const riskOptions = ["All", "Damp", "Cold", "IAQ", "Heat loss", "Overheat", "Good"];
+  const filteredProperties = PORTFOLIO_PROPERTIES.filter((property) => {
+    const matchesRisk = riskFilter === "All" || property.risk === riskFilter;
+    const query = search.trim().toLowerCase();
+    const matchesSearch = !query || [property.id, property.estate, property.archetype]
+      .some((value) => value.toLowerCase().includes(query));
+    return matchesRisk && matchesSearch;
+  });
+  const liveCount = PORTFOLIO_PROPERTIES.filter((property) => property.collector === "Live").length;
+  const priorityCount = PORTFOLIO_PROPERTIES.filter((property) => !["Good", "Monitor"].includes(property.risk)).length;
+  const verifiedCount = PORTFOLIO_PROPERTIES.filter((property) => property.retrofit === "Verified").length;
+  const average = (key) => Math.round(
+    PORTFOLIO_PROPERTIES.reduce((sum, property) => sum + property[key], 0) /
+      PORTFOLIO_PROPERTIES.length
+  );
+
+  const statusClass = (value) => {
+    if (["Good", "Verified", "Live"].includes(value)) return "bg-emerald-50 text-emerald-800 border-emerald-200";
+    if (["Damp", "Cold", "IAQ", "Heat loss", "Overheat", "Attention"].includes(value)) return "bg-red-50 text-red-800 border-red-200";
+    return "bg-amber-50 text-amber-800 border-amber-200";
+  };
+
+  return (
+    <main className="min-h-screen bg-white p-3 sm:p-5">
+      <header className="border-b border-gray-200 pb-4">
+        <div>
+          <div>
+            <p className="text-xs font-semibold uppercase text-gray-500">Portfolio prototype</p>
+            <h1 className="text-2xl font-bold">East Suffolk Social Housing</h1>
+            <p className="text-sm text-gray-600">Warm Homes Programme 2027</p>
+          </div>
+        </div>
+      </header>
+
+      <section className="grid grid-cols-2 border-b border-gray-200 md:grid-cols-4">
+        {[
+          ["Properties", PORTFOLIO_PROPERTIES.length, `${liveCount} reporting`],
+          ["Priority homes", priorityCount, "Action required"],
+          ["Average health", `${average("health")}/100`, "Occupied performance"],
+          ["Average energy", `${average("energy")}/100`, `${verifiedCount} retrofits verified`],
+        ].map(([label, value, detail]) => (
+          <div key={label} className="border-r border-gray-200 px-3 py-4 last:border-r-0 sm:px-5">
+            <p className="text-xs uppercase text-gray-500">{label}</p>
+            <p className="mt-1 text-2xl font-bold">{value}</p>
+            <p className="text-xs text-gray-600">{detail}</p>
+          </div>
+        ))}
+      </section>
+
+      <section className="grid border-b border-gray-200 lg:grid-cols-[minmax(0,2fr)_minmax(260px,1fr)]">
+        <div className="px-3 py-5 sm:px-5">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-lg font-bold">Property register</h2>
+            <input
+              type="search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search ID, estate or archetype"
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm sm:w-64"
+            />
+          </div>
+          <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
+            {riskOptions.map((risk) => (
+              <button
+                key={risk}
+                type="button"
+                onClick={() => setRiskFilter(risk)}
+                className={`whitespace-nowrap rounded border px-3 py-1.5 text-xs font-semibold ${riskFilter === risk ? "border-black bg-black text-white" : "border-gray-300 bg-white"}`}
+              >
+                {risk}
+              </button>
+            ))}
+          </div>
+          <div className="overflow-x-auto border border-gray-200">
+            <table className="w-full min-w-[760px] border-collapse text-left text-sm">
+              <thead className="bg-gray-100 text-xs uppercase text-gray-600">
+                <tr>
+                  {['Property', 'Estate', 'Archetype', 'Health', 'Energy', 'Risk', 'Retrofit', 'Evidence'].map((heading) => (
+                    <th key={heading} className="border-b border-gray-200 px-3 py-2 font-semibold">{heading}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filteredProperties.map((property) => (
+                  <tr key={property.id} className="border-b border-gray-100 last:border-b-0 hover:bg-gray-50">
+                    <td className="px-3 py-3 font-semibold">{property.id}</td>
+                    <td className="px-3 py-3">{property.estate}</td>
+                    <td className="px-3 py-3">{property.archetype}</td>
+                    <td className="px-3 py-3">{property.health}/100</td>
+                    <td className="px-3 py-3">{property.energy}/100</td>
+                    <td className="px-3 py-3"><span className={`rounded border px-2 py-1 text-xs font-semibold ${statusClass(property.risk)}`}>{property.risk}</span></td>
+                    <td className="px-3 py-3">{property.retrofit}</td>
+                    <td className="px-3 py-3">{property.evidence}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {filteredProperties.length === 0 ? <p className="p-6 text-center text-sm text-gray-500">No matching properties</p> : null}
+          </div>
+        </div>
+
+        <aside className="border-t border-gray-200 px-3 py-5 sm:px-5 lg:border-l lg:border-t-0">
+          <h2 className="text-lg font-bold">Retrofit programme</h2>
+          <div className="mt-4 space-y-4">
+            {[
+              ["Baseline", 1, "bg-gray-500"],
+              ["Assessment", 2, "bg-amber-500"],
+              ["Planned", 2, "bg-blue-500"],
+              ["In works", 1, "bg-violet-500"],
+              ["Verified", 2, "bg-emerald-500"],
+            ].map(([label, count, colour]) => (
+              <div key={label}>
+                <div className="mb-1 flex justify-between text-sm"><span>{label}</span><strong>{count}</strong></div>
+                <div className="h-2 bg-gray-100"><div className={`h-full ${colour}`} style={{ width: `${count / PORTFOLIO_PROPERTIES.length * 100}%` }} /></div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-6 border-t border-gray-200 pt-4">
+            <h3 className="font-semibold">Evidence inventory</h3>
+            <dl className="mt-3 space-y-2 text-sm">
+              <div className="flex justify-between"><dt>Audit-ready homes</dt><dd className="font-semibold">2</dd></div>
+              <div className="flex justify-between"><dt>Baselines maturing</dt><dd className="font-semibold">4</dd></div>
+              <div className="flex justify-between"><dt>Collector attention</dt><dd className="font-semibold text-red-700">1</dd></div>
+              <div className="flex justify-between"><dt>Marketplace eligible</dt><dd className="font-semibold">Pending</dd></div>
+            </dl>
+          </div>
+        </aside>
+      </section>
+    </main>
+  );
+};
+
 const BuildingDashboard = () => {
   const defaultIndex = BUILDINGS.findIndex((building) => building.id === "cc");
   const [activeIndex, setActiveIndex] = useState(defaultIndex >= 0 ? defaultIndex : 0);
@@ -7659,12 +7802,12 @@ const BuildingDashboard = () => {
     >
       <div className="sticky top-0 z-20 bg-white border-b px-4 py-3">
         <div className="flex items-center justify-between gap-3">
-          <div className="flex gap-2">
+          <div className="flex min-w-0 gap-2 overflow-x-auto pb-1">
             {BUILDINGS.map((building, index) => (
               <button
                 key={building.id}
                 type="button"
-                className={`px-4 py-2 rounded border text-sm font-semibold ${
+                className={`shrink-0 px-3 py-2 rounded border text-sm font-semibold sm:px-4 ${
                   activeBuilding.id === building.id
                     ? "bg-black text-white border-black"
                     : "bg-white text-black border-gray-300"
@@ -7703,6 +7846,8 @@ const BuildingDashboard = () => {
               >
                 {building.setupOnly ? (
                   <NewBuildingSetupPanel />
+                ) : building.portfolioOnly ? (
+                  <PortfolioDashboardPanel />
                 ) : (
                   <BuildingDashboardPanel building={building} />
                 )}
