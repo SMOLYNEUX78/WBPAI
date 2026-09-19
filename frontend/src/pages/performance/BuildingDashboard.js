@@ -7861,6 +7861,17 @@ const ExchangeDashboardPanel = ({
   const bridgewoodValue = Number.isFinite(bridgewoodTokens)
     ? bridgewoodTokens * carbonPrice
     : null;
+  const basketLots = [
+    { name: "Carbon", target: annualCarbonValue, coverage: 1, status: "Settled", colour: "#047857" },
+    { name: "Monitoring", target: annualMonitoringValue, coverage: 0.72, status: "Bidding", colour: "#2563eb" },
+    { name: "Health", target: annualHealthDataValue, coverage: 0.41, status: "Bidding", colour: "#be123c" },
+    { name: "Grid", target: annualGridDataValue, coverage: 1, status: "Reserve met", colour: "#0891b2" },
+    { name: "Evidence", target: annualEvidenceValue, coverage: 0.22, status: "Open", colour: "#d97706" },
+  ];
+  const basketSecuredValue = basketLots.reduce(
+    (sum, lot) => sum + lot.target * lot.coverage,
+    0
+  );
   const dataProducts = [
     { name: "Monitoring data", buyer: "Council / housing provider", product: "Consented portfolio performance and retrofit-prioritisation dataset", price: "£12 / property / month", route: "Annual licence" },
     { name: "Evidence", buyer: "Funder / verifier", product: "Evidence-pack status, provenance and verified performance records", price: "From £2,400 / year", route: "Evidence service" },
@@ -7940,6 +7951,41 @@ const ExchangeDashboardPanel = ({
           <button type="button" disabled className="cursor-not-allowed border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-500">Set higher ask</button>
           <p className="text-[10px] text-gray-500 sm:col-span-full">One basket offer can match separate buyers to compatible rights. Carbon is transferred and retired once; data and evidence are supplied through defined licences or services.</p>
         </div>
+      </section>
+
+      <section className="border-b border-gray-200 px-3 py-5 sm:px-5">
+        <div className="mb-4 flex items-end justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-semibold uppercase text-gray-500 sm:text-xs">Divisible basket offer</p>
+            <h2 className="mt-1 text-lg font-bold">£{basketSecuredValue.toFixed(2)} secured <span className="font-normal text-gray-500">/ £{annualPortfolioValue.toFixed(2)} target</span></h2>
+          </div>
+          <p className="max-w-sm text-right text-[10px] text-gray-500 sm:text-xs">One parent contract. Each right settles independently.</p>
+        </div>
+        <div className="flex h-10 w-full overflow-hidden border border-gray-300 bg-gray-100" role="img" aria-label={`Basket bids have secured £${basketSecuredValue.toFixed(2)} of a £${annualPortfolioValue.toFixed(2)} target`}>
+          {basketLots.map((lot) => (
+            <div
+              key={lot.name}
+              className="relative h-full border-r border-white last:border-r-0"
+              style={{ flexBasis: `${lot.target / annualPortfolioValue * 100}%`, backgroundColor: `${lot.colour}20` }}
+              title={`${lot.name}: £${(lot.target * lot.coverage).toFixed(2)} secured of £${lot.target.toFixed(2)}`}
+            >
+              <div className="h-full" style={{ width: `${lot.coverage * 100}%`, backgroundColor: lot.colour }} />
+            </div>
+          ))}
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-5 sm:gap-3">
+          {basketLots.map((lot) => (
+            <div key={lot.name} className="min-w-0 border-l-2 pl-2" style={{ borderColor: lot.colour }}>
+              <div className="flex items-start justify-between gap-2 text-[10px] sm:text-xs">
+                <strong>{lot.name}</strong>
+                <span className="text-gray-500">{Math.round(lot.coverage * 100)}%</span>
+              </div>
+              <p className="mt-0.5 text-xs font-semibold sm:text-sm">£{(lot.target * lot.coverage).toFixed(2)} / £{lot.target.toFixed(2)}</p>
+              <p className="text-[9px] text-gray-500 sm:text-[10px]">{lot.status}</p>
+            </div>
+          ))}
+        </div>
+        <p className="mt-4 border-t border-gray-200 pt-3 text-[10px] text-gray-500 sm:text-xs">Settled lots close without waiting for the rest of the basket. Open lots remain available to eligible bidders until their reserve or expiry condition is reached.</p>
       </section>
 
       <section className="border-b border-gray-200 px-3 py-3 sm:px-5">
