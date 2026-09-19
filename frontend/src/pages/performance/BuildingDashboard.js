@@ -7730,8 +7730,8 @@ const PortfolioDashboardPanel = ({
         ))}
       </section>
 
-      <section className="grid border-b border-gray-200 lg:grid-cols-[minmax(0,2fr)_minmax(260px,1fr)]">
-        <div className="px-3 py-5 sm:px-5">
+      <section className="grid min-w-0 border-b border-gray-200 lg:grid-cols-[minmax(0,2fr)_minmax(260px,1fr)]">
+        <div className="min-w-0 px-3 py-5 sm:px-5">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-lg font-bold">Property register</h2>
             <input
@@ -7754,8 +7754,8 @@ const PortfolioDashboardPanel = ({
               </button>
             ))}
           </div>
-          <div className="overflow-x-auto border border-gray-200">
-            <table className="w-full min-w-[760px] border-collapse text-left text-sm">
+          <div className="w-full max-w-full overflow-x-auto overscroll-x-contain border border-gray-200" style={{ WebkitOverflowScrolling: "touch" }}>
+            <table className="w-full min-w-[820px] whitespace-nowrap border-collapse text-left text-sm">
               <thead className="bg-gray-100 text-xs uppercase text-gray-600">
                 <tr>
                   {['Property', 'Estate', 'Archetype', 'Health', 'Energy', 'Risk', 'Retrofit', 'Evidence'].map((heading) => (
