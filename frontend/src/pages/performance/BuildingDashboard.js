@@ -7967,24 +7967,48 @@ const ExchangeDashboardPanel = ({
                   <div><span className="block text-xs uppercase text-gray-500">Spread</span><strong>£{bidAskSpread}</strong></div>
                 </div>
               </div>
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-4 md:grid-cols-[220px_minmax(0,1fr)]">
                 <div className="border border-gray-200">
-                  <div className="flex justify-between bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-900"><span>Bids</span><span>Buy interest</span></div>
+                  <div className="grid grid-cols-2 bg-gray-100 px-3 py-2 text-xs font-semibold uppercase text-gray-600"><span>Price</span><span className="text-right">Volume</span></div>
+                  <div className="flex justify-between border-t border-gray-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-900"><span>Asks</span><span>Sell</span></div>
+                  {[{ price: 88, volume: 25 }, { price: 92, volume: 60 }, { price: 105, volume: 120 }].map((order) => (
+                    <div key={`ask-${order.price}`} className="grid grid-cols-2 border-t border-gray-100 px-3 py-1.5 text-sm"><strong>£{order.price}/t</strong><span className="text-right">{order.volume}</span></div>
+                  ))}
+                  <div className="flex justify-between border-t border-gray-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-900"><span>Bids</span><span>Buy</span></div>
                   {[{ price: 76, volume: 40 }, { price: 72, volume: 100 }, { price: 68, volume: 250 }].map((order) => (
-                    <div key={order.price} className="relative grid grid-cols-2 overflow-hidden border-t border-gray-100 px-3 py-2 text-sm">
-                      <span className="absolute bottom-0 right-0 top-0 bg-emerald-100" style={{ width: `${order.volume / 250 * 100}%` }} />
-                      <strong className="relative">£{order.price}/t</strong><span className="relative text-right">{order.volume} WBP-C</span>
-                    </div>
+                    <div key={`bid-${order.price}`} className="grid grid-cols-2 border-t border-gray-100 px-3 py-1.5 text-sm"><strong>£{order.price}/t</strong><span className="text-right">{order.volume}</span></div>
                   ))}
                 </div>
-                <div className="border border-gray-200">
-                  <div className="flex justify-between bg-red-50 px-3 py-2 text-sm font-semibold text-red-900"><span>Asks</span><span>Sell interest</span></div>
-                  {[{ price: 88, volume: 25 }, { price: 92, volume: 60 }, { price: 105, volume: 120 }].map((order) => (
-                    <div key={order.price} className="relative grid grid-cols-2 overflow-hidden border-t border-gray-100 px-3 py-2 text-sm">
-                      <span className="absolute bottom-0 left-0 top-0 bg-red-100" style={{ width: `${order.volume / 250 * 100}%` }} />
-                      <strong className="relative">£{order.price}/t</strong><span className="relative text-right">{order.volume} WBP-C</span>
-                    </div>
-                  ))}
+                <div className="min-w-0 border border-gray-200 px-3 pb-3 pt-4" role="img" aria-label="Carbon market volume chart showing bids at £68, £72 and £76, the seller reserve at £85, and asks at £88, £92 and £105 per tonne">
+                  <div className="mb-2 flex items-center justify-between gap-3 text-xs text-gray-500">
+                    <span>Available volume (WBP-C)</span>
+                    <span><span className="mr-3 inline-block h-2.5 w-2.5 bg-emerald-600" />Bid <span className="ml-3 mr-1 inline-block h-2.5 w-2.5 bg-red-500" />Ask</span>
+                  </div>
+                  <div className="grid h-48 grid-cols-7 items-end gap-2 border-b border-l border-gray-300 px-2 pt-3 sm:gap-3">
+                    {[
+                      { price: 68, volume: 250, side: "bid" },
+                      { price: 72, volume: 100, side: "bid" },
+                      { price: 76, volume: 40, side: "bid" },
+                      { price: sellerReservePrice, volume: null, side: "reserve" },
+                      { price: 88, volume: 25, side: "ask" },
+                      { price: 92, volume: 60, side: "ask" },
+                      { price: 105, volume: 120, side: "ask" },
+                    ].map((order) => (
+                      <div key={`${order.side}-${order.price}`} className="flex h-full min-w-0 flex-col items-center justify-end">
+                        {order.side === "reserve" ? (
+                          <div className="relative h-full w-full border-x-2 border-dashed border-amber-500 bg-amber-50/70"><span className="absolute left-1/2 top-1 -translate-x-1/2 whitespace-nowrap text-[10px] font-semibold text-amber-800">Reserve</span></div>
+                        ) : (
+                          <>
+                            <span className="mb-1 text-[10px] font-semibold text-gray-600">{order.volume}</span>
+                            <span className={`w-full max-w-12 ${order.side === "bid" ? "bg-emerald-600" : "bg-red-500"}`} style={{ height: `${Math.max(10, order.volume / 250 * 100)}%` }} />
+                          </>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-7 gap-2 px-2 pt-1 text-center text-[10px] font-semibold text-gray-600 sm:gap-3">
+                    {[68, 72, 76, sellerReservePrice, 88, 92, 105].map((price) => <span key={price}>£{price}</span>)}
+                  </div>
                 </div>
               </div>
               <div className="mt-4 border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-950">
