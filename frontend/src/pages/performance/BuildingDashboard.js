@@ -7940,29 +7940,33 @@ const PortfolioDashboardPanel = ({
             <div className="bg-white p-3"><p className="text-xs uppercase text-gray-500">Open defects</p><p className="mt-1 text-xl font-bold text-amber-700">6</p></div>
             <div className="bg-white p-3"><p className="text-xs uppercase text-gray-500">Retention ready</p><p className="mt-1 text-xl font-bold text-emerald-700">2</p></div>
           </div>
-          <h3 className="mt-6 font-semibold">Retrofit programme</h3>
-          <div className="mt-4 space-y-4">
-            {[
-              ["Baseline", 1, "bg-gray-500"],
-              ["Assessment", 2, "bg-amber-500"],
-              ["Planned", 2, "bg-blue-500"],
-              ["In works", 1, "bg-violet-500"],
-              ["Verified", 2, "bg-emerald-500"],
-            ].map(([label, count, colour]) => (
-              <div key={label}>
-                <div className="mb-1 flex justify-between text-sm"><span>{label}</span><strong>{count}</strong></div>
-                <div className="h-2 bg-gray-100"><div className={`h-full ${colour}`} style={{ width: `${count / PORTFOLIO_PROPERTIES.length * 100}%` }} /></div>
+          <div className="mt-6 grid grid-cols-2 border-t border-gray-200 pt-4">
+            <div className="min-w-0 pr-3 sm:pr-4">
+              <h3 className="text-sm font-semibold sm:text-base">Retrofit programme</h3>
+              <div className="mt-3 space-y-3">
+                {[
+                  ["Baseline", 1, "bg-gray-500"],
+                  ["Assessment", 2, "bg-amber-500"],
+                  ["Planned", 2, "bg-blue-500"],
+                  ["In works", 1, "bg-violet-500"],
+                  ["Verified", 2, "bg-emerald-500"],
+                ].map(([label, count, colour]) => (
+                  <div key={label}>
+                    <div className="mb-1 flex justify-between gap-2 text-xs sm:text-sm"><span>{label}</span><strong>{count}</strong></div>
+                    <div className="h-2 bg-gray-100"><div className={`h-full ${colour}`} style={{ width: `${count / PORTFOLIO_PROPERTIES.length * 100}%` }} /></div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-          <div className="mt-6 border-t border-gray-200 pt-4">
-            <h3 className="font-semibold">Evidence inventory</h3>
-            <dl className="mt-3 space-y-2 text-sm">
-              <div className="flex justify-between"><dt>Audit-ready homes</dt><dd className="font-semibold">2</dd></div>
-              <div className="flex justify-between"><dt>Baselines maturing</dt><dd className="font-semibold">4</dd></div>
-              <div className="flex justify-between"><dt>Collector attention</dt><dd className="font-semibold text-red-700">1</dd></div>
-              <div className="flex justify-between"><dt>Marketplace eligible</dt><dd className="font-semibold">{PORTFOLIO_EXCHANGE_SUMMARY.propertyCount}</dd></div>
-            </dl>
+            </div>
+            <div className="min-w-0 border-l border-gray-200 pl-3 sm:pl-4">
+              <h3 className="text-sm font-semibold sm:text-base">Evidence inventory</h3>
+              <dl className="mt-3 space-y-3 text-xs sm:text-sm">
+                <div className="flex items-start justify-between gap-2"><dt>Audit-ready homes</dt><dd className="shrink-0 font-semibold">2</dd></div>
+                <div className="flex items-start justify-between gap-2"><dt>Baselines maturing</dt><dd className="shrink-0 font-semibold">4</dd></div>
+                <div className="flex items-start justify-between gap-2"><dt>Collector attention</dt><dd className="shrink-0 font-semibold text-red-700">1</dd></div>
+                <div className="flex items-start justify-between gap-2"><dt>Marketplace eligible</dt><dd className="shrink-0 font-semibold">{PORTFOLIO_EXCHANGE_SUMMARY.propertyCount}</dd></div>
+              </dl>
+            </div>
           </div>
         </aside>
       </section>
