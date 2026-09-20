@@ -8586,7 +8586,7 @@ const ExchangeDashboardPanel = ({
             <div
               key={lot.name}
               className="relative h-full border-r border-white last:border-r-0"
-              style={{ flexBasis: `${lot.target / annualPortfolioValue * 100}%`, backgroundColor: `${lot.colour}20` }}
+              style={{ flexBasis: `${lot.target / annualPortfolioValue * 100}%`, backgroundColor: `${lot.colour}45` }}
               title={`${lot.name}: £${(lot.target * lot.coverage).toFixed(2)} secured of £${lot.target.toFixed(2)}`}
             >
               <div
