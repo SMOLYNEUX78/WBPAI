@@ -15,11 +15,11 @@ const SplashScreen = () => {
   const [fadeOut, setFadeOut] = useState(false);
 
   useEffect(() => {
-    const assembleTimer = setTimeout(() => setStage(1), 320);
-    const resolveTimer = setTimeout(() => setStage(2), 900);
-    const verifyTimer = setTimeout(() => setStage(3), 1450);
-    const exitTimer = setTimeout(() => setFadeOut(true), 1950);
-    const navigationTimer = setTimeout(() => navigate("/dashboard/new"), 2300);
+    const assembleTimer = setTimeout(() => setStage(1), 520);
+    const resolveTimer = setTimeout(() => setStage(2), 1550);
+    const verifyTimer = setTimeout(() => setStage(3), 2750);
+    const exitTimer = setTimeout(() => setFadeOut(true), 3700);
+    const navigationTimer = setTimeout(() => navigate("/dashboard/new"), 4100);
 
     return () => {
       clearTimeout(assembleTimer);
@@ -35,6 +35,18 @@ const SplashScreen = () => {
       className={`wbp-splash-shell ${fadeOut ? "is-exiting" : ""}`}
       aria-label="Whole Build Profile loading"
     >
+      <video
+        className="wbp-splash-video"
+        autoPlay
+        muted
+        loop
+        playsInline
+        preload="auto"
+        aria-hidden="true"
+      >
+        <source src="/videos/wbp-architecture.mp4" type="video/mp4" />
+      </video>
+      <div className="wbp-splash-video-treatment" aria-hidden="true" />
       <main className={`wbp-splash-ident stage-${stage}`}>
         <div className="wbp-signal-stack" aria-hidden="true">
           {PROFILE_SIGNALS.map((signal, index) => (
