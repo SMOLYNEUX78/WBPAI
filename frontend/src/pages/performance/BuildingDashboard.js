@@ -8586,11 +8586,22 @@ const ExchangeDashboardPanel = ({
                           <button key={value} type="button" onClick={() => setCarbonSaleAction(value)} className={`border px-3 py-2.5 text-sm font-semibold ${carbonSaleAction === value ? "border-emerald-700 bg-emerald-700 text-white" : "border-gray-300 bg-white text-gray-700"}`}>{label}</button>
                         ))}
                       </div>
-                      {carbonSaleAction === "ask" ? (
-                        <label className="mt-4 block text-xs font-semibold text-gray-700">Minimum price per tonne
-                          <div className="mt-1 flex items-center border border-gray-300 bg-white px-3"><span>£</span><input type="number" min="1" step="1" value={carbonAskPrice} onChange={(event) => setCarbonAskPrice(event.target.value)} className="min-w-0 flex-1 px-2 py-2 text-sm outline-none" /><span className="text-gray-500">/t</span></div>
+                      <div
+                        className={`grid overflow-hidden ${carbonSaleAction === "ask" ? "pointer-events-auto" : "pointer-events-none"}`}
+                        style={{
+                          gridTemplateRows:
+                            carbonSaleAction === "ask" ? "1fr" : "0fr",
+                          opacity: carbonSaleAction === "ask" ? 1 : 0,
+                          marginTop: carbonSaleAction === "ask" ? "1rem" : 0,
+                          transition:
+                            "grid-template-rows 240ms ease, opacity 180ms ease, margin-top 240ms ease",
+                        }}
+                        aria-hidden={carbonSaleAction !== "ask"}
+                      >
+                        <label className="min-h-0 block overflow-hidden text-xs font-semibold text-gray-700">Minimum price per tonne
+                          <div className="mt-1 flex items-center border border-gray-300 bg-white px-3"><span>£</span><input type="number" min="1" step="1" value={carbonAskPrice} onChange={(event) => setCarbonAskPrice(event.target.value)} tabIndex={carbonSaleAction === "ask" ? 0 : -1} className="min-w-0 flex-1 px-2 py-2 text-sm outline-none" /><span className="text-gray-500">/t</span></div>
                         </label>
-                      ) : null}
+                      </div>
                       <label className="mt-4 block text-xs font-semibold text-gray-700">Sell {carbonSalePercent}% of available carbon
                         <input type="range" min="10" max="100" step="10" value={carbonSalePercent} onChange={(event) => setCarbonSalePercent(Number(event.target.value))} className="mt-2 w-full accent-emerald-700" />
                       </label>
