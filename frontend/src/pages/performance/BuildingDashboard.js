@@ -99,18 +99,17 @@ const HOME_BUILDING = {
 
 const BUILDINGS = [
   {
-    ...HOME_BUILDING,
-    id: "cc",
-    name: "CC",
-    subtitle: "Carbon credit token workspace",
-    dataSourceId: "home",
-  },
-  HOME_BUILDING,
-  {
     id: "new",
     name: "New",
     subtitle: "New building setup",
     setupOnly: true,
+  },
+  {
+    ...HOME_BUILDING,
+    id: "cc",
+    name: "WBP-001",
+    subtitle: "Carbon credit token workspace",
+    dataSourceId: "home",
   },
   {
     id: "portfolio",
@@ -8430,7 +8429,7 @@ const ExchangeDashboardPanel = ({
     0
   );
   const theoreticalBasketSales = [
-    { date: "18 Sep 2026", right: "Carbon", buyer: "UK retrofit fund", share: 1, value: annualCarbonValue, structure: "Transfer and retirement" },
+    { date: "18 Sep 2026", right: "Carbon", buyer: "Corporate carbon buyer", share: 1, value: annualCarbonValue, structure: "Transfer and retirement" },
     { date: "16 Sep 2026", right: "Monitoring", buyer: "Social housing lender", share: 0.28, value: annualMonitoringValue * 0.28, structure: "12-month licence" },
     { date: "12 Sep 2026", right: "Monitoring", buyer: "Retrofit research consortium", share: 0.24, value: annualMonitoringValue * 0.24, structure: "Research licence" },
     { date: "08 Sep 2026", right: "Monitoring", buyer: "Building insurer", share: 0.2, value: annualMonitoringValue * 0.2, structure: "Risk-analysis licence" },
@@ -9073,11 +9072,11 @@ const ExchangeDashboardPanel = ({
 const BuildingDashboard = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const routeSection = location.pathname.split("/").filter(Boolean)[1] || "cc";
+  const routeSection = location.pathname.split("/").filter(Boolean)[1] || "new";
   const routeIndex = BUILDINGS.findIndex((building) => building.id === routeSection);
   const defaultIndex = routeIndex >= 0
     ? routeIndex
-    : BUILDINGS.findIndex((building) => building.id === "cc");
+    : BUILDINGS.findIndex((building) => building.id === "new");
   const [activeIndex, setActiveIndex] = useState(defaultIndex >= 0 ? defaultIndex : 0);
   const [bridgewoodValue, setBridgewoodValue] = useState(readCachedBridgewoodValue);
   const bridgewoodTokens = bridgewoodValue.credits;
@@ -9106,11 +9105,12 @@ const BuildingDashboard = () => {
       return;
     }
 
-    navigate("/dashboard/cc", { replace: true });
+    navigate("/dashboard/new", { replace: true });
   }, [location.pathname, navigate]);
 
   const openBuildingById = (buildingId) => {
-    const buildingIndex = BUILDINGS.findIndex((building) => building.id === buildingId);
+    const navigationId = buildingId === "home" ? "cc" : buildingId;
+    const buildingIndex = BUILDINGS.findIndex((building) => building.id === navigationId);
     if (buildingIndex >= 0) {
       goToBuilding(buildingIndex);
     }
@@ -9195,18 +9195,22 @@ const BuildingDashboard = () => {
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 gap-2 overflow-x-auto pb-1">
             {BUILDINGS.map((building, index) => (
-              <button
-                key={building.id}
-                type="button"
-                className={`shrink-0 px-3 py-2 rounded border text-sm font-semibold sm:px-4 ${
-                  activeBuilding.id === building.id
-                    ? "bg-black text-white border-black"
-                    : "bg-white text-black border-gray-300"
-                }`}
-                onClick={() => goToBuilding(index)}
-              >
-                {building.name}
-              </button>
+              <React.Fragment key={building.id}>
+                {building.id === "museum" ? (
+                  <span className="mx-2 h-9 w-px shrink-0 self-center bg-gray-300" aria-hidden="true" />
+                ) : null}
+                <button
+                  type="button"
+                  className={`shrink-0 px-3 py-2 rounded border text-sm font-semibold sm:px-4 ${
+                    activeBuilding.id === building.id
+                      ? "bg-black text-white border-black"
+                      : "bg-white text-black border-gray-300"
+                  }`}
+                  onClick={() => goToBuilding(index)}
+                >
+                  {building.name}
+                </button>
+              </React.Fragment>
             ))}
           </div>
 
