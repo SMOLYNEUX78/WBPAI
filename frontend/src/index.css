@@ -43,7 +43,7 @@ code {
   object-fit: cover;
   object-position: center;
   transform: scale(1.08);
-  animation: wbp-video-drift 4.2s linear both;
+  animation: wbp-video-drift 6.2s linear both;
 }
 
 .wbp-splash-video-treatment {

@@ -15,11 +15,11 @@ const SplashScreen = () => {
   const [fadeOut, setFadeOut] = useState(false);
 
   useEffect(() => {
-    const assembleTimer = setTimeout(() => setStage(1), 520);
-    const resolveTimer = setTimeout(() => setStage(2), 1550);
-    const verifyTimer = setTimeout(() => setStage(3), 2750);
-    const exitTimer = setTimeout(() => setFadeOut(true), 3700);
-    const navigationTimer = setTimeout(() => navigate("/dashboard/new"), 4100);
+    const assembleTimer = setTimeout(() => setStage(1), 700);
+    const resolveTimer = setTimeout(() => setStage(2), 2200);
+    const verifyTimer = setTimeout(() => setStage(3), 4200);
+    const exitTimer = setTimeout(() => setFadeOut(true), 5700);
+    const navigationTimer = setTimeout(() => navigate("/dashboard/new"), 6100);
 
     return () => {
       clearTimeout(assembleTimer);
