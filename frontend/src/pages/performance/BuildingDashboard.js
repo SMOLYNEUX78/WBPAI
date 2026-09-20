@@ -7269,6 +7269,29 @@ const NewBuildingSetupPanel = () => {
   });
   const [energyConsent, setEnergyConsent] = useState(false);
   const [historicalDataFileName, setHistoricalDataFileName] = useState("");
+  const [healthSensors, setHealthSensors] = useState([]);
+  const [sensorEvidenceFileName, setSensorEvidenceFileName] = useState("");
+  const [sensorDraft, setSensorDraft] = useState({
+    manufacturer: "",
+    model: "",
+    serialNumber: "",
+    location: "",
+    evidenceGrade: "indicative",
+    verificationStatus: "unverified",
+    verificationDate: "",
+    placementNotes: "",
+    metrics: ["temperature", "humidity"],
+  });
+  const healthMetricOptions = [
+    ["temperature", "Temperature"],
+    ["humidity", "Humidity"],
+    ["pm25", "PM2.5"],
+    ["pm10", "PM10"],
+    ["voc", "VOC"],
+    ["no2", "NO2"],
+    ["co2", "CO2"],
+    ["hcho", "HCHO"],
+  ];
 
   const modelId = useMemo(() => extractMatterportModelId(modelInput), [modelInput]);
   const modelUrl = useMemo(() => normalizeMatterportUrl(modelInput), [modelInput]);
@@ -7294,7 +7317,7 @@ const NewBuildingSetupPanel = () => {
     { label: "Energy consent", complete: energyConsent },
     { label: "13-month energy history", complete: Boolean(historicalDataFileName) },
     { label: "Weather/GIA ready", complete: hasWeatherAndArea },
-    { label: "IAQ monitoring started", complete: false },
+    { label: "IAQ monitoring started", complete: healthSensors.length > 0 },
     { label: "Baseline locked", complete: false },
   ];
   const baselineCompleteCount = baselineReadinessSteps.filter(
@@ -7310,6 +7333,51 @@ const NewBuildingSetupPanel = () => {
       ...current,
       [field]: value,
     }));
+  };
+
+  const handleSensorDraftChange = (field, value) => {
+    setSensorDraft((current) => ({ ...current, [field]: value }));
+  };
+
+  const toggleSensorMetric = (metric) => {
+    setSensorDraft((current) => ({
+      ...current,
+      metrics: current.metrics.includes(metric)
+        ? current.metrics.filter((item) => item !== metric)
+        : [...current.metrics, metric],
+    }));
+  };
+
+  const addHealthSensor = () => {
+    if (
+      !sensorDraft.manufacturer.trim() ||
+      !sensorDraft.model.trim() ||
+      !sensorDraft.location.trim() ||
+      sensorDraft.metrics.length === 0
+    ) {
+      return;
+    }
+
+    setHealthSensors((current) => [
+      ...current,
+      {
+        ...sensorDraft,
+        id: `health-sensor-${Date.now()}`,
+        evidenceFileName: sensorEvidenceFileName,
+      },
+    ]);
+    setSensorDraft({
+      manufacturer: "",
+      model: "",
+      serialNumber: "",
+      location: "",
+      evidenceGrade: "indicative",
+      verificationStatus: "unverified",
+      verificationDate: "",
+      placementNotes: "",
+      metrics: ["temperature", "humidity"],
+    });
+    setSensorEvidenceFileName("");
   };
 
   return (
@@ -7605,28 +7673,232 @@ const NewBuildingSetupPanel = () => {
             <div>
               <h3 className="font-semibold mb-2">Health Data</h3>
               <p className="text-sm text-gray-600">
-                Scan for a preferred IAQ monitor to connect comfort and air quality
-                readings for health scoring, seasonal resilience and HTC overlap.
+                Register each IAQ instrument so its readings carry the device,
+                placement and assurance evidence needed for health scoring and audit.
               </p>
             </div>
 
             <div className="border rounded p-3 bg-gray-50 space-y-3">
               <div>
-                <h4 className="font-semibold text-sm">IAQ Monitor Scan</h4>
+                <h4 className="font-semibold text-sm">Instrument Register</h4>
                 <p className="text-xs text-gray-600">
-                  Future setup step for supported CO2, PM2.5, VOC, temperature and
-                  humidity monitors.
+                  Record only the metrics exposed by this device. Evidence grades are
+                  provisional until the audit pack is independently reviewed.
                 </p>
               </div>
+
+              <div className="grid gap-2 sm:grid-cols-2">
+                <label className="space-y-1 text-xs text-gray-600">
+                  Manufacturer
+                  <input
+                    type="text"
+                    className="border rounded p-2 w-full text-xs bg-white"
+                    value={sensorDraft.manufacturer}
+                    onChange={(event) =>
+                      handleSensorDraftChange("manufacturer", event.target.value)
+                    }
+                    placeholder="e.g. Dyson"
+                  />
+                </label>
+                <label className="space-y-1 text-xs text-gray-600">
+                  Model
+                  <input
+                    type="text"
+                    className="border rounded p-2 w-full text-xs bg-white"
+                    value={sensorDraft.model}
+                    onChange={(event) =>
+                      handleSensorDraftChange("model", event.target.value)
+                    }
+                    placeholder="Model name or number"
+                  />
+                </label>
+                <label className="space-y-1 text-xs text-gray-600">
+                  Serial / device ID
+                  <input
+                    type="text"
+                    className="border rounded p-2 w-full text-xs bg-white"
+                    value={sensorDraft.serialNumber}
+                    onChange={(event) =>
+                      handleSensorDraftChange("serialNumber", event.target.value)
+                    }
+                    placeholder="Optional device identifier"
+                  />
+                </label>
+                <label className="space-y-1 text-xs text-gray-600">
+                  Installed location
+                  <input
+                    type="text"
+                    className="border rounded p-2 w-full text-xs bg-white"
+                    value={sensorDraft.location}
+                    onChange={(event) =>
+                      handleSensorDraftChange("location", event.target.value)
+                    }
+                    placeholder="e.g. Downstairs living room"
+                  />
+                </label>
+                <label className="space-y-1 text-xs text-gray-600">
+                  Provisional evidence grade
+                  <select
+                    className="border rounded p-2 w-full text-xs bg-white"
+                    value={sensorDraft.evidenceGrade}
+                    onChange={(event) =>
+                      handleSensorDraftChange("evidenceGrade", event.target.value)
+                    }
+                  >
+                    <option value="indicative">Indicative</option>
+                    <option value="validated">Validated field device</option>
+                    <option value="reference">Reference grade</option>
+                  </select>
+                </label>
+                <label className="space-y-1 text-xs text-gray-600">
+                  Physical / calibration check
+                  <select
+                    className="border rounded p-2 w-full text-xs bg-white"
+                    value={sensorDraft.verificationStatus}
+                    onChange={(event) =>
+                      handleSensorDraftChange("verificationStatus", event.target.value)
+                    }
+                  >
+                    <option value="unverified">Not yet checked</option>
+                    <option value="manufacturer">Manufacturer specification recorded</option>
+                    <option value="co-location">Co-location comparison completed</option>
+                    <option value="site-inspection">Site inspection completed</option>
+                    <option value="traceable">Traceable calibration recorded</option>
+                  </select>
+                </label>
+                <label className="space-y-1 text-xs text-gray-600">
+                  Check / calibration date
+                  <input
+                    type="date"
+                    className="border rounded p-2 w-full text-xs bg-white"
+                    value={sensorDraft.verificationDate}
+                    onChange={(event) =>
+                      handleSensorDraftChange("verificationDate", event.target.value)
+                    }
+                  />
+                </label>
+                <label className="space-y-1 text-xs text-gray-600">
+                  Supporting evidence
+                  <input
+                    key={sensorEvidenceFileName || "empty-sensor-evidence"}
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png,.csv,application/pdf,image/*,text/csv"
+                    className="block w-full text-xs pt-1"
+                    onChange={(event) =>
+                      setSensorEvidenceFileName(event.target.files?.[0]?.name || "")
+                    }
+                  />
+                </label>
+              </div>
+
+              <fieldset className="space-y-2">
+                <legend className="text-xs font-semibold text-gray-700">
+                  Metrics supplied by this device
+                </legend>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {healthMetricOptions.map(([value, label]) => (
+                    <label
+                      key={value}
+                      className="flex items-center gap-2 text-xs border rounded bg-white p-2"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={sensorDraft.metrics.includes(value)}
+                        onChange={() => toggleSensorMetric(value)}
+                      />
+                      <span>{label}</span>
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+
+              <label className="space-y-1 text-xs text-gray-600 block">
+                Placement and installation notes
+                <textarea
+                  className="border rounded p-2 w-full min-h-[64px] text-xs bg-white"
+                  value={sensorDraft.placementNotes}
+                  onChange={(event) =>
+                    handleSensorDraftChange("placementNotes", event.target.value)
+                  }
+                  placeholder="Height, room position, airflow obstructions or installation notes"
+                />
+              </label>
+
               <button
                 type="button"
-                className="bg-blue-600 text-white px-4 py-2 rounded text-sm font-semibold"
+                className="bg-blue-600 disabled:bg-gray-300 disabled:text-gray-500 text-white px-4 py-2 rounded text-sm font-semibold"
+                disabled={
+                  !sensorDraft.manufacturer.trim() ||
+                  !sensorDraft.model.trim() ||
+                  !sensorDraft.location.trim() ||
+                  sensorDraft.metrics.length === 0
+                }
+                onClick={addHealthSensor}
               >
-                Scan Now
+                Add Instrument
               </button>
-              <div className="text-xs border rounded bg-white p-2 text-gray-600">
-                Status: waiting for supported IAQ monitor integration
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <h4 className="font-semibold text-sm">Registered Instruments</h4>
+                <span className="text-xs text-gray-500">
+                  {healthSensors.length} registered
+                </span>
               </div>
+              {healthSensors.length === 0 ? (
+                <div className="text-xs border rounded bg-gray-50 p-3 text-gray-600">
+                  No health-data instruments registered yet.
+                </div>
+              ) : (
+                healthSensors.map((sensor) => (
+                  <div key={sensor.id} className="border rounded p-3 text-xs space-y-2">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-semibold break-words">
+                          {sensor.manufacturer} {sensor.model}
+                        </p>
+                        <p className="text-gray-600 break-words">
+                          {sensor.location}
+                          {sensor.serialNumber ? ` | ${sensor.serialNumber}` : ""}
+                        </p>
+                      </div>
+                      <span className="shrink-0 border rounded px-2 py-1 uppercase text-[10px] text-gray-600">
+                        {sensor.evidenceGrade}
+                      </span>
+                    </div>
+                    <p className="text-gray-700">
+                      <strong>Metrics:</strong>{" "}
+                      {sensor.metrics
+                        .map(
+                          (metric) =>
+                            healthMetricOptions.find(([value]) => value === metric)?.[1] ||
+                            metric
+                        )
+                        .join(", ")}
+                    </p>
+                    <p className="text-gray-600">
+                      <strong>Assurance:</strong>{" "}
+                      {sensor.verificationStatus.replaceAll("-", " ")}
+                      {sensor.verificationDate ? ` on ${sensor.verificationDate}` : ""}
+                      {sensor.evidenceFileName
+                        ? ` | Evidence: ${sensor.evidenceFileName}`
+                        : ""}
+                    </p>
+                    <button
+                      type="button"
+                      className="text-red-700 underline"
+                      onClick={() =>
+                        setHealthSensors((current) =>
+                          current.filter((item) => item.id !== sensor.id)
+                        )
+                      }
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
@@ -7819,6 +8091,7 @@ const PORTFOLIO_EXCHANGE_SUMMARY = (() => {
       gridValue +
       evidenceValue,
   };
+
 })();
 
 const PORTFOLIO_SUPPLIERS = [
