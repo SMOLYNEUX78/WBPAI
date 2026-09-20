@@ -7685,6 +7685,41 @@ const PORTFOLIO_PROPERTIES = [
   { id: "WBP-008", estate: "Melton", archetype: "Flat", health: 83, energy: 81, risk: "Good", retrofit: "Verified", evidence: 96, qa: "Verified", supplier: "Suffolk Whole House", collector: "Live", projectedAnnualCredits: 0.92 },
 ];
 
+const PORTFOLIO_SELLER_RESERVE_PRICE = 85;
+const PORTFOLIO_EXCHANGE_PROPERTIES = PORTFOLIO_PROPERTIES.filter(
+  (property) =>
+    property.qa === "Verified" &&
+    Number.isFinite(property.projectedAnnualCredits)
+);
+const PORTFOLIO_EXCHANGE_SUMMARY = (() => {
+  const propertyCount = PORTFOLIO_EXCHANGE_PROPERTIES.length;
+  const carbonCredits = PORTFOLIO_EXCHANGE_PROPERTIES.reduce(
+    (sum, property) => sum + property.projectedAnnualCredits,
+    0
+  );
+  const carbonValue = carbonCredits * PORTFOLIO_SELLER_RESERVE_PRICE;
+  const monitoringValue = propertyCount * 144;
+  const healthValue = propertyCount * 120;
+  const gridValue = propertyCount * 180;
+  const evidenceValue = propertyCount * 300;
+
+  return {
+    propertyCount,
+    carbonCredits,
+    carbonValue,
+    monitoringValue,
+    healthValue,
+    gridValue,
+    evidenceValue,
+    totalValue:
+      carbonValue +
+      monitoringValue +
+      healthValue +
+      gridValue +
+      evidenceValue,
+  };
+})();
+
 const PORTFOLIO_SUPPLIERS = [
   { name: "Suffolk Whole House", projects: 3, verified: 2, outcome: 89, defects: 1 },
   { name: "Coastal Energy Works", projects: 2, verified: 0, outcome: 74, defects: 2 },
@@ -7710,7 +7745,6 @@ const readCachedBridgewoodValue = () => {
 };
 
 const PortfolioDashboardPanel = ({
-  bridgewoodTokens,
   onOpenBuilding,
   onOpenExchange,
 }) => {
@@ -7727,11 +7761,8 @@ const PortfolioDashboardPanel = ({
   const liveCount = PORTFOLIO_PROPERTIES.filter((property) => property.collector === "Live").length;
   const priorityCount = PORTFOLIO_PROPERTIES.filter((property) => !["Good", "Monitor"].includes(property.risk)).length;
   const verifiedCount = PORTFOLIO_PROPERTIES.filter((property) => property.retrofit === "Verified").length;
-  const portfolioTokens = bridgewoodTokens;
-  const indicativeCarbonPrice = FALLBACK_CARBON_PRICE_GBP_PER_TONNE;
-  const portfolioTokenValue = Number.isFinite(portfolioTokens)
-    ? portfolioTokens * indicativeCarbonPrice
-    : null;
+  const portfolioTokens = PORTFOLIO_EXCHANGE_SUMMARY.carbonCredits;
+  const portfolioTokenValue = PORTFOLIO_EXCHANGE_SUMMARY.totalValue;
   const average = (key) => Math.round(
     PORTFOLIO_PROPERTIES.reduce((sum, property) => sum + property[key], 0) /
       PORTFOLIO_PROPERTIES.length
@@ -7757,23 +7788,23 @@ const PortfolioDashboardPanel = ({
 
       <section className="grid grid-cols-2 gap-px border-b border-gray-200 bg-emerald-200/70 lg:grid-cols-[repeat(3,minmax(0,1fr))_auto]">
         <div className="min-w-0 bg-emerald-50 px-4 py-4 sm:px-5">
-          <p className="text-xs font-semibold uppercase text-emerald-800">Portfolio tokens</p>
+          <p className="text-xs font-semibold uppercase text-emerald-800">Carbon rights</p>
             <p className="mt-1 text-2xl font-bold text-emerald-950">
               {Number.isFinite(portfolioTokens) ? portfolioTokens.toFixed(4) : "--"} WBP-C
             </p>
-          <p className="text-xs text-emerald-800">Candidate credits accrued</p>
+          <p className="text-xs text-emerald-800">Across exchange-ready homes</p>
         </div>
         <div className="min-w-0 bg-emerald-50 px-4 py-4 sm:px-5">
-          <p className="text-xs font-semibold uppercase text-emerald-800">Indicative value</p>
+          <p className="text-xs font-semibold uppercase text-emerald-800">Portfolio value</p>
           <p className="mt-1 text-2xl font-bold text-emerald-950">
             {Number.isFinite(portfolioTokenValue) ? `£${portfolioTokenValue.toFixed(2)}` : "--"}
           </p>
-          <p className="text-xs text-emerald-800">At £{indicativeCarbonPrice}/tCO2e</p>
+          <p className="text-xs text-emerald-800">Carbon, data and evidence basket</p>
         </div>
         <div className="min-w-0 bg-emerald-50 px-4 py-4 sm:px-5">
           <p className="text-xs font-semibold uppercase text-emerald-800">Eligible properties</p>
-          <p className="mt-1 text-2xl font-bold text-emerald-950">1 / {PORTFOLIO_PROPERTIES.length}</p>
-          <p className="text-xs text-emerald-800">Evidence review required</p>
+          <p className="mt-1 text-2xl font-bold text-emerald-950">{PORTFOLIO_EXCHANGE_SUMMARY.propertyCount} / {PORTFOLIO_PROPERTIES.length}</p>
+          <p className="text-xs text-emerald-800">Audited and exchange ready</p>
         </div>
         <div className="flex min-w-0 items-center justify-end bg-emerald-50 px-4 py-4 sm:px-5">
           <button
@@ -7956,24 +7987,19 @@ const ExchangeDashboardPanel = ({
   const [selectedDataLots, setSelectedDataLots] = useState(["Monitoring", "Health", "Grid", "Evidence"]);
   const [salePrepared, setSalePrepared] = useState(false);
   const carbonPrice = FALLBACK_CARBON_PRICE_GBP_PER_TONNE;
-  const sellerReservePrice = 85;
+  const sellerReservePrice = PORTFOLIO_SELLER_RESERVE_PRICE;
   const bestBidPrice = 76;
   const bestAskPrice = 88;
   const bidAskSpread = bestAskPrice - bestBidPrice;
   const marketMidPrice = (bestBidPrice + bestAskPrice) / 2;
-  const projectedLots = PORTFOLIO_PROPERTIES.filter((property) =>
-    Number.isFinite(property.projectedAnnualCredits)
-  );
-  const projectedAnnualCredits = projectedLots.reduce(
-    (sum, property) => sum + property.projectedAnnualCredits,
-    0
-  );
-  const annualCarbonValue = projectedAnnualCredits * sellerReservePrice;
-  const annualMonitoringValue = projectedLots.length * 144;
-  const annualHealthDataValue = projectedLots.length * 120;
-  const annualGridDataValue = projectedLots.length * 180;
-  const annualEvidenceValue = projectedLots.length * 300;
-  const annualPortfolioValue = annualCarbonValue + annualMonitoringValue + annualHealthDataValue + annualGridDataValue + annualEvidenceValue;
+  const projectedLots = PORTFOLIO_EXCHANGE_PROPERTIES;
+  const projectedAnnualCredits = PORTFOLIO_EXCHANGE_SUMMARY.carbonCredits;
+  const annualCarbonValue = PORTFOLIO_EXCHANGE_SUMMARY.carbonValue;
+  const annualMonitoringValue = PORTFOLIO_EXCHANGE_SUMMARY.monitoringValue;
+  const annualHealthDataValue = PORTFOLIO_EXCHANGE_SUMMARY.healthValue;
+  const annualGridDataValue = PORTFOLIO_EXCHANGE_SUMMARY.gridValue;
+  const annualEvidenceValue = PORTFOLIO_EXCHANGE_SUMMARY.evidenceValue;
+  const annualPortfolioValue = PORTFOLIO_EXCHANGE_SUMMARY.totalValue;
   const carbonValueShare = annualPortfolioValue > 0 ? annualCarbonValue / annualPortfolioValue * 100 : 0;
   const monitoringValueShare = annualPortfolioValue > 0 ? annualMonitoringValue / annualPortfolioValue * 100 : 0;
   const healthDataValueShare = annualPortfolioValue > 0 ? annualHealthDataValue / annualPortfolioValue * 100 : 0;
@@ -8069,6 +8095,7 @@ const ExchangeDashboardPanel = ({
       <section className="border-b border-gray-200">
         <div className="grid grid-cols-[minmax(0,0.85fr)_96px_minmax(112px,1fr)] items-center gap-2 px-3 py-5 sm:grid-cols-[minmax(150px,0.9fr)_160px_minmax(180px,1fr)] sm:gap-5 sm:px-5 sm:py-7 lg:grid-cols-[minmax(220px,1fr)_176px_minmax(240px,1fr)] lg:gap-8">
           <div className="min-w-0">
+            <p className="mb-1 text-[9px] font-semibold uppercase text-gray-500 sm:text-xs">East Suffolk Social Housing</p>
             <h1 className="text-sm font-bold sm:text-lg lg:text-2xl">Portfolio Value</h1>
             <p className="mt-1 break-words text-2xl font-bold sm:text-3xl lg:text-4xl">£{annualPortfolioValue.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
             <p className="mt-1 text-[10px] text-gray-600 sm:text-xs">{projectedLots.length} Good / Verified homes · modelled</p>
@@ -8705,7 +8732,6 @@ const BuildingDashboard = () => {
                   <NewBuildingSetupPanel />
                 ) : building.portfolioOnly ? (
                   <PortfolioDashboardPanel
-                    bridgewoodTokens={bridgewoodTokens}
                     onOpenBuilding={openBuildingById}
                     onOpenExchange={() => openSectionById("exchange")}
                   />
