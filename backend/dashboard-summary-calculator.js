@@ -108,6 +108,25 @@ async function fetchEnergyRows(buildingId) {
   return data || [];
 }
 
+async function fetchCarbonDailyRows(buildingId) {
+  const { data, error } = await supabase
+    .from("CarbonSavingsDaily")
+    .select("saving_date, baseline_electricity_kwh, baseline_gas_kwh")
+    .eq("building_id", buildingId)
+    .eq("scenario", "enerphit-certified-v3")
+    .order("saving_date", { ascending: true })
+    .limit(500);
+
+  if (error) {
+    console.warn(
+      `[dashboard-summary] ${buildingId}: compact daily energy history unavailable; using recent raw readings. (${error.message})`
+    );
+    return [];
+  }
+
+  return data || [];
+}
+
 async function fetchSensorRows(buildingId) {
   const { data, error } = await supabase
     .from("Readings")
@@ -192,7 +211,7 @@ async function fetchRainHumidityRows(buildingId) {
   };
 }
 
-function buildEnergySummary(energyRows) {
+function buildEnergySummary(energyRows, carbonDailyRows = []) {
   const dailyRows = energyRows.filter(
     (row) => row.reading_type === "daily_total" && Number.isFinite(Number(row.usage_kwh))
   );
@@ -235,14 +254,14 @@ function buildEnergySummary(energyRows) {
     byDay[day][fuelType] = usage;
   }
 
-  const days = Object.keys(byDay).sort();
-  const electricityValues = days
+  const rawDays = Object.keys(byDay).sort();
+  const rawElectricityValues = rawDays
     .map((day) => byDay[day].electricity)
     .filter((value) => Number.isFinite(value));
-  const gasValues = days
+  const rawGasValues = rawDays
     .map((day) => byDay[day].gas)
     .filter((value) => Number.isFinite(value));
-  const dayTotals = days
+  const rawDayTotals = rawDays
     .map((day) =>
       ["electricity", "gas"].reduce(
         (sum, fuelType) =>
@@ -255,6 +274,35 @@ function buildEnergySummary(energyRows) {
     (row) => row.reading_type === "instant_power" && Number.isFinite(Number(row.power_kw))
   );
   const today = new Date().toISOString().slice(0, 10);
+  const completedDailyHistory = carbonDailyRows
+    .filter((row) => row.saving_date && row.saving_date < today)
+    .map((row) => ({
+      day: row.saving_date,
+      electricity: numericOrNull(row.baseline_electricity_kwh),
+      gas: numericOrNull(row.baseline_gas_kwh),
+    }))
+    .filter(
+      (row) => Number.isFinite(row.electricity) || Number.isFinite(row.gas)
+    );
+  const hasCompactHistory = completedDailyHistory.length > 0;
+  const historyDays = hasCompactHistory
+    ? completedDailyHistory.map((row) => row.day)
+    : rawDays.filter((day) => day < today);
+  const electricityValues = hasCompactHistory
+    ? completedDailyHistory
+        .map((row) => row.electricity)
+        .filter((value) => Number.isFinite(value))
+    : rawElectricityValues;
+  const gasValues = hasCompactHistory
+    ? completedDailyHistory
+        .map((row) => row.gas)
+        .filter((value) => Number.isFinite(value))
+    : rawGasValues;
+  const dayTotals = hasCompactHistory
+    ? completedDailyHistory
+        .map((row) => (row.electricity || 0) + (row.gas || 0))
+        .filter((value) => value > 0)
+    : rawDayTotals;
 
   return {
     electricityDailyAverage: average(electricityValues),
@@ -264,9 +312,12 @@ function buildEnergySummary(energyRows) {
     totalDailyAverage: average(dayTotals),
     electricityPowerKw: latestPower ? Number(latestPower.power_kw) : 0,
     hasGasData: gasValues.length > 0 || energyRows.some((row) => row.fuel_type === "gas"),
-    baselineMeteredDays: days.length,
-    baselineStartDate: days[0] || null,
-    baselineEndDate: days[days.length - 1] || null,
+    baselineMeteredDays: historyDays.length,
+    baselineStartDate: historyDays[0] || null,
+    baselineEndDate: historyDays[historyDays.length - 1] || null,
+    historicalEnergySource: hasCompactHistory
+      ? "CarbonSavingsDaily completed days"
+      : "recent EnergyReadings fallback",
     summaryLookbackDays: ENERGY_LOOKBACK_DAYS,
   };
 }
@@ -476,13 +527,14 @@ function buildRainHumiditySummary({ sensorRows = [], rainRows, humidityRows, bui
 }
 
 async function upsertSummary(buildingId) {
-  const [energyRows, sensorRows, rainHumidityRows] = await Promise.all([
+  const [energyRows, carbonDailyRows, sensorRows, rainHumidityRows] = await Promise.all([
     fetchEnergyRows(buildingId),
+    fetchCarbonDailyRows(buildingId),
     fetchSensorRows(buildingId),
     fetchRainHumidityRows(buildingId),
   ]);
   const calculatedAt = new Date().toISOString();
-  const energySummary = buildEnergySummary(energyRows);
+  const energySummary = buildEnergySummary(energyRows, carbonDailyRows);
   const iaqSummary = buildSensorSummary(sensorRows);
   const weatherSummary = buildWeatherSummary(sensorRows);
   const rainHumiditySummary = buildRainHumiditySummary({
@@ -502,6 +554,7 @@ async function upsertSummary(buildingId) {
     rain_humidity_summary: rainHumiditySummary,
     raw_payload: {
       energy_rows: energyRows.length,
+      compact_energy_days: carbonDailyRows.length,
       sensor_rows: sensorRows.length,
       rain_rows: rainHumidityRows.rainRows.length,
       rain_humidity_rows: rainHumidityRows.humidityRows.length,

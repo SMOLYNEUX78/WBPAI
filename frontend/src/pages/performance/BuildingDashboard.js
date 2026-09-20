@@ -1259,6 +1259,24 @@ const BuildingDashboardPanel = ({ building }) => {
     return data || [];
   };
 
+  const fetchCompactDailyEnergyHistory = async () => {
+    const { data, error } = await supabase
+      .from("CarbonSavingsDaily")
+      .select("saving_date, baseline_electricity_kwh, baseline_gas_kwh")
+      .eq("building_id", dataSourceBuildingId)
+      .eq("scenario", CARBON_SAVINGS_SCENARIO)
+      .order("saving_date", { ascending: true })
+      .limit(500);
+
+    if (error) {
+      console.warn("Compact daily energy history unavailable:", error.message);
+      return [];
+    }
+
+    const today = new Date().toISOString().slice(0, 10);
+    return (data || []).filter((row) => row.saving_date < today);
+  };
+
   const applyEnergySummary = (nextEnergySummary, nextHistoricalPerformance) => {
     setEnergySummary(nextEnergySummary);
     setHistoricalPerformance(nextHistoricalPerformance);
@@ -1530,10 +1548,16 @@ const BuildingDashboardPanel = ({ building }) => {
 
   const fetchLongTermAverage = async () => {
     try {
-      const [completedDailyData, todayDailyData, gasIntervalData] = await Promise.all([
+      const [
+        completedDailyData,
+        todayDailyData,
+        gasIntervalData,
+        compactDailyHistory,
+      ] = await Promise.all([
         fetchEnergyDailyTotals({ beforeToday: true }),
         fetchEnergyDailyTotals({ beforeToday: false }),
         fetchGasIntervalRows(),
+        fetchCompactDailyEnergyHistory(),
       ]);
 
       const { data: latestElectricPowerRows, error: powerError } =
@@ -1587,7 +1611,24 @@ const BuildingDashboardPanel = ({ building }) => {
 
           return totals;
         }, {});
-        const completedBaselineDays = Object.keys(completedDailyTotalsByDay).sort();
+        const compactHistoryByDay = (compactDailyHistory || []).reduce(
+          (days, row) => {
+            const electricity = Number(row.baseline_electricity_kwh);
+            const gas = Number(row.baseline_gas_kwh);
+            days[row.saving_date] = {
+              electricity: Number.isFinite(electricity) ? electricity : null,
+              gas: Number.isFinite(gas) ? gas : null,
+            };
+            return days;
+          },
+          {}
+        );
+        const hasCompactHistory = Object.keys(compactHistoryByDay).length > 0;
+        const completedBaselineDays = (
+          hasCompactHistory
+            ? Object.keys(compactHistoryByDay)
+            : Object.keys(completedDailyTotalsByDay)
+        ).sort();
         const baselineMeteredDays = completedBaselineDays.length;
         const baselineStartDate = completedBaselineDays[0] || null;
         const baselineEndDate =
@@ -1603,10 +1644,17 @@ const BuildingDashboardPanel = ({ building }) => {
           return totals;
         }, {});
 
-        const dailyValues = (fuelType) =>
-          Object.entries(completedDailyTotalsByFuel)
+        const dailyValues = (fuelType) => {
+          if (hasCompactHistory) {
+            return Object.values(compactHistoryByDay)
+              .map((day) => day[fuelType])
+              .filter((value) => Number.isFinite(value));
+          }
+
+          return Object.entries(completedDailyTotalsByFuel)
             .filter(([key]) => key.startsWith(`${fuelType}:`))
             .map(([, value]) => value);
+        };
 
         const averageDailyUsage = (fuelType) => {
           const completedDays = dailyValues(fuelType);
@@ -1766,6 +1814,9 @@ const BuildingDashboardPanel = ({ building }) => {
           baselineMeteredDays,
           baselineStartDate,
           baselineEndDate,
+          historicalEnergySource: hasCompactHistory
+            ? "CarbonSavingsDaily completed days"
+            : "EnergyReadings fallback",
         }, totalDailyAverage);
         return;
       }
