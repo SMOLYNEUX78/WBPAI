@@ -7745,6 +7745,7 @@ const readCachedBridgewoodValue = () => {
 };
 
 const PortfolioDashboardPanel = ({
+  bridgewoodTokens,
   onOpenBuilding,
   onOpenExchange,
 }) => {
@@ -7763,13 +7764,24 @@ const PortfolioDashboardPanel = ({
   const verifiedCount = PORTFOLIO_PROPERTIES.filter((property) => property.retrofit === "Verified").length;
   const portfolioTokens = PORTFOLIO_EXCHANGE_SUMMARY.carbonCredits;
   const portfolioTokenValue = PORTFOLIO_EXCHANGE_SUMMARY.totalValue;
+  const perPropertyDataValue =
+    PORTFOLIO_EXCHANGE_SUMMARY.propertyCount > 0
+      ? (PORTFOLIO_EXCHANGE_SUMMARY.monitoringValue +
+          PORTFOLIO_EXCHANGE_SUMMARY.healthValue +
+          PORTFOLIO_EXCHANGE_SUMMARY.gridValue +
+          PORTFOLIO_EXCHANGE_SUMMARY.evidenceValue) /
+        PORTFOLIO_EXCHANGE_SUMMARY.propertyCount
+      : 0;
+  const incomingPortfolioValue = Number.isFinite(bridgewoodTokens)
+    ? bridgewoodTokens * PORTFOLIO_SELLER_RESERVE_PRICE + perPropertyDataValue
+    : null;
   const average = (key) => Math.round(
     PORTFOLIO_PROPERTIES.reduce((sum, property) => sum + property[key], 0) /
       PORTFOLIO_PROPERTIES.length
   );
 
   const statusClass = (value) => {
-    if (["Good", "Verified", "Live"].includes(value)) return "bg-emerald-50 text-emerald-800 border-emerald-200";
+    if (["Good", "Verified", "Live", "Ready for sale"].includes(value)) return "bg-emerald-50 text-emerald-800 border-emerald-200";
     if (["Damp", "Cold", "IAQ", "Heat loss", "Overheat", "Attention", "Action needed"].includes(value)) return "bg-red-50 text-red-800 border-red-200";
     return "bg-amber-50 text-amber-800 border-amber-200";
   };
@@ -7788,18 +7800,16 @@ const PortfolioDashboardPanel = ({
 
       <section className="grid grid-cols-2 gap-px border-b border-gray-200 bg-emerald-200/70 lg:grid-cols-[repeat(3,minmax(0,1fr))_auto]">
         <div className="min-w-0 bg-emerald-50 px-4 py-4 sm:px-5">
-          <p className="text-xs font-semibold uppercase text-emerald-800">Carbon rights</p>
-            <p className="mt-1 text-2xl font-bold text-emerald-950">
-              {Number.isFinite(portfolioTokens) ? portfolioTokens.toFixed(4) : "--"} WBP-C
-            </p>
-          <p className="text-xs text-emerald-800">Across exchange-ready homes</p>
+          <p className="text-xs font-semibold uppercase text-emerald-800">Ready for sale</p>
+          <p className="mt-1 text-2xl font-bold text-emerald-950">£{portfolioTokenValue.toFixed(2)}</p>
+          <p className="text-xs text-emerald-800">{portfolioTokens.toFixed(4)} WBP-C plus licensed data</p>
         </div>
         <div className="min-w-0 bg-emerald-50 px-4 py-4 sm:px-5">
-          <p className="text-xs font-semibold uppercase text-emerald-800">Portfolio value</p>
+          <p className="text-xs font-semibold uppercase text-emerald-800">Incoming value</p>
           <p className="mt-1 text-2xl font-bold text-emerald-950">
-            {Number.isFinite(portfolioTokenValue) ? `£${portfolioTokenValue.toFixed(2)}` : "--"}
+            {Number.isFinite(incomingPortfolioValue) ? `£${incomingPortfolioValue.toFixed(2)}` : "--"}
           </p>
-          <p className="text-xs text-emerald-800">Carbon, data and evidence basket</p>
+          <p className="text-xs text-emerald-800">14 Bridgewood Road · processing</p>
         </div>
         <div className="min-w-0 bg-emerald-50 px-4 py-4 sm:px-5">
           <p className="text-xs font-semibold uppercase text-emerald-800">Eligible properties</p>
@@ -7857,16 +7867,32 @@ const PortfolioDashboardPanel = ({
             ))}
           </div>
           <div className="w-full max-w-full overflow-x-auto overscroll-x-contain border border-gray-200" style={{ WebkitOverflowScrolling: "touch" }}>
-            <table className="w-full min-w-[1080px] whitespace-nowrap border-collapse text-left text-sm">
+            <table className="w-full min-w-[1260px] whitespace-nowrap border-collapse text-left text-sm">
               <thead className="bg-gray-100 text-xs uppercase text-gray-600">
                 <tr>
-                  {['Property', 'Estate', 'Archetype', 'Health', 'Energy', 'Risk', 'Retrofit', 'QA status', 'Delivery partner', 'Evidence'].map((heading) => (
+                  {['Property', 'Estate', 'Archetype', 'Health', 'Energy', 'Risk', 'Retrofit', 'Value status', 'Indicative value', 'QA status', 'Delivery partner', 'Evidence'].map((heading) => (
                     <th key={heading} className="border-b border-gray-200 px-3 py-2 font-semibold">{heading}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {filteredProperties.map((property) => (
+                {filteredProperties.map((property) => {
+                  const isReadyForSale = PORTFOLIO_EXCHANGE_PROPERTIES.some(
+                    (eligibleProperty) => eligibleProperty.id === property.id
+                  );
+                  const isIncoming = property.buildingId === "home";
+                  const propertyValue = isReadyForSale
+                    ? property.projectedAnnualCredits * PORTFOLIO_SELLER_RESERVE_PRICE + perPropertyDataValue
+                    : isIncoming
+                    ? incomingPortfolioValue
+                    : null;
+                  const valueStatus = isReadyForSale
+                    ? "Ready for sale"
+                    : isIncoming
+                    ? "Processing"
+                    : "Not valued";
+
+                  return (
                   <tr
                     key={property.id}
                     className={`border-b border-gray-100 last:border-b-0 ${property.buildingId ? "cursor-pointer hover:bg-emerald-50" : "hover:bg-gray-50"}`}
@@ -7892,11 +7918,14 @@ const PortfolioDashboardPanel = ({
                     <td className="px-3 py-3">{property.energy}/100</td>
                     <td className="px-3 py-3"><span className={`rounded border px-2 py-1 text-xs font-semibold ${statusClass(property.risk)}`}>{property.risk}</span></td>
                     <td className="px-3 py-3">{property.retrofit}</td>
+                    <td className="px-3 py-3"><span className={`rounded border px-2 py-1 text-xs font-semibold ${statusClass(valueStatus)}`}>{valueStatus}</span></td>
+                    <td className="px-3 py-3 font-semibold">{Number.isFinite(propertyValue) ? `£${propertyValue.toFixed(2)}` : "--"}</td>
                     <td className="px-3 py-3"><span className={`rounded border px-2 py-1 text-xs font-semibold ${statusClass(property.qa)}`}>{property.qa}</span></td>
                     <td className="px-3 py-3">{property.supplier}</td>
                     <td className="px-3 py-3">{property.evidence}%</td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
             {filteredProperties.length === 0 ? <p className="p-6 text-center text-sm text-gray-500">No matching properties</p> : null}
@@ -8732,6 +8761,7 @@ const BuildingDashboard = () => {
                   <NewBuildingSetupPanel />
                 ) : building.portfolioOnly ? (
                   <PortfolioDashboardPanel
+                    bridgewoodTokens={bridgewoodTokens}
                     onOpenBuilding={openBuildingById}
                     onOpenExchange={() => openSectionById("exchange")}
                   />
