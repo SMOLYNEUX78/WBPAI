@@ -8223,6 +8223,20 @@ const ExchangeDashboardPanel = ({
   const tradeCurrentPrice = tradeSeries[tradeSeries.length - 1][1];
   const tradeOpeningPrice = tradeSeries[0][1];
   const tradePriceChange = (tradeCurrentPrice - tradeOpeningPrice) / tradeOpeningPrice * 100;
+  const orderBookAsks = [
+    { price: 105, volume: 120 },
+    { price: 92, volume: 60 },
+    { price: 88, volume: 25 },
+  ];
+  const orderBookBids = [
+    { price: 76, volume: 40 },
+    { price: 72, volume: 100 },
+    { price: 68, volume: 250 },
+  ];
+  const orderBookMaxVolume = Math.max(
+    ...orderBookAsks.map((order) => order.volume),
+    ...orderBookBids.map((order) => order.volume)
+  );
 
   return (
     <main className="min-h-screen bg-white p-3 sm:p-5">
@@ -8566,9 +8580,16 @@ const ExchangeDashboardPanel = ({
                     <fieldset>
                       <legend className="text-sm font-bold">Carbon</legend>
                       <p className="mt-1 text-xs text-gray-600">Choose what happens to the exclusive carbon rights in this vintage.</p>
-                      <div className="mt-3 grid grid-cols-3 gap-2">
-                        {[["market", "Sell now"], ["ask", "Set ask"], ["hold", "Hold"]].map(([value, label]) => (
-                          <button key={value} type="button" onClick={() => setCarbonSaleAction(value)} className={`border px-2 py-2 text-xs font-semibold sm:text-sm ${carbonSaleAction === value ? "border-black bg-black text-white" : "border-gray-300 bg-white text-gray-700"}`}>{label}</button>
+                      <div className="mt-3 space-y-2">
+                        {[
+                          ["market", "Sell now", "Accept the best eligible bid currently available in the approved carbon market."],
+                          ["ask", "Set ask", "Choose your minimum price and wait for an eligible buyer to match it."],
+                          ["hold", "Hold", "Keep this vintage unlisted while continuing to monitor the market."],
+                        ].map(([value, label, detail]) => (
+                          <label key={value} className={`flex cursor-pointer items-start gap-3 border p-3 ${carbonSaleAction === value ? "border-emerald-700 bg-emerald-50" : "border-gray-200"}`}>
+                            <input type="radio" name="carbon-sale-action" value={value} checked={carbonSaleAction === value} onChange={() => setCarbonSaleAction(value)} className="mt-1 accent-emerald-700" />
+                            <span><strong className="block text-sm">{label}</strong><span className="block text-xs text-gray-600">{detail}</span></span>
+                          </label>
                         ))}
                       </div>
                       {carbonSaleAction === "ask" ? (
@@ -8622,11 +8643,21 @@ const ExchangeDashboardPanel = ({
                           </svg>
                         </div>
                         <aside className="min-w-0 text-[9px] sm:text-[10px]">
-                          <div className="grid grid-cols-2 bg-red-50 px-2 py-1.5 font-semibold text-red-900"><span>Asks</span><span className="text-right">WBP-C</span></div>
-                          {[{ price: 105, volume: 120 }, { price: 92, volume: 60 }, { price: 88, volume: 25 }].map((order) => <div key={`manage-ask-${order.price}`} className="grid grid-cols-2 border-t border-gray-100 px-2 py-1.5"><strong>£{order.price}/t</strong><span className="text-right">{order.volume}</span></div>)}
-                          <div className="border-y border-gray-300 bg-gray-900 px-2 py-2 text-center text-white"><p className="text-[8px] uppercase text-gray-300">Midpoint</p><strong>£{marketMidPrice.toFixed(2)}/t</strong></div>
-                          <div className="grid grid-cols-2 bg-emerald-50 px-2 py-1.5 font-semibold text-emerald-900"><span>Bids</span><span className="text-right">Buy</span></div>
-                          {[{ price: 76, volume: 40 }, { price: 72, volume: 100 }, { price: 68, volume: 250 }].map((order) => <div key={`manage-bid-${order.price}`} className="grid grid-cols-2 border-t border-gray-100 px-2 py-1.5"><strong>£{order.price}/t</strong><span className="text-right">{order.volume}</span></div>)}
+                          <div className="grid grid-cols-2 bg-red-50 px-2 py-1.5 font-semibold text-red-900"><span>Asks</span><span className="text-right">Volume</span></div>
+                          {orderBookAsks.map((order) => (
+                            <div key={`manage-ask-${order.price}`} className="relative overflow-hidden border-t border-red-100">
+                              <div className="absolute inset-y-0 right-0 bg-red-100" style={{ width: `${order.volume / orderBookMaxVolume * 100}%` }} />
+                              <div className="relative grid grid-cols-2 px-2 py-1.5"><strong className="text-red-800">£{order.price}/t</strong><span className="text-right font-semibold">{order.volume}</span></div>
+                            </div>
+                          ))}
+                          <div className="border-y border-gray-400 bg-white px-2 py-2 text-center text-black"><p className="text-[8px] font-semibold uppercase text-gray-500">Market midpoint</p><strong>£{marketMidPrice.toFixed(2)}/t</strong></div>
+                          <div className="grid grid-cols-2 bg-emerald-50 px-2 py-1.5 font-semibold text-emerald-900"><span>Bids</span><span className="text-right">Volume</span></div>
+                          {orderBookBids.map((order) => (
+                            <div key={`manage-bid-${order.price}`} className="relative overflow-hidden border-t border-emerald-100">
+                              <div className="absolute inset-y-0 right-0 bg-emerald-100" style={{ width: `${order.volume / orderBookMaxVolume * 100}%` }} />
+                              <div className="relative grid grid-cols-2 px-2 py-1.5"><strong className="text-emerald-800">£{order.price}/t</strong><span className="text-right font-semibold">{order.volume}</span></div>
+                            </div>
+                          ))}
                         </aside>
                       </div>
                       <p className="border-t border-gray-200 px-3 py-2 text-[9px] text-gray-500">Simulated market view. No executable or issued units.</p>
