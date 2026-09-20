@@ -8067,14 +8067,14 @@ const ExchangeDashboardPanel = ({
   return (
     <main className="min-h-screen bg-white p-3 sm:p-5">
       <section className="border-b border-gray-200">
-        <div className="grid grid-cols-[minmax(0,1fr)_88px_minmax(112px,0.9fr)] items-center gap-2 px-3 py-5 sm:grid-cols-[minmax(0,1fr)_150px_minmax(180px,0.8fr)] sm:gap-6 sm:px-5 sm:py-7">
+        <div className="grid grid-cols-[minmax(0,0.85fr)_96px_minmax(112px,1fr)] items-center gap-2 px-3 py-5 sm:grid-cols-[minmax(150px,0.9fr)_160px_minmax(180px,1fr)] sm:gap-5 sm:px-5 sm:py-7 lg:grid-cols-[minmax(220px,1fr)_176px_minmax(240px,1fr)] lg:gap-8">
           <div className="min-w-0">
-            <h1 className="text-base font-bold sm:text-xl">WBP portfolio accrued value</h1>
-            <p className="mt-1 text-3xl font-bold">£{annualPortfolioValue.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+            <h1 className="text-sm font-bold sm:text-lg lg:text-2xl">Portfolio Value</h1>
+            <p className="mt-1 break-words text-2xl font-bold sm:text-3xl lg:text-4xl">£{annualPortfolioValue.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
             <p className="mt-1 text-[10px] text-gray-600 sm:text-xs">{projectedLots.length} Good / Verified homes · modelled</p>
           </div>
           <div
-            className="relative h-[88px] w-[88px] rounded-full sm:h-[150px] sm:w-[150px]"
+            className="relative h-24 w-24 rounded-full sm:h-40 sm:w-40 lg:h-44 lg:w-44"
             style={{ background: `conic-gradient(#047857 0 ${carbonValueShare}%, #2563eb ${carbonValueShare}% ${monitoringShareEnd}%, #be123c ${monitoringShareEnd}% ${healthShareEnd}%, #0891b2 ${healthShareEnd}% ${gridShareEnd}%, #d97706 ${gridShareEnd}% 100%)` }}
             role="img"
             aria-label={`Annual assumed value: carbon £${annualCarbonValue.toFixed(2)}, monitoring data £${annualMonitoringValue.toFixed(2)}, health data £${annualHealthDataValue.toFixed(2)}, grid data £${annualGridDataValue.toFixed(2)}, evidence £${annualEvidenceValue.toFixed(2)}`}
@@ -8099,9 +8099,9 @@ const ExchangeDashboardPanel = ({
             ))}
           </div>
         </div>
-        <div className="grid gap-2 border-t border-gray-200 px-3 py-3 sm:grid-cols-[minmax(220px,1fr)_auto] sm:px-5">
-          <button type="button" onClick={() => openSalePanel("simple", "market")} className="border border-emerald-700 bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800">Sell available value</button>
-          <button type="button" onClick={() => openSalePanel("advanced")} className="border border-gray-400 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 hover:bg-gray-50">Manage sale</button>
+        <div className="grid grid-cols-2 gap-2 border-t border-gray-200 px-3 py-3 sm:px-5">
+          <button type="button" aria-pressed={salePanelOpen && saleMode === "simple"} onClick={() => openSalePanel("simple", "market")} className={`min-h-11 border px-3 py-2.5 text-sm font-semibold ${salePanelOpen && saleMode === "simple" ? "border-emerald-700 bg-emerald-700 text-white" : "border-gray-400 bg-white text-gray-800 hover:bg-gray-50"}`}>Sell available value</button>
+          <button type="button" aria-pressed={salePanelOpen && saleMode === "advanced"} onClick={() => openSalePanel("advanced")} className={`min-h-11 border px-3 py-2.5 text-sm font-semibold ${salePanelOpen && saleMode === "advanced" ? "border-emerald-700 bg-emerald-700 text-white" : "border-gray-400 bg-white text-gray-800 hover:bg-gray-50"}`}>Manage sale</button>
           <p className="text-[10px] text-gray-500 sm:col-span-full">One basket offer can match separate buyers to compatible rights. Carbon is transferred and retired once; data and evidence are supplied through defined licences or services.</p>
         </div>
       </section>
