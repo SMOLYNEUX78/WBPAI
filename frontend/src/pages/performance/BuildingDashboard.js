@@ -8095,21 +8095,21 @@ const ExchangeDashboardPanel = ({
     ? bridgewoodTokens * carbonPrice
     : null;
   const basketLots = [
-    { name: "Carbon", target: annualCarbonValue, coverage: 1, status: "Settled", colour: "#047857" },
-    { name: "Monitoring", target: annualMonitoringValue, coverage: 0.72, status: "Bidding", colour: "#2563eb" },
-    { name: "Health", target: annualHealthDataValue, coverage: 0.41, status: "Bidding", colour: "#be123c" },
-    { name: "Grid", target: annualGridDataValue, coverage: 1, status: "Reserve met", colour: "#0891b2" },
-    { name: "Evidence", target: annualEvidenceValue, coverage: 0.22, status: "Open", colour: "#d97706" },
+    { name: "Carbon", target: annualCarbonValue, coverage: 1, status: "1 of 1 transfer settled", rights: "Finite right", colour: "#047857" },
+    { name: "Monitoring", target: annualMonitoringValue, coverage: 0.72, status: "3 buyers matched · still available", rights: "Repeatable licence", colour: "#2563eb" },
+    { name: "Health", target: annualHealthDataValue, coverage: 0.41, status: "2 buyers matched · still available", rights: "Repeatable licence", colour: "#be123c" },
+    { name: "Grid", target: annualGridDataValue, coverage: 1, status: "1 buyer matched · renewal open", rights: "Repeatable licence", colour: "#0891b2" },
+    { name: "Evidence", target: annualEvidenceValue, coverage: 0.22, status: "1 service engagement · open", rights: "Repeatable service", colour: "#d97706" },
   ];
   const basketSecuredValue = basketLots.reduce(
     (sum, lot) => sum + lot.target * lot.coverage,
     0
   );
   const dataRights = [
-    { name: "Monitoring", value: annualMonitoringValue, detail: "Building performance and retrofit trends" },
-    { name: "Health", value: annualHealthDataValue, detail: "Aggregated IAQ and outcomes analysis" },
-    { name: "Grid", value: annualGridDataValue, detail: "Demand, peak and heat-pump readiness" },
-    { name: "Evidence", value: annualEvidenceValue, detail: "Verified provenance and performance records" },
+    { name: "Monitoring", value: annualMonitoringValue, detail: "Building performance and retrofit trends", licence: "Non-exclusive · multiple approved buyers" },
+    { name: "Health", value: annualHealthDataValue, detail: "Aggregated IAQ and outcomes analysis", licence: "Purpose-bound · NHS and research buyers" },
+    { name: "Grid", value: annualGridDataValue, detail: "Demand, peak and heat-pump readiness", licence: "Non-exclusive · network planning access" },
+    { name: "Evidence", value: annualEvidenceValue, detail: "Verified provenance and performance records", licence: "Repeatable verifier and funder service" },
   ];
   const selectedCarbonPrice = carbonSaleAction === "ask" ? Number(carbonAskPrice) || 0 : bestBidPrice;
   const selectedCarbonValue = carbonSaleAction === "hold"
@@ -8195,10 +8195,10 @@ const ExchangeDashboardPanel = ({
           <div className="min-w-0 space-y-2 border-l border-gray-200 pl-2 sm:pl-4">
             {[
               ["Carbon", annualCarbonValue, "bg-emerald-700", Number.isFinite(bridgewoodValue) ? `Live £${bridgewoodValue.toFixed(2)} · ref £${carbonPrice}/t` : `Ref £${carbonPrice}/t`],
-              ["Monitoring data", annualMonitoringValue, "bg-blue-600", "Annual licence"],
-              ["Health data", annualHealthDataValue, "bg-rose-700", "Outcomes licence"],
-              ["Grid data", annualGridDataValue, "bg-cyan-600", "Planning licence"],
-              ["Evidence", annualEvidenceValue, "bg-amber-600", "Verifier/funder pack"],
+              ["Monitoring data", annualMonitoringValue, "bg-blue-600", "Repeatable annual licences"],
+              ["Health data", annualHealthDataValue, "bg-rose-700", "Repeatable outcomes licences"],
+              ["Grid data", annualGridDataValue, "bg-cyan-600", "Repeatable planning licences"],
+              ["Evidence", annualEvidenceValue, "bg-amber-600", "Repeatable verifier/funder service"],
             ].map(([label, value, colour, detail]) => (
               <div key={label} className="min-w-0 text-[8px] leading-tight sm:text-[11px]">
                 <div className="flex items-start gap-1 sm:gap-1.5">
@@ -8213,17 +8213,17 @@ const ExchangeDashboardPanel = ({
         <div className="grid grid-cols-2 gap-2 border-t border-gray-200 px-3 py-3 sm:px-5">
           <button type="button" aria-pressed={salePanelOpen && saleMode === "simple"} onClick={() => openSalePanel("simple", "market")} className={`min-h-11 border px-3 py-2.5 text-sm font-semibold ${salePanelOpen && saleMode === "simple" ? "border-emerald-700 bg-emerald-700 text-white" : "border-gray-400 bg-white text-gray-800 hover:bg-gray-50"}`}>Sell available value</button>
           <button type="button" aria-pressed={salePanelOpen && saleMode === "advanced"} onClick={() => openSalePanel("advanced")} className={`min-h-11 border px-3 py-2.5 text-sm font-semibold ${salePanelOpen && saleMode === "advanced" ? "border-emerald-700 bg-emerald-700 text-white" : "border-gray-400 bg-white text-gray-800 hover:bg-gray-50"}`}>Manage sale</button>
-          <p className="text-[10px] text-gray-500 sm:col-span-full">One basket offer can match separate buyers to compatible rights. Carbon is transferred and retired once; data and evidence are supplied through defined licences or services.</p>
+          <p className="text-[10px] text-gray-500 sm:col-span-full">One basket offer can match separate buyers to compatible rights. Carbon transfers once; monitoring, health, grid and evidence access can be licensed repeatedly to approved buyers without selling the source data.</p>
         </div>
       </section>
 
       <section className="border-b border-gray-200 px-3 py-5 sm:px-5">
         <div className="mb-4 flex items-end justify-between gap-3">
           <div>
-            <p className="text-[10px] font-semibold uppercase text-gray-500 sm:text-xs">Divisible basket offer</p>
+            <p className="text-[10px] font-semibold uppercase text-gray-500 sm:text-xs">Divisible rights basket</p>
             <h2 className="mt-1 text-lg font-bold">£{basketSecuredValue.toFixed(2)} secured <span className="font-normal text-gray-500">/ £{annualPortfolioValue.toFixed(2)} target</span></h2>
           </div>
-          <p className="max-w-sm text-right text-[10px] text-gray-500 sm:text-xs">One parent contract. Each right settles independently.</p>
+          <p className="max-w-sm text-right text-[10px] text-gray-500 sm:text-xs">One offer. Carbon settles once; each data buyer receives a separate controlled licence.</p>
         </div>
         <div className="flex h-10 w-full overflow-hidden border border-gray-300 bg-gray-100" role="img" aria-label={`Basket bids have secured £${basketSecuredValue.toFixed(2)} of a £${annualPortfolioValue.toFixed(2)} target`}>
           {basketLots.map((lot) => (
@@ -8242,14 +8242,14 @@ const ExchangeDashboardPanel = ({
             <div key={lot.name} className="min-w-0 border-l-2 pl-2" style={{ borderColor: lot.colour }}>
               <div className="flex items-start justify-between gap-2 text-[10px] sm:text-xs">
                 <strong>{lot.name}</strong>
-                <span className="text-gray-500">{Math.round(lot.coverage * 100)}%</span>
+                <span className="text-gray-500">{lot.rights}</span>
               </div>
               <p className="mt-0.5 text-xs font-semibold sm:text-sm">£{(lot.target * lot.coverage).toFixed(2)} / £{lot.target.toFixed(2)}</p>
               <p className="text-[9px] text-gray-500 sm:text-[10px]">{lot.status}</p>
             </div>
           ))}
         </div>
-        <p className="mt-4 border-t border-gray-200 pt-3 text-[10px] text-gray-500 sm:text-xs">Settled lots close without waiting for the rest of the basket. Open lots remain available to eligible bidders until their reserve or expiry condition is reached.</p>
+        <p className="mt-4 border-t border-gray-200 pt-3 text-[10px] text-gray-500 sm:text-xs">The carbon lot closes when transferred and retired. A data match does not exhaust that right: further purpose-bound licences can be issued to other approved buyers, subject to consent, aggregation and permitted-use controls.</p>
       </section>
 
       {false ? <>
@@ -8605,7 +8605,7 @@ const ExchangeDashboardPanel = ({
                               <label key={right.name} className={`cursor-pointer border p-3 ${selectedDataLots.includes(right.name) ? "border-blue-600 bg-blue-50" : "border-gray-200 bg-white"}`}>
                                 <span className="flex items-start gap-2">
                                   <input type="checkbox" checked={selectedDataLots.includes(right.name)} onChange={() => toggleDataLot(right.name)} className="mt-0.5 accent-blue-700" />
-                                  <span className="min-w-0"><strong className="block text-xs sm:text-sm">{right.name}</strong><span className="block text-[10px] leading-tight text-gray-600 sm:text-xs">{right.detail}</span><span className="mt-1 block text-[10px] font-semibold text-blue-800">£{right.value.toFixed(2)} modelled</span></span>
+                                  <span className="min-w-0"><strong className="block text-xs sm:text-sm">{right.name}</strong><span className="block text-[10px] leading-tight text-gray-600 sm:text-xs">{right.detail}</span><span className="mt-1 block text-[10px] font-semibold text-blue-800">{right.licence}</span><span className="mt-1 block text-[10px] text-gray-600">£{right.value.toFixed(2)} modelled annual value</span></span>
                                 </span>
                               </label>
                             ))}
@@ -8624,6 +8624,7 @@ const ExchangeDashboardPanel = ({
                       <div className="flex justify-between gap-3"><dt className="text-gray-600">Carbon route</dt><dd className="text-right font-semibold">{carbonSaleAction === "market" ? "Best approved market" : carbonSaleAction === "ask" ? `Ask £${Number(carbonAskPrice || 0).toFixed(0)}/t` : "Not listed"}</dd></div>
                       <div className="flex justify-between gap-3 border-t border-gray-200 pt-3"><dt className="text-gray-600">Data potential</dt><dd className="text-right font-semibold">{dataLicenceAction === "hold" ? "Hold" : `£${selectedDataValue.toFixed(2)}`}</dd></div>
                       <div className="flex justify-between gap-3"><dt className="text-gray-600">Data route</dt><dd className="text-right font-semibold">{dataLicenceAction === "auto" ? "Auto-match buyers" : dataLicenceAction === "review" ? "Open for offers" : "Keep private"}</dd></div>
+                      {dataLicenceAction !== "hold" ? <div className="flex justify-between gap-3"><dt className="text-gray-600">Licence model</dt><dd className="text-right font-semibold">Multiple approved buyers</dd></div> : null}
                       {dataLicenceAction !== "hold" ? <div className="flex justify-between gap-3"><dt className="text-gray-600">Licences listed</dt><dd className="text-right font-semibold">{selectedDataLots.length} of {dataRights.length}</dd></div> : null}
                     </dl>
                     <div className="mt-5 border border-amber-200 bg-amber-50 p-3 text-[10px] leading-relaxed text-amber-950">Carbon may produce immediate proceeds when an eligible bid exists. Data values remain modelled until an approved buyer accepts a licence; they are not guaranteed sale proceeds.</div>
