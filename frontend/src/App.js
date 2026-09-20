@@ -43,6 +43,10 @@ const SplashScreen = () => {
         playsInline
         preload="auto"
         aria-hidden="true"
+        onCanPlay={(event) => {
+          event.currentTarget.playbackRate = 1.35;
+          event.currentTarget.play().catch(() => {});
+        }}
       >
         <source src="/videos/wbp-architecture.mp4" type="video/mp4" />
       </video>
