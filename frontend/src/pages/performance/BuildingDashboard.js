@@ -7961,7 +7961,7 @@ const PortfolioDashboardPanel = ({
               <div className="flex justify-between"><dt>Audit-ready homes</dt><dd className="font-semibold">2</dd></div>
               <div className="flex justify-between"><dt>Baselines maturing</dt><dd className="font-semibold">4</dd></div>
               <div className="flex justify-between"><dt>Collector attention</dt><dd className="font-semibold text-red-700">1</dd></div>
-              <div className="flex justify-between"><dt>Marketplace eligible</dt><dd className="font-semibold">Pending</dd></div>
+              <div className="flex justify-between"><dt>Marketplace eligible</dt><dd className="font-semibold">{PORTFOLIO_EXCHANGE_SUMMARY.propertyCount}</dd></div>
             </dl>
           </div>
         </aside>
