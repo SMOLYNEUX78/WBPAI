@@ -1529,7 +1529,8 @@ const BuildingDashboardPanel = ({ building }) => {
         throw error;
       }
 
-      return applyDashboardSnapshot(data);
+      applyDashboardSnapshot(data);
+      return data || null;
     } catch (err) {
       console.error("Error fetching dashboard snapshot:", err.message);
       return false;
@@ -2503,6 +2504,7 @@ const BuildingDashboardPanel = ({ building }) => {
         `${dataSourceBuildingId}:heatLossSummary`,
         JSON.stringify(nextHeatLossSummary)
       );
+      return nextHeatLossSummary;
     } catch (err) {
       console.error("Error fetching heat loss summary:", err.message);
       setHeatLossSummary({
@@ -2527,6 +2529,7 @@ const BuildingDashboardPanel = ({ building }) => {
         flatlineIndoorTemp: false,
         filteredInsideReadings: 0,
       });
+      return null;
     }
   };
 
@@ -2671,8 +2674,10 @@ const BuildingDashboardPanel = ({ building }) => {
         `${dataSourceBuildingId}:heatExclusionSummary`,
         JSON.stringify(nextHeatExclusionSummary)
       );
+      return nextHeatExclusionSummary;
     } catch (err) {
       console.error("Error fetching heat exclusion summary:", err.message);
+      return null;
     }
   };
 
@@ -3005,8 +3010,17 @@ const BuildingDashboardPanel = ({ building }) => {
     }
   };
 
-  const fetchLongTermBuildingPerformance = async () => {
+  const fetchLongTermBuildingPerformance = async (overrides = {}) => {
     try {
+      const scoreHistoricalPerformance = Number.isFinite(
+        Number(overrides.historicalPerformance)
+      )
+        ? Number(overrides.historicalPerformance)
+        : historicalPerformance;
+      const scoreHeatLossSummary =
+        overrides.heatLossSummary || heatLossSummary;
+      const scoreHeatExclusionSummary =
+        overrides.heatExclusionSummary || heatExclusionSummary;
       const rowsByKey = new Map();
       let error = null;
       const now = Date.now();
@@ -3080,7 +3094,7 @@ const BuildingDashboardPanel = ({ building }) => {
       const pm10Values = getValidValues(ieqRows, "pm10");
       const hchoValues = getValidValues(ieqRows, "hcho");
       const no2Values = getValidValues(ieqRows, "no2");
-      const nextHeatExclusionSummary = heatExclusionSummary;
+      const nextHeatExclusionSummary = scoreHeatExclusionSummary;
       const averageHeatExclusionBuffer =
         nextHeatExclusionSummary.averageBuffer;
       const overheatingShare = nextHeatExclusionSummary.overheatingShare;
@@ -3114,8 +3128,8 @@ const BuildingDashboardPanel = ({ building }) => {
         matterportMetadata.internalArea !== "--"
           ? Number(matterportMetadata.internalArea)
           : 145;
-      const annualEnergyUse = Number.isFinite(historicalPerformance)
-        ? historicalPerformance * 365
+      const annualEnergyUse = Number.isFinite(scoreHistoricalPerformance)
+        ? scoreHistoricalPerformance * 365
         : null;
       const annualEui =
         Number.isFinite(annualEnergyUse) && estimatedArea
@@ -3128,12 +3142,12 @@ const BuildingDashboardPanel = ({ building }) => {
         building.nationalAverageEui
       );
       const hasReliableHddSampleForScore =
-        heatLossSummary.hddSource === "legacy" ||
-        ((heatLossSummary.hddDays || 0) >= MIN_BASELINE_HDD_DAYS &&
-          (heatLossSummary.hddTotal || 0) >= MIN_RELIABLE_HDD_TOTAL);
+        scoreHeatLossSummary.hddSource === "legacy" ||
+        ((scoreHeatLossSummary.hddDays || 0) >= MIN_BASELINE_HDD_DAYS &&
+          (scoreHeatLossSummary.hddTotal || 0) >= MIN_RELIABLE_HDD_TOTAL);
       const weatherNormalisedEuiScore = calculateEnergyScore(
         hasReliableHddSampleForScore
-          ? heatLossSummary.weatherNormalisedEui
+          ? scoreHeatLossSummary.weatherNormalisedEui
           : null,
         building.targetEui,
         building.nationalAverageEui
@@ -3161,16 +3175,16 @@ const BuildingDashboardPanel = ({ building }) => {
         );
       };
       const hddIntensityPerM2ForScore =
-        Number.isFinite(heatLossSummary.kwhPerHdd) &&
+        Number.isFinite(scoreHeatLossSummary.kwhPerHdd) &&
         Number.isFinite(estimatedArea) &&
         estimatedArea > 0
-          ? heatLossSummary.kwhPerHdd / estimatedArea
+          ? scoreHeatLossSummary.kwhPerHdd / estimatedArea
           : null;
       const annualHddForScore =
-        Number.isFinite(heatLossSummary.weatherNormalisedEui) &&
+        Number.isFinite(scoreHeatLossSummary.weatherNormalisedEui) &&
         Number.isFinite(hddIntensityPerM2ForScore) &&
         hddIntensityPerM2ForScore > 0
-          ? heatLossSummary.weatherNormalisedEui / hddIntensityPerM2ForScore
+          ? scoreHeatLossSummary.weatherNormalisedEui / hddIntensityPerM2ForScore
           : null;
       const targetHddIntensityForScore =
         Number.isFinite(annualHddForScore) && annualHddForScore > 0
@@ -3182,15 +3196,15 @@ const BuildingDashboardPanel = ({ building }) => {
         targetHddIntensityForScore * 6
       );
       const htcPerM2ForScore =
-        Number.isFinite(heatLossSummary.htcEstimate) &&
+        Number.isFinite(scoreHeatLossSummary.htcEstimate) &&
         Number.isFinite(estimatedArea) &&
         estimatedArea > 0
-          ? heatLossSummary.htcEstimate / estimatedArea
+          ? scoreHeatLossSummary.htcEstimate / estimatedArea
           : null;
       const hasReliableHtcSampleForScore =
-        heatLossSummary.hddSource === "legacy" ||
-        ((heatLossSummary.htcSamples || 0) >= MIN_RELIABLE_HTC_SAMPLES &&
-          (heatLossSummary.htcDeltaTotal || 0) >=
+        scoreHeatLossSummary.hddSource === "legacy" ||
+        ((scoreHeatLossSummary.htcSamples || 0) >= MIN_RELIABLE_HTC_SAMPLES &&
+          (scoreHeatLossSummary.htcDeltaTotal || 0) >=
             MIN_RELIABLE_HTC_DELTA_TOTAL);
       const htcScore = lowerIsBetterScore(
         hasReliableHtcSampleForScore ? htcPerM2ForScore : null,
@@ -3240,20 +3254,39 @@ const BuildingDashboardPanel = ({ building }) => {
       setPerformanceBreakdown(nextPerformanceBreakdown);
 
       setPerformanceValue(buildingPerformanceIndex);
+      const calculatedAt = new Date().toISOString();
+      const nextPerformanceSummary = {
+        value: buildingPerformanceIndex,
+        breakdown: nextPerformanceBreakdown,
+        calculatedAt,
+      };
       localStorage.setItem(
         `${dataSourceBuildingId}:performanceSummary:v2`,
-        JSON.stringify({
-          value: buildingPerformanceIndex,
-          breakdown: nextPerformanceBreakdown,
-          calculatedAt: new Date().toISOString(),
-        })
+        JSON.stringify(nextPerformanceSummary)
       );
       localStorage.removeItem(`${dataSourceBuildingId}:performanceSummary`);
+      const { error: performancePersistError } = await supabase
+        .from("BuildingLatestSnapshot")
+        .update({
+          performance_summary: nextPerformanceSummary,
+          updated_at: calculatedAt,
+        })
+        .eq("building_id", dataSourceBuildingId);
+
+      if (performancePersistError) {
+        console.error(
+          "Error persisting shared performance summary:",
+          performancePersistError.message
+        );
+      }
+
+      return nextPerformanceSummary;
     } catch (err) {
       console.error(
         "Error calculating long-term building performance:",
         err.message
       );
+      return null;
     }
   };
 
@@ -4041,7 +4074,7 @@ const BuildingDashboardPanel = ({ building }) => {
     setMrvEvidence(readCachedMrvEvidence());
     let cancelled = false;
     const refreshBuilding = async () => {
-      const hasSnapshot = await fetchDashboardSnapshot();
+      const snapshot = await fetchDashboardSnapshot();
 
       if (cancelled) {
         return;
@@ -4052,10 +4085,22 @@ const BuildingDashboardPanel = ({ building }) => {
       fetchRainHumiditySummary();
       fetchWeeklyPerformanceTrend();
 
-      if (!hasSnapshot) {
-        fetchLongTermAverage();
-        fetchHeatLossSummary();
-        fetchHeatExclusionSummary();
+      const hasSharedPerformance = Number.isFinite(
+        Number(snapshot?.performance_summary?.value)
+      );
+
+      if (!snapshot) {
+        await fetchLongTermAverage();
+      }
+
+      if (!snapshot || !hasSharedPerformance) {
+        const nextHeatLossSummary = await fetchHeatLossSummary();
+        const nextHeatExclusionSummary = await fetchHeatExclusionSummary();
+        await fetchLongTermBuildingPerformance({
+          historicalPerformance: snapshot?.energy_summary?.totalDailyAverage,
+          heatLossSummary: nextHeatLossSummary,
+          heatExclusionSummary: nextHeatExclusionSummary,
+        });
       }
     };
 
@@ -4068,18 +4113,23 @@ const BuildingDashboardPanel = ({ building }) => {
   }, [dataSourceBuildingId]);
 
   useEffect(() => {
-    fetchLongTermBuildingPerformance();
     let refreshCount = 0;
 
-    const interval = setInterval(() => {
+    const interval = setInterval(async () => {
       refreshCount += 1;
-      fetchDashboardSnapshot();
+      const snapshot = await fetchDashboardSnapshot();
       fetchIAQData();
       fetchExternalTemp();
 
       if (refreshCount % HEAVY_DASHBOARD_REFRESH_EVERY === 0) {
-        fetchLongTermAverage();
-        fetchLongTermBuildingPerformance();
+        await fetchLongTermAverage();
+        const nextHeatLossSummary = await fetchHeatLossSummary();
+        const nextHeatExclusionSummary = await fetchHeatExclusionSummary();
+        await fetchLongTermBuildingPerformance({
+          historicalPerformance: snapshot?.energy_summary?.totalDailyAverage,
+          heatLossSummary: nextHeatLossSummary,
+          heatExclusionSummary: nextHeatExclusionSummary,
+        });
         fetchWeeklyPerformanceTrend();
         fetchRainHumiditySummary();
       }
