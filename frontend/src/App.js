@@ -35,47 +35,44 @@ const SplashScreen = () => {
         fadeOut ? "opacity-0" : "opacity-100"
       }`}
     >
-      <main className="flex min-h-screen flex-col items-center justify-center px-6 py-10">
-        <section className="flex w-full max-w-xl flex-col items-center" aria-label="Whole Build Profile loading">
-          <div className={`wbp-corporate-mark stage-${stage}`} aria-hidden="true">
-            <div className="wbp-mark-grid">
-              {Array.from({ length: 12 }).map((_, index) => (
-                <span key={index} style={{ "--cell-delay": `${index * 55}ms` }} />
-              ))}
-            </div>
-            <div className="wbp-building-form">
-              <span className="wbp-building-column wbp-building-column-a" />
-              <span className="wbp-building-column wbp-building-column-b" />
-              <span className="wbp-building-column wbp-building-column-c" />
-            </div>
-            <span className="wbp-scan-line" />
-            <span className="wbp-mark-corner wbp-mark-corner-tl" />
-            <span className="wbp-mark-corner wbp-mark-corner-tr" />
-            <span className="wbp-mark-corner wbp-mark-corner-bl" />
-            <span className="wbp-mark-corner wbp-mark-corner-br" />
-            <span className="wbp-profile-code">WBP-001</span>
+      <main className="flex min-h-screen items-center justify-center px-5 py-8 sm:px-10">
+        <section className={`wbp-plan-ident stage-${stage}`} aria-label="Whole Build Profile loading">
+          <div className="wbp-plan-meta wbp-plan-meta-top" aria-hidden="true">
+            <span>52.0945</span>
+            <span>1.30488</span>
+            <span>99.2 m2</span>
           </div>
 
-          <div className="mt-8 text-center sm:mt-10">
-            <h1 className="text-3xl font-bold text-gray-950 sm:text-5xl">
-              Whole Build Profile
-            </h1>
-            <p className="mt-3 text-[10px] font-semibold uppercase text-gray-500 sm:text-xs">
-              Building intelligence
-            </p>
+          <div className="wbp-plan-canvas" aria-hidden="true">
+            <span className="wbp-plan-line wbp-plan-line-top" />
+            <span className="wbp-plan-line wbp-plan-line-right" />
+            <span className="wbp-plan-line wbp-plan-line-bottom" />
+            <span className="wbp-plan-line wbp-plan-line-left" />
+            <span className="wbp-plan-line wbp-plan-line-room-a" />
+            <span className="wbp-plan-line wbp-plan-line-room-b" />
+            <span className="wbp-plan-line wbp-plan-line-room-c" />
+            <span className="wbp-plan-line wbp-plan-line-room-d" />
+            <span className="wbp-plan-node wbp-plan-node-a" />
+            <span className="wbp-plan-node wbp-plan-node-b" />
+            <span className="wbp-plan-node wbp-plan-node-c" />
+            <span className="wbp-plan-node wbp-plan-node-d" />
+            <span className="wbp-plan-axis wbp-plan-axis-x">01—04</span>
+            <span className="wbp-plan-axis wbp-plan-axis-y">A—D</span>
+            <div className="wbp-plan-wordmark">
+              <strong>WBP</strong>
+              <span>001</span>
+            </div>
           </div>
 
-          <div className="mt-8 w-full max-w-xs sm:mt-10">
-            <div className="flex items-center justify-between text-[10px] font-semibold uppercase text-gray-500">
-              <span>{stage < 2 ? "Building profile" : stage < 3 ? "Registering evidence" : "Profile ready"}</span>
-              <span>{stage < 1 ? "00" : stage < 2 ? "38" : stage < 3 ? "76" : "100"}%</span>
-            </div>
-            <div className="mt-2 h-1 overflow-hidden bg-gray-300">
-              <span
-                className="block h-full bg-emerald-700 transition-[width] duration-700 ease-out"
-                style={{ width: stage < 1 ? "0%" : stage < 2 ? "38%" : stage < 3 ? "76%" : "100%" }}
-              />
-            </div>
+          <div className="wbp-plan-copy">
+            <p>Whole Build Profile</p>
+            <span>{stage < 2 ? "Measuring building" : stage < 3 ? "Assembling evidence" : "Profile established"}</span>
+          </div>
+
+          <div className="wbp-plan-status" aria-hidden="true">
+            <span className={stage >= 1 ? "is-complete" : ""}>Structure</span>
+            <span className={stage >= 2 ? "is-complete" : ""}>Performance</span>
+            <span className={stage >= 3 ? "is-complete" : ""}>Evidence</span>
           </div>
         </section>
       </main>

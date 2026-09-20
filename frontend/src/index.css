@@ -16,143 +16,164 @@ code {
     monospace;
 }
 
-.wbp-corporate-mark {
-  position: relative;
-  width: min(62vw, 280px);
-  aspect-ratio: 1;
-  overflow: hidden;
-  border: 1px solid #9ca3af;
-  background: #ffffff;
+.wbp-plan-ident {
+  width: min(92vw, 680px);
+  color: #111827;
 }
 
-.wbp-mark-grid {
-  position: absolute;
-  inset: 12%;
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  grid-template-rows: repeat(3, 1fr);
-}
-
-.wbp-mark-grid span {
-  border-right: 1px solid #e5e7eb;
-  border-bottom: 1px solid #e5e7eb;
-  opacity: 0;
-  animation: wbp-cell-in 320ms ease forwards;
-  animation-delay: var(--cell-delay);
-}
-
-.wbp-building-form {
-  position: absolute;
-  inset: 22% 24% 21%;
+.wbp-plan-meta {
   display: flex;
-  align-items: flex-end;
-  gap: 7%;
+  justify-content: flex-end;
+  gap: 16px;
+  margin-bottom: 8px;
+  color: #6b7280;
+  font-size: 9px;
+  font-weight: 600;
 }
 
-.wbp-building-column {
+.wbp-plan-canvas {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 8;
+  min-height: 230px;
+  overflow: hidden;
+  border: 1px solid #d1d5db;
+  background-color: #fff;
+}
+
+.wbp-plan-line {
+  position: absolute;
   display: block;
-  width: 29%;
-  height: 0;
-  border: 1px solid #111827;
-  background: #f3f4f6;
-  transition: height 650ms ease, background-color 450ms ease;
-}
-
-.stage-1 .wbp-building-column-a,
-.stage-2 .wbp-building-column-a,
-.stage-3 .wbp-building-column-a {
-  height: 58%;
-}
-
-.stage-1 .wbp-building-column-b,
-.stage-2 .wbp-building-column-b,
-.stage-3 .wbp-building-column-b {
-  height: 100%;
-}
-
-.stage-1 .wbp-building-column-c,
-.stage-2 .wbp-building-column-c,
-.stage-3 .wbp-building-column-c {
-  height: 76%;
-}
-
-.stage-3 .wbp-building-column {
-  background: #d1fae5;
-}
-
-.wbp-scan-line {
-  position: absolute;
-  left: 12%;
-  right: 12%;
-  top: 12%;
-  height: 2px;
-  background: #047857;
-  opacity: 0;
-}
-
-.stage-2 .wbp-scan-line {
-  opacity: 1;
-  animation: wbp-scan 900ms ease-in-out forwards;
-}
-
-.wbp-mark-corner {
-  position: absolute;
-  width: 18px;
-  height: 18px;
-  border-color: #111827;
-  opacity: 0;
-  transition: opacity 300ms ease;
-}
-
-.stage-1 .wbp-mark-corner,
-.stage-2 .wbp-mark-corner,
-.stage-3 .wbp-mark-corner {
-  opacity: 1;
-}
-
-.wbp-mark-corner-tl { left: 7%; top: 7%; border-left: 2px solid; border-top: 2px solid; }
-.wbp-mark-corner-tr { right: 7%; top: 7%; border-right: 2px solid; border-top: 2px solid; }
-.wbp-mark-corner-bl { left: 7%; bottom: 7%; border-left: 2px solid; border-bottom: 2px solid; }
-.wbp-mark-corner-br { right: 7%; bottom: 7%; border-right: 2px solid; border-bottom: 2px solid; }
-
-.wbp-profile-code {
-  position: absolute;
-  right: 7%;
-  bottom: 7%;
-  padding: 4px 7px;
   background: #111827;
-  color: #ffffff;
+  transform-origin: left top;
+  transition: transform 650ms ease;
+}
+
+.wbp-plan-line-top { left: 18%; top: 23%; width: 64%; height: 2px; transform: scaleX(0); }
+.wbp-plan-line-right { left: 82%; top: 23%; width: 2px; height: 57%; transform: scaleY(0); }
+.wbp-plan-line-bottom { left: 18%; top: 80%; width: 64%; height: 2px; transform: scaleX(0); }
+.wbp-plan-line-left { left: 18%; top: 23%; width: 2px; height: 57%; transform: scaleY(0); }
+.wbp-plan-line-room-a { left: 47%; top: 23%; width: 2px; height: 57%; transform: scaleY(0); }
+.wbp-plan-line-room-b { left: 18%; top: 52%; width: 29%; height: 2px; transform: scaleX(0); }
+.wbp-plan-line-room-c { left: 47%; top: 61%; width: 35%; height: 2px; transform: scaleX(0); }
+.wbp-plan-line-room-d { left: 66%; top: 23%; width: 2px; height: 38%; transform: scaleY(0); }
+
+.stage-1 .wbp-plan-line,
+.stage-2 .wbp-plan-line,
+.stage-3 .wbp-plan-line {
+  transform: scale(1);
+}
+
+.wbp-plan-node {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  border: 2px solid #047857;
+  background: #fff;
+  opacity: 0;
+  transform: scale(0);
+  transition: opacity 300ms ease, transform 300ms ease;
+}
+
+.wbp-plan-node-a { left: 30%; top: 36%; }
+.wbp-plan-node-b { left: 56%; top: 40%; }
+.wbp-plan-node-c { left: 72%; top: 69%; }
+.wbp-plan-node-d { left: 34%; top: 65%; }
+
+.stage-2 .wbp-plan-node,
+.stage-3 .wbp-plan-node {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.wbp-plan-axis {
+  position: absolute;
+  color: #9ca3af;
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.wbp-plan-axis-x { left: 18%; top: 15%; }
+.wbp-plan-axis-y { left: 11%; top: 24%; writing-mode: vertical-rl; }
+
+.wbp-plan-wordmark {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.92);
+  opacity: 0;
+  transition: opacity 500ms ease;
+}
+
+.wbp-plan-wordmark strong {
+  font-size: clamp(52px, 12vw, 104px);
+  line-height: 1;
+}
+
+.wbp-plan-wordmark span {
+  align-self: flex-end;
+  margin-bottom: 12%;
+  padding: 4px 7px;
+  background: #047857;
+  color: #fff;
   font-size: 10px;
   font-weight: 700;
-  opacity: 0;
-  transform: translateY(5px);
-  transition: opacity 350ms ease, transform 350ms ease;
 }
 
-.stage-3 .wbp-profile-code {
-  opacity: 1;
-  transform: translateY(0);
+.stage-3 .wbp-plan-wordmark { opacity: 1; }
+
+.wbp-plan-copy {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 0 12px;
+  border-bottom: 1px solid #111827;
 }
 
-@keyframes wbp-cell-in {
-  to { opacity: 1; }
+.wbp-plan-copy p { margin: 0; font-size: clamp(20px, 4vw, 30px); font-weight: 750; }
+.wbp-plan-copy span { color: #6b7280; font-size: 9px; font-weight: 700; text-transform: uppercase; }
+
+.wbp-plan-status {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding-top: 10px;
+  color: #9ca3af;
+  font-size: 8px;
+  font-weight: 700;
+  text-transform: uppercase;
 }
 
-@keyframes wbp-scan {
-  0% { top: 12%; }
-  100% { top: 86%; }
+.wbp-plan-status span::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  background: #d1d5db;
 }
+
+.wbp-plan-status span.is-complete { color: #111827; }
+.wbp-plan-status span.is-complete::before { background: #047857; }
 
 @media (prefers-reduced-motion: reduce) {
-  .wbp-mark-grid span,
-  .wbp-scan-line {
-    animation: none;
-    opacity: 1;
-  }
-
-  .wbp-building-column,
-  .wbp-profile-code,
-  .wbp-mark-corner {
+  .wbp-plan-line,
+  .wbp-plan-node,
+  .wbp-plan-wordmark {
     transition: none;
   }
+}
+
+@media (max-width: 480px) {
+  .wbp-plan-copy {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .wbp-plan-meta { justify-content: space-between; }
 }
