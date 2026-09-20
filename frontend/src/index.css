@@ -16,130 +16,128 @@ code {
     monospace;
 }
 
-.wbp-plan-ident {
-  width: min(92vw, 680px);
+.wbp-audit-ident {
+  width: 100%;
+  max-width: 760px;
+  min-width: 0;
   color: #111827;
 }
 
-.wbp-plan-meta {
-  display: flex;
-  justify-content: flex-end;
-  gap: 16px;
-  margin-bottom: 8px;
-  color: #6b7280;
-  font-size: 9px;
-  font-weight: 600;
-}
-
-.wbp-plan-canvas {
+.wbp-audit-scene {
   position: relative;
   width: 100%;
-  aspect-ratio: 16 / 8;
-  min-height: 230px;
+  height: clamp(300px, 58vh, 560px);
+  min-height: 300px;
   overflow: hidden;
   border: 1px solid #d1d5db;
-  background-color: #fff;
+  background: #f4f5f3;
 }
 
-.wbp-plan-line {
-  position: absolute;
+.wbp-audit-canvas {
   display: block;
-  background: #111827;
-  transform-origin: left top;
-  transition: transform 650ms ease;
+  width: 100%;
+  height: 100%;
 }
 
-.wbp-plan-line-top { left: 18%; top: 23%; width: 64%; height: 2px; transform: scaleX(0); }
-.wbp-plan-line-right { left: 82%; top: 23%; width: 2px; height: 57%; transform: scaleY(0); }
-.wbp-plan-line-bottom { left: 18%; top: 80%; width: 64%; height: 2px; transform: scaleX(0); }
-.wbp-plan-line-left { left: 18%; top: 23%; width: 2px; height: 57%; transform: scaleY(0); }
-.wbp-plan-line-room-a { left: 47%; top: 23%; width: 2px; height: 57%; transform: scaleY(0); }
-.wbp-plan-line-room-b { left: 18%; top: 52%; width: 29%; height: 2px; transform: scaleX(0); }
-.wbp-plan-line-room-c { left: 47%; top: 61%; width: 35%; height: 2px; transform: scaleX(0); }
-.wbp-plan-line-room-d { left: 66%; top: 23%; width: 2px; height: 38%; transform: scaleY(0); }
-
-.stage-1 .wbp-plan-line,
-.stage-2 .wbp-plan-line,
-.stage-3 .wbp-plan-line {
-  transform: scale(1);
-}
-
-.wbp-plan-node {
+.wbp-audit-reticle {
   position: absolute;
-  width: 9px;
-  height: 9px;
-  border: 2px solid #047857;
-  background: #fff;
-  opacity: 0;
-  transform: scale(0);
-  transition: opacity 300ms ease, transform 300ms ease;
+  inset: 7%;
+  pointer-events: none;
 }
 
-.wbp-plan-node-a { left: 30%; top: 36%; }
-.wbp-plan-node-b { left: 56%; top: 40%; }
-.wbp-plan-node-c { left: 72%; top: 69%; }
-.wbp-plan-node-d { left: 34%; top: 65%; }
-
-.stage-2 .wbp-plan-node,
-.stage-3 .wbp-plan-node {
-  opacity: 1;
-  transform: scale(1);
-}
-
-.wbp-plan-axis {
+.wbp-audit-reticle span {
   position: absolute;
-  color: #9ca3af;
-  font-size: 8px;
+  width: 24px;
+  height: 24px;
+  border-color: #374151;
+  opacity: 0.8;
+}
+
+.wbp-audit-reticle-tl { left: 0; top: 0; border-left: 2px solid; border-top: 2px solid; }
+.wbp-audit-reticle-tr { right: 0; top: 0; border-right: 2px solid; border-top: 2px solid; }
+.wbp-audit-reticle-bl { left: 0; bottom: 0; border-left: 2px solid; border-bottom: 2px solid; }
+.wbp-audit-reticle-br { right: 0; bottom: 0; border-right: 2px solid; border-bottom: 2px solid; }
+
+.wbp-audit-coordinates {
+  position: absolute;
+  top: 9%;
+  left: 9%;
+  right: 9%;
+  display: flex;
+  justify-content: space-between;
+  color: #6b7280;
+  font-size: 9px;
   font-weight: 700;
 }
 
-.wbp-plan-axis-x { left: 18%; top: 15%; }
-.wbp-plan-axis-y { left: 11%; top: 24%; writing-mode: vertical-rl; }
-
-.wbp-plan-wordmark {
+.wbp-audit-pass {
   position: absolute;
-  inset: 0;
+  left: 50%;
+  bottom: 10%;
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 10px;
-  background: rgba(255, 255, 255, 0.92);
+  gap: 9px;
+  padding: 9px 13px;
+  border: 1px solid #047857;
+  background: rgba(255, 255, 255, 0.94);
+  color: #065f46;
+  font-size: 12px;
+  text-transform: uppercase;
   opacity: 0;
-  transition: opacity 500ms ease;
+  transform: translate(-50%, 10px);
+  transition: opacity 350ms ease, transform 350ms ease;
 }
 
-.wbp-plan-wordmark strong {
-  font-size: clamp(52px, 12vw, 104px);
-  line-height: 1;
+.stage-3 .wbp-audit-pass {
+  opacity: 1;
+  transform: translate(-50%, 0);
 }
 
-.wbp-plan-wordmark span {
-  align-self: flex-end;
-  margin-bottom: 12%;
-  padding: 4px 7px;
+.wbp-audit-check {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
   background: #047857;
   color: #fff;
-  font-size: 10px;
-  font-weight: 700;
+  font-size: 14px;
 }
 
-.stage-3 .wbp-plan-wordmark { opacity: 1; }
-
-.wbp-plan-copy {
-  display: flex;
-  align-items: baseline;
+.wbp-audit-copy {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: flex-end;
   justify-content: space-between;
-  gap: 16px;
-  padding: 14px 0 12px;
+  gap: 20px;
+  padding: 15px 0 12px;
   border-bottom: 1px solid #111827;
 }
 
-.wbp-plan-copy p { margin: 0; font-size: clamp(20px, 4vw, 30px); font-weight: 750; }
-.wbp-plan-copy span { color: #6b7280; font-size: 9px; font-weight: 700; text-transform: uppercase; }
+.wbp-audit-copy h1 {
+  min-width: 0;
+  margin: 0;
+  font-size: clamp(24px, 4.5vw, 38px);
+  font-weight: 750;
+}
 
-.wbp-plan-status {
+.wbp-audit-copy p {
+  margin: 3px 0 0;
+  color: #6b7280;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.wbp-audit-progress {
+  flex-shrink: 0;
+  color: #047857;
+  font-size: clamp(22px, 4vw, 34px);
+  font-weight: 750;
+}
+
+.wbp-audit-steps {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 8px;
   padding-top: 10px;
   color: #9ca3af;
@@ -148,32 +146,27 @@ code {
   text-transform: uppercase;
 }
 
-.wbp-plan-status span::before {
+.wbp-audit-steps span::before {
   content: "";
   display: inline-block;
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
   margin-right: 6px;
   background: #d1d5db;
 }
 
-.wbp-plan-status span.is-complete { color: #111827; }
-.wbp-plan-status span.is-complete::before { background: #047857; }
+.wbp-audit-steps span.is-complete { color: #111827; }
+.wbp-audit-steps span.is-complete::before { background: #047857; }
 
 @media (prefers-reduced-motion: reduce) {
-  .wbp-plan-line,
-  .wbp-plan-node,
-  .wbp-plan-wordmark {
-    transition: none;
-  }
+  .wbp-audit-pass { transition: none; }
 }
 
 @media (max-width: 480px) {
-  .wbp-plan-copy {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  .wbp-plan-meta { justify-content: space-between; }
+  .wbp-audit-scene { height: min(56vh, 430px); }
+  .wbp-audit-copy { align-items: end; gap: 8px; }
+  .wbp-audit-copy h1 { font-size: 22px; line-height: 1.08; }
+  .wbp-audit-progress { font-size: 22px; }
+  .wbp-audit-steps { gap: 4px; }
+  .wbp-audit-steps span::before { display: block; margin: 0 0 4px; }
 }
