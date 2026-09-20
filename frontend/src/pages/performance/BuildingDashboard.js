@@ -8393,6 +8393,7 @@ const ExchangeDashboardPanel = ({
   const [dataLicenceAction, setDataLicenceAction] = useState("auto");
   const [selectedDataLots, setSelectedDataLots] = useState(["Monitoring", "Health", "Grid", "Evidence"]);
   const [salePrepared, setSalePrepared] = useState(false);
+  const [basketAnimationReady, setBasketAnimationReady] = useState(false);
   const carbonPrice = FALLBACK_CARBON_PRICE_GBP_PER_TONNE;
   const sellerReservePrice = PORTFOLIO_SELLER_RESERVE_PRICE;
   const bestBidPrice = 76;
@@ -8428,6 +8429,16 @@ const ExchangeDashboardPanel = ({
     (sum, lot) => sum + lot.target * lot.coverage,
     0
   );
+  const theoreticalBasketSales = [
+    { date: "18 Sep 2026", right: "Carbon", buyer: "UK retrofit fund", share: 1, value: annualCarbonValue, structure: "Transfer and retirement" },
+    { date: "16 Sep 2026", right: "Monitoring", buyer: "Social housing lender", share: 0.28, value: annualMonitoringValue * 0.28, structure: "12-month licence" },
+    { date: "12 Sep 2026", right: "Monitoring", buyer: "Retrofit research consortium", share: 0.24, value: annualMonitoringValue * 0.24, structure: "Research licence" },
+    { date: "08 Sep 2026", right: "Monitoring", buyer: "Building insurer", share: 0.2, value: annualMonitoringValue * 0.2, structure: "Risk-analysis licence" },
+    { date: "14 Sep 2026", right: "Health", buyer: "Regional NHS partner", share: 0.23, value: annualHealthDataValue * 0.23, structure: "Outcomes licence" },
+    { date: "06 Sep 2026", right: "Health", buyer: "Public-health research team", share: 0.18, value: annualHealthDataValue * 0.18, structure: "Cohort licence" },
+    { date: "10 Sep 2026", right: "Grid", buyer: "Distribution network operator", share: 1, value: annualGridDataValue, structure: "Planning licence" },
+    { date: "04 Sep 2026", right: "Evidence", buyer: "Retrofit programme funder", share: 0.22, value: annualEvidenceValue * 0.22, structure: "Evidence review" },
+  ];
   const dataRights = [
     { name: "Monitoring", value: annualMonitoringValue, detail: "Building performance and retrofit trends", licence: "Non-exclusive · multiple approved buyers" },
     { name: "Health", value: annualHealthDataValue, detail: "Aggregated IAQ and outcomes analysis", licence: "Purpose-bound · NHS and research buyers" },
@@ -8512,6 +8523,13 @@ const ExchangeDashboardPanel = ({
     ...orderBookBids.map((order) => order.volume)
   );
 
+  useEffect(() => {
+    const animationFrame = window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => setBasketAnimationReady(true));
+    });
+    return () => window.cancelAnimationFrame(animationFrame);
+  }, []);
+
   return (
     <main className="min-h-screen bg-white p-3 sm:p-5">
       <section className="border-b border-gray-200">
@@ -8571,7 +8589,13 @@ const ExchangeDashboardPanel = ({
               style={{ flexBasis: `${lot.target / annualPortfolioValue * 100}%`, backgroundColor: `${lot.colour}20` }}
               title={`${lot.name}: £${(lot.target * lot.coverage).toFixed(2)} secured of £${lot.target.toFixed(2)}`}
             >
-              <div className="h-full" style={{ width: `${lot.coverage * 100}%`, backgroundColor: lot.colour }} />
+              <div
+                className="h-full transition-[width] duration-1000 ease-out motion-reduce:transition-none"
+                style={{
+                  width: basketAnimationReady ? `${lot.coverage * 100}%` : "0%",
+                  backgroundColor: lot.colour,
+                }}
+              />
             </div>
           ))}
         </div>
@@ -8588,6 +8612,53 @@ const ExchangeDashboardPanel = ({
           ))}
         </div>
         <p className="mt-4 border-t border-gray-200 pt-3 text-[10px] text-gray-500 sm:text-xs">The carbon lot closes when transferred and retired. A data match does not exhaust that right: further purpose-bound licences can be issued to other approved buyers, subject to consent, aggregation and permitted-use controls.</p>
+
+        <div className="mt-5 border-t border-gray-200 pt-4">
+          <div className="mb-3 flex items-end justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-bold sm:text-base">Theoretical sales</h3>
+              <p className="text-[10px] text-gray-500 sm:text-xs">
+                Illustrative matches making up the secured portion of the basket.
+              </p>
+            </div>
+            <strong className="shrink-0 text-sm">£{basketSecuredValue.toFixed(2)}</strong>
+          </div>
+          <div className="overflow-x-auto border border-gray-200">
+            <table className="w-full min-w-[680px] border-collapse text-left text-xs">
+              <thead className="bg-gray-50 text-[10px] uppercase text-gray-500">
+                <tr>
+                  <th className="px-3 py-2 font-semibold">Date</th>
+                  <th className="px-3 py-2 font-semibold">Right</th>
+                  <th className="px-3 py-2 font-semibold">Buyer</th>
+                  <th className="px-3 py-2 font-semibold">Structure</th>
+                  <th className="px-3 py-2 text-right font-semibold">Matched</th>
+                  <th className="px-3 py-2 text-right font-semibold">Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                {theoreticalBasketSales.map((sale) => {
+                  const lot = basketLots.find((item) => item.name === sale.right);
+                  return (
+                    <tr key={`${sale.right}-${sale.buyer}`} className="border-t border-gray-100">
+                      <td className="whitespace-nowrap px-3 py-2 text-gray-500">{sale.date}</td>
+                      <td className="px-3 py-2 font-semibold">
+                        <span
+                          className="mr-2 inline-block h-2 w-2"
+                          style={{ backgroundColor: lot?.colour || "#6b7280" }}
+                        />
+                        {sale.right}
+                      </td>
+                      <td className="px-3 py-2">{sale.buyer}</td>
+                      <td className="px-3 py-2 text-gray-600">{sale.structure}</td>
+                      <td className="px-3 py-2 text-right">{Math.round(sale.share * 100)}%</td>
+                      <td className="px-3 py-2 text-right font-semibold">£{sale.value.toFixed(2)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </section>
 
       {false ? <>
