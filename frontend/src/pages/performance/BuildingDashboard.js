@@ -8124,14 +8124,40 @@ const PortfolioDashboardPanel = ({
 }) => {
   const [riskFilter, setRiskFilter] = useState("All");
   const [search, setSearch] = useState("");
-  const riskOptions = ["All", "Damp", "Cold", "IAQ", "Heat loss", "Overheat", "Good"];
-  const filteredProperties = PORTFOLIO_PROPERTIES.filter((property) => {
-    const matchesRisk = riskFilter === "All" || property.risk === riskFilter;
-    const query = search.trim().toLowerCase();
-    const matchesSearch = !query || [property.id, property.estate, property.archetype]
-      .some((value) => value.toLowerCase().includes(query));
-    return matchesRisk && matchesSearch;
-  });
+  const [propertySort, setPropertySort] = useState("priority");
+  const [propertySortDirection, setPropertySortDirection] = useState("asc");
+  const [propertyPage, setPropertyPage] = useState(1);
+  const riskOptions = ["All", "Damp", "Cold", "IAQ", "Heat loss", "Overheat", "Monitor", "Good"];
+  const riskPriority = { Damp: 1, IAQ: 2, Cold: 3, "Heat loss": 4, Overheat: 5, Monitor: 6, Good: 7 };
+  const filteredProperties = PORTFOLIO_PROPERTIES
+    .filter((property) => {
+      const matchesRisk = riskFilter === "All" || property.risk === riskFilter;
+      const query = search.trim().toLowerCase();
+      const matchesSearch = !query || [property.id, property.estate, property.archetype]
+        .some((value) => value.toLowerCase().includes(query));
+      return matchesRisk && matchesSearch;
+    })
+    .sort((a, b) => {
+      const direction = propertySortDirection === "asc" ? 1 : -1;
+      const values = {
+        priority: [riskPriority[a.risk] || 99, riskPriority[b.risk] || 99],
+        property: [a.id, b.id],
+        estate: [a.estate, b.estate],
+        health: [a.health, b.health],
+        energy: [a.energy, b.energy],
+        evidence: [a.evidence, b.evidence],
+        stage: [a.retrofit, b.retrofit],
+      };
+      const [aValue, bValue] = values[propertySort] || values.priority;
+      return direction * (typeof aValue === "string" ? aValue.localeCompare(bValue) : aValue - bValue);
+    });
+  const propertyPageSize = 25;
+  const propertyPageCount = Math.max(1, Math.ceil(filteredProperties.length / propertyPageSize));
+  const pagedProperties = filteredProperties.slice((propertyPage - 1) * propertyPageSize, propertyPage * propertyPageSize);
+
+  useEffect(() => {
+    setPropertyPage(1);
+  }, [search, riskFilter, propertySort, propertySortDirection]);
   const liveCount = PORTFOLIO_PROPERTIES.filter((property) => property.collector === "Live").length;
   const priorityCount = PORTFOLIO_PROPERTIES.filter((property) => !["Good", "Monitor"].includes(property.risk)).length;
   const verifiedCount = PORTFOLIO_PROPERTIES.filter((property) => property.trustmark).length;
@@ -8259,44 +8285,51 @@ const PortfolioDashboardPanel = ({
 
       <section className="grid min-w-0 border-b border-gray-200 lg:grid-cols-[minmax(0,2fr)_minmax(260px,1fr)]">
         <div className="min-w-0 px-3 py-5 sm:px-5">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-lg font-bold">Property register</h2>
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-bold">Property register</h2>
+              <p className="text-xs text-gray-500">{filteredProperties.length} of {PORTFOLIO_PROPERTIES.length} homes</p>
+            </div>
+          </div>
+          <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-[minmax(180px,1fr)_140px_160px_42px]">
             <input
               type="search"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search ID, estate or archetype"
-              className="w-full rounded border border-gray-300 px-3 py-2 text-sm sm:w-64"
+              placeholder="Search homes"
+              className="col-span-2 min-w-0 border border-gray-300 px-3 py-2 text-sm sm:col-span-1"
             />
-          </div>
-          <div className="mb-4 flex flex-wrap gap-2">
-            {riskOptions.map((risk) => (
-              <button
-                key={risk}
-                type="button"
-                onClick={() => setRiskFilter(risk)}
-                className={`whitespace-nowrap rounded border px-3 py-1.5 text-xs font-semibold ${riskFilter === risk ? "border-black bg-black text-white" : "border-gray-300 bg-white"}`}
-              >
-                {risk}
-              </button>
-            ))}
+            <select value={riskFilter} onChange={(event) => setRiskFilter(event.target.value)} className="min-w-0 border border-gray-300 bg-white px-2 py-2 text-sm" aria-label="Filter properties by priority">
+              {riskOptions.map((risk) => <option key={risk} value={risk}>{risk === "All" ? "All priorities" : risk}</option>)}
+            </select>
+            <select value={propertySort} onChange={(event) => setPropertySort(event.target.value)} className="min-w-0 border border-gray-300 bg-white px-2 py-2 text-sm" aria-label="Sort properties">
+              <option value="priority">Priority</option>
+              <option value="property">Property ID</option>
+              <option value="estate">Estate</option>
+              <option value="health">Health score</option>
+              <option value="energy">Energy score</option>
+              <option value="evidence">Evidence readiness</option>
+              <option value="stage">Scheme stage</option>
+            </select>
+            <button type="button" onClick={() => setPropertySortDirection((current) => current === "asc" ? "desc" : "asc")} className="border border-gray-300 bg-white px-2 text-lg font-semibold hover:bg-gray-50" title={propertySortDirection === "asc" ? "Ascending" : "Descending"} aria-label={`Sort ${propertySortDirection === "asc" ? "ascending" : "descending"}`}>
+              {propertySortDirection === "asc" ? "↑" : "↓"}
+            </button>
           </div>
           <div className="border border-gray-200">
-            <div className="hidden grid-cols-[minmax(180px,1.35fr)_80px_80px_minmax(105px,0.8fr)_minmax(110px,0.9fr)] gap-3 bg-gray-100 px-3 py-2 text-xs font-semibold uppercase text-gray-600 md:grid">
+            <div className="hidden grid-cols-[minmax(170px,1.35fr)_64px_64px_minmax(90px,0.8fr)_minmax(95px,0.9fr)] gap-2 bg-gray-100 px-3 py-2 text-xs font-semibold uppercase text-gray-600 md:grid">
               <span>Home</span><span>Health</span><span>Energy</span><span>Priority</span><span>Evidence</span>
             </div>
             <div className="divide-y divide-gray-200">
-              {filteredProperties.map((property) => (
+              {pagedProperties.map((property) => (
                 <button
                   key={property.id}
                   type="button"
                   onClick={property.buildingId ? () => onOpenBuilding(property.buildingId) : undefined}
-                  className={`grid w-full gap-3 px-3 py-3 text-left md:grid-cols-[minmax(180px,1.35fr)_80px_80px_minmax(105px,0.8fr)_minmax(110px,0.9fr)] md:items-center ${property.buildingId ? "hover:bg-emerald-50" : "hover:bg-gray-50"}`}
+                  className={`grid w-full gap-2 px-3 py-2 text-left md:grid-cols-[minmax(170px,1.35fr)_64px_64px_minmax(90px,0.8fr)_minmax(95px,0.9fr)] md:items-center ${property.buildingId ? "hover:bg-emerald-50" : "hover:bg-gray-50"}`}
                 >
-                  <span className="min-w-0">
+                  <span className="min-w-0" title={`${property.measure} · ${property.supplier}`}>
                     <strong className={`block truncate text-sm ${property.buildingId ? "text-emerald-800 underline decoration-emerald-300 underline-offset-4" : ""}`}>{property.id} · {property.estate}</strong>
                     <span className="block truncate text-xs text-gray-500">{property.archetype} · {property.retrofit} · EPC {property.epcBefore}{property.epcAfter ? ` → ${property.epcAfter}` : ""}</span>
-                    <span className="block truncate text-[10px] text-gray-500">{property.measure} · {property.supplier}</span>
                   </span>
                   <span className="grid grid-cols-2 gap-2 md:contents">
                     <span><small className="block text-[10px] uppercase text-gray-500 md:hidden">Health</small><strong className="text-sm">{property.health}/100</strong></span>
@@ -8314,6 +8347,15 @@ const PortfolioDashboardPanel = ({
               ))}
             </div>
             {filteredProperties.length === 0 ? <p className="p-6 text-center text-sm text-gray-500">No matching properties</p> : null}
+            {propertyPageCount > 1 ? (
+              <div className="flex items-center justify-between border-t border-gray-200 bg-gray-50 px-3 py-2 text-xs">
+                <span>Page {propertyPage} of {propertyPageCount}</span>
+                <span className="flex gap-1">
+                  <button type="button" disabled={propertyPage === 1} onClick={() => setPropertyPage((page) => Math.max(1, page - 1))} className="border border-gray-300 bg-white px-3 py-1.5 font-semibold disabled:opacity-40">Previous</button>
+                  <button type="button" disabled={propertyPage === propertyPageCount} onClick={() => setPropertyPage((page) => Math.min(propertyPageCount, page + 1))} className="border border-gray-300 bg-white px-3 py-1.5 font-semibold disabled:opacity-40">Next</button>
+                </span>
+              </div>
+            ) : null}
           </div>
         </div>
 
