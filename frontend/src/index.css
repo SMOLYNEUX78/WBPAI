@@ -92,6 +92,7 @@ code {
   transform: translateX(0);
 }
 
+.stage-2 .wbp-signal-row,
 .stage-3 .wbp-signal-row { color: #d1d5db; }
 
 .wbp-signal-rule {
@@ -108,6 +109,7 @@ code {
 .stage-2 .wbp-signal-rule,
 .stage-3 .wbp-signal-rule { transform: scaleX(1); }
 
+.stage-2 .wbp-signal-rule,
 .stage-3 .wbp-signal-rule { background: #10b981; }
 
 .wbp-signal-state { text-align: right; }
@@ -174,6 +176,7 @@ code {
   transition: width 480ms ease;
 }
 
+.stage-2 .wbp-verified-rule span,
 .stage-3 .wbp-verified-rule span { width: 100%; }
 
 .wbp-profile-status {
