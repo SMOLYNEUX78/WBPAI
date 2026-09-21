@@ -70,11 +70,11 @@ code {
 
 .wbp-signal-row {
   display: grid;
-  grid-template-columns: 76px minmax(0, 1fr) 24px;
+  grid-template-columns: 96px minmax(0, 1fr) 30px;
   align-items: center;
   gap: 13px;
   color: #9ca3af;
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
   opacity: 0;
@@ -140,17 +140,17 @@ code {
 
 .wbp-profile-name span {
   margin-bottom: 2px;
-  padding: 5px 8px;
+  padding: 6px 10px;
   background: #ffffff;
   color: #111827;
-  font-size: 11px;
+  font-size: 14px;
   font-weight: 800;
 }
 
 .wbp-profile-lockup > p {
   margin: 18px 0 0;
   color: #d1d5db;
-  font-size: clamp(18px, 4vw, 28px);
+  font-size: clamp(22px, 4vw, 34px);
   font-weight: 650;
   opacity: 0;
   transition: opacity 350ms ease 100ms;
@@ -182,7 +182,7 @@ code {
   gap: 8px;
   margin-top: 10px;
   color: #9ca3af;
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
 }
@@ -199,9 +199,13 @@ code {
 @media (max-width: 480px) {
   .wbp-splash-shell { padding: 22px; }
   .wbp-signal-row {
-    grid-template-columns: 66px minmax(0, 1fr) 20px;
+    grid-template-columns: 82px minmax(0, 1fr) 24px;
     gap: 9px;
+    font-size: 11px;
   }
+
+  .wbp-profile-lockup > p { font-size: 22px; }
+  .wbp-profile-status { font-size: 11px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
