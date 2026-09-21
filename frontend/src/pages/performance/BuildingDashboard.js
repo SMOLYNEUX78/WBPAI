@@ -9127,6 +9127,14 @@ const ExchangeDashboardPanel = ({
 const BuildingDashboard = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const accessParams = new URLSearchParams(location.search);
+  const storedRole = window.localStorage.getItem("wbp-user-role") || "";
+  const accessRole = accessParams.get("role") || storedRole;
+  const roleDetails = {
+    architect: { label: "Architect", phase: "Design", focus: "Design intent and specification" },
+    builder: { label: "Builder", phase: "Build", focus: "Delivery, quality and commissioning" },
+    homeowner: { label: "Homeowner", phase: "Occupancy", focus: "Handover and measured performance" },
+  }[accessRole];
   const routeSection = location.pathname.split("/").filter(Boolean)[1] || "new";
   const routeIndex = BUILDINGS.findIndex((building) => building.id === routeSection);
   const defaultIndex = routeIndex >= 0
@@ -9274,6 +9282,25 @@ const BuildingDashboard = () => {
           </p>
         </div>
       </div>
+
+      {activeBuilding.id === "new" && roleDetails ? (
+        <section className="border-b border-emerald-200 bg-emerald-50 px-4 py-3">
+          <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-3">
+              <span className="bg-emerald-700 px-2 py-1 text-xs font-bold uppercase text-white">
+                {roleDetails.label}
+              </span>
+              <div>
+                <p className="m-0 text-sm font-bold text-gray-900">{roleDetails.phase} workspace</p>
+                <p className="m-0 text-xs text-gray-600">{roleDetails.focus}</p>
+              </div>
+            </div>
+            <p className="m-0 text-xs font-semibold text-emerald-800">
+              Design &rarr; Procurement &rarr; Build &rarr; Commission &rarr; Occupancy
+            </p>
+          </div>
+        </section>
+      ) : null}
 
       <div className="overflow-hidden">
         <div
