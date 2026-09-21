@@ -65,9 +65,6 @@ const SplashScreen = () => {
             <span>001</span>
           </div>
           <p>Whole Build Profile</p>
-          <div className="wbp-verified-rule" aria-hidden="true">
-            <span />
-          </div>
           <div className="wbp-profile-status">
             <span className="wbp-status-marker" aria-hidden="true" />
             <span>Building Confidence</span>

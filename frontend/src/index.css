@@ -159,28 +159,11 @@ code {
 .stage-4 .wbp-profile-lockup > p,
 .stage-5 .wbp-profile-lockup > p { opacity: 1; }
 
-.wbp-verified-rule {
-  height: 3px;
-  margin-top: 22px;
-  overflow: hidden;
-  background: #374151;
-}
-
-.wbp-verified-rule span {
-  display: block;
-  width: 0;
-  height: 100%;
-  background: #10b981;
-  transition: width 1100ms ease;
-}
-
-.stage-5 .wbp-verified-rule span { width: 100%; }
-
 .wbp-profile-status {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 10px;
+  margin-top: 22px;
   color: #9ca3af;
   font-size: 12px;
   font-weight: 700;
@@ -220,7 +203,6 @@ code {
   .wbp-signal-rule,
   .wbp-profile-name,
   .wbp-profile-lockup > p,
-  .wbp-verified-rule span,
   .wbp-status-marker {
     transition: none;
   }
