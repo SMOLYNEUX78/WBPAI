@@ -30,7 +30,7 @@ code {
 
 .wbp-splash-shell.is-exiting { opacity: 0; }
 
-.wbp-splash-video,
+.wbp-splash-image,
 .wbp-splash-video-treatment {
   position: absolute;
   inset: 0;
@@ -38,22 +38,15 @@ code {
   height: 100%;
 }
 
-.wbp-splash-video {
+.wbp-splash-image {
   z-index: 0;
   object-fit: cover;
   object-position: center;
-  transform: scale(1.08);
-  animation: wbp-video-drift 6.2s linear both;
 }
 
 .wbp-splash-video-treatment {
   z-index: 1;
   background: rgba(17, 24, 39, 0.7);
-}
-
-@keyframes wbp-video-drift {
-  from { transform: scale(1.08) translate3d(-1.5%, 0, 0); }
-  to { transform: scale(1.14) translate3d(1.5%, -1%, 0); }
 }
 
 .wbp-splash-ident {

@@ -39,21 +39,12 @@ const SplashScreen = () => {
       className={`wbp-splash-shell ${fadeOut ? "is-exiting" : ""}`}
       aria-label="Whole Build Profile loading"
     >
-      <video
-        className="wbp-splash-video"
-        autoPlay
-        muted
-        loop
-        playsInline
-        preload="auto"
+      <img
+        className="wbp-splash-image"
+        src="/images/wbp-architecture-splash.jpg"
+        alt=""
         aria-hidden="true"
-        onCanPlay={(event) => {
-          event.currentTarget.playbackRate = 1.35;
-          event.currentTarget.play().catch(() => {});
-        }}
-      >
-        <source src="/videos/wbp-architecture.mp4" type="video/mp4" />
-      </video>
+      />
       <div className="wbp-splash-video-treatment" aria-hidden="true" />
       <main className={`wbp-splash-ident stage-${stage}`}>
         <div className="wbp-signal-stack" aria-hidden="true">
