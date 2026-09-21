@@ -8569,7 +8569,6 @@ const ExchangeDashboardPanel = ({
         <div className="grid grid-cols-2 gap-2 border-t border-gray-200 px-3 py-3 sm:px-5">
           <button type="button" aria-pressed={salePanelOpen && saleMode === "simple"} onClick={() => openSalePanel("simple", "market")} className="min-h-11 border border-emerald-700 bg-emerald-700 px-3 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800">Sell</button>
           <button type="button" aria-pressed={salePanelOpen && saleMode === "advanced"} onClick={() => openSalePanel("advanced")} className="min-h-11 border border-emerald-700 bg-emerald-700 px-3 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800">Managed sale</button>
-          <p className="text-[10px] text-gray-500 sm:col-span-full">One basket offer can match separate buyers to compatible rights. Carbon transfers once; monitoring, health, grid and evidence access can be licensed repeatedly to approved buyers without selling the source data.</p>
         </div>
       </section>
 
