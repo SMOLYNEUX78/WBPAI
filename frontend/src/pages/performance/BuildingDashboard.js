@@ -8548,7 +8548,7 @@ const ExchangeDashboardPanel = ({
             </div>
             <p className="mt-2 text-[9px] text-gray-600 sm:text-xs">{projectedLots.length} Good / Verified homes · modelled</p>
           </div>
-          <div className="min-w-0 space-y-2 border-l border-gray-200 pl-3 sm:pl-5">
+          <div className="min-w-0 space-y-2 border-l border-gray-200 pl-3 pt-7 sm:pl-5 sm:pt-8">
             {[
               ["Carbon", annualCarbonValue, "bg-emerald-700", Number.isFinite(bridgewoodValue) ? `Live £${bridgewoodValue.toFixed(2)} · ref £${carbonPrice}/t` : `Ref £${carbonPrice}/t`],
               ["Monitoring data", annualMonitoringValue, "bg-blue-600", "Repeatable annual licences"],

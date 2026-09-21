@@ -100,7 +100,7 @@ code {
   background: #4b5563;
   transform: scaleX(0);
   transform-origin: left;
-  transition: transform 500ms ease, background-color 300ms ease;
+  transition: transform 900ms ease, background-color 500ms ease;
   transition-delay: calc(280ms + var(--signal-index) * 70ms);
 }
 
@@ -171,7 +171,7 @@ code {
   width: 0;
   height: 100%;
   background: #10b981;
-  transition: width 480ms ease;
+  transition: width 1100ms ease;
 }
 
 .stage-3 .wbp-verified-rule span { width: 100%; }
