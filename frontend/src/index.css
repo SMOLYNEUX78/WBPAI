@@ -97,7 +97,7 @@ code {
   transform: scaleX(0);
   transform-origin: left;
   transition: transform 900ms ease, background-color 500ms ease;
-  transition-delay: calc(280ms + var(--signal-index) * 70ms);
+  transition-delay: 0ms;
 }
 
 .stage-4 .wbp-signal-rule,
