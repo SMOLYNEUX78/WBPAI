@@ -8567,8 +8567,8 @@ const ExchangeDashboardPanel = ({
           </div>
         </div>
         <div className="grid grid-cols-2 gap-2 border-t border-gray-200 px-3 py-3 sm:px-5">
-          <button type="button" aria-pressed={salePanelOpen && saleMode === "simple"} onClick={() => openSalePanel("simple", "market")} className="min-h-11 border border-emerald-700 bg-emerald-700 px-3 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800">Sell</button>
-          <button type="button" aria-pressed={salePanelOpen && saleMode === "advanced"} onClick={() => openSalePanel("advanced")} className="min-h-11 border border-emerald-700 bg-emerald-700 px-3 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800">Managed sale</button>
+          <button type="button" aria-pressed={salePanelOpen && saleMode === "simple"} onClick={() => openSalePanel("simple", "market")} className="min-h-11 border border-lime-500 bg-lime-400 px-3 py-2.5 text-sm font-semibold text-gray-950 hover:bg-lime-500">Sell</button>
+          <button type="button" aria-pressed={salePanelOpen && saleMode === "advanced"} onClick={() => openSalePanel("advanced")} className="min-h-11 border border-lime-500 bg-lime-400 px-3 py-2.5 text-sm font-semibold text-gray-950 hover:bg-lime-500">Managed sale</button>
         </div>
       </section>
 
