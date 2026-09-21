@@ -8532,22 +8532,23 @@ const ExchangeDashboardPanel = ({
   return (
     <main className="min-h-screen bg-white p-3 sm:p-5">
       <section className="border-b border-gray-200">
-        <div className="grid grid-cols-[minmax(0,0.85fr)_96px_minmax(112px,1fr)] items-start gap-2 px-3 py-5 sm:grid-cols-[minmax(150px,0.9fr)_160px_minmax(180px,1fr)] sm:gap-5 sm:px-5 sm:py-7 lg:grid-cols-[minmax(220px,1fr)_176px_minmax(240px,1fr)] lg:gap-8">
+        <div className="grid grid-cols-[minmax(130px,0.9fr)_minmax(130px,1fr)] items-start gap-3 px-3 py-5 sm:grid-cols-[minmax(230px,0.9fr)_minmax(260px,1fr)] sm:gap-8 sm:px-5 sm:py-7">
           <div className="min-w-0">
-            <p className="mb-1 text-[9px] font-semibold uppercase text-gray-500 sm:text-xs">East Suffolk Social Housing</p>
-            <h1 className="text-sm font-bold sm:text-lg lg:text-2xl">Portfolio Value</h1>
-            <p className="mt-1 break-words text-2xl font-bold sm:text-3xl lg:text-4xl">£{annualPortfolioValue.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-            <p className="mt-1 text-[10px] text-gray-600 sm:text-xs">{projectedLots.length} Good / Verified homes · modelled</p>
+            <p className="mb-3 text-[10px] font-semibold uppercase text-gray-600 sm:text-sm">East Suffolk Social Housing</p>
+            <div
+              className="relative h-36 w-36 rounded-full sm:h-48 sm:w-48 lg:h-52 lg:w-52"
+              style={{ background: `conic-gradient(#047857 0 ${carbonValueShare}%, #2563eb ${carbonValueShare}% ${monitoringShareEnd}%, #be123c ${monitoringShareEnd}% ${healthShareEnd}%, #0891b2 ${healthShareEnd}% ${gridShareEnd}%, #d97706 ${gridShareEnd}% 100%)` }}
+              role="img"
+              aria-label={`Portfolio value £${annualPortfolioValue.toFixed(2)}. Annual assumed value: carbon £${annualCarbonValue.toFixed(2)}, monitoring data £${annualMonitoringValue.toFixed(2)}, health data £${annualHealthDataValue.toFixed(2)}, grid data £${annualGridDataValue.toFixed(2)}, evidence £${annualEvidenceValue.toFixed(2)}`}
+            >
+              <div className="absolute inset-[18%] flex flex-col items-center justify-center rounded-full bg-white px-2 text-center">
+                <span className="text-[8px] font-semibold uppercase text-gray-500 sm:text-[10px]">Portfolio value</span>
+                <strong className="mt-0.5 text-base leading-none sm:text-xl lg:text-2xl">£{annualPortfolioValue.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+              </div>
+            </div>
+            <p className="mt-2 text-[9px] text-gray-600 sm:text-xs">{projectedLots.length} Good / Verified homes · modelled</p>
           </div>
-          <div
-            className="relative h-24 w-24 rounded-full sm:h-40 sm:w-40 lg:h-44 lg:w-44"
-            style={{ background: `conic-gradient(#047857 0 ${carbonValueShare}%, #2563eb ${carbonValueShare}% ${monitoringShareEnd}%, #be123c ${monitoringShareEnd}% ${healthShareEnd}%, #0891b2 ${healthShareEnd}% ${gridShareEnd}%, #d97706 ${gridShareEnd}% 100%)` }}
-            role="img"
-            aria-label={`Annual assumed value: carbon £${annualCarbonValue.toFixed(2)}, monitoring data £${annualMonitoringValue.toFixed(2)}, health data £${annualHealthDataValue.toFixed(2)}, grid data £${annualGridDataValue.toFixed(2)}, evidence £${annualEvidenceValue.toFixed(2)}`}
-          >
-            <div className="absolute inset-[18%] rounded-full bg-white" />
-          </div>
-          <div className="min-w-0 space-y-2 border-l border-gray-200 pl-2 sm:pl-4">
+          <div className="min-w-0 space-y-2 border-l border-gray-200 pl-3 sm:pl-5">
             {[
               ["Carbon", annualCarbonValue, "bg-emerald-700", Number.isFinite(bridgewoodValue) ? `Live £${bridgewoodValue.toFixed(2)} · ref £${carbonPrice}/t` : `Ref £${carbonPrice}/t`],
               ["Monitoring data", annualMonitoringValue, "bg-blue-600", "Repeatable annual licences"],
