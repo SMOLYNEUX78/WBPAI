@@ -8148,10 +8148,37 @@ const PortfolioDashboardPanel = ({
   const incomingPortfolioValue = Number.isFinite(bridgewoodTokens)
     ? bridgewoodTokens * PORTFOLIO_SELLER_RESERVE_PRICE + perPropertyDataValue
     : null;
-  const average = (key) => Math.round(
-    PORTFOLIO_PROPERTIES.reduce((sum, property) => sum + property[key], 0) /
-      PORTFOLIO_PROPERTIES.length
-  );
+  const auditReadyCount = PORTFOLIO_PROPERTIES.filter((property) => property.evidence >= 90).length;
+  const retrofitReadyCount = PORTFOLIO_PROPERTIES.filter((property) => ["Planned", "In works", "Verified"].includes(property.retrofit)).length;
+  const priorityProperties = PORTFOLIO_PROPERTIES
+    .filter((property) => !["Good", "Monitor"].includes(property.risk))
+    .sort((a, b) => (a.health + a.energy) - (b.health + b.energy));
+  const performanceBands = [
+    {
+      label: "Health",
+      segments: [
+        ["Good", PORTFOLIO_PROPERTIES.filter((property) => property.health >= 80).length, "bg-emerald-500"],
+        ["Watch", PORTFOLIO_PROPERTIES.filter((property) => property.health >= 65 && property.health < 80).length, "bg-amber-400"],
+        ["Action", PORTFOLIO_PROPERTIES.filter((property) => property.health < 65).length, "bg-red-500"],
+      ],
+    },
+    {
+      label: "Energy",
+      segments: [
+        ["Good", PORTFOLIO_PROPERTIES.filter((property) => property.energy >= 75).length, "bg-emerald-500"],
+        ["Watch", PORTFOLIO_PROPERTIES.filter((property) => property.energy >= 55 && property.energy < 75).length, "bg-amber-400"],
+        ["Action", PORTFOLIO_PROPERTIES.filter((property) => property.energy < 55).length, "bg-red-500"],
+      ],
+    },
+    {
+      label: "Evidence",
+      segments: [
+        ["Ready", PORTFOLIO_PROPERTIES.filter((property) => property.evidence >= 90).length, "bg-emerald-500"],
+        ["Progressing", PORTFOLIO_PROPERTIES.filter((property) => property.evidence >= 60 && property.evidence < 90).length, "bg-amber-400"],
+        ["Incomplete", PORTFOLIO_PROPERTIES.filter((property) => property.evidence < 60).length, "bg-red-500"],
+      ],
+    },
+  ];
 
   const statusClass = (value) => {
     if (["Good", "Verified", "Live", "Ready for sale"].includes(value)) return "bg-emerald-50 text-emerald-800 border-emerald-200";
@@ -8162,57 +8189,70 @@ const PortfolioDashboardPanel = ({
   return (
     <main className="min-h-screen bg-white p-3 sm:p-5">
       <header className="border-b border-gray-200 pb-4">
-        <div>
+        <div className="flex items-end justify-between gap-4">
           <div>
             <p className="text-xs font-semibold uppercase text-gray-500">Portfolio prototype</p>
             <h1 className="text-2xl font-bold">East Suffolk Social Housing</h1>
             <p className="text-sm text-gray-600">Warm Homes Programme 2027</p>
           </div>
+          <button type="button" onClick={onOpenExchange} className="shrink-0 border border-gray-300 bg-white px-3 py-2 text-xs font-semibold hover:bg-gray-50 sm:text-sm">View exchange</button>
         </div>
       </header>
 
-      <section className="grid grid-cols-2 gap-px border-b border-gray-200 bg-emerald-200/70 lg:grid-cols-[repeat(3,minmax(0,1fr))_auto]">
-        <div className="min-w-0 bg-emerald-50 px-4 py-4 sm:px-5">
-          <p className="text-xs font-semibold uppercase text-emerald-800">Ready for sale</p>
-          <p className="mt-1 text-2xl font-bold text-emerald-950">£{portfolioTokenValue.toFixed(2)}</p>
-          <p className="text-xs text-emerald-800">{portfolioTokens.toFixed(4)} WBP-C plus licensed data</p>
-        </div>
-        <div className="min-w-0 bg-emerald-50 px-4 py-4 sm:px-5">
-          <p className="text-xs font-semibold uppercase text-emerald-800">Incoming value</p>
-          <p className="mt-1 text-2xl font-bold text-emerald-950">
-            {Number.isFinite(incomingPortfolioValue) ? `£${incomingPortfolioValue.toFixed(2)}` : "--"}
-          </p>
-          <p className="text-xs text-emerald-800">14 Bridgewood Road · processing</p>
-        </div>
-        <div className="min-w-0 bg-emerald-50 px-4 py-4 sm:px-5">
-          <p className="text-xs font-semibold uppercase text-emerald-800">Eligible properties</p>
-          <p className="mt-1 text-2xl font-bold text-emerald-950">{PORTFOLIO_EXCHANGE_SUMMARY.propertyCount} / {PORTFOLIO_PROPERTIES.length}</p>
-          <p className="text-xs text-emerald-800">Audited and exchange ready</p>
-        </div>
-        <div className="flex min-w-0 items-center justify-end bg-emerald-50 px-4 py-4 sm:px-5">
-          <button
-            type="button"
-            onClick={onOpenExchange}
-            className="w-full rounded border border-emerald-700 bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800 lg:w-auto"
-          >
-            Explore exchange
-          </button>
-        </div>
-      </section>
-
-      <section className="grid grid-cols-2 border-b border-gray-200 md:grid-cols-4">
+      <section className="grid grid-cols-2 border-b border-gray-200 sm:grid-cols-3 xl:grid-cols-6">
         {[
-          ["Properties", PORTFOLIO_PROPERTIES.length, `${liveCount} reporting`],
-          ["Priority homes", priorityCount, "Action required"],
-          ["Average health", `${average("health")}/100`, "Occupied performance"],
-          ["Average energy", `${average("energy")}/100`, `${verifiedCount} retrofits verified`],
+          ["Homes", PORTFOLIO_PROPERTIES.length, `${liveCount} monitored`],
+          ["Action required", priorityCount, "Health or energy risk"],
+          ["Retrofit ready", retrofitReadyCount, `${verifiedCount} verified`],
+          ["Audit ready", auditReadyCount, `${PORTFOLIO_EXCHANGE_SUMMARY.propertyCount} exchange eligible`],
+          ["Ready value", `£${portfolioTokenValue.toFixed(0)}`, `${portfolioTokens.toFixed(2)} WBP-C + data`],
+          ["Incoming", Number.isFinite(incomingPortfolioValue) ? `£${incomingPortfolioValue.toFixed(0)}` : "--", "Bridgewood processing"],
         ].map(([label, value, detail]) => (
-          <div key={label} className="border-r border-gray-200 px-3 py-4 last:border-r-0 sm:px-5">
+          <div key={label} className="border-r border-gray-200 px-3 py-4 last:border-r-0 sm:px-4">
             <p className="text-xs uppercase text-gray-500">{label}</p>
             <p className="mt-1 text-2xl font-bold">{value}</p>
             <p className="text-xs text-gray-600">{detail}</p>
           </div>
         ))}
+      </section>
+
+      <section className="grid border-b border-gray-200 lg:grid-cols-2">
+        <div className="px-3 py-5 sm:px-5">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h2 className="text-lg font-bold">Priority actions</h2>
+            <span className="text-xs font-semibold text-red-700">{priorityCount} homes</span>
+          </div>
+          <div className="divide-y divide-gray-200 border-y border-gray-200">
+            {priorityProperties.slice(0, 4).map((property) => (
+              <button key={property.id} type="button" onClick={property.buildingId ? () => onOpenBuilding(property.buildingId) : undefined} className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 py-3 text-left hover:bg-gray-50">
+                <span className="min-w-0">
+                  <strong className="block truncate text-sm">{property.id} · {property.estate}</strong>
+                  <span className="text-xs text-gray-600">{property.risk} · {property.retrofit}</span>
+                </span>
+                <span className={`border px-2 py-1 text-xs font-semibold ${statusClass(property.risk)}`}>{property.risk}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="border-t border-gray-200 px-3 py-5 sm:px-5 lg:border-l lg:border-t-0">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h2 className="text-lg font-bold">Portfolio performance</h2>
+            <span className="text-xs text-gray-500">{PORTFOLIO_PROPERTIES.length} homes</span>
+          </div>
+          <div className="space-y-5">
+            {performanceBands.map((band) => (
+              <div key={band.label}>
+                <div className="mb-1.5 flex items-center justify-between text-sm"><strong>{band.label}</strong><span className="text-xs text-gray-500">Good · Watch · Action</span></div>
+                <div className="flex h-4 overflow-hidden bg-gray-100">
+                  {band.segments.map(([label, count, colour]) => <div key={label} className={colour} style={{ width: `${count / PORTFOLIO_PROPERTIES.length * 100}%` }} title={`${label}: ${count}`} />)}
+                </div>
+                <div className="mt-1.5 flex gap-4 text-xs text-gray-600">
+                  {band.segments.map(([label, count, colour]) => <span key={label} className="flex items-center gap-1"><i className={`h-2 w-2 ${colour}`} />{label} {count}</span>)}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </section>
 
       <section className="grid min-w-0 border-b border-gray-200 lg:grid-cols-[minmax(0,2fr)_minmax(260px,1fr)]">
@@ -8227,7 +8267,7 @@ const PortfolioDashboardPanel = ({
               className="w-full rounded border border-gray-300 px-3 py-2 text-sm sm:w-64"
             />
           </div>
-          <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
+          <div className="mb-4 flex flex-wrap gap-2">
             {riskOptions.map((risk) => (
               <button
                 key={risk}
@@ -8239,68 +8279,37 @@ const PortfolioDashboardPanel = ({
               </button>
             ))}
           </div>
-          <div className="w-full max-w-full overflow-x-auto overscroll-x-contain border border-gray-200" style={{ WebkitOverflowScrolling: "touch" }}>
-            <table className="w-full min-w-[1260px] whitespace-nowrap border-collapse text-left text-sm">
-              <thead className="bg-gray-100 text-xs uppercase text-gray-600">
-                <tr>
-                  {['Property', 'Estate', 'Archetype', 'Health', 'Energy', 'Risk', 'Retrofit', 'Value status', 'Indicative value', 'QA status', 'Delivery partner', 'Evidence'].map((heading) => (
-                    <th key={heading} className="border-b border-gray-200 px-3 py-2 font-semibold">{heading}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {filteredProperties.map((property) => {
-                  const isReadyForSale = PORTFOLIO_EXCHANGE_PROPERTIES.some(
-                    (eligibleProperty) => eligibleProperty.id === property.id
-                  );
-                  const isIncoming = property.buildingId === "home";
-                  const propertyValue = isReadyForSale
-                    ? property.projectedAnnualCredits * PORTFOLIO_SELLER_RESERVE_PRICE + perPropertyDataValue
-                    : isIncoming
-                    ? incomingPortfolioValue
-                    : null;
-                  const valueStatus = isReadyForSale
-                    ? "Ready for sale"
-                    : isIncoming
-                    ? "Processing"
-                    : "Not valued";
-
-                  return (
-                  <tr
-                    key={property.id}
-                    className={`border-b border-gray-100 last:border-b-0 ${property.buildingId ? "cursor-pointer hover:bg-emerald-50" : "hover:bg-gray-50"}`}
-                    onClick={property.buildingId ? () => onOpenBuilding(property.buildingId) : undefined}
-                  >
-                    <td className="px-3 py-3 font-semibold">
-                      {property.buildingId ? (
-                        <button
-                          type="button"
-                          className="text-left text-emerald-800 underline decoration-emerald-300 underline-offset-4"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            onOpenBuilding(property.buildingId);
-                          }}
-                        >
-                          {property.id}
-                        </button>
-                      ) : property.id}
-                    </td>
-                    <td className="px-3 py-3">{property.estate}</td>
-                    <td className="px-3 py-3">{property.archetype}</td>
-                    <td className="px-3 py-3">{property.health}/100</td>
-                    <td className="px-3 py-3">{property.energy}/100</td>
-                    <td className="px-3 py-3"><span className={`rounded border px-2 py-1 text-xs font-semibold ${statusClass(property.risk)}`}>{property.risk}</span></td>
-                    <td className="px-3 py-3">{property.retrofit}</td>
-                    <td className="px-3 py-3"><span className={`rounded border px-2 py-1 text-xs font-semibold ${statusClass(valueStatus)}`}>{valueStatus}</span></td>
-                    <td className="px-3 py-3 font-semibold">{Number.isFinite(propertyValue) ? `£${propertyValue.toFixed(2)}` : "--"}</td>
-                    <td className="px-3 py-3"><span className={`rounded border px-2 py-1 text-xs font-semibold ${statusClass(property.qa)}`}>{property.qa}</span></td>
-                    <td className="px-3 py-3">{property.supplier}</td>
-                    <td className="px-3 py-3">{property.evidence}%</td>
-                  </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="border border-gray-200">
+            <div className="hidden grid-cols-[minmax(180px,1.35fr)_80px_80px_minmax(105px,0.8fr)_minmax(110px,0.9fr)] gap-3 bg-gray-100 px-3 py-2 text-xs font-semibold uppercase text-gray-600 md:grid">
+              <span>Home</span><span>Health</span><span>Energy</span><span>Priority</span><span>Evidence</span>
+            </div>
+            <div className="divide-y divide-gray-200">
+              {filteredProperties.map((property) => (
+                <button
+                  key={property.id}
+                  type="button"
+                  onClick={property.buildingId ? () => onOpenBuilding(property.buildingId) : undefined}
+                  className={`grid w-full gap-3 px-3 py-3 text-left md:grid-cols-[minmax(180px,1.35fr)_80px_80px_minmax(105px,0.8fr)_minmax(110px,0.9fr)] md:items-center ${property.buildingId ? "hover:bg-emerald-50" : "hover:bg-gray-50"}`}
+                >
+                  <span className="min-w-0">
+                    <strong className={`block truncate text-sm ${property.buildingId ? "text-emerald-800 underline decoration-emerald-300 underline-offset-4" : ""}`}>{property.id} · {property.estate}</strong>
+                    <span className="block truncate text-xs text-gray-500">{property.archetype} · {property.retrofit} · {property.supplier}</span>
+                  </span>
+                  <span className="grid grid-cols-2 gap-2 md:contents">
+                    <span><small className="block text-[10px] uppercase text-gray-500 md:hidden">Health</small><strong className="text-sm">{property.health}/100</strong></span>
+                    <span><small className="block text-[10px] uppercase text-gray-500 md:hidden">Energy</small><strong className="text-sm">{property.energy}/100</strong></span>
+                  </span>
+                  <span className="flex items-center justify-between gap-2 md:block">
+                    <small className="text-[10px] uppercase text-gray-500 md:hidden">Priority</small>
+                    <span className={`border px-2 py-1 text-xs font-semibold ${statusClass(property.risk)}`}>{property.risk}</span>
+                  </span>
+                  <span>
+                    <span className="mb-1 flex justify-between text-xs"><small className="uppercase text-gray-500 md:hidden">Evidence</small><strong>{property.evidence}%</strong></span>
+                    <span className="block h-1.5 bg-gray-100"><i className={`block h-full ${property.evidence >= 90 ? "bg-emerald-500" : property.evidence >= 60 ? "bg-amber-400" : "bg-red-500"}`} style={{ width: `${property.evidence}%` }} /></span>
+                  </span>
+                </button>
+              ))}
+            </div>
             {filteredProperties.length === 0 ? <p className="p-6 text-center text-sm text-gray-500">No matching properties</p> : null}
           </div>
         </div>
