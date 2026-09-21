@@ -161,6 +161,7 @@ code {
   transition: opacity 350ms ease 100ms;
 }
 
+.stage-2 .wbp-profile-lockup > p,
 .stage-3 .wbp-profile-lockup > p,
 .stage-4 .wbp-profile-lockup > p,
 .stage-5 .wbp-profile-lockup > p { opacity: 1; }
