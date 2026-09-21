@@ -8047,14 +8047,14 @@ const NewBuildingSetupPanel = () => {
 };
 
 const PORTFOLIO_PROPERTIES = [
-  { id: "WBP-001", estate: "14 Bridgewood Road", archetype: "Semi-detached", health: 87, energy: 88, risk: "Monitor", retrofit: "Assessed", evidence: 63, qa: "Monitoring", supplier: "Pending appointment", collector: "Live", epcBefore: "D", epcAfter: null, measure: "Whole-house design pending", pas2035: true, residentConsent: false, trustmark: false, buildingId: "home" },
-  { id: "WBP-002", estate: "Bridgewood", archetype: "Terrace", health: 61, energy: 54, risk: "Damp", retrofit: "Assessed", evidence: 42, qa: "Action needed", supplier: "EastBuild Retrofit", collector: "Live", epcBefore: "D", epcAfter: null, measure: "Fabric assessment", pas2035: true, residentConsent: false, trustmark: false },
-  { id: "WBP-003", estate: "Kyson", archetype: "Flat", health: 72, energy: 47, risk: "Cold", retrofit: "Design ready", evidence: 78, qa: "Pre-works", supplier: "Suffolk Whole House", collector: "Live", epcBefore: "E", epcAfter: null, measure: "Insulation + glazing", pas2035: true, residentConsent: false, trustmark: false },
-  { id: "WBP-004", estate: "Kyson", archetype: "Maisonette", health: 58, energy: 69, risk: "IAQ", retrofit: "Installation started", evidence: 86, qa: "Action needed", supplier: "EastBuild Retrofit", collector: "Attention", epcBefore: "D", epcAfter: null, measure: "Ventilation + fabric", pas2035: true, residentConsent: true, trustmark: false },
-  { id: "WBP-005", estate: "Rendlesham", archetype: "Bungalow", health: 91, energy: 76, risk: "Good", retrofit: "TrustMark + handover", evidence: 100, qa: "Verified", supplier: "Suffolk Whole House", collector: "Live", epcBefore: "D", epcAfter: "B", measure: "Fabric + heat pump", pas2035: true, residentConsent: true, trustmark: true, projectedAnnualCredits: 1.35 },
-  { id: "WBP-006", estate: "Rendlesham", archetype: "Semi-detached", health: 67, energy: 51, risk: "Heat loss", retrofit: "Assessed", evidence: 55, qa: "Action needed", supplier: "Coastal Energy Works", collector: "Live", epcBefore: "E", epcAfter: null, measure: "Fabric assessment", pas2035: true, residentConsent: false, trustmark: false },
-  { id: "WBP-007", estate: "Melton", archetype: "Terrace", health: 76, energy: 64, risk: "Overheat", retrofit: "Resident confirmed", evidence: 71, qa: "Pre-works", supplier: "Coastal Energy Works", collector: "Live", epcBefore: "D", epcAfter: null, measure: "Solar + ventilation", pas2035: true, residentConsent: true, trustmark: false },
-  { id: "WBP-008", estate: "Melton", archetype: "Flat", health: 83, energy: 81, risk: "Good", retrofit: "TrustMark + handover", evidence: 96, qa: "Verified", supplier: "Suffolk Whole House", collector: "Live", epcBefore: "D", epcAfter: "C", measure: "Fabric + solar", pas2035: true, residentConsent: true, trustmark: true, projectedAnnualCredits: 0.92 },
+  { id: "WBP-001", estate: "14 Bridgewood Road", archetype: "Semi-detached", health: 87, energy: 88, risk: "Monitor", retrofit: "Assessed", evidence: 63, qa: "Monitoring", supplier: "Pending appointment", collector: "Live", euiBefore: 41.5, euiAfter: null, measure: "Whole-house design pending", pas2035: true, residentConsent: false, trustmark: false, buildingId: "home" },
+  { id: "WBP-002", estate: "Bridgewood", archetype: "Terrace", health: 61, energy: 54, risk: "Damp", retrofit: "Assessed", evidence: 42, qa: "Action needed", supplier: "EastBuild Retrofit", collector: "Live", euiBefore: 132, euiAfter: null, measure: "Fabric assessment", pas2035: true, residentConsent: false, trustmark: false },
+  { id: "WBP-003", estate: "Kyson", archetype: "Flat", health: 72, energy: 47, risk: "Cold", retrofit: "Design ready", evidence: 78, qa: "Pre-works", supplier: "Suffolk Whole House", collector: "Live", euiBefore: 148, euiAfter: null, measure: "Insulation + glazing", pas2035: true, residentConsent: false, trustmark: false },
+  { id: "WBP-004", estate: "Kyson", archetype: "Maisonette", health: 58, energy: 69, risk: "IAQ", retrofit: "Installation started", evidence: 86, qa: "Action needed", supplier: "EastBuild Retrofit", collector: "Attention", euiBefore: 94, euiAfter: null, measure: "Ventilation + fabric", pas2035: true, residentConsent: true, trustmark: false },
+  { id: "WBP-005", estate: "Rendlesham", archetype: "Bungalow", health: 91, energy: 76, risk: "Good", retrofit: "TrustMark + handover", evidence: 100, qa: "Verified", supplier: "Suffolk Whole House", collector: "Live", euiBefore: 118, euiAfter: 36, measure: "Fabric + heat pump", pas2035: true, residentConsent: true, trustmark: true, projectedAnnualCredits: 1.35 },
+  { id: "WBP-006", estate: "Rendlesham", archetype: "Semi-detached", health: 67, energy: 51, risk: "Heat loss", retrofit: "Assessed", evidence: 55, qa: "Action needed", supplier: "Coastal Energy Works", collector: "Live", euiBefore: 151, euiAfter: null, measure: "Fabric assessment", pas2035: true, residentConsent: false, trustmark: false },
+  { id: "WBP-007", estate: "Melton", archetype: "Terrace", health: 76, energy: 64, risk: "Overheat", retrofit: "Resident confirmed", evidence: 71, qa: "Pre-works", supplier: "Coastal Energy Works", collector: "Live", euiBefore: 88, euiAfter: null, measure: "Solar + ventilation", pas2035: true, residentConsent: true, trustmark: false },
+  { id: "WBP-008", estate: "Melton", archetype: "Flat", health: 83, energy: 81, risk: "Good", retrofit: "TrustMark + handover", evidence: 96, qa: "Verified", supplier: "Suffolk Whole House", collector: "Live", euiBefore: 102, euiAfter: 42, measure: "Fabric + solar", pas2035: true, residentConsent: true, trustmark: true, projectedAnnualCredits: 0.92 },
 ];
 
 const PORTFOLIO_SELLER_RESERVE_PRICE = 85;
@@ -8174,10 +8174,10 @@ const PortfolioDashboardPanel = ({
   const incomingPortfolioValue = Number.isFinite(bridgewoodTokens)
     ? bridgewoodTokens * PORTFOLIO_SELLER_RESERVE_PRICE + perPropertyDataValue
     : null;
-  const reportingReadyCount = PORTFOLIO_PROPERTIES.filter((property) => property.trustmark && property.epcAfter && property.evidence >= 90).length;
+  const reportingReadyCount = PORTFOLIO_PROPERTIES.filter((property) => property.trustmark && Number.isFinite(property.euiAfter) && property.evidence >= 90).length;
   const retrofitReadyCount = PORTFOLIO_PROPERTIES.filter((property) => ["Design ready", "Resident confirmed", "Installation started", "TrustMark + handover"].includes(property.retrofit)).length;
   const residentConfirmedCount = PORTFOLIO_PROPERTIES.filter((property) => property.residentConsent).length;
-  const epcCCount = PORTFOLIO_PROPERTIES.filter((property) => property.epcAfter && property.epcAfter <= "C").length;
+  const euiTargetCount = PORTFOLIO_PROPERTIES.filter((property) => Number.isFinite(property.euiAfter) && property.euiAfter <= 60).length;
   const priorityProperties = PORTFOLIO_PROPERTIES
     .filter((property) => !["Good", "Monitor"].includes(property.risk))
     .sort((a, b) => (a.health + a.energy) - (b.health + b.energy));
@@ -8329,7 +8329,7 @@ const PortfolioDashboardPanel = ({
                 >
                   <span className="min-w-0" title={`${property.measure} · ${property.supplier}`}>
                     <strong className={`block truncate text-sm ${property.buildingId ? "text-emerald-800 underline decoration-emerald-300 underline-offset-4" : ""}`}>{property.id} · {property.estate}</strong>
-                    <span className="block truncate text-xs text-gray-500">{property.archetype} · {property.retrofit} · EPC {property.epcBefore}{property.epcAfter ? ` → ${property.epcAfter}` : ""}</span>
+                    <span className="block truncate text-xs text-gray-500">{property.archetype} · {property.retrofit} · EUI {property.euiBefore}{Number.isFinite(property.euiAfter) ? ` → ${property.euiAfter}` : ""} kWh/m²/yr</span>
                   </span>
                   <span className="grid grid-cols-2 gap-2 md:contents">
                     <span><small className="block text-[10px] uppercase text-gray-500 md:hidden">Health</small><strong className="text-sm">{property.health}/100</strong></span>
@@ -8364,7 +8364,7 @@ const PortfolioDashboardPanel = ({
           <div className="mt-4 grid grid-cols-2 gap-px border border-gray-200 bg-gray-200 text-sm">
             <div className="bg-white p-3"><p className="text-xs uppercase text-gray-500">PAS 2035 assessed</p><p className="mt-1 text-xl font-bold">{PORTFOLIO_PROPERTIES.filter((property) => property.pas2035).length}</p></div>
             <div className="bg-white p-3"><p className="text-xs uppercase text-gray-500">Resident confirmed</p><p className="mt-1 text-xl font-bold">{residentConfirmedCount}</p></div>
-            <div className="bg-white p-3"><p className="text-xs uppercase text-gray-500">EPC C or better</p><p className="mt-1 text-xl font-bold text-emerald-700">{epcCCount}</p></div>
+            <div className="bg-white p-3"><p className="text-xs uppercase text-gray-500">EUI target achieved</p><p className="mt-1 text-xl font-bold text-emerald-700">{euiTargetCount}</p></div>
             <div className="bg-white p-3"><p className="text-xs uppercase text-gray-500">TrustMark lodged</p><p className="mt-1 text-xl font-bold text-emerald-700">{verifiedCount}</p></div>
           </div>
           <div className="mt-6 grid grid-cols-2 border-t border-gray-200 pt-4">
@@ -8391,7 +8391,7 @@ const PortfolioDashboardPanel = ({
               <dl className="mt-3 space-y-3 text-xs sm:text-sm">
                 <div className="flex items-start justify-between gap-2"><dt>Whole Dwelling Assessments</dt><dd className="shrink-0 font-semibold">8 / 8</dd></div>
                 <div className="flex items-start justify-between gap-2"><dt>Resident consent</dt><dd className="shrink-0 font-semibold">{residentConfirmedCount} / 8</dd></div>
-                <div className="flex items-start justify-between gap-2"><dt>Post-works EPC</dt><dd className="shrink-0 font-semibold">{epcCCount} / 8</dd></div>
+                <div className="flex items-start justify-between gap-2"><dt>Post-works EUI ≤60</dt><dd className="shrink-0 font-semibold">{euiTargetCount} / 8</dd></div>
                 <div className="flex items-start justify-between gap-2"><dt>TrustMark + handover</dt><dd className="shrink-0 font-semibold">{verifiedCount} / 8</dd></div>
                 <div className="flex items-start justify-between gap-2"><dt>Monthly report ready</dt><dd className="shrink-0 font-semibold text-emerald-700">{reportingReadyCount}</dd></div>
               </dl>
