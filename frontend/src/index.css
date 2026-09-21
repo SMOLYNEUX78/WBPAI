@@ -79,20 +79,23 @@ code {
   text-transform: uppercase;
   opacity: 0;
   transform: translateX(34px);
-  transition: opacity 320ms ease, transform 480ms cubic-bezier(0.2, 0.8, 0.2, 1), color 300ms ease;
-  transition-delay: calc(var(--signal-index) * 70ms);
+  transition: opacity 380ms ease, transform 500ms cubic-bezier(0.2, 0.8, 0.2, 1), color 300ms ease;
+  transition-delay: calc(var(--signal-index) * 240ms);
 }
 
 .wbp-signal-row:nth-child(even) { transform: translateX(-34px); }
 
 .stage-1 .wbp-signal-row,
 .stage-2 .wbp-signal-row,
-.stage-3 .wbp-signal-row {
+.stage-3 .wbp-signal-row,
+.stage-4 .wbp-signal-row,
+.stage-5 .wbp-signal-row {
   opacity: 1;
   transform: translateX(0);
 }
 
-.stage-3 .wbp-signal-row { color: #d1d5db; }
+.stage-4 .wbp-signal-row,
+.stage-5 .wbp-signal-row { color: #d1d5db; }
 
 .wbp-signal-rule {
   display: block;
@@ -104,11 +107,11 @@ code {
   transition-delay: calc(280ms + var(--signal-index) * 70ms);
 }
 
-.stage-1 .wbp-signal-rule,
-.stage-2 .wbp-signal-rule,
-.stage-3 .wbp-signal-rule { transform: scaleX(1); }
+.stage-4 .wbp-signal-rule,
+.stage-5 .wbp-signal-rule { transform: scaleX(1); }
 
-.stage-3 .wbp-signal-rule { background: #10b981; }
+.stage-4 .wbp-signal-rule,
+.stage-5 .wbp-signal-rule { background: #10b981; }
 
 .wbp-signal-state { text-align: right; }
 
@@ -128,7 +131,9 @@ code {
 }
 
 .stage-2 .wbp-profile-name,
-.stage-3 .wbp-profile-name {
+.stage-3 .wbp-profile-name,
+.stage-4 .wbp-profile-name,
+.stage-5 .wbp-profile-name {
   opacity: 1;
   transform: translateY(0);
 }
@@ -156,8 +161,9 @@ code {
   transition: opacity 350ms ease 100ms;
 }
 
-.stage-2 .wbp-profile-lockup > p,
-.stage-3 .wbp-profile-lockup > p { opacity: 1; }
+.stage-3 .wbp-profile-lockup > p,
+.stage-4 .wbp-profile-lockup > p,
+.stage-5 .wbp-profile-lockup > p { opacity: 1; }
 
 .wbp-verified-rule {
   height: 3px;
@@ -174,7 +180,7 @@ code {
   transition: width 1100ms ease;
 }
 
-.stage-3 .wbp-verified-rule span { width: 100%; }
+.stage-5 .wbp-verified-rule span { width: 100%; }
 
 .wbp-profile-status {
   display: flex;
@@ -185,7 +191,13 @@ code {
   font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
+  opacity: 0;
+  transition: opacity 350ms ease;
 }
+
+.stage-3 .wbp-profile-status,
+.stage-4 .wbp-profile-status,
+.stage-5 .wbp-profile-status { opacity: 1; }
 
 .wbp-status-marker {
   width: 7px;
@@ -194,7 +206,7 @@ code {
   transition: background-color 250ms ease;
 }
 
-.stage-3 .wbp-status-marker { background: #10b981; }
+.stage-5 .wbp-status-marker { background: #10b981; }
 
 @media (max-width: 480px) {
   .wbp-splash-shell { padding: 22px; }

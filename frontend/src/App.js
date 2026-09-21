@@ -15,15 +15,19 @@ const SplashScreen = () => {
   const [fadeOut, setFadeOut] = useState(false);
 
   useEffect(() => {
-    const assembleTimer = setTimeout(() => setStage(1), 700);
-    const resolveTimer = setTimeout(() => setStage(2), 1450);
-    const verifyTimer = setTimeout(() => setStage(3), 2750);
+    const assembleTimer = setTimeout(() => setStage(1), 350);
+    const resolveTimer = setTimeout(() => setStage(2), 1750);
+    const subtitleTimer = setTimeout(() => setStage(3), 2500);
+    const signalTimer = setTimeout(() => setStage(4), 3000);
+    const verifyTimer = setTimeout(() => setStage(5), 4450);
     const exitTimer = setTimeout(() => setFadeOut(true), 5700);
     const navigationTimer = setTimeout(() => navigate("/dashboard/new"), 6100);
 
     return () => {
       clearTimeout(assembleTimer);
       clearTimeout(resolveTimer);
+      clearTimeout(subtitleTimer);
+      clearTimeout(signalTimer);
       clearTimeout(verifyTimer);
       clearTimeout(exitTimer);
       clearTimeout(navigationTimer);
@@ -77,7 +81,7 @@ const SplashScreen = () => {
           </div>
           <div className="wbp-profile-status">
             <span className="wbp-status-marker" aria-hidden="true" />
-            <span>{stage >= 3 ? "Profile verified" : "Assembling profile"}</span>
+            <span>{stage >= 5 ? "Profile verified" : "Assembling profile"}</span>
           </div>
         </div>
       </main>
