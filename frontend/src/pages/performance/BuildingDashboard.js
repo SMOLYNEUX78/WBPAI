@@ -8047,14 +8047,14 @@ const NewBuildingSetupPanel = () => {
 };
 
 const PORTFOLIO_PROPERTIES = [
-  { id: "WBP-001", estate: "14 Bridgewood Road", archetype: "Semi-detached", health: 87, energy: 88, risk: "Monitor", retrofit: "Baseline", evidence: 63, qa: "Monitoring", supplier: "Pending appointment", collector: "Live", buildingId: "home" },
-  { id: "WBP-002", estate: "Bridgewood", archetype: "Terrace", health: 61, energy: 54, risk: "Damp", retrofit: "Assessment", evidence: 42, qa: "Action needed", supplier: "EastBuild Retrofit", collector: "Live" },
-  { id: "WBP-003", estate: "Kyson", archetype: "Flat", health: 72, energy: 47, risk: "Cold", retrofit: "Planned", evidence: 78, qa: "Pre-works", supplier: "Suffolk Whole House", collector: "Live" },
-  { id: "WBP-004", estate: "Kyson", archetype: "Maisonette", health: 58, energy: 69, risk: "IAQ", retrofit: "In works", evidence: 86, qa: "Action needed", supplier: "EastBuild Retrofit", collector: "Attention" },
-  { id: "WBP-005", estate: "Rendlesham", archetype: "Bungalow", health: 91, energy: 76, risk: "Good", retrofit: "Verified", evidence: 100, qa: "Verified", supplier: "Suffolk Whole House", collector: "Live", projectedAnnualCredits: 1.35 },
-  { id: "WBP-006", estate: "Rendlesham", archetype: "Semi-detached", health: 67, energy: 51, risk: "Heat loss", retrofit: "Assessment", evidence: 55, qa: "Action needed", supplier: "Coastal Energy Works", collector: "Live" },
-  { id: "WBP-007", estate: "Melton", archetype: "Terrace", health: 76, energy: 64, risk: "Overheat", retrofit: "Planned", evidence: 71, qa: "Pre-works", supplier: "Coastal Energy Works", collector: "Live" },
-  { id: "WBP-008", estate: "Melton", archetype: "Flat", health: 83, energy: 81, risk: "Good", retrofit: "Verified", evidence: 96, qa: "Verified", supplier: "Suffolk Whole House", collector: "Live", projectedAnnualCredits: 0.92 },
+  { id: "WBP-001", estate: "14 Bridgewood Road", archetype: "Semi-detached", health: 87, energy: 88, risk: "Monitor", retrofit: "Assessed", evidence: 63, qa: "Monitoring", supplier: "Pending appointment", collector: "Live", epcBefore: "D", epcAfter: null, measure: "Whole-house design pending", pas2035: true, residentConsent: false, trustmark: false, buildingId: "home" },
+  { id: "WBP-002", estate: "Bridgewood", archetype: "Terrace", health: 61, energy: 54, risk: "Damp", retrofit: "Assessed", evidence: 42, qa: "Action needed", supplier: "EastBuild Retrofit", collector: "Live", epcBefore: "D", epcAfter: null, measure: "Fabric assessment", pas2035: true, residentConsent: false, trustmark: false },
+  { id: "WBP-003", estate: "Kyson", archetype: "Flat", health: 72, energy: 47, risk: "Cold", retrofit: "Design ready", evidence: 78, qa: "Pre-works", supplier: "Suffolk Whole House", collector: "Live", epcBefore: "E", epcAfter: null, measure: "Insulation + glazing", pas2035: true, residentConsent: false, trustmark: false },
+  { id: "WBP-004", estate: "Kyson", archetype: "Maisonette", health: 58, energy: 69, risk: "IAQ", retrofit: "Installation started", evidence: 86, qa: "Action needed", supplier: "EastBuild Retrofit", collector: "Attention", epcBefore: "D", epcAfter: null, measure: "Ventilation + fabric", pas2035: true, residentConsent: true, trustmark: false },
+  { id: "WBP-005", estate: "Rendlesham", archetype: "Bungalow", health: 91, energy: 76, risk: "Good", retrofit: "TrustMark + handover", evidence: 100, qa: "Verified", supplier: "Suffolk Whole House", collector: "Live", epcBefore: "D", epcAfter: "B", measure: "Fabric + heat pump", pas2035: true, residentConsent: true, trustmark: true, projectedAnnualCredits: 1.35 },
+  { id: "WBP-006", estate: "Rendlesham", archetype: "Semi-detached", health: 67, energy: 51, risk: "Heat loss", retrofit: "Assessed", evidence: 55, qa: "Action needed", supplier: "Coastal Energy Works", collector: "Live", epcBefore: "E", epcAfter: null, measure: "Fabric assessment", pas2035: true, residentConsent: false, trustmark: false },
+  { id: "WBP-007", estate: "Melton", archetype: "Terrace", health: 76, energy: 64, risk: "Overheat", retrofit: "Resident confirmed", evidence: 71, qa: "Pre-works", supplier: "Coastal Energy Works", collector: "Live", epcBefore: "D", epcAfter: null, measure: "Solar + ventilation", pas2035: true, residentConsent: true, trustmark: false },
+  { id: "WBP-008", estate: "Melton", archetype: "Flat", health: 83, energy: 81, risk: "Good", retrofit: "TrustMark + handover", evidence: 96, qa: "Verified", supplier: "Suffolk Whole House", collector: "Live", epcBefore: "D", epcAfter: "C", measure: "Fabric + solar", pas2035: true, residentConsent: true, trustmark: true, projectedAnnualCredits: 0.92 },
 ];
 
 const PORTFOLIO_SELLER_RESERVE_PRICE = 85;
@@ -8134,7 +8134,7 @@ const PortfolioDashboardPanel = ({
   });
   const liveCount = PORTFOLIO_PROPERTIES.filter((property) => property.collector === "Live").length;
   const priorityCount = PORTFOLIO_PROPERTIES.filter((property) => !["Good", "Monitor"].includes(property.risk)).length;
-  const verifiedCount = PORTFOLIO_PROPERTIES.filter((property) => property.retrofit === "Verified").length;
+  const verifiedCount = PORTFOLIO_PROPERTIES.filter((property) => property.trustmark).length;
   const portfolioTokens = PORTFOLIO_EXCHANGE_SUMMARY.carbonCredits;
   const portfolioTokenValue = PORTFOLIO_EXCHANGE_SUMMARY.totalValue;
   const perPropertyDataValue =
@@ -8148,8 +8148,10 @@ const PortfolioDashboardPanel = ({
   const incomingPortfolioValue = Number.isFinite(bridgewoodTokens)
     ? bridgewoodTokens * PORTFOLIO_SELLER_RESERVE_PRICE + perPropertyDataValue
     : null;
-  const auditReadyCount = PORTFOLIO_PROPERTIES.filter((property) => property.evidence >= 90).length;
-  const retrofitReadyCount = PORTFOLIO_PROPERTIES.filter((property) => ["Planned", "In works", "Verified"].includes(property.retrofit)).length;
+  const reportingReadyCount = PORTFOLIO_PROPERTIES.filter((property) => property.trustmark && property.epcAfter && property.evidence >= 90).length;
+  const retrofitReadyCount = PORTFOLIO_PROPERTIES.filter((property) => ["Design ready", "Resident confirmed", "Installation started", "TrustMark + handover"].includes(property.retrofit)).length;
+  const residentConfirmedCount = PORTFOLIO_PROPERTIES.filter((property) => property.residentConsent).length;
+  const epcCCount = PORTFOLIO_PROPERTIES.filter((property) => property.epcAfter && property.epcAfter <= "C").length;
   const priorityProperties = PORTFOLIO_PROPERTIES
     .filter((property) => !["Good", "Monitor"].includes(property.risk))
     .sort((a, b) => (a.health + a.energy) - (b.health + b.energy));
@@ -8181,7 +8183,7 @@ const PortfolioDashboardPanel = ({
   ];
 
   const statusClass = (value) => {
-    if (["Good", "Verified", "Live", "Ready for sale"].includes(value)) return "bg-emerald-50 text-emerald-800 border-emerald-200";
+    if (["Good", "Verified", "Live", "Ready for sale", "TrustMark + handover"].includes(value)) return "bg-emerald-50 text-emerald-800 border-emerald-200";
     if (["Damp", "Cold", "IAQ", "Heat loss", "Overheat", "Attention", "Action needed"].includes(value)) return "bg-red-50 text-red-800 border-red-200";
     return "bg-amber-50 text-amber-800 border-amber-200";
   };
@@ -8193,25 +8195,25 @@ const PortfolioDashboardPanel = ({
           <div>
             <p className="text-xs font-semibold uppercase text-gray-500">Portfolio prototype</p>
             <h1 className="text-2xl font-bold">East Suffolk Social Housing</h1>
-            <p className="text-sm text-gray-600">Warm Homes Programme 2027</p>
+            <p className="text-sm text-gray-600">Warm Homes: Social Housing Fund · 2027 delivery</p>
           </div>
           <button type="button" onClick={onOpenExchange} className="shrink-0 border border-gray-300 bg-white px-3 py-2 text-xs font-semibold hover:bg-gray-50 sm:text-sm">View exchange</button>
         </div>
       </header>
 
-      <section className="grid grid-cols-2 border-b border-gray-200 sm:grid-cols-3 xl:grid-cols-6">
+      <section className="grid grid-cols-2 gap-px border-b border-emerald-200 bg-emerald-200 sm:grid-cols-3 xl:grid-cols-6">
         {[
           ["Homes", PORTFOLIO_PROPERTIES.length, `${liveCount} monitored`],
           ["Action required", priorityCount, "Health or energy risk"],
           ["Retrofit ready", retrofitReadyCount, `${verifiedCount} verified`],
-          ["Audit ready", auditReadyCount, `${PORTFOLIO_EXCHANGE_SUMMARY.propertyCount} exchange eligible`],
+          ["Reporting ready", reportingReadyCount, `${PORTFOLIO_EXCHANGE_SUMMARY.propertyCount} exchange eligible`],
           ["Ready value", `£${portfolioTokenValue.toFixed(0)}`, `${portfolioTokens.toFixed(2)} WBP-C + data`],
           ["Incoming", Number.isFinite(incomingPortfolioValue) ? `£${incomingPortfolioValue.toFixed(0)}` : "--", "Bridgewood processing"],
         ].map(([label, value, detail]) => (
-          <div key={label} className="border-r border-gray-200 px-3 py-4 last:border-r-0 sm:px-4">
-            <p className="text-xs uppercase text-gray-500">{label}</p>
-            <p className="mt-1 text-2xl font-bold">{value}</p>
-            <p className="text-xs text-gray-600">{detail}</p>
+          <div key={label} className="bg-emerald-50 px-3 py-4 sm:px-4">
+            <p className="text-xs font-semibold uppercase text-emerald-800">{label}</p>
+            <p className="mt-1 text-2xl font-bold text-emerald-950">{value}</p>
+            <p className="text-xs text-emerald-800">{detail}</p>
           </div>
         ))}
       </section>
@@ -8293,7 +8295,8 @@ const PortfolioDashboardPanel = ({
                 >
                   <span className="min-w-0">
                     <strong className={`block truncate text-sm ${property.buildingId ? "text-emerald-800 underline decoration-emerald-300 underline-offset-4" : ""}`}>{property.id} · {property.estate}</strong>
-                    <span className="block truncate text-xs text-gray-500">{property.archetype} · {property.retrofit} · {property.supplier}</span>
+                    <span className="block truncate text-xs text-gray-500">{property.archetype} · {property.retrofit} · EPC {property.epcBefore}{property.epcAfter ? ` → ${property.epcAfter}` : ""}</span>
+                    <span className="block truncate text-[10px] text-gray-500">{property.measure} · {property.supplier}</span>
                   </span>
                   <span className="grid grid-cols-2 gap-2 md:contents">
                     <span><small className="block text-[10px] uppercase text-gray-500 md:hidden">Health</small><strong className="text-sm">{property.health}/100</strong></span>
@@ -8315,23 +8318,24 @@ const PortfolioDashboardPanel = ({
         </div>
 
         <aside className="border-t border-gray-200 px-3 py-5 sm:px-5 lg:border-l lg:border-t-0">
-          <h2 className="text-lg font-bold">Quality assurance</h2>
+          <h2 className="text-lg font-bold">Warm Homes compliance</h2>
           <div className="mt-4 grid grid-cols-2 gap-px border border-gray-200 bg-gray-200 text-sm">
-            <div className="bg-white p-3"><p className="text-xs uppercase text-gray-500">Verified outcomes</p><p className="mt-1 text-xl font-bold">2</p></div>
-            <div className="bg-white p-3"><p className="text-xs uppercase text-gray-500">Action needed</p><p className="mt-1 text-xl font-bold text-red-700">3</p></div>
-            <div className="bg-white p-3"><p className="text-xs uppercase text-gray-500">Open defects</p><p className="mt-1 text-xl font-bold text-amber-700">6</p></div>
-            <div className="bg-white p-3"><p className="text-xs uppercase text-gray-500">Retention ready</p><p className="mt-1 text-xl font-bold text-emerald-700">2</p></div>
+            <div className="bg-white p-3"><p className="text-xs uppercase text-gray-500">PAS 2035 assessed</p><p className="mt-1 text-xl font-bold">{PORTFOLIO_PROPERTIES.filter((property) => property.pas2035).length}</p></div>
+            <div className="bg-white p-3"><p className="text-xs uppercase text-gray-500">Resident confirmed</p><p className="mt-1 text-xl font-bold">{residentConfirmedCount}</p></div>
+            <div className="bg-white p-3"><p className="text-xs uppercase text-gray-500">EPC C or better</p><p className="mt-1 text-xl font-bold text-emerald-700">{epcCCount}</p></div>
+            <div className="bg-white p-3"><p className="text-xs uppercase text-gray-500">TrustMark lodged</p><p className="mt-1 text-xl font-bold text-emerald-700">{verifiedCount}</p></div>
           </div>
           <div className="mt-6 grid grid-cols-2 border-t border-gray-200 pt-4">
             <div className="min-w-0 pr-3 sm:pr-4">
-              <h3 className="text-sm font-semibold sm:text-base">Retrofit programme</h3>
+              <h3 className="text-sm font-semibold sm:text-base">Scheme milestones</h3>
               <div className="mt-3 space-y-3">
                 {[
-                  ["Baseline", 1, "bg-gray-500"],
-                  ["Assessment", 2, "bg-amber-500"],
-                  ["Planned", 2, "bg-blue-500"],
-                  ["In works", 1, "bg-violet-500"],
-                  ["Verified", 2, "bg-emerald-500"],
+                  ["Homes assessed", 8, "bg-gray-500"],
+                  ["Design ready", 5, "bg-blue-500"],
+                  ["Resident confirmed", residentConfirmedCount, "bg-cyan-500"],
+                  ["Installation started", 3, "bg-violet-500"],
+                  ["Installation complete", verifiedCount, "bg-teal-500"],
+                  ["TrustMark + handover", verifiedCount, "bg-emerald-500"],
                 ].map(([label, count, colour]) => (
                   <div key={label}>
                     <div className="mb-1 flex justify-between gap-2 text-xs sm:text-sm"><span>{label}</span><strong>{count}</strong></div>
@@ -8341,12 +8345,13 @@ const PortfolioDashboardPanel = ({
               </div>
             </div>
             <div className="min-w-0 border-l border-gray-200 pl-3 sm:pl-4">
-              <h3 className="text-sm font-semibold sm:text-base">Evidence inventory</h3>
+              <h3 className="text-sm font-semibold sm:text-base">Reporting evidence</h3>
               <dl className="mt-3 space-y-3 text-xs sm:text-sm">
-                <div className="flex items-start justify-between gap-2"><dt>Audit-ready homes</dt><dd className="shrink-0 font-semibold">2</dd></div>
-                <div className="flex items-start justify-between gap-2"><dt>Baselines maturing</dt><dd className="shrink-0 font-semibold">4</dd></div>
-                <div className="flex items-start justify-between gap-2"><dt>Collector attention</dt><dd className="shrink-0 font-semibold text-red-700">1</dd></div>
-                <div className="flex items-start justify-between gap-2"><dt>Marketplace eligible</dt><dd className="shrink-0 font-semibold">{PORTFOLIO_EXCHANGE_SUMMARY.propertyCount}</dd></div>
+                <div className="flex items-start justify-between gap-2"><dt>Whole Dwelling Assessments</dt><dd className="shrink-0 font-semibold">8 / 8</dd></div>
+                <div className="flex items-start justify-between gap-2"><dt>Resident consent</dt><dd className="shrink-0 font-semibold">{residentConfirmedCount} / 8</dd></div>
+                <div className="flex items-start justify-between gap-2"><dt>Post-works EPC</dt><dd className="shrink-0 font-semibold">{epcCCount} / 8</dd></div>
+                <div className="flex items-start justify-between gap-2"><dt>TrustMark + handover</dt><dd className="shrink-0 font-semibold">{verifiedCount} / 8</dd></div>
+                <div className="flex items-start justify-between gap-2"><dt>Monthly report ready</dt><dd className="shrink-0 font-semibold text-emerald-700">{reportingReadyCount}</dd></div>
               </dl>
             </div>
           </div>
