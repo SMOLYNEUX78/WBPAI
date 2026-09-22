@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useLocation, useNavigate } from "react-router-dom";
 import AnalogGauge from "../../components/AnalogGauge";
@@ -7285,7 +7285,11 @@ const BuildingDashboardPanel = ({ building }) => {
   );
 };
 
-const NewBuildingSetupPanel = () => {
+export const NewBuildingSetupPanel = () => {
+  const [setupTab, setSetupTab] = useState("ownership");
+  const setupPanelRef = useRef(null);
+  const setupContentRef = useRef(null);
+  const previousPanelHeightRef = useRef(null);
   const location = useLocation();
   const recordMode = new URLSearchParams(location.search).get("record") || "new";
   const [ownershipRecord, setOwnershipRecord] = useState(() => {
@@ -7920,8 +7924,72 @@ const NewBuildingSetupPanel = () => {
     setSensorEvidenceFileName("");
   };
 
+  useLayoutEffect(() => {
+    const panel = setupPanelRef.current;
+    const content = setupContentRef.current;
+    if (!panel || !content) return;
+    const nextHeight = content.scrollHeight;
+    const previousHeight = previousPanelHeightRef.current;
+    previousPanelHeightRef.current = nextHeight;
+    if (previousHeight === null || !panel.animate || window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches) return;
+    const animation = panel.animate(
+      [
+        { height: `${previousHeight}px`, opacity: 0.8, transform: "translateY(12px)" },
+        { height: `${nextHeight}px`, opacity: 1, transform: "translateY(0)" },
+      ],
+      { duration: 320, easing: "ease-out" }
+    );
+    return () => animation.cancel();
+  }, [setupTab, ownershipRecord]);
+
+  useEffect(() => {
+    const panel = setupPanelRef.current;
+    const content = setupContentRef.current;
+    if (!panel || !content || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => {
+      const nextHeight = content.scrollHeight;
+      const previousHeight = previousPanelHeightRef.current;
+      if (previousHeight === null || Math.abs(nextHeight - previousHeight) < 2) return;
+      previousPanelHeightRef.current = nextHeight;
+      if (!panel.animate || window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches) return;
+      panel.animate(
+        [{ height: `${previousHeight}px` }, { height: `${nextHeight}px` }],
+        { duration: 280, easing: "ease-out" }
+      );
+    });
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, []);
+
   return (
-    <div className="min-h-screen bg-white p-4 flex flex-col space-y-6">
+    <div className="bg-white p-4 flex flex-col space-y-6">
+      <nav className="flex flex-wrap gap-2 border-b border-gray-200 pb-3" role="tablist" aria-label="New building sections">
+        {[["ownership", "Ownership"], ["measurements", "Measurements"], ["performance", "Performance"], ["carbon", "Carbon Context"]].map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            id={`new-building-tab-${id}`}
+            role="tab"
+            aria-selected={setupTab === id}
+            aria-controls="new-building-panel"
+            onClick={() => setSetupTab(id)}
+            onKeyDown={(event) => {
+              if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+              event.preventDefault();
+              const tabs = [...event.currentTarget.parentElement.querySelectorAll('[role="tab"]')];
+              const nextIndex = (tabs.indexOf(event.currentTarget) + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+              tabs[nextIndex].focus();
+              tabs[nextIndex].click();
+            }}
+            className={`border px-3 py-2 text-sm font-semibold transition-colors ${setupTab === id ? "border-gray-900 bg-gray-900 text-white" : "border-gray-300 bg-white text-gray-700 hover:bg-gray-100"}`}
+          >
+            {label}
+          </button>
+        ))}
+      </nav>
+      <div ref={setupPanelRef} id="new-building-panel" role="tabpanel" aria-labelledby={`new-building-tab-${setupTab}`} className="overflow-hidden">
+      <div ref={setupContentRef}>
+      <div style={{ display: setupTab === "ownership" ? undefined : "none" }}>
       <div className="bg-gray-100 p-4 rounded shadow">
         <h2 className="text-lg font-bold mb-3">New Building</h2>
 
@@ -8222,7 +8290,12 @@ const NewBuildingSetupPanel = () => {
             </a>
           </section>
         ) : null}
+      </div>
+      </div>
 
+      <div style={{ display: setupTab === "measurements" ? undefined : "none" }}>
+      <div className="bg-gray-100 p-4 rounded shadow">
+        <h2 className="text-lg font-bold mb-3">Measurements</h2>
         {ownershipRecord ? <div className="mx-auto mt-4 max-w-4xl bg-white rounded border p-4 space-y-3">
           <h3 className="text-base font-semibold">Matterport Data</h3>
 
@@ -8283,7 +8356,6 @@ const NewBuildingSetupPanel = () => {
             <span className="ml-auto shrink-0 text-lg" aria-hidden="true">&#8599;</span>
           </a>
         </div> : null}
-      </div>
 
       {ownershipRecord ? <>
       {setupMode === "api" && apiDetails ? (
@@ -8409,7 +8481,11 @@ const NewBuildingSetupPanel = () => {
           </div>
         </div>
       ) : null}
+      </> : <p className="bg-white p-4 text-sm text-gray-600">Create the ownership record before adding measurements.</p>}
+      </div>
+      </div>
 
+      <div style={{ display: setupTab === "performance" ? undefined : "none" }}>
       <div className="bg-gray-100 p-4 rounded shadow">
         <h2 className="text-lg font-bold mb-3">Performance</h2>
         <div className="grid gap-4 md:grid-cols-2 items-start">
@@ -8747,6 +8823,37 @@ const NewBuildingSetupPanel = () => {
           </div>
         </div>
 
+        <div className="mt-4 bg-white rounded border p-4 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h3 className="font-semibold">Baseline Readiness</h3>
+              <p className="text-xs text-gray-600">
+                {nextBaselineStep ? `Next: ${nextBaselineStep.label}` : "Ready to lock baseline"}
+              </p>
+            </div>
+            <p className="text-sm font-semibold">
+              {baselineCompleteCount}/{baselineReadinessSteps.length} complete
+            </p>
+          </div>
+          <div className="h-3 rounded bg-gray-200 overflow-hidden">
+            <div className="h-full bg-blue-600 transition-all" style={{ width: `${baselineProgress}%` }} />
+          </div>
+          <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6 text-xs">
+            {baselineReadinessSteps.map((step) => (
+              <div key={step.label} className={`rounded border p-2 ${step.complete ? "border-blue-200 bg-blue-50 text-blue-900" : "border-gray-200 bg-gray-50 text-gray-600"}`}>
+                <span className="font-semibold">{step.complete ? "Complete" : "Pending"}</span>
+                <br />
+                {step.label}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+      </div>
+
+      <div style={{ display: setupTab === "carbon" ? undefined : "none" }}>
+      <div className="bg-gray-100 p-4 rounded shadow">
+        <h2 className="text-lg font-bold mb-3">Carbon Context</h2>
         <div className="mt-4 bg-white rounded border p-4 space-y-4">
           <div>
             <h3 className="font-semibold mb-2">Carbon Context</h3>
@@ -8845,49 +8952,10 @@ const NewBuildingSetupPanel = () => {
             but they do not bypass the measured energy, IAQ and seasonal evidence checks.
           </p>
         </div>
-        <div className="mt-4 bg-white rounded border p-4 space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <h3 className="font-semibold">Baseline Readiness</h3>
-              <p className="text-xs text-gray-600">
-                {nextBaselineStep
-                  ? `Next: ${nextBaselineStep.label}`
-                  : "Ready to lock baseline"}
-              </p>
-            </div>
-            <p className="text-sm font-semibold">
-              {baselineCompleteCount}/{baselineReadinessSteps.length} complete
-            </p>
-          </div>
-
-          <div className="h-3 rounded bg-gray-200 overflow-hidden">
-            <div
-              className="h-full bg-blue-600 transition-all"
-              style={{ width: `${baselineProgress}%` }}
-            />
-          </div>
-
-          <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6 text-xs">
-            {baselineReadinessSteps.map((step) => (
-              <div
-                key={step.label}
-                className={`rounded border p-2 ${
-                  step.complete
-                    ? "border-blue-200 bg-blue-50 text-blue-900"
-                    : "border-gray-200 bg-gray-50 text-gray-600"
-                }`}
-              >
-                <span className="font-semibold">
-                  {step.complete ? "Complete" : "Pending"}
-                </span>
-                <br />
-                {step.label}
-              </div>
-            ))}
-          </div>
-        </div>
       </div>
-      </> : null}
+      </div>
+      </div>
+      </div>
     </div>
   );
 };

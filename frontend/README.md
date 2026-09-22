@@ -1,5 +1,9 @@
 # Getting Started with Create React App
 
+## Interaction convention
+
+When content appearing, disappearing, or resizing moves other controls, animate the affected area into its new position with a short slide and height transition. Respect `prefers-reduced-motion` by applying the layout change immediately.
+
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
 
 ## Available Scripts
