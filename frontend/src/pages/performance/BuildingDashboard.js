@@ -8277,6 +8277,13 @@ export const NewBuildingSetupPanel = () => {
             </div>
           </div>
           {passportSaveError ? <p className="mt-3 border border-red-200 bg-red-50 p-2 text-xs text-red-800">{passportSaveError}</p> : null}
+          {setupTab === "ownership" ? (
+            <div className="mt-4 grid gap-3 border-t border-emerald-200 pt-3 text-xs text-gray-700 sm:grid-cols-3">
+              <p><strong>Ownership:</strong><br />{ownershipRecord.ownershipType.replaceAll("-", " ")}</p>
+              <p><strong>Tenure:</strong><br />{ownershipRecord.tenure.replaceAll("-", " ")}</p>
+              <p><strong>Property number:</strong><br />{ownershipRecord.uprn || "Can be added later"}</p>
+            </div>
+          ) : null}
           <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-emerald-200 pt-3">
             <div>
               <h3 id="baseline-readiness-heading" className="text-sm font-bold text-emerald-950">Baseline readiness</h3>
@@ -8294,13 +8301,6 @@ export const NewBuildingSetupPanel = () => {
             </ul>
             <p className="mt-2 text-xs text-gray-600">Submission is not audit approval. A verifier must review the evidence before the baseline can be locked.</p>
           </details>
-          {setupTab === "ownership" ? (
-            <div className="mt-4 grid gap-3 border-t border-emerald-200 pt-3 text-xs text-gray-700 sm:grid-cols-3">
-              <p><strong>Ownership:</strong><br />{ownershipRecord.ownershipType.replaceAll("-", " ")}</p>
-              <p><strong>Tenure:</strong><br />{ownershipRecord.tenure.replaceAll("-", " ")}</p>
-              <p><strong>Property number:</strong><br />{ownershipRecord.uprn || "Can be added later"}</p>
-            </div>
-          ) : null}
         </div>
       ) : null}
       <div ref={setupPanelRef} id="new-building-panel" role="tabpanel" aria-labelledby={`new-building-tab-${setupTab}`} className="overflow-hidden">
