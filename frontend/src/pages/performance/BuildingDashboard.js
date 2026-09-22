@@ -8294,6 +8294,13 @@ export const NewBuildingSetupPanel = () => {
             </ul>
             <p className="mt-2 text-xs text-gray-600">Submission is not audit approval. A verifier must review the evidence before the baseline can be locked.</p>
           </details>
+          {setupTab === "ownership" ? (
+            <div className="mt-4 grid gap-3 border-t border-emerald-200 pt-3 text-xs text-gray-700 sm:grid-cols-3">
+              <p><strong>Ownership:</strong><br />{ownershipRecord.ownershipType.replaceAll("-", " ")}</p>
+              <p><strong>Tenure:</strong><br />{ownershipRecord.tenure.replaceAll("-", " ")}</p>
+              <p><strong>Property number:</strong><br />{ownershipRecord.uprn || "Can be added later"}</p>
+            </div>
+          ) : null}
         </div>
       ) : null}
       <div ref={setupPanelRef} id="new-building-panel" role="tabpanel" aria-labelledby={`new-building-tab-${setupTab}`} className="overflow-hidden">
@@ -8486,15 +8493,7 @@ export const NewBuildingSetupPanel = () => {
               </section>
             ) : null}
           </form>
-        ) : (
-          <div className="mx-auto max-w-4xl border border-emerald-200 bg-emerald-50 p-4">
-            <div className="mt-4 grid gap-3 border-t border-emerald-200 pt-3 text-xs text-gray-700 sm:grid-cols-3">
-              <p><strong>Ownership:</strong><br />{ownershipRecord.ownershipType.replaceAll("-", " ")}</p>
-              <p><strong>Tenure:</strong><br />{ownershipRecord.tenure.replaceAll("-", " ")}</p>
-              <p><strong>Property number:</strong><br />{ownershipRecord.uprn || "Can be added later"}</p>
-            </div>
-          </div>
-        )}
+        ) : null}
 
         {ownershipRecord && profileEditMode ? (
           <form onSubmit={saveProfileDetails} className="mx-auto mt-4 max-w-4xl border border-gray-300 bg-white p-4">

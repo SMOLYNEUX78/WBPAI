@@ -30,6 +30,10 @@ test("baseline readiness stays above every setup tab for a created home profile"
   expect(banner).toContainElement(screen.getByRole("heading", { name: "Baseline readiness" }));
   expect(banner).toContainElement(screen.getByRole("progressbar", { name: "Baseline readiness" }));
   expect(screen.getByRole("progressbar", { name: "Baseline readiness" })).toHaveAttribute("aria-valuenow", "11");
+  expect(banner).toContainElement(screen.getByText("Ownership:"));
+  expect(banner).toContainElement(screen.getByText("Tenure:"));
+  expect(banner).toContainElement(screen.getByText("Property number:"));
+  expect(screen.getByRole("progressbar", { name: "Baseline readiness" }).compareDocumentPosition(screen.getByText("Ownership:")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   fireEvent.click(screen.getByText("What’s needed"));
   expect(banner).toHaveTextContent("Historical energy evidence");
   expect(banner).toHaveTextContent("A verifier must review the evidence");
