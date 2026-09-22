@@ -9,6 +9,7 @@ test("new building sections keep ownership first and separate the inputs", () =>
 
   expect(screen.getByRole("heading", { name: "New Building" })).toBeInTheDocument();
   expect(screen.getByRole("tablist").closest("section")).toContainElement(screen.getByRole("heading", { name: "New Building" }));
+  expect(screen.getByRole("heading", { name: "Baseline Readiness" }).closest("#new-building-panel")).toBeNull();
   fireEvent.click(screen.getByRole("tab", { name: "Measurements" }));
   expect(screen.getByText("Create the ownership record before adding measurements.")).toBeInTheDocument();
 
@@ -17,8 +18,10 @@ test("new building sections keep ownership first and separate the inputs", () =>
   expect(screen.getByRole("heading", { name: "Baseline Readiness" })).toBeInTheDocument();
 
   fireEvent.click(screen.getByRole("tab", { name: "Carbon Context" }));
-  expect(screen.getByText("Electricity tariff")).toBeInTheDocument();
-  expect(screen.queryByRole("heading", { name: "Baseline Readiness" })).not.toBeInTheDocument();
+  expect(screen.getByRole("combobox", { name: "Electricity tariff" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Baseline Readiness" })).toBeInTheDocument();
+  expect(screen.getByLabelText("Electricity tariff evidence")).toBeDisabled();
+  expect(screen.queryByRole("option", { name: "Renewable tariff - evidence uploaded" })).not.toBeInTheDocument();
 });
 
 test("measurements contain the existing Matterport controls for a saved record", () => {
@@ -29,6 +32,21 @@ test("measurements contain the existing Matterport controls for a saved record",
   expect(screen.getByRole("heading", { name: "Matterport Data" })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "URL / number" })).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: "Model Preview" })).toBeInTheDocument();
+});
+
+test("measurements reuse the ownership address and location", () => {
+  window.localStorage.setItem("wbp-new-building-passport", JSON.stringify({
+    recordId: "WBP-001",
+    legalOwnerName: "Test Owner", ownershipType: "owner-occupier", tenure: "freehold",
+    propertyDiscovery: { address: "14 Bridgewood Road", postcode: "IP12 4HA", latitude: 52.0945, longitude: 1.3048 },
+  }));
+  render(<MemoryRouter><NewBuildingSetupPanel /></MemoryRouter>);
+  fireEvent.click(screen.getByRole("tab", { name: "Measurements" }));
+
+  expect(screen.getAllByText("14 Bridgewood Road, IP12 4HA").length).toBeGreaterThan(0);
+  expect(screen.queryByPlaceholderText("Building address")).not.toBeInTheDocument();
+  expect(screen.getByPlaceholderText("Lat")).toHaveValue(52.0945);
+  expect(screen.getByPlaceholderText("Long")).toHaveValue(1.3048);
 });
 
 test("switching tabs preserves an in-progress carbon selection", () => {

@@ -32,6 +32,14 @@ const MIN_FULL_YEAR_METERED_DAYS = 300;
 const SEASON_NAMES = ["Summer", "Autumn", "Winter", "Spring"];
 
 const PROPERTY_DISCOVERY_CACHE_KEY = "wbp-property-discovery-draft:v1";
+const CARBON_EVIDENCE_TYPES = [
+  { id: "energy-history", label: "Historical energy records", help: "Bills covering the baseline period. A reviewer must confirm the actual date coverage." },
+  { id: "electricity-tariff", label: "Electricity tariff", help: "A supplier bill or tariff confirmation showing the account, dates and product." },
+  { id: "gas-tariff", label: "Gas / thermal fuel", help: "A bill or fuel-supplier statement showing the product and covered dates." },
+  { id: "heating-system", label: "Heating system", help: "Installation or commissioning record for the main heating system." },
+  { id: "solar-pv", label: "Solar PV", help: "Installation certificate or commissioning record, if installed." },
+  { id: "battery-storage", label: "Battery storage", help: "Installation or commissioning record, if installed." },
+];
 const PROPERTY_DISCOVERY_DATASETS = [
   "planning-application",
   "listed-building",
@@ -7374,6 +7382,10 @@ export const NewBuildingSetupPanel = () => {
   });
   const [energyConsent, setEnergyConsent] = useState(false);
   const [historicalDataFileName, setHistoricalDataFileName] = useState("");
+  const [carbonSelections, setCarbonSelections] = useState({ electricity: "unknown", fuel: "unknown", heating: "unknown", solar: "none", battery: "none" });
+  const [carbonEvidence, setCarbonEvidence] = useState({});
+  const [carbonEvidenceStatus, setCarbonEvidenceStatus] = useState("");
+  const [carbonEvidenceBusy, setCarbonEvidenceBusy] = useState("");
   const [healthSensors, setHealthSensors] = useState([]);
   const [sensorEvidenceFileName, setSensorEvidenceFileName] = useState("");
   const [sensorDraft, setSensorDraft] = useState({
@@ -7401,29 +7413,28 @@ export const NewBuildingSetupPanel = () => {
   const modelId = useMemo(() => extractMatterportModelId(modelInput), [modelInput]);
   const modelUrl = useMemo(() => normalizeMatterportUrl(modelInput), [modelInput]);
   const embedUrl = useMemo(() => buildMatterportEmbedUrl(modelInput), [modelInput]);
+  const ownershipProperty = ownershipRecord?.propertyDiscovery || propertyDiscovery;
+  const buildingAddress = [ownershipProperty?.address, ownershipProperty?.postcode].filter(Boolean).join(", ");
+  const buildingLatitude = manualData.latitude || ownershipProperty?.latitude || "";
+  const buildingLongitude = manualData.longitude || ownershipProperty?.longitude || "";
   const hasManualBuildingInput =
-    manualData.address ||
-    manualData.latitude ||
-    manualData.longitude ||
+    buildingAddress ||
+    buildingLatitude ||
+    buildingLongitude ||
     manualData.internalArea;
   const hasCompleteBuildingProfile = Boolean(
-    apiDetails ||
-      (manualData.address &&
-        manualData.latitude &&
-        manualData.longitude &&
-        manualData.internalArea)
+    buildingAddress && buildingLatitude && buildingLongitude && manualData.internalArea
   );
-  const hasWeatherAndArea = Boolean(
-    apiDetails ||
-      (manualData.latitude && manualData.longitude && manualData.internalArea)
-  );
+  const hasWeatherAndArea = Boolean(buildingLatitude && buildingLongitude && manualData.internalArea);
   const baselineReadinessSteps = [
     { label: "Ownership and custodianship", complete: Boolean(ownershipRecord) },
     { label: "Building profile", complete: hasCompleteBuildingProfile },
     { label: "Energy consent", complete: energyConsent },
-    { label: "13-month energy history", complete: Boolean(historicalDataFileName) },
+    { label: "Historical energy evidence", complete: Boolean(carbonEvidence["energy-history"]) },
     { label: "Weather/GIA ready", complete: hasWeatherAndArea },
     { label: "IAQ monitoring started", complete: healthSensors.length > 0 },
+    { label: "Electricity tariff evidence", complete: Boolean(carbonEvidence["electricity-tariff"]) },
+    { label: "Heating-system evidence", complete: Boolean(carbonEvidence["heating-system"]) },
     { label: "Baseline locked", complete: false },
   ];
   const baselineCompleteCount = baselineReadinessSteps.filter(
@@ -7433,6 +7444,95 @@ export const NewBuildingSetupPanel = () => {
     (baselineCompleteCount / baselineReadinessSteps.length) * 100
   );
   const nextBaselineStep = baselineReadinessSteps.find((step) => !step.complete);
+
+  useEffect(() => {
+    if (!ownershipRecord?.databaseId) return;
+    let active = true;
+    const loadEvidence = async () => {
+      const { data, error } = await supabase.from("WBPEvidenceVersions")
+        .select("id,evidence_type,original_file_name,storage_reference,created_at,assurance_status")
+        .eq("building_record_id", ownershipRecord.databaseId)
+        .eq("lifecycle_stage", "occupy")
+        .order("created_at", { ascending: false });
+      if (!active) return;
+      if (error) {
+        setCarbonEvidenceStatus(`Could not load evidence: ${error.message}`);
+        return;
+      }
+      const latest = {};
+      (data || []).forEach((item) => {
+        if (CARBON_EVIDENCE_TYPES.some((type) => type.id === item.evidence_type) && !latest[item.evidence_type]) latest[item.evidence_type] = item;
+      });
+      setCarbonEvidence(latest);
+    };
+    loadEvidence();
+    return () => { active = false; };
+  }, [ownershipRecord?.databaseId]);
+
+  const uploadCarbonEvidence = async (type, file) => {
+    if (!file) return;
+    if (!ownershipRecord?.databaseId) {
+      setCarbonEvidenceStatus("Save the ownership record to your secure account before uploading evidence.");
+      return;
+    }
+    if (!["application/pdf", "image/jpeg", "image/png"].includes(file.type) || file.size > 10 * 1024 * 1024) {
+      setCarbonEvidenceStatus("Use a PDF, JPG or PNG file no larger than 10 MB.");
+      return;
+    }
+    setCarbonEvidenceBusy(type);
+    setCarbonEvidenceStatus("");
+    let path = "";
+    try {
+      const { data: auth, error: authError } = await supabase.auth.getUser();
+      if (authError || !auth.user) throw new Error("Sign in again to upload evidence.");
+      if (!window.crypto?.subtle) throw new Error("Secure file hashing is unavailable in this browser.");
+      const digest = await window.crypto.subtle.digest("SHA-256", await file.arrayBuffer());
+      const hash = Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+      const { data: previous, error: versionError } = await supabase.from("WBPEvidenceVersions")
+        .select("version_number")
+        .eq("building_record_id", ownershipRecord.databaseId)
+        .eq("evidence_type", type)
+        .order("version_number", { ascending: false })
+        .limit(1);
+      if (versionError) throw versionError;
+      const version = (previous?.[0]?.version_number || 0) + 1;
+      path = `${auth.user.id}/${ownershipRecord.databaseId}/${window.crypto.randomUUID()}`;
+      const { error: uploadError } = await supabase.storage.from("wbp-private-evidence")
+        .upload(path, file, { contentType: file.type, upsert: false });
+      if (uploadError) throw uploadError;
+      const { data, error: metadataError } = await supabase.from("WBPEvidenceVersions").insert({
+        building_record_id: ownershipRecord.databaseId,
+        evidence_type: type,
+        lifecycle_stage: "occupy",
+        version_number: version,
+        storage_reference: path,
+        evidence_hash: hash,
+        original_file_name: file.name,
+        mime_type: file.type,
+        byte_size: file.size,
+        classification: "verifier-access",
+        assurance_status: "self-declared",
+        submitted_by: auth.user.id,
+      }).select("id,evidence_type,original_file_name,storage_reference,created_at,assurance_status").single();
+      if (metadataError) throw metadataError;
+      setCarbonEvidence((current) => ({ ...current, [type]: data }));
+      setCarbonEvidenceStatus(`${file.name} uploaded for review. It is not yet verified.`);
+    } catch (error) {
+      if (path) await supabase.storage.from("wbp-private-evidence").remove([path]);
+      setCarbonEvidenceStatus(`Upload failed: ${error.message}`);
+    } finally {
+      setCarbonEvidenceBusy("");
+    }
+  };
+
+  const openCarbonEvidence = async (path) => {
+    const { data, error } = await supabase.storage.from("wbp-private-evidence").createSignedUrl(path, 60);
+    if (error || !data?.signedUrl) {
+      setCarbonEvidenceStatus(`Could not open evidence: ${error?.message || "Link unavailable"}`);
+      return;
+    }
+    window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+  };
 
   const handleManualChange = (field, value) => {
     setManualData((current) => ({
@@ -8361,8 +8461,8 @@ export const NewBuildingSetupPanel = () => {
 
       {ownershipRecord ? <>
       {setupMode === "api" && apiDetails ? (
-        <div className="bg-gray-100 p-4 rounded shadow">
-          <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="mx-auto mt-4 w-full max-w-4xl bg-gray-100 p-4 rounded shadow">
+          <div className="grid gap-5 sm:grid-cols-2">
             <div className="bg-white rounded border p-3">
               <h3 className="font-semibold mb-2">Building Input</h3>
               <p className="text-sm text-gray-600">
@@ -8383,23 +8483,15 @@ export const NewBuildingSetupPanel = () => {
       ) : null}
 
       {setupMode === "manual" ? (
-        <div className="bg-gray-100 p-4 rounded shadow">
-          <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_360px] items-start">
+        <div className="mx-auto mt-4 w-full max-w-4xl bg-gray-100 p-4 rounded shadow">
+          <div className="grid gap-5">
             <div className="space-y-4">
-              <div className="grid gap-3 md:grid-cols-3">
+              <div className="grid gap-3 sm:grid-cols-3 [&>*]:min-w-0">
                 <div className="bg-white rounded border p-3">
                   <p className="text-xs uppercase tracking-wide text-gray-500">
-                    Address
+                    WBP-001 Address
                   </p>
-                  <input
-                    type="text"
-                    className="border p-2 w-full text-sm mt-2"
-                    value={manualData.address}
-                    onChange={(event) =>
-                      handleManualChange("address", event.target.value)
-                    }
-                    placeholder="Building address"
-                  />
+                  <p className="mt-2 break-words text-sm">{buildingAddress || "Add an address in Ownership"}</p>
                 </div>
 
                 <div className="bg-white rounded border p-3">
@@ -8410,7 +8502,7 @@ export const NewBuildingSetupPanel = () => {
                     <input
                       type="number"
                       className="border p-2 w-full text-sm"
-                      value={manualData.latitude}
+                      value={buildingLatitude}
                       onChange={(event) =>
                         handleManualChange("latitude", event.target.value)
                       }
@@ -8419,7 +8511,7 @@ export const NewBuildingSetupPanel = () => {
                     <input
                       type="number"
                       className="border p-2 w-full text-sm"
-                      value={manualData.longitude}
+                      value={buildingLongitude}
                       onChange={(event) =>
                         handleManualChange("longitude", event.target.value)
                       }
@@ -8448,11 +8540,11 @@ export const NewBuildingSetupPanel = () => {
                 <div className="bg-white rounded border p-3 text-sm">
                   <h3 className="font-semibold mb-2">Current Building Input</h3>
                   <p>
-                    <strong>Address:</strong> {manualData.address || "Pending"}
+                    <strong>Address:</strong> {buildingAddress || "Pending"}
                   </p>
                   <p>
                     <strong>Coordinates:</strong>{" "}
-                    {manualData.latitude || "--"}, {manualData.longitude || "--"}
+                    {buildingLatitude || "--"}, {buildingLongitude || "--"}
                   </p>
                   <p>
                     <strong>Internal Area:</strong>{" "}
@@ -8583,9 +8675,8 @@ export const NewBuildingSetupPanel = () => {
                 </p>
               ) : null}
               <p className="text-xs text-gray-600">
-                Upload bills, tariff documents, green tariff evidence or non-smart-meter
-                meter-read histories. Half-hourly consumption should come through
-                the n3rgy/API registration path where available.
+                This only selects a local file; it is not stored or counted as audit evidence.
+                Add supported documents in Carbon Context after saving the ownership record.
               </p>
             </div>
 
@@ -8825,31 +8916,6 @@ export const NewBuildingSetupPanel = () => {
           </div>
         </div>
 
-        <div className="mt-4 bg-white rounded border p-4 space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <h3 className="font-semibold">Baseline Readiness</h3>
-              <p className="text-xs text-gray-600">
-                {nextBaselineStep ? `Next: ${nextBaselineStep.label}` : "Ready to lock baseline"}
-              </p>
-            </div>
-            <p className="text-sm font-semibold">
-              {baselineCompleteCount}/{baselineReadinessSteps.length} complete
-            </p>
-          </div>
-          <div className="h-3 rounded bg-gray-200 overflow-hidden">
-            <div className="h-full bg-blue-600 transition-all" style={{ width: `${baselineProgress}%` }} />
-          </div>
-          <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6 text-xs">
-            {baselineReadinessSteps.map((step) => (
-              <div key={step.label} className={`rounded border p-2 ${step.complete ? "border-blue-200 bg-blue-50 text-blue-900" : "border-gray-200 bg-gray-50 text-gray-600"}`}>
-                <span className="font-semibold">{step.complete ? "Complete" : "Pending"}</span>
-                <br />
-                {step.label}
-              </div>
-            ))}
-          </div>
-        </div>
       </div>
       </div>
 
@@ -8870,12 +8936,12 @@ export const NewBuildingSetupPanel = () => {
               Electricity tariff
               <select
                 className="border rounded p-2 w-full text-xs"
-                defaultValue="unknown"
+                value={carbonSelections.electricity}
+                onChange={(event) => setCarbonSelections((current) => ({ ...current, electricity: event.target.value }))}
               >
                 <option value="unknown">Unknown / not verified</option>
                 <option value="standard">Standard grid electricity</option>
                 <option value="renewable-unverified">Renewable tariff - unverified</option>
-                <option value="renewable-verified">Renewable tariff - evidence uploaded</option>
               </select>
             </label>
 
@@ -8883,12 +8949,12 @@ export const NewBuildingSetupPanel = () => {
               Gas / thermal fuel
               <select
                 className="border rounded p-2 w-full text-xs"
-                defaultValue="unknown"
+                value={carbonSelections.fuel}
+                onChange={(event) => setCarbonSelections((current) => ({ ...current, fuel: event.target.value }))}
               >
                 <option value="unknown">Unknown / not verified</option>
                 <option value="mains-gas">Mains gas</option>
                 <option value="green-gas-unverified">Green gas - unverified</option>
-                <option value="green-gas-verified">Green gas - evidence uploaded</option>
                 <option value="none">No gas supply</option>
                 <option value="other">Oil / LPG / solid fuel / other</option>
               </select>
@@ -8898,7 +8964,8 @@ export const NewBuildingSetupPanel = () => {
               Main heating system
               <select
                 className="border rounded p-2 w-full text-xs"
-                defaultValue="unknown"
+                value={carbonSelections.heating}
+                onChange={(event) => setCarbonSelections((current) => ({ ...current, heating: event.target.value }))}
               >
                 <option value="unknown">Unknown</option>
                 <option value="gas-boiler">Gas boiler</option>
@@ -8913,12 +8980,12 @@ export const NewBuildingSetupPanel = () => {
               Solar PV
               <select
                 className="border rounded p-2 w-full text-xs"
-                defaultValue="none"
+                value={carbonSelections.solar}
+                onChange={(event) => setCarbonSelections((current) => ({ ...current, solar: event.target.value }))}
               >
                 <option value="none">No / unknown</option>
                 <option value="planned">Planned</option>
                 <option value="installed-unverified">Installed - unverified</option>
-                <option value="installed-verified">Installed - evidence uploaded</option>
               </select>
             </label>
 
@@ -8926,38 +8993,77 @@ export const NewBuildingSetupPanel = () => {
               Battery storage
               <select
                 className="border rounded p-2 w-full text-xs"
-                defaultValue="none"
+                value={carbonSelections.battery}
+                onChange={(event) => setCarbonSelections((current) => ({ ...current, battery: event.target.value }))}
               >
                 <option value="none">No / unknown</option>
                 <option value="planned">Planned</option>
                 <option value="installed-unverified">Installed - unverified</option>
-                <option value="installed-verified">Installed - evidence uploaded</option>
               </select>
             </label>
 
-            <label className="space-y-1 text-xs text-gray-600">
-              Carbon evidence status
-              <select
-                className="border rounded p-2 w-full text-xs"
-                defaultValue="unverified"
-              >
-                <option value="unverified">Unverified user declaration</option>
-                <option value="bill-uploaded">Bill/tariff evidence uploaded</option>
-                <option value="api-verified">API / supplier verified</option>
-                <option value="audit-ready">Audit-ready evidence pack</option>
-              </select>
-            </label>
           </div>
 
           <p className="text-xs text-gray-600">
-            Tariff and system details can reduce reported carbon intensity when verified,
-            but they do not bypass the measured energy, IAQ and seasonal evidence checks.
+            These selections are draft declarations and do not change carbon factors on their own.
+            Only the documents below are saved to the private evidence store; supplier or reviewer verification is separate.
           </p>
         </div>
+
+        <section className="mt-4 space-y-3" aria-labelledby="carbon-evidence-heading">
+          <div>
+            <h3 id="carbon-evidence-heading" className="font-semibold">Supporting evidence</h3>
+            <p className="text-sm text-gray-600">Documents are stored privately against this building record. An upload is submitted for review, not independently verified.</p>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            {CARBON_EVIDENCE_TYPES.map((type) => {
+              const evidence = carbonEvidence[type.id];
+              return <div key={type.id} className="min-w-0 border bg-white p-4 space-y-2">
+                <div className="flex items-start justify-between gap-2">
+                  <h4 className="text-sm font-semibold">{type.label}</h4>
+                  <span className={`shrink-0 text-xs ${evidence ? "text-amber-800" : "text-gray-500"}`}>{evidence ? "Submitted" : "Missing"}</span>
+                </div>
+                <p className="text-xs text-gray-600">{type.help}</p>
+                <input
+                  type="file"
+                  aria-label={`${type.label} evidence`}
+                  accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+                  disabled={Boolean(carbonEvidenceBusy) || !ownershipRecord?.databaseId}
+                  className="block w-full text-xs"
+                  onChange={(event) => {
+                    uploadCarbonEvidence(type.id, event.target.files?.[0]);
+                    event.target.value = "";
+                  }}
+                />
+                {carbonEvidenceBusy === type.id ? <p className="text-xs" role="status">Uploading...</p> : null}
+                {evidence ? <button type="button" className="block max-w-full break-all text-left text-xs text-blue-700 underline" onClick={() => openCarbonEvidence(evidence.storage_reference)}>{evidence.original_file_name || "View uploaded evidence"}</button> : null}
+              </div>;
+            })}
+          </div>
+          {!ownershipRecord?.databaseId ? <p className="text-xs text-amber-800">Save the ownership record to your secure account to enable uploads.</p> : null}
+          {carbonEvidenceStatus ? <p className="text-sm" role="status">{carbonEvidenceStatus}</p> : null}
+        </section>
+
       </div>
       </div>
       </div>
       </div>
+      <section className="mt-4 border bg-white p-4 space-y-3" aria-labelledby="baseline-readiness-heading">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 id="baseline-readiness-heading" className="font-semibold">Baseline Readiness</h3>
+            <p className="text-xs text-gray-600">{nextBaselineStep ? `Next: ${nextBaselineStep.label}` : "Ready for baseline review"}</p>
+          </div>
+          <p className="text-sm font-semibold">{baselineCompleteCount}/{baselineReadinessSteps.length} submitted</p>
+        </div>
+        <div className="h-3 bg-gray-200 overflow-hidden"><div className="h-full bg-blue-600 transition-all" style={{ width: `${baselineProgress}%` }} /></div>
+        <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-4 text-xs">
+          {baselineReadinessSteps.map((step) => <div key={step.label} className={`border p-2 ${step.complete ? "border-blue-200 bg-blue-50 text-blue-900" : "border-gray-200 bg-gray-50 text-gray-600"}`}>
+            <span className="font-semibold">{step.complete ? "Submitted" : "Pending"}</span><br />{step.label}
+          </div>)}
+        </div>
+        <p className="text-xs text-gray-600">Submission does not establish date coverage, accuracy or audit approval. A verifier must review the evidence before the baseline can be locked.</p>
+      </section>
       </section>
     </div>
   );
