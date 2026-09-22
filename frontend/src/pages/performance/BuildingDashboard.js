@@ -7357,7 +7357,7 @@ const NewBuildingSetupPanel = () => {
   });
   const [discoveryStatus, setDiscoveryStatus] = useState("idle");
   const [discoveryError, setDiscoveryError] = useState("");
-  const [setupMode, setSetupMode] = useState("api");
+  const [setupMode, setSetupMode] = useState("manual");
   const [apiDetails, setApiDetails] = useState("");
   const [modelInput, setModelInput] = useState("");
   const [manualData, setManualData] = useState({
@@ -8217,8 +8217,32 @@ const NewBuildingSetupPanel = () => {
           </section>
         ) : null}
 
-        {ownershipRecord ? <div className="mx-auto mt-4 max-w-3xl bg-white rounded border p-4 space-y-3">
+        {ownershipRecord ? <div className="mx-auto mt-4 max-w-4xl bg-white rounded border p-4 space-y-3">
           <h3 className="text-base font-semibold text-center">Matterport Data</h3>
+          <p className="text-center text-sm text-gray-600">
+            Need a model? <a href="https://matterport.com/3d-camera-app" target="_blank" rel="noopener noreferrer" className="font-semibold text-blue-700 underline">Get the Matterport app to scan your home</a>, then enter its model URL or ID below.
+          </p>
+
+          <div className="flex flex-wrap gap-2 justify-center">
+            <button
+              type="button"
+              className={`px-3 py-2 rounded border text-sm font-semibold ${
+                setupMode === "manual" ? "bg-blue-600 text-white" : "bg-white"
+              }`}
+              onClick={() => setSetupMode("manual")}
+            >
+              URL / number
+            </button>
+            <button
+              type="button"
+              className={`px-3 py-2 rounded border text-sm font-semibold ${
+                setupMode === "api" ? "bg-blue-600 text-white" : "bg-white"
+              }`}
+              onClick={() => setSetupMode("api")}
+            >
+              SDK / API
+            </button>
+          </div>
 
           {setupMode === "api" ? (
             <textarea
@@ -8228,27 +8252,6 @@ const NewBuildingSetupPanel = () => {
               placeholder="Paste Matterport SDK / API details when available"
             />
           ) : null}
-
-          <div className="flex flex-wrap gap-2 justify-center">
-            <button
-              type="button"
-              className={`px-3 py-2 rounded border text-sm font-semibold ${
-                setupMode === "api" ? "bg-blue-600 text-white" : "bg-white"
-              }`}
-              onClick={() => setSetupMode("api")}
-            >
-              Use SDK / API details
-            </button>
-            <button
-              type="button"
-              className={`px-3 py-2 rounded border text-sm font-semibold ${
-                setupMode === "manual" ? "bg-blue-600 text-white" : "bg-white"
-              }`}
-              onClick={() => setSetupMode("manual")}
-            >
-              No SDK / API details
-            </button>
-          </div>
 
           {setupMode === "manual" ? (
             <div className="grid gap-2">
