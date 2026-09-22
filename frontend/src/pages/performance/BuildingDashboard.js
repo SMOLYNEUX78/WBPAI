@@ -8199,8 +8199,7 @@ const NewBuildingSetupPanel = () => {
                 <input type="checkbox" className="mt-1" checked={ownershipEvidence.declarationAccepted} onChange={(event) => setOwnershipEvidence((current) => ({ ...current, declarationAccepted: event.target.checked }))} />
                 <span>I confirm that these details are accurate and that WBP may use them only to check my authority to manage this home profile.</span>
               </label>
-              <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-                <a href="https://www.gov.uk/search-property-information-land-registry" target="_blank" rel="noreferrer" className="text-xs font-semibold text-blue-800 underline">Get property information from HM Land Registry</a>
+              <div className="mt-4 flex justify-end">
                 <button type="submit" disabled={!ownershipEvidence.declarationAccepted} className="bg-amber-500 px-4 py-2 text-sm font-bold text-black disabled:cursor-not-allowed disabled:opacity-40">Save evidence details</button>
               </div>
             </form>
@@ -8214,14 +8213,16 @@ const NewBuildingSetupPanel = () => {
                 <p><strong>Your control:</strong> a production account must support access, correction, deletion requests and a clear retention period.</p>
               </div>
             </details>
+            <a href="https://www.gov.uk/search-property-information-land-registry" target="_blank" rel="noopener noreferrer" className="mt-4 flex flex-wrap items-center gap-3 border-t border-gray-200 pt-4 text-sm text-gray-700 hover:text-blue-800">
+              <span className="bg-black px-2 py-1 text-xs font-extrabold text-white" aria-hidden="true">GOV.UK</span>
+              <span>Get property information from <strong className="text-blue-800 underline">HM Land Registry</strong></span>
+              <span aria-hidden="true">&#8599;</span>
+            </a>
           </section>
         ) : null}
 
         {ownershipRecord ? <div className="mx-auto mt-4 max-w-4xl bg-white rounded border p-4 space-y-3">
           <h3 className="text-base font-semibold text-center">Matterport Data</h3>
-          <p className="text-center text-sm text-gray-600">
-            Need a model? <a href="https://matterport.com/3d-camera-app" target="_blank" rel="noopener noreferrer" className="font-semibold text-blue-700 underline">Get the Matterport app to scan your home</a>, then enter its model URL or ID below.
-          </p>
 
           <div className="flex flex-wrap gap-2 justify-center">
             <button
@@ -8274,6 +8275,11 @@ const NewBuildingSetupPanel = () => {
               </div>
             </div>
           ) : null}
+          <a href="https://matterport.com/3d-camera-app" target="_blank" rel="noopener noreferrer" className="flex flex-wrap items-center gap-3 border-t border-gray-200 pt-4 text-sm text-gray-700 hover:text-blue-800">
+            <span className="text-base font-bold text-gray-900" aria-hidden="true">matterport</span>
+            <span>Scan your home in the <strong className="text-blue-800 underline">Matterport app</strong></span>
+            <span aria-hidden="true">&#8599;</span>
+          </a>
         </div> : null}
       </div>
 
