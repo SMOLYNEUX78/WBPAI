@@ -15,6 +15,24 @@ jest.mock("./supabaseClient", () => ({
 }));
 jest.mock("./pages/performance/BuildingDashboard", () => () => "Dashboard test view");
 
+test.each(["architect", "builder"])("%s portfolio profile can be edited and saved", async (role) => {
+  const session = { user: { id: "profile-test-user", email: "wbpai25@gmail.com" } };
+  supabase.auth.getSession.mockResolvedValue({ data: { session } });
+  supabase.auth.getUser.mockResolvedValue({ data: { user: session.user } });
+  supabase.auth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: jest.fn() } } });
+  window.localStorage.setItem(`wbp-${role}-profile-${session.user.id}`, JSON.stringify({ organisationName: "Original organisation", registrationNumber: "12345" }));
+  window.history.pushState({}, "", `/workspace/${role}`);
+
+  render(<App />);
+  expect(await screen.findByRole("heading", { name: "Original organisation" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Edit profile" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "Organisation name" }), { target: { value: "Updated organisation" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save profile" }));
+
+  expect(screen.getByRole("heading", { name: "Updated organisation" })).toBeInTheDocument();
+  expect(JSON.parse(window.localStorage.getItem(`wbp-${role}-profile-${session.user.id}`)).organisationName).toBe("Updated organisation");
+});
+
 test("test account switches workspaces without requesting another email link", async () => {
   const session = { user: { id: "test-user", email: "wbpai25@gmail.com" } };
   supabase.auth.getSession.mockResolvedValue({ data: { session } });

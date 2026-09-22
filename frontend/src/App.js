@@ -610,12 +610,17 @@ const ProfessionalWorkspace = () => {
   const navigate = useNavigate();
   const isBuilder = role === "builder";
   const [profile, setProfile] = useState(location.state?.profile?.organisationName ? location.state.profile : {});
+  const [profileUserId, setProfileUserId] = useState("");
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [profileDraft, setProfileDraft] = useState({});
+  const [profileStatus, setProfileStatus] = useState("");
   const [isTestAccount, setIsTestAccount] = useState(false);
   const [canSwitchWorkspace, setCanSwitchWorkspace] = useState(false);
   useEffect(() => {
     let active = true;
     supabase.auth.getUser().then(({ data }) => {
       if (!active || !data.user) return;
+      setProfileUserId(data.user.id);
       setIsTestAccount(data.user.email?.toLowerCase() === TEST_PROFESSIONAL_EMAIL);
       setCanSwitchWorkspace(hasFullWorkspaceAccess(data.user));
       try {
@@ -628,6 +633,23 @@ const ProfessionalWorkspace = () => {
     return () => { active = false; };
   }, [role, location.state]);
   const organisationName = profile.organisationName || (isBuilder ? "Build organisation" : "Design organisation");
+  const startProfileEdit = () => {
+    setProfileDraft({ ...profile });
+    setProfileStatus("");
+    setEditingProfile(true);
+  };
+  const saveProfile = (event) => {
+    event.preventDefault();
+    if (!profileUserId) {
+      setProfileStatus("Sign in again before saving your profile.");
+      return;
+    }
+    const updated = Object.fromEntries(Object.entries(profileDraft).map(([key, value]) => [key, typeof value === "string" ? value.trim() : value]));
+    window.localStorage.setItem(`wbp-${role}-profile-${profileUserId}`, JSON.stringify(updated));
+    setProfile(updated);
+    setEditingProfile(false);
+    setProfileStatus("Profile saved in this browser. Organisation details remain unverified.");
+  };
   const [showLinkRecord, setShowLinkRecord] = useState(false);
   const [showIssueHandover, setShowIssueHandover] = useState(false);
   const [linkCode, setLinkCode] = useState("");
@@ -715,8 +737,32 @@ const ProfessionalWorkspace = () => {
           <span>{isTestAccount ? "Test account · Organisation not verified" : "Self-declared · Organisation not verified"}</span>
           <span>{profile.registrationNumber || "Registration pending"}</span>
           <span>{profile.city || "Head office pending"}</span>
+          <button type="button" onClick={startProfileEdit} className="wbp-profile-edit-button">Edit profile</button>
         </div>
       </section>
+
+      {editingProfile ? <form className="wbp-professional-profile-editor" onSubmit={saveProfile}>
+        <div className="wbp-profile-editor-heading"><h2>Edit organisation profile</h2><p>Changes are saved in this browser and do not verify the organisation.</p></div>
+        <div className="wbp-profile-editor-grid">
+          {[
+            ["organisationName", "Organisation name", true],
+            ["organisationType", "Organisation type", true],
+            ["registrationNumber", "Companies House / statutory registration", true],
+            ["professionalRegistration", isBuilder ? "CIOB / FMB / professional registration" : "ARB / RIBA / professional registration"],
+            ["vatNumber", "VAT number"],
+            ["contactName", "Primary contact name"],
+            ["jobTitle", "Primary contact role"],
+            ["phone", "Telephone"],
+            ["website", "Website"],
+            ["address", "Head office address"],
+            ["city", "Town / city"],
+            ["postcode", "Postcode"],
+            ["serviceArea", "Operating area"],
+          ].map(([field, label, required]) => <label key={field} className="wbp-access-field"><span>{label}</span><input type={field === "website" ? "url" : field === "phone" ? "tel" : "text"} required={Boolean(required)} value={profileDraft[field] || ""} onChange={(event) => setProfileDraft((current) => ({ ...current, [field]: event.target.value }))} /></label>)}
+        </div>
+        <div className="wbp-profile-editor-actions"><button type="button" onClick={() => setEditingProfile(false)}>Cancel</button><button type="submit" className="is-primary">Save profile</button></div>
+      </form> : null}
+      {profileStatus ? <p className="wbp-profile-save-status" role="status">{profileStatus}</p> : null}
 
       <section className="wbp-workspace-actions">
         <button type="button" className="is-primary" onClick={() => navigate(`/dashboard/new?role=${role}&phase=${isBuilder ? "build" : "design"}`)}>

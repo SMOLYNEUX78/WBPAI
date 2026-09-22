@@ -650,6 +650,15 @@ code {
 .wbp-professional-hero h1 { margin: 0; font-size: clamp(27px, 4vw, 42px); line-height: 1.05; }
 .wbp-professional-hero > div > span { display: block; margin-top: 6px; color: #4b5563; font-size: 14px; }
 .wbp-organisation-meta { display: grid; gap: 5px; justify-items: end; color: #4b5563; font-size: 12px; }
+.wbp-profile-edit-button, .wbp-profile-editor-actions button { min-height: 36px; padding: 0 14px; border: 1px solid #6b7280; background: #ffffff; color: #111827; font: inherit; font-size: 13px; font-weight: 750; cursor: pointer; }
+.wbp-profile-edit-button { margin-top: 6px; }
+.wbp-professional-profile-editor { margin: 20px clamp(20px, 4vw, 58px) 0; padding: 20px; border: 1px solid #d1d5db; background: #ffffff; }
+.wbp-profile-editor-heading h2 { margin: 0; font-size: 18px; }
+.wbp-profile-editor-heading p { margin: 5px 0 0; color: #6b7280; font-size: 13px; }
+.wbp-profile-editor-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 15px; margin-top: 18px; }
+.wbp-profile-editor-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+.wbp-profile-editor-actions button.is-primary { border-color: #047857; background: #047857; color: #ffffff; }
+.wbp-profile-save-status { margin: 12px clamp(20px, 4vw, 58px) 0; color: #047857; font-size: 13px; font-weight: 700; }
 .wbp-workspace-actions { display: flex; gap: 10px; padding: 25px clamp(20px, 4vw, 58px) 0; }
 .wbp-workspace-actions button.is-primary { border-color: #047857; background: #047857; color: #ffffff; }
 .wbp-workspace-actions button:disabled { cursor: not-allowed; opacity: 0.5; }
@@ -690,6 +699,8 @@ button.wbp-project-row:hover { background: #f9fafb; }
   .wbp-professional-hero { grid-template-columns: 58px minmax(0, 1fr); gap: 14px; padding: 25px 16px; }
   .wbp-organisation-logo { width: 58px; height: 58px; font-size: 18px; }
   .wbp-organisation-meta { grid-column: 1 / -1; align-items: start; justify-items: start; padding-top: 8px; border-top: 1px solid rgba(17, 24, 39, 0.14); }
+  .wbp-professional-profile-editor { margin: 15px 15px 0; padding: 16px; }
+  .wbp-profile-editor-grid { grid-template-columns: 1fr; }
   .wbp-workspace-actions { padding: 18px 15px 0; }
   .wbp-workspace-actions button { flex: 1; padding: 0 10px; }
   .wbp-link-record { grid-template-columns: 1fr; margin: 15px 15px 0; padding: 16px; }
