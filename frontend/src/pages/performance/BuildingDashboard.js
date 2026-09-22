@@ -7963,7 +7963,9 @@ export const NewBuildingSetupPanel = () => {
 
   return (
     <div className="bg-white p-4 flex flex-col space-y-6">
-      <nav className="flex flex-wrap gap-2 border-b border-gray-200 pb-3" role="tablist" aria-label="New building sections">
+      <header className="flex flex-wrap items-center gap-x-6 gap-y-3 border-b border-gray-200 pb-3">
+      <h2 className="text-lg font-bold">New Building</h2>
+      <nav className="flex flex-wrap gap-2" role="tablist" aria-label="New building sections">
         {[["ownership", "Ownership"], ["measurements", "Measurements"], ["performance", "Performance"], ["carbon", "Carbon Context"]].map(([id, label]) => (
           <button
             key={id}
@@ -7987,12 +7989,11 @@ export const NewBuildingSetupPanel = () => {
           </button>
         ))}
       </nav>
+      </header>
       <div ref={setupPanelRef} id="new-building-panel" role="tabpanel" aria-labelledby={`new-building-tab-${setupTab}`} className="overflow-hidden">
       <div ref={setupContentRef}>
       <div style={{ display: setupTab === "ownership" ? undefined : "none" }}>
       <div className="bg-gray-100 p-4 rounded shadow">
-        <h2 className="text-lg font-bold mb-3">New Building</h2>
-
         {!ownershipRecord ? (
           <form onSubmit={createBuildingPassport} className="mx-auto max-w-4xl border border-emerald-200 bg-white p-4 sm:p-5">
             <div className="border-b border-gray-200 pb-4">
