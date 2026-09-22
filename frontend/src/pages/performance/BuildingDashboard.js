@@ -7462,7 +7462,6 @@ export const NewBuildingSetupPanel = () => {
   const baselineProgress = Math.round(
     (baselineCompleteCount / baselineReadinessSteps.length) * 100
   );
-  const nextBaselineStep = baselineReadinessSteps.find((step) => !step.complete);
 
   useEffect(() => {
     if (!ownershipRecord?.databaseId) return;
@@ -8252,6 +8251,51 @@ export const NewBuildingSetupPanel = () => {
         ))}
       </nav>
       </header>
+      {ownershipRecord ? (
+        <div className="mx-auto mb-4 max-w-4xl border border-emerald-200 bg-emerald-50 p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold uppercase text-emerald-700">Home profile created</p>
+              <h3 className="mt-1 text-lg font-bold">{ownershipRecord.recordId}</h3>
+              <p className="mt-1 text-sm text-gray-700">Created by {ownershipRecord.legalOwnerName}</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <span className="border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-bold uppercase text-amber-900">
+                {ownershipRecord.ownershipVerificationStatus === "ready-for-review" ? "Evidence awaiting review" : "Ownership unverified"}
+              </span>
+              <span className="border border-gray-300 bg-white px-2 py-1 text-xs font-bold uppercase text-gray-700">Not transferable</span>
+              <span className={`border px-2 py-1 text-xs font-bold uppercase ${passportSaveStatus === "saved" ? "border-emerald-300 bg-white text-emerald-800" : "border-gray-300 bg-gray-100 text-gray-700"}`}>
+                {passportSaveStatus === "saved" ? "Saved securely" : passportSaveStatus === "saving" ? "Saving..." : "Browser only"}
+              </span>
+            </div>
+          </div>
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-emerald-200 pt-3">
+            <div>
+              <h3 id="baseline-readiness-heading" className="text-sm font-bold text-emerald-950">Baseline readiness</h3>
+              <p className="text-xs text-gray-600">{baselineCompleteCount}/{baselineReadinessSteps.length} submitted</p>
+            </div>
+            <span className="text-sm font-bold text-emerald-900">{baselineProgress}%</span>
+          </div>
+          <div role="progressbar" aria-label="Baseline readiness" aria-valuenow={baselineProgress} aria-valuemin={0} aria-valuemax={100} className="mt-2 h-2 overflow-hidden bg-emerald-200">
+            <div className="h-full bg-emerald-700 transition-[width] duration-300" style={{ width: `${baselineProgress}%` }} />
+          </div>
+          <details className="mt-3 text-sm text-emerald-950">
+            <summary className="cursor-pointer font-semibold">What’s needed</summary>
+            <ul className="mt-2 grid gap-1 pl-5 text-xs text-gray-700 sm:grid-cols-2">
+              {baselineReadinessSteps.filter((step) => !step.complete).map((step) => <li key={step.label} className="list-disc">{step.label}</li>)}
+            </ul>
+            <p className="mt-2 text-xs text-gray-600">Submission is not audit approval. A verifier must review the evidence before the baseline can be locked.</p>
+          </details>
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-emerald-200 pt-3">
+            <p className="text-xs text-gray-600">This is an owner-created profile. WBP has not yet verified legal ownership.</p>
+            <div className="flex flex-wrap gap-2">
+              {passportSaveStatus !== "saved" ? <button type="button" disabled={passportSaveStatus === "saving"} onClick={secureExistingPassport} className="bg-emerald-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">{passportSaveStatus === "saving" ? "Saving..." : "Save to secure account"}</button> : null}
+              <button type="button" onClick={() => { setSetupTab("ownership"); startProfileEdit(); }} className="border border-emerald-700 bg-white px-3 py-2 text-xs font-bold text-emerald-800">Edit profile</button>
+            </div>
+          </div>
+          {passportSaveError ? <p className="mt-3 border border-red-200 bg-red-50 p-2 text-xs text-red-800">{passportSaveError}</p> : null}
+        </div>
+      ) : null}
       <div ref={setupPanelRef} id="new-building-panel" role="tabpanel" aria-labelledby={`new-building-tab-${setupTab}`} className="overflow-hidden">
       <div ref={setupContentRef}>
       <div style={{ display: setupTab === "ownership" ? undefined : "none" }}>
@@ -8444,35 +8488,11 @@ export const NewBuildingSetupPanel = () => {
           </form>
         ) : (
           <div className="mx-auto max-w-4xl border border-emerald-200 bg-emerald-50 p-4">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p className="text-xs font-bold uppercase text-emerald-700">Home profile created</p>
-                <h3 className="mt-1 text-lg font-bold">{ownershipRecord.recordId}</h3>
-                <p className="mt-1 text-sm text-gray-700">Created by {ownershipRecord.legalOwnerName}</p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <span className="border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-bold uppercase text-amber-900">
-                  {ownershipRecord.ownershipVerificationStatus === "ready-for-review" ? "Evidence awaiting review" : "Ownership unverified"}
-                </span>
-                <span className="border border-gray-300 bg-white px-2 py-1 text-xs font-bold uppercase text-gray-700">Not transferable</span>
-                <span className={`border px-2 py-1 text-xs font-bold uppercase ${passportSaveStatus === "saved" ? "border-emerald-300 bg-white text-emerald-800" : "border-gray-300 bg-gray-100 text-gray-700"}`}>
-                  {passportSaveStatus === "saved" ? "Saved securely" : passportSaveStatus === "saving" ? "Saving..." : "Browser only"}
-                </span>
-              </div>
-            </div>
             <div className="mt-4 grid gap-3 border-t border-emerald-200 pt-3 text-xs text-gray-700 sm:grid-cols-3">
               <p><strong>Ownership:</strong><br />{ownershipRecord.ownershipType.replaceAll("-", " ")}</p>
               <p><strong>Tenure:</strong><br />{ownershipRecord.tenure.replaceAll("-", " ")}</p>
               <p><strong>Property number:</strong><br />{ownershipRecord.uprn || "Can be added later"}</p>
             </div>
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-emerald-200 pt-3">
-              <p className="text-xs text-gray-600">This is an owner-created profile. WBP has not yet verified legal ownership.</p>
-              <div className="flex flex-wrap gap-2">
-                {passportSaveStatus !== "saved" ? <button type="button" disabled={passportSaveStatus === "saving"} onClick={secureExistingPassport} className="bg-emerald-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">{passportSaveStatus === "saving" ? "Saving..." : "Save to secure account"}</button> : null}
-                <button type="button" onClick={startProfileEdit} className="border border-emerald-700 bg-white px-3 py-2 text-xs font-bold text-emerald-800">Edit profile</button>
-              </div>
-            </div>
-            {passportSaveError ? <p className="mt-3 border border-red-200 bg-red-50 p-2 text-xs text-red-800">{passportSaveError}</p> : null}
           </div>
         )}
 
@@ -9265,22 +9285,6 @@ export const NewBuildingSetupPanel = () => {
       </div>
       </div>
       </div>
-      <section className="mt-4 border bg-white p-4 space-y-3" aria-labelledby="baseline-readiness-heading">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <h3 id="baseline-readiness-heading" className="font-semibold">Baseline Readiness</h3>
-            <p className="text-xs text-gray-600">{nextBaselineStep ? `Next: ${nextBaselineStep.label}` : "Ready for baseline review"}</p>
-          </div>
-          <p className="text-sm font-semibold">{baselineCompleteCount}/{baselineReadinessSteps.length} submitted</p>
-        </div>
-        <div className="h-3 bg-gray-200 overflow-hidden"><div className="h-full bg-blue-600 transition-all" style={{ width: `${baselineProgress}%` }} /></div>
-        <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-4 text-xs">
-          {baselineReadinessSteps.map((step) => <div key={step.label} className={`border p-2 ${step.complete ? "border-blue-200 bg-blue-50 text-blue-900" : "border-gray-200 bg-gray-50 text-gray-600"}`}>
-            <span className="font-semibold">{step.complete ? "Submitted" : "Pending"}</span><br />{step.label}
-          </div>)}
-        </div>
-        <p className="text-xs text-gray-600">Submission does not establish date coverage, accuracy or audit approval. A verifier must review the evidence before the baseline can be locked.</p>
-      </section>
       </section>
     </div>
   );

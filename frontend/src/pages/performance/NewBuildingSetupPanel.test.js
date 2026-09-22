@@ -9,19 +9,36 @@ test("new building sections keep ownership first and separate the inputs", () =>
 
   expect(screen.getByRole("heading", { name: "New Building" })).toBeInTheDocument();
   expect(screen.getByRole("tablist").closest("section")).toContainElement(screen.getByRole("heading", { name: "New Building" }));
-  expect(screen.getByRole("heading", { name: "Baseline Readiness" }).closest("#new-building-panel")).toBeNull();
+  expect(screen.queryByRole("heading", { name: "Baseline readiness" })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("tab", { name: "Measurements" }));
   expect(screen.getByText("Create the ownership record before adding measurements.")).toBeInTheDocument();
 
   fireEvent.click(screen.getByRole("tab", { name: "Performance" }));
   expect(screen.getByRole("heading", { name: "Energy Data" })).toBeInTheDocument();
-  expect(screen.getByRole("heading", { name: "Baseline Readiness" })).toBeInTheDocument();
 
   fireEvent.click(screen.getByRole("tab", { name: "Carbon Context" }));
   expect(screen.getByRole("combobox", { name: "Electricity tariff" })).toBeInTheDocument();
-  expect(screen.getByRole("heading", { name: "Baseline Readiness" })).toBeInTheDocument();
   expect(screen.getByLabelText("Electricity tariff evidence")).toBeDisabled();
   expect(screen.queryByRole("option", { name: "Renewable tariff - evidence uploaded" })).not.toBeInTheDocument();
+});
+
+test("baseline readiness stays above every setup tab for a created home profile", () => {
+  window.localStorage.setItem("wbp-new-building-passport", JSON.stringify({ recordId: "WBP-TEST", legalOwnerName: "Test Owner", ownershipType: "owner-occupier", tenure: "freehold" }));
+  render(<MemoryRouter><NewBuildingSetupPanel /></MemoryRouter>);
+
+  const banner = screen.getByText("Home profile created").closest(".bg-emerald-50");
+  expect(banner).toContainElement(screen.getByRole("heading", { name: "Baseline readiness" }));
+  expect(banner).toContainElement(screen.getByRole("progressbar", { name: "Baseline readiness" }));
+  expect(screen.getByRole("progressbar", { name: "Baseline readiness" })).toHaveAttribute("aria-valuenow", "11");
+  fireEvent.click(screen.getByText("What’s needed"));
+  expect(banner).toHaveTextContent("Historical energy evidence");
+  expect(banner).toHaveTextContent("A verifier must review the evidence");
+
+  for (const tab of ["Measurements", "Performance", "Carbon Context"]) {
+    fireEvent.click(screen.getByRole("tab", { name: tab }));
+    expect(screen.getByText("Home profile created")).toBeInTheDocument();
+    expect(banner.compareDocumentPosition(screen.getByRole("tabpanel")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  }
 });
 
 test("measurements contain the existing Matterport controls for a saved record", () => {
