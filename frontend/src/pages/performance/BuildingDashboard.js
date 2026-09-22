@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { useLocation, useNavigate } from "react-router-dom";
 import AnalogGauge from "../../components/AnalogGauge";
 import supabase from "../../supabaseClient";
-import { hasFullWorkspaceAccess, loadLinkedHistoricOutline } from "../../workspaceAccess";
+import { hasFullWorkspaceAccess } from "../../workspaceAccess";
 import govukCrown from "../../assets/govuk-crown.png";
 import matterportMark from "../../assets/matterport-mark.png";
 
@@ -32,6 +32,12 @@ const MIN_FULL_YEAR_METERED_DAYS = 300;
 const SEASON_NAMES = ["Summer", "Autumn", "Winter", "Spring"];
 
 const PROPERTY_DISCOVERY_CACHE_KEY = "wbp-property-discovery-draft:v1";
+const HISTORIC_EVIDENCE_TYPES = [
+  { id: "historic-planning-permission", label: "Planning permission" },
+  { id: "historic-design-plan", label: "Design plans" },
+  { id: "historic-building-control", label: "Building control / completion" },
+  { id: "historic-builder-record", label: "Builder / construction record" },
+];
 const CARBON_EVIDENCE_TYPES = [
   { id: "energy-history", label: "Historical energy records", help: "Bills covering the baseline period. A reviewer must confirm the actual date coverage." },
   { id: "electricity-tariff", label: "Electricity tariff", help: "A supplier bill or tariff confirmation showing the account, dates and product." },
@@ -7295,6 +7301,7 @@ const BuildingDashboardPanel = ({ building }) => {
 
 export const NewBuildingSetupPanel = () => {
   const [setupTab, setSetupTab] = useState("ownership");
+  const historicSectionRef = useRef(null);
   const setupPanelRef = useRef(null);
   const setupContentRef = useRef(null);
   const previousPanelHeightRef = useRef(null);
@@ -7373,6 +7380,15 @@ export const NewBuildingSetupPanel = () => {
   const [historicLinks, setHistoricLinks] = useState([]);
   const [historicStatus, setHistoricStatus] = useState("");
   const [historicBusy, setHistoricBusy] = useState(false);
+  const [historicEvidenceType, setHistoricEvidenceType] = useState(HISTORIC_EVIDENCE_TYPES[0].id);
+  const [historicEvidence, setHistoricEvidence] = useState([]);
+  const [historicUploadBusy, setHistoricUploadBusy] = useState(false);
+  useEffect(() => {
+    if (new URLSearchParams(location.search).get("focus") !== "historic-evidence") return;
+    setSetupTab("ownership");
+    const timer = window.setTimeout(() => historicSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
+    return () => window.clearTimeout(timer);
+  }, [location.search]);
   const [discoveryStatus, setDiscoveryStatus] = useState("idle");
   const [discoveryError, setDiscoveryError] = useState("");
   const [setupMode, setSetupMode] = useState("manual");
@@ -7511,6 +7527,84 @@ export const NewBuildingSetupPanel = () => {
     } finally {
       setHistoricBusy(false);
     }
+  };
+
+  useEffect(() => {
+    if (!ownershipRecord?.databaseId) return;
+    let active = true;
+    const load = async () => {
+      const { data, error } = await supabase.from("WBPEvidenceVersions")
+        .select("id,evidence_type,original_file_name,storage_reference,created_at,assurance_status")
+        .eq("building_record_id", ownershipRecord.databaseId)
+        .eq("lifecycle_stage", "occupy")
+        .order("created_at", { ascending: false });
+      if (!active) return;
+      if (error) setHistoricStatus(`Could not load uploads: ${error.message}`);
+      else setHistoricEvidence((data || []).filter((item) => HISTORIC_EVIDENCE_TYPES.some((type) => type.id === item.evidence_type)));
+    };
+    load();
+    return () => { active = false; };
+  }, [ownershipRecord?.databaseId]);
+
+  const uploadHistoricEvidence = async (file) => {
+    if (!file) return;
+    if (!ownershipRecord?.databaseId) {
+      setHistoricStatus("Save this home to your secure account before uploading documents.");
+      return;
+    }
+    if (!["application/pdf", "image/jpeg", "image/png"].includes(file.type) || file.size > 10 * 1024 * 1024) {
+      setHistoricStatus("Use a PDF, JPG or PNG file no larger than 10 MB.");
+      return;
+    }
+    setHistoricUploadBusy(true);
+    setHistoricStatus("");
+    let path = "";
+    try {
+      const { data: auth, error: authError } = await supabase.auth.getUser();
+      if (authError || !auth.user) throw new Error("Sign in again to upload evidence.");
+      if (!window.crypto?.subtle) throw new Error("Secure file hashing is unavailable in this browser.");
+      const digest = await window.crypto.subtle.digest("SHA-256", await file.arrayBuffer());
+      const hash = Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+      const { data: previous, error: versionError } = await supabase.from("WBPEvidenceVersions")
+        .select("version_number").eq("building_record_id", ownershipRecord.databaseId)
+        .eq("evidence_type", historicEvidenceType).order("version_number", { ascending: false }).limit(1);
+      if (versionError) throw versionError;
+      path = `${auth.user.id}/${ownershipRecord.databaseId}/${window.crypto.randomUUID()}`;
+      const { error: uploadError } = await supabase.storage.from("wbp-private-evidence")
+        .upload(path, file, { contentType: file.type, upsert: false });
+      if (uploadError) throw uploadError;
+      const { data, error: metadataError } = await supabase.from("WBPEvidenceVersions").insert({
+        building_record_id: ownershipRecord.databaseId,
+        evidence_type: historicEvidenceType,
+        lifecycle_stage: "occupy",
+        version_number: (previous?.[0]?.version_number || 0) + 1,
+        storage_reference: path,
+        evidence_hash: hash,
+        original_file_name: file.name,
+        mime_type: file.type,
+        byte_size: file.size,
+        classification: "verifier-access",
+        assurance_status: "self-declared",
+        submitted_by: auth.user.id,
+      }).select("id,evidence_type,original_file_name,storage_reference,created_at,assurance_status").single();
+      if (metadataError) throw metadataError;
+      setHistoricEvidence((current) => [data, ...current]);
+      setHistoricStatus(`${file.name} uploaded privately. It has not been verified.`);
+    } catch (error) {
+      if (path) await supabase.storage.from("wbp-private-evidence").remove([path]);
+      setHistoricStatus(`Upload failed: ${error.message}`);
+    } finally {
+      setHistoricUploadBusy(false);
+    }
+  };
+
+  const openHistoricEvidence = async (path) => {
+    const { data, error } = await supabase.storage.from("wbp-private-evidence").createSignedUrl(path, 60);
+    if (error || !data?.signedUrl) {
+      setHistoricStatus(`Could not open document: ${error?.message || "Link unavailable"}`);
+      return;
+    }
+    window.open(data.signedUrl, "_blank", "noopener,noreferrer");
   };
 
   useEffect(() => {
@@ -8460,13 +8554,34 @@ export const NewBuildingSetupPanel = () => {
             </a>
           </section>
         ) : null}
-        {ownershipRecord ? <section className="mx-auto mt-4 max-w-4xl border border-gray-200 bg-white p-4">
+        {ownershipRecord ? <section ref={historicSectionRef} id="historic-evidence" className="mx-auto mt-4 max-w-4xl scroll-mt-32 border border-gray-200 bg-white p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h3 className="text-base font-bold">Historic design and build</h3>
-              <p className="mt-1 max-w-2xl text-xs text-gray-600">Link a drawing, planning document or construction record you found for this home. Its source is shown in a read-only outline; the named designer or builder is not verified by WBP.</p>
+              <h3 className="text-base font-bold">Historical design / build evidence</h3>
+              <p className="mt-1 max-w-2xl text-xs text-gray-600">Add permission notices, plans, building control records or builder details. Uploaded documents are private and remain unverified until reviewed.</p>
             </div>
             <span className="text-xs text-gray-600">{historicLinks.length} source{historicLinks.length === 1 ? "" : "s"} linked</span>
+          </div>
+          <div className="mt-4 grid gap-2 border-t pt-3 text-xs sm:grid-cols-2">
+            {ownershipRecord.propertyDiscovery?.localAuthority?.toLowerCase().includes("east suffolk") ? <a href="https://publicaccess.eastsuffolk.gov.uk/online-applications/" target="_blank" rel="noopener noreferrer" className="border border-blue-200 bg-blue-50 p-3 font-semibold text-blue-900 underline">Search East Suffolk planning applications and drawings</a> : null}
+            <a href="https://www.gov.uk/search-register-planning-decisions" target="_blank" rel="noopener noreferrer" className="border border-blue-200 bg-blue-50 p-3 font-semibold text-blue-900 underline">Find another council's planning register</a>
+            {ownershipRecord.propertyDiscovery?.localAuthority?.toLowerCase().includes("east suffolk") ? <>
+              <a href={`mailto:land.charges@eastsuffolk.gov.uk?subject=${encodeURIComponent(`Property records enquiry: ${ownershipRecord.propertyDiscovery?.address || ""}`)}`} className="border border-gray-200 p-3 font-semibold text-gray-800 underline">Ask East Suffolk land charges about search records</a>
+              <a href="mailto:buildingcontrol@eastsuffolk.gov.uk?subject=Historic%20building%20control%20records" className="border border-gray-200 p-3 font-semibold text-gray-800 underline">Ask East Suffolk building control about completion records</a>
+            </> : null}
+          </div>
+          <p className="mt-2 text-xs text-gray-600">Planning registers may hold applications and submitted plans, but not necessarily original house plans or the builder's identity. Land charges are a separate record search.</p>
+          <div className="mt-4 border-t pt-3">
+            <h4 className="text-sm font-semibold">Upload a document</h4>
+            <div className="mt-2 flex flex-wrap items-end gap-2">
+              <label className="text-xs font-semibold">Document type
+                <select className="mt-1 block border p-2 text-sm" value={historicEvidenceType} onChange={(event) => setHistoricEvidenceType(event.target.value)}>{HISTORIC_EVIDENCE_TYPES.map((type) => <option key={type.id} value={type.id}>{type.label}</option>)}</select>
+              </label>
+              <label className="text-xs font-semibold">PDF, JPG or PNG (up to 10 MB)
+                <input type="file" accept=".pdf,.jpg,.jpeg,.png" disabled={!ownershipRecord.databaseId || historicUploadBusy} className="mt-1 block max-w-full text-sm" onChange={(event) => { uploadHistoricEvidence(event.target.files?.[0]); event.target.value = ""; }} />
+              </label>
+            </div>
+            {historicEvidence.length ? <ul className="mt-3 divide-y border-t text-xs">{historicEvidence.map((item) => <li key={item.id} className="flex flex-wrap items-center justify-between gap-2 py-2"><span>{HISTORIC_EVIDENCE_TYPES.find((type) => type.id === item.evidence_type)?.label}: {item.original_file_name} <span className="text-gray-500">(unverified)</span></span><button type="button" onClick={() => openHistoricEvidence(item.storage_reference)} className="font-semibold text-blue-700 underline">Open</button></li>)}</ul> : null}
           </div>
           {(ownershipRecord.propertyDiscovery?.planningRecords || []).some((record) => /^https:\/\//i.test(record.documentationUrl || "")) ? <details className="mt-4 border-t pt-3 text-xs">
             <summary className="cursor-pointer font-semibold">Possible public records from the address check</summary>
@@ -10279,21 +10394,10 @@ const BuildingDashboard = () => {
     let mounted = true;
     const checkAccess = async () => {
       const { data } = await supabase.auth.getUser();
-      if (!mounted || !data.user) return;
-      if (hasFullWorkspaceAccess(data.user)) {
-        setCanSwitchWorkspace(true);
-        return;
-      }
-      try {
-        const history = await loadLinkedHistoricOutline(data.user);
-        if (mounted) setCanSwitchWorkspace(history.length > 0);
-      } catch {
-        if (mounted) setCanSwitchWorkspace(false);
-      }
+      if (mounted) setCanSwitchWorkspace(Boolean(data?.user && hasFullWorkspaceAccess(data.user)));
     };
     checkAccess();
-    window.addEventListener("wbp:historic-source-linked", checkAccess);
-    return () => { mounted = false; window.removeEventListener("wbp:historic-source-linked", checkAccess); };
+    return () => { mounted = false; };
   }, []);
 
   const logOut = async () => {
@@ -10431,7 +10535,10 @@ const BuildingDashboard = () => {
             ))}
           </div>
 
-          <p className="hidden shrink-0 text-xs text-gray-500 lg:block">Swipe left or right to switch buildings</p>
+          <div className="flex shrink-0 items-center gap-3">
+            {canSwitchWorkspace ? <button type="button" onClick={() => navigate("/workspaces")} className="border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-900 hover:bg-gray-100">Switch workspace</button> : null}
+            <p className="hidden text-xs text-gray-500 lg:block">Swipe left or right to switch buildings</p>
+          </div>
         </div>
       </div>
 
@@ -10448,7 +10555,7 @@ const BuildingDashboard = () => {
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              {canSwitchWorkspace ? <button type="button" onClick={() => navigate("/workspaces")} className="border border-emerald-700 bg-white px-3 py-2 text-xs font-semibold text-emerald-900 hover:bg-emerald-100">Switch workspace</button> : null}
+              {accessRole === "homeowner" ? <button type="button" onClick={() => navigate("/dashboard/new?role=homeowner&focus=historic-evidence")} className="border border-emerald-700 bg-white px-3 py-2 text-xs font-semibold text-emerald-900 hover:bg-emerald-100">Historical design / build evidence</button> : null}
               <button type="button" onClick={logOut} className="border border-emerald-700 bg-white px-3 py-2 text-xs font-semibold text-emerald-900 hover:bg-emerald-100">Log out</button>
             </div>
           </div>
