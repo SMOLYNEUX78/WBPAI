@@ -6778,7 +6778,10 @@ const BuildingDashboardPanel = ({ building }) => {
                 : ""}
             </p>
           </div>
+        </div>
+      </div>}
 
+      {building.id === "home" && <div className="bg-gray-100 p-4 rounded shadow">
           <button
             type="button"
             className={`w-full rounded border p-4 text-left shadow-sm transition hover:border-gray-400 ${
@@ -6819,10 +6822,9 @@ const BuildingDashboardPanel = ({ building }) => {
               Click to view evidence requirements
             </p>
           </button>
-        </div>
       </div>}
 
-      {activeMrvEvidenceField && typeof document !== "undefined"
+      {building.id === "home" && activeMrvEvidenceField && typeof document !== "undefined"
         ? createPortal(
             <div className="fixed inset-0 z-[9999] flex items-center justify-center overflow-y-auto bg-black/40 p-3 sm:p-6">
               <div className="relative my-6 max-h-[calc(100vh-3rem)] w-full max-w-6xl overflow-y-auto rounded-lg border border-gray-200 bg-white p-5 shadow-2xl sm:p-6">
