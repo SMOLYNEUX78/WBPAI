@@ -600,6 +600,11 @@ code {
   background: #ffffff;
 }
 .wbp-professional-nav strong { font-size: 20px; }
+.wbp-professional-nav-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+@media (max-width: 640px) {
+  .wbp-professional-nav { flex-wrap: wrap; gap: 8px; padding-top: 12px; padding-bottom: 12px; }
+  .wbp-professional-nav-actions { width: 100%; justify-content: flex-end; }
+}
 .wbp-professional-nav button, .wbp-workspace-actions button, .wbp-link-record button {
   min-height: 40px;
   padding: 0 16px;

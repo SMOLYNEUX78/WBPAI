@@ -113,6 +113,8 @@ const RoleGateway = () => {
   const [authStatus, setAuthStatus] = useState("idle");
   const [authMessage, setAuthMessage] = useState("");
   const [existingSessionEmail, setExistingSessionEmail] = useState("");
+  const [testSession, setTestSession] = useState(null);
+  const [sessionReady, setSessionReady] = useState(false);
   const activeRole = ACCESS_ROLES.find((role) => role.id === selectedRole);
 
   const finishAuthenticatedAccess = useCallback(async (session, intent) => {
@@ -151,7 +153,10 @@ const RoleGateway = () => {
     let mounted = true;
     const resumeAuthenticatedAccess = async () => {
       const { data } = await supabase.auth.getSession();
-      if (!mounted || !data.session) return;
+      if (!mounted) return;
+      setTestSession(data.session?.user.email?.toLowerCase() === TEST_PROFESSIONAL_EMAIL ? data.session : null);
+      setSessionReady(true);
+      if (!data.session) return;
       let intent = null;
       try {
         intent = JSON.parse(window.localStorage.getItem(AUTH_INTENT_KEY) || "null");
@@ -164,6 +169,7 @@ const RoleGateway = () => {
     };
     resumeAuthenticatedAccess();
     const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+      setTestSession(session?.user.email?.toLowerCase() === TEST_PROFESSIONAL_EMAIL ? session : null);
       if (event !== "SIGNED_IN" || !session) return;
       let intent = null;
       try {
@@ -266,9 +272,20 @@ const RoleGateway = () => {
         {ACCESS_ROLES.map((role, index) => (
           <button
             type="button"
+            disabled={!sessionReady}
             className={`wbp-route-band is-${role.position}`}
             key={role.id}
-            onClick={() => setSelectedRole(role.id)}
+            onClick={() => {
+              if (testSession) {
+                finishAuthenticatedAccess(testSession, {
+                  role: role.id,
+                  email: testSession.user.email,
+                  occupyMode: "new",
+                });
+              } else {
+                setSelectedRole(role.id);
+              }
+            }}
           >
             <span className="wbp-route-number">0{index + 1}</span>
             <span className="wbp-route-copy">
@@ -544,7 +561,10 @@ const ProfessionalWorkspace = () => {
     <main className={`wbp-professional-shell is-${isBuilder ? "build" : "design"}`}>
       <header className="wbp-professional-nav">
         <strong>Whole Build Profile</strong>
-        <button type="button" onClick={logOut}>Log out</button>
+        <div className="wbp-professional-nav-actions">
+          {isTestAccount ? <button type="button" onClick={() => navigate("/login")}>Switch workspace</button> : null}
+          <button type="button" onClick={logOut}>Log out</button>
+        </div>
       </header>
 
       <section className="wbp-professional-hero">

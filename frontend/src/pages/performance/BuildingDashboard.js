@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { useLocation, useNavigate } from "react-router-dom";
 import AnalogGauge from "../../components/AnalogGauge";
 import supabase from "../../supabaseClient";
+import { TEST_PROFESSIONAL_EMAIL } from "../../professionalEmail";
 
 const DEFAULT_MATTERPORT_URL = "https://my.matterport.com/show/?m=zHm8SwWeHiN";
 const HDD_BASE_TEMP_C = 15.5;
@@ -9968,12 +9969,21 @@ const BuildingDashboard = () => {
     ? routeIndex
     : BUILDINGS.findIndex((building) => building.id === "new");
   const [activeIndex, setActiveIndex] = useState(defaultIndex >= 0 ? defaultIndex : 0);
+  const [isTestAccount, setIsTestAccount] = useState(false);
   const [bridgewoodValue, setBridgewoodValue] = useState(readCachedBridgewoodValue);
   const bridgewoodTokens = bridgewoodValue.credits;
   const touchStartX = useRef(null);
   const [dragOffset, setDragOffset] = useState(0);
 
   const activeBuilding = BUILDINGS[activeIndex];
+
+  useEffect(() => {
+    let mounted = true;
+    supabase.auth.getSession().then(({ data }) => {
+      if (mounted) setIsTestAccount(data.session?.user.email?.toLowerCase() === TEST_PROFESSIONAL_EMAIL);
+    });
+    return () => { mounted = false; };
+  }, []);
 
   const logOut = async () => {
     await supabase.auth.signOut();
@@ -10089,8 +10099,8 @@ const BuildingDashboard = () => {
       onTouchEnd={handleTouchEnd}
     >
       <div className="sticky top-0 z-20 bg-white border-b px-4 py-3">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex min-w-0 gap-2 overflow-x-auto pb-1">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+          <div className="flex min-w-0 w-full gap-2 overflow-x-auto pb-1 sm:w-auto sm:flex-1">
             {BUILDINGS.map((building, index) => (
               <React.Fragment key={building.id}>
                 {building.id === "museum" ? (
@@ -10111,10 +10121,19 @@ const BuildingDashboard = () => {
             ))}
           </div>
 
-          <div className="flex shrink-0 items-center gap-3">
+          <div className="flex shrink-0 items-center justify-end gap-2 sm:gap-3">
             <p className="text-xs text-gray-500 hidden lg:block">
               Swipe left or right to switch buildings
             </p>
+            {isTestAccount ? (
+              <button
+                type="button"
+                onClick={() => navigate("/login")}
+                className="shrink-0 border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:border-gray-500 hover:text-black"
+              >
+                Switch workspace
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={logOut}
