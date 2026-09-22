@@ -43,6 +43,24 @@ create table if not exists public."WBPBuildingRecords" (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public."WBPPropertyDiscoverySnapshots" (
+  id uuid primary key default gen_random_uuid(),
+  building_record_id uuid not null references public."WBPBuildingRecords"(id) on delete cascade,
+  snapshot_version integer not null default 1,
+  searched_address text not null,
+  postcode text,
+  uprn text,
+  latitude double precision,
+  longitude double precision,
+  local_authority text,
+  discovered_sources jsonb not null default '[]'::jsonb,
+  planning_records jsonb not null default '[]'::jsonb,
+  owner_confirmed_at timestamptz,
+  discovered_at timestamptz not null default now(),
+  created_by uuid not null references auth.users(id),
+  created_at timestamptz not null default now()
+);
+
 create table if not exists public."WBPRoleAssignments" (
   id uuid primary key default gen_random_uuid(),
   building_record_id uuid not null references public."WBPBuildingRecords"(id) on delete cascade,
@@ -118,6 +136,8 @@ create table if not exists public."WBPHandoverReceipts" (
 
 create index if not exists wbp_building_record_uprn_idx
   on public."WBPBuildingRecords" (uprn);
+create index if not exists wbp_property_discovery_building_idx
+  on public."WBPPropertyDiscoverySnapshots" (building_record_id, discovered_at desc);
 create index if not exists wbp_role_building_idx
   on public."WBPRoleAssignments" (building_record_id, role_type);
 create index if not exists wbp_evidence_building_idx
@@ -127,6 +147,7 @@ create index if not exists wbp_handover_building_idx
 
 alter table public."WBPOrganisations" enable row level security;
 alter table public."WBPBuildingRecords" enable row level security;
+alter table public."WBPPropertyDiscoverySnapshots" enable row level security;
 alter table public."WBPRoleAssignments" enable row level security;
 alter table public."WBPEvidenceVersions" enable row level security;
 alter table public."WBPDataPermissions" enable row level security;
@@ -147,3 +168,22 @@ create policy "building custodians can update records"
   on public."WBPBuildingRecords" for update to authenticated
   using (custodian_user_id = auth.uid())
   with check (custodian_user_id = auth.uid());
+
+drop policy if exists "building custodians can manage discovery snapshots" on public."WBPPropertyDiscoverySnapshots";
+create policy "building custodians can manage discovery snapshots"
+  on public."WBPPropertyDiscoverySnapshots" for all to authenticated
+  using (
+    exists (
+      select 1 from public."WBPBuildingRecords" record
+      where record.id = building_record_id
+        and record.custodian_user_id = auth.uid()
+    )
+  )
+  with check (
+    created_by = auth.uid()
+    and exists (
+      select 1 from public."WBPBuildingRecords" record
+      where record.id = building_record_id
+        and record.custodian_user_id = auth.uid()
+    )
+  );

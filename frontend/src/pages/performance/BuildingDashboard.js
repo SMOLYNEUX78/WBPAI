@@ -28,6 +28,25 @@ const MIN_FULL_YEAR_BASELINE_DAYS = 365;
 const MIN_FULL_YEAR_METERED_DAYS = 300;
 const SEASON_NAMES = ["Summer", "Autumn", "Winter", "Spring"];
 
+const PROPERTY_DISCOVERY_CACHE_KEY = "wbp-property-discovery-draft:v1";
+const PROPERTY_DISCOVERY_DATASETS = [
+  "planning-application",
+  "listed-building",
+  "conservation-area",
+  "article-4-direction-area",
+  "tree-preservation-zone",
+  "flood-risk-zone",
+];
+
+const normalisePostcode = (value = "") => value.trim().toUpperCase().replace(/\s+/g, " ");
+
+const sourceStatusClasses = {
+  found: "border-emerald-200 bg-emerald-50 text-emerald-900",
+  checked: "border-blue-200 bg-blue-50 text-blue-900",
+  action: "border-amber-200 bg-amber-50 text-amber-900",
+  unavailable: "border-gray-200 bg-gray-50 text-gray-600",
+};
+
 const getMeteorologicalSeason = (date = new Date()) => {
   const month = date.getUTCMonth();
   const year = date.getUTCFullYear();
@@ -7277,6 +7296,29 @@ const NewBuildingSetupPanel = () => {
     authorityToCreate: false,
     privacyAccepted: false,
   });
+  const [propertySearch, setPropertySearch] = useState(() => {
+    try {
+      const cached = JSON.parse(window.localStorage.getItem(PROPERTY_DISCOVERY_CACHE_KEY) || "null");
+      return cached?.search || {
+        address: "",
+        postcode: "",
+        uprn: "",
+        latitude: "",
+        longitude: "",
+      };
+    } catch {
+      return { address: "", postcode: "", uprn: "", latitude: "", longitude: "" };
+    }
+  });
+  const [propertyDiscovery, setPropertyDiscovery] = useState(() => {
+    try {
+      return JSON.parse(window.localStorage.getItem(PROPERTY_DISCOVERY_CACHE_KEY) || "null")?.snapshot || null;
+    } catch {
+      return null;
+    }
+  });
+  const [discoveryStatus, setDiscoveryStatus] = useState("idle");
+  const [discoveryError, setDiscoveryError] = useState("");
   const [setupMode, setSetupMode] = useState("api");
   const [apiDetails, setApiDetails] = useState("");
   const [modelInput, setModelInput] = useState("");
@@ -7359,6 +7401,177 @@ const NewBuildingSetupPanel = () => {
     setOwnershipDraft((current) => ({ ...current, [field]: value }));
   };
 
+  const updatePropertySearch = (field, value) => {
+    setPropertySearch((current) => ({ ...current, [field]: value }));
+  };
+
+  const discoverProperty = async () => {
+    const postcode = normalisePostcode(propertySearch.postcode);
+    if (!propertySearch.address.trim() || !postcode) {
+      setDiscoveryError("Enter the property address and postcode first.");
+      return;
+    }
+
+    setDiscoveryStatus("loading");
+    setDiscoveryError("");
+
+    try {
+      let latitude = Number(propertySearch.latitude) || null;
+      let longitude = Number(propertySearch.longitude) || null;
+      let localAuthority = "";
+      let postcodeMatched = false;
+
+      try {
+        const postcodeResponse = await fetch(
+          `https://api.postcodes.io/postcodes/${encodeURIComponent(postcode.replace(/\s/g, ""))}`
+        );
+        if (postcodeResponse.ok) {
+          const postcodePayload = await postcodeResponse.json();
+          latitude = latitude || postcodePayload?.result?.latitude || null;
+          longitude = longitude || postcodePayload?.result?.longitude || null;
+          localAuthority = postcodePayload?.result?.admin_district || "";
+          postcodeMatched = true;
+        }
+      } catch {
+        // Manual coordinates still allow discovery when postcode lookup is unavailable.
+      }
+
+      const planningRecords = [];
+      let planningChecked = false;
+      if (latitude && longitude) {
+        const planningUrl = new URL("https://www.planning.data.gov.uk/entity.json");
+        planningUrl.searchParams.set("latitude", latitude);
+        planningUrl.searchParams.set("longitude", longitude);
+        planningUrl.searchParams.set("limit", "100");
+        PROPERTY_DISCOVERY_DATASETS.forEach((dataset) =>
+          planningUrl.searchParams.append("dataset", dataset)
+        );
+
+        try {
+          const planningResponse = await fetch(planningUrl.toString());
+          if (planningResponse.ok) {
+            const planningPayload = await planningResponse.json();
+            const entities = planningPayload?.entities || planningPayload?.data || [];
+            entities.forEach((entity) => {
+              planningRecords.push({
+                dataset: entity.dataset || entity?.typology || "planning-record",
+                name: entity.name || entity.reference || "Property planning record",
+                reference: entity.reference || entity.entity || "",
+                documentationUrl: entity["documentation-url"] || entity.documentation_url || "",
+                startDate: entity["start-date"] || entity.start_date || "",
+                provenance: "MHCLG Planning Data",
+              });
+            });
+            planningChecked = true;
+          }
+        } catch {
+          planningChecked = false;
+        }
+      }
+
+      const discoveredAt = new Date().toISOString();
+      const snapshot = {
+        version: 1,
+        discoveredAt,
+        confirmedAt: null,
+        address: propertySearch.address.trim(),
+        postcode,
+        uprn: propertySearch.uprn.trim(),
+        latitude,
+        longitude,
+        localAuthority,
+        planningRecords,
+        sources: [
+          {
+            id: "address",
+            label: "Address and location",
+            status: postcodeMatched ? "found" : latitude && longitude ? "checked" : "action",
+            detail: postcodeMatched
+              ? `${postcode}${localAuthority ? ` · ${localAuthority}` : ""}`
+              : latitude && longitude
+              ? "Location supplied by owner"
+              : "Coordinates need confirmation",
+            provenance: postcodeMatched ? "Postcodes.io / ONS geography" : "Owner supplied",
+          },
+          {
+            id: "planning",
+            label: "Planning and design history",
+            status: planningRecords.length ? "found" : planningChecked ? "checked" : "action",
+            detail: planningRecords.length
+              ? `${planningRecords.length} matching public record${planningRecords.length === 1 ? "" : "s"}`
+              : planningChecked
+              ? "Public datasets checked; no matching record returned"
+              : "Local planning portal search still required",
+            provenance: "MHCLG Planning Data",
+          },
+          {
+            id: "epc",
+            label: "Energy certificate history",
+            status: "action",
+            detail: "Connect the government EPC credential to import certificates and floor-area evidence",
+            provenance: "MHCLG EPC Register",
+          },
+          {
+            id: "ownership",
+            label: "Ownership evidence",
+            status: propertySearch.uprn.trim() ? "checked" : "action",
+            detail: propertySearch.uprn.trim()
+              ? `UPRN ${propertySearch.uprn.trim()} ready for title matching`
+              : "Add a UPRN or title number, then authorise Land Registry verification",
+            provenance: "Owner supplied / HM Land Registry connector pending",
+          },
+          {
+            id: "building-control",
+            label: "Building-control record",
+            status: "action",
+            detail: "Owner authority may be required before plans or completion records can be released",
+            provenance: localAuthority || "Relevant building-control body",
+          },
+        ],
+      };
+
+      const nextSearch = {
+        ...propertySearch,
+        postcode,
+        latitude: latitude || "",
+        longitude: longitude || "",
+      };
+      setPropertySearch(nextSearch);
+      setPropertyDiscovery(snapshot);
+      setOwnershipDraft((current) => ({
+        ...current,
+        uprn: propertySearch.uprn.trim() || current.uprn,
+      }));
+      setManualData((current) => ({
+        ...current,
+        address: propertySearch.address.trim(),
+        latitude: latitude || current.latitude,
+        longitude: longitude || current.longitude,
+      }));
+      window.localStorage.setItem(
+        PROPERTY_DISCOVERY_CACHE_KEY,
+        JSON.stringify({ search: nextSearch, snapshot })
+      );
+      setDiscoveryStatus("complete");
+    } catch (error) {
+      setDiscoveryStatus("error");
+      setDiscoveryError(error?.message || "Property discovery could not be completed.");
+    }
+  };
+
+  const confirmPropertyDiscovery = () => {
+    if (!propertyDiscovery) return;
+    const confirmedSnapshot = {
+      ...propertyDiscovery,
+      confirmedAt: new Date().toISOString(),
+    };
+    setPropertyDiscovery(confirmedSnapshot);
+    window.localStorage.setItem(
+      PROPERTY_DISCOVERY_CACHE_KEY,
+      JSON.stringify({ search: propertySearch, snapshot: confirmedSnapshot })
+    );
+  };
+
   const createBuildingPassport = async (event) => {
     event.preventDefault();
     const recordId = `WBP-${new Date().getFullYear()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
@@ -7368,6 +7581,7 @@ const NewBuildingSetupPanel = () => {
       createdAt,
       lifecycleStage: "occupy",
       ...ownershipDraft,
+      propertyDiscovery,
     });
     let genesisHash = "hash-pending";
 
@@ -7386,6 +7600,7 @@ const NewBuildingSetupPanel = () => {
       custodianStatus: "active",
       genesisHash,
       ...ownershipDraft,
+      propertyDiscovery,
       history: [
         {
           event: "Building passport created",
@@ -7470,6 +7685,116 @@ const NewBuildingSetupPanel = () => {
               </div>
             ) : null}
 
+            <section className="mt-5 border border-gray-200 bg-gray-50 p-3 sm:p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-bold uppercase text-blue-700">Find my property</p>
+                  <h4 className="mt-1 text-base font-bold">Build the profile from trusted records</h4>
+                  <p className="mt-1 max-w-2xl text-xs text-gray-600">
+                    Enter the address once. WBP will identify its location, search available planning records and prepare protected EPC and ownership checks.
+                  </p>
+                </div>
+                <span className="border border-blue-200 bg-white px-2 py-1 text-xs font-semibold text-blue-800">
+                  Discovery first
+                </span>
+              </div>
+
+              <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,2fr)_minmax(130px,1fr)]">
+                <label className="space-y-1">
+                  <span className="text-xs font-semibold text-gray-700">Property address</span>
+                  <input
+                    className="w-full border border-gray-300 p-2 text-sm"
+                    value={propertySearch.address}
+                    onChange={(event) => updatePropertySearch("address", event.target.value)}
+                    placeholder="House number, street and town"
+                  />
+                </label>
+                <label className="space-y-1">
+                  <span className="text-xs font-semibold text-gray-700">Postcode</span>
+                  <input
+                    className="w-full border border-gray-300 p-2 text-sm uppercase"
+                    value={propertySearch.postcode}
+                    onChange={(event) => updatePropertySearch("postcode", event.target.value)}
+                    placeholder="IP12 4HA"
+                  />
+                </label>
+                <label className="space-y-1">
+                  <span className="text-xs font-semibold text-gray-700">UPRN, if known</span>
+                  <input
+                    className="w-full border border-gray-300 p-2 text-sm"
+                    value={propertySearch.uprn}
+                    onChange={(event) => updatePropertySearch("uprn", event.target.value)}
+                    placeholder="Optional property identifier"
+                  />
+                </label>
+                <div className="flex items-end">
+                  <button
+                    type="button"
+                    onClick={discoverProperty}
+                    disabled={discoveryStatus === "loading"}
+                    className="w-full bg-blue-700 px-4 py-2 text-sm font-bold text-white disabled:cursor-wait disabled:opacity-60"
+                  >
+                    {discoveryStatus === "loading" ? "Searching records..." : propertyDiscovery ? "Refresh records" : "Find property records"}
+                  </button>
+                </div>
+              </div>
+
+              {discoveryError ? (
+                <p className="mt-3 border border-red-200 bg-red-50 p-2 text-xs text-red-800">{discoveryError}</p>
+              ) : null}
+
+              {propertyDiscovery ? (
+                <div className="mt-4 space-y-3">
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {propertyDiscovery.sources.map((source) => (
+                      <article key={source.id} className={`border p-3 ${sourceStatusClasses[source.status] || sourceStatusClasses.unavailable}`}>
+                        <div className="flex items-start justify-between gap-2">
+                          <strong className="text-sm">{source.label}</strong>
+                          <span className="shrink-0 text-[10px] font-bold uppercase">{source.status}</span>
+                        </div>
+                        <p className="mt-1 text-xs">{source.detail}</p>
+                        <p className="mt-2 text-[10px] opacity-75">Source: {source.provenance}</p>
+                      </article>
+                    ))}
+                  </div>
+
+                  {propertyDiscovery.planningRecords.length ? (
+                    <details className="border border-gray-200 bg-white p-3">
+                      <summary className="cursor-pointer text-sm font-bold">
+                        Review {propertyDiscovery.planningRecords.length} planning and design record{propertyDiscovery.planningRecords.length === 1 ? "" : "s"}
+                      </summary>
+                      <div className="mt-3 grid gap-2">
+                        {propertyDiscovery.planningRecords.slice(0, 12).map((record, index) => (
+                          <div key={`${record.reference}-${index}`} className="border-t border-gray-100 pt-2 text-xs">
+                            <p className="font-semibold">{record.name}</p>
+                            <p className="text-gray-600">{record.dataset.replaceAll("-", " ")}{record.reference ? ` · ${record.reference}` : ""}</p>
+                            {record.documentationUrl ? (
+                              <a className="text-blue-700 underline" href={record.documentationUrl} target="_blank" rel="noreferrer">Open source record</a>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  ) : null}
+
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 pt-3">
+                    <p className="text-xs text-gray-600">
+                      {propertyDiscovery.confirmedAt
+                        ? `Confirmed ${new Date(propertyDiscovery.confirmedAt).toLocaleDateString("en-GB")}`
+                        : "Check the address and records before continuing. Inferred data remains clearly labelled."}
+                    </p>
+                    {!propertyDiscovery.confirmedAt ? (
+                      <button type="button" onClick={confirmPropertyDiscovery} className="border border-emerald-700 bg-white px-3 py-2 text-xs font-bold text-emerald-800">
+                        Confirm property match
+                      </button>
+                    ) : (
+                      <span className="bg-emerald-700 px-3 py-2 text-xs font-bold text-white">Property confirmed</span>
+                    )}
+                  </div>
+                </div>
+              ) : null}
+            </section>
+
             <div className="mt-5 grid gap-4 md:grid-cols-2">
               <label className="space-y-1">
                 <span className="text-xs font-semibold text-gray-700">Ownership arrangement</span>
@@ -7535,7 +7860,7 @@ const NewBuildingSetupPanel = () => {
               </label>
             </div>
 
-            <button type="submit" disabled={!ownershipDraft.legalOwnerName.trim() || !ownershipDraft.custodianName.trim() || !ownershipDraft.authorityToCreate || !ownershipDraft.privacyAccepted} className="mt-5 bg-emerald-700 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-40">
+            <button type="submit" disabled={!propertyDiscovery?.confirmedAt || !ownershipDraft.legalOwnerName.trim() || !ownershipDraft.custodianName.trim() || !ownershipDraft.authorityToCreate || !ownershipDraft.privacyAccepted} className="mt-5 bg-emerald-700 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-40">
               Establish building passport
             </button>
           </form>
