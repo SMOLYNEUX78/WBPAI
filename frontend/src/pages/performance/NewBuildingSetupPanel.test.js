@@ -27,6 +27,8 @@ test("new building sections keep ownership first and separate the inputs", () =>
 test("measurements contain the existing Matterport controls for a saved record", () => {
   window.localStorage.setItem("wbp-new-building-passport", JSON.stringify({ recordId: "WBP-TEST", legalOwnerName: "Test Owner", ownershipType: "owner-occupier", tenure: "freehold" }));
   render(<MemoryRouter><NewBuildingSetupPanel /></MemoryRouter>);
+  expect(screen.getByRole("heading", { name: "Historic design and build" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Link source" })).toBeDisabled();
   fireEvent.click(screen.getByRole("tab", { name: "Measurements" }));
 
   expect(screen.getByRole("heading", { name: "Matterport Data" })).toBeInTheDocument();

@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { useLocation, useNavigate } from "react-router-dom";
 import AnalogGauge from "../../components/AnalogGauge";
 import supabase from "../../supabaseClient";
-import { TEST_PROFESSIONAL_EMAIL } from "../../professionalEmail";
+import { hasFullWorkspaceAccess, loadLinkedHistoricOutline } from "../../workspaceAccess";
 import govukCrown from "../../assets/govuk-crown.png";
 import matterportMark from "../../assets/matterport-mark.png";
 
@@ -7369,6 +7369,10 @@ export const NewBuildingSetupPanel = () => {
       return null;
     }
   });
+  const [historicDraft, setHistoricDraft] = useState({ stage: "design", name: "", provider: "", url: "" });
+  const [historicLinks, setHistoricLinks] = useState([]);
+  const [historicStatus, setHistoricStatus] = useState("");
+  const [historicBusy, setHistoricBusy] = useState(false);
   const [discoveryStatus, setDiscoveryStatus] = useState("idle");
   const [discoveryError, setDiscoveryError] = useState("");
   const [setupMode, setSetupMode] = useState("manual");
@@ -7444,6 +7448,70 @@ export const NewBuildingSetupPanel = () => {
     (baselineCompleteCount / baselineReadinessSteps.length) * 100
   );
   const nextBaselineStep = baselineReadinessSteps.find((step) => !step.complete);
+
+  useEffect(() => {
+    if (!ownershipRecord?.databaseId) return;
+    let active = true;
+    const load = async () => {
+      const { data, error } = await supabase.from("WBPPropertyDiscoverySnapshots")
+        .select("planning_records")
+        .eq("building_record_id", ownershipRecord.databaseId)
+        .order("discovered_at", { ascending: false })
+        .limit(1).maybeSingle();
+      if (!active) return;
+      if (error) setHistoricStatus(`Could not load historic sources: ${error.message}`);
+      else setHistoricLinks((data?.planning_records || []).filter((record) => record.ownerLinked === true));
+    };
+    load();
+    return () => { active = false; };
+  }, [ownershipRecord?.databaseId]);
+
+  const saveHistoricLink = async (event) => {
+    event.preventDefault();
+    if (!ownershipRecord?.databaseId) return;
+    let sourceUrl;
+    try {
+      sourceUrl = new URL(historicDraft.url.trim());
+      if (sourceUrl.protocol !== "https:") throw new Error();
+    } catch {
+      setHistoricStatus("Enter an HTTPS link to the source document or public record.");
+      return;
+    }
+    setHistoricBusy(true);
+    setHistoricStatus("");
+    try {
+      const { data: auth, error: authError } = await supabase.auth.getUser();
+      if (authError || !auth.user) throw new Error("Sign in again to link a source.");
+      const { data: snapshot, error: loadError } = await supabase.from("WBPPropertyDiscoverySnapshots")
+        .select("id,planning_records")
+        .eq("building_record_id", ownershipRecord.databaseId)
+        .order("discovered_at", { ascending: false })
+        .limit(1).maybeSingle();
+      if (loadError) throw loadError;
+      if (!snapshot) throw new Error("Save the property's address check before linking historic sources.");
+      const link = {
+        ownerLinked: true,
+        stage: historicDraft.stage,
+        name: historicDraft.name.trim(),
+        provider: historicDraft.provider.trim(),
+        documentationUrl: sourceUrl.href,
+        provenance: "Owner-linked source; not professionally verified",
+        linkedAt: new Date().toISOString(),
+      };
+      const records = [...(snapshot.planning_records || []), link];
+      const { error: saveError } = await supabase.from("WBPPropertyDiscoverySnapshots")
+        .update({ planning_records: records }).eq("id", snapshot.id);
+      if (saveError) throw saveError;
+      setHistoricLinks(records.filter((record) => record.ownerLinked === true));
+      setHistoricDraft({ stage: "design", name: "", provider: "", url: "" });
+      setHistoricStatus("Source linked to this home. The historical outline is now available.");
+      window.dispatchEvent(new Event("wbp:historic-source-linked"));
+    } catch (error) {
+      setHistoricStatus(`Could not link source: ${error.message}`);
+    } finally {
+      setHistoricBusy(false);
+    }
+  };
 
   useEffect(() => {
     if (!ownershipRecord?.databaseId) return;
@@ -8392,6 +8460,41 @@ export const NewBuildingSetupPanel = () => {
             </a>
           </section>
         ) : null}
+        {ownershipRecord ? <section className="mx-auto mt-4 max-w-4xl border border-gray-200 bg-white p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h3 className="text-base font-bold">Historic design and build</h3>
+              <p className="mt-1 max-w-2xl text-xs text-gray-600">Link a drawing, planning document or construction record you found for this home. Its source is shown in a read-only outline; the named designer or builder is not verified by WBP.</p>
+            </div>
+            <span className="text-xs text-gray-600">{historicLinks.length} source{historicLinks.length === 1 ? "" : "s"} linked</span>
+          </div>
+          {(ownershipRecord.propertyDiscovery?.planningRecords || []).some((record) => /^https:\/\//i.test(record.documentationUrl || "")) ? <details className="mt-4 border-t pt-3 text-xs">
+            <summary className="cursor-pointer font-semibold">Possible public records from the address check</summary>
+            <p className="mt-2 text-gray-600">These may only be near the postcode. Confirm the source belongs to this property before linking it.</p>
+            <div className="mt-2 space-y-2">{ownershipRecord.propertyDiscovery.planningRecords.filter((record) => /^https:\/\//i.test(record.documentationUrl || "")).map((record, index) => <div key={`${record.documentationUrl}-${index}`} className="flex flex-wrap items-center justify-between gap-2 border p-2">
+              <span className="min-w-0 break-words">{record.name || record.reference || "Planning record"}</span>
+              <button type="button" className="border border-blue-700 px-2 py-1 font-semibold text-blue-800" onClick={() => setHistoricDraft((current) => ({ ...current, stage: "design", name: record.name || record.reference || "Planning record", url: record.documentationUrl }))}>Use as source</button>
+            </div>)}</div>
+          </details> : null}
+          <form onSubmit={saveHistoricLink} className="mt-4 grid gap-3 sm:grid-cols-2">
+            <label className="text-xs font-semibold">Stage
+              <select className="mt-1 block w-full border p-2 text-sm" value={historicDraft.stage} onChange={(event) => setHistoricDraft((current) => ({ ...current, stage: event.target.value }))}><option value="design">Design</option><option value="build">Build</option></select>
+            </label>
+            <label className="text-xs font-semibold">Document or record title
+              <input required className="mt-1 block w-full border p-2 text-sm" value={historicDraft.name} onChange={(event) => setHistoricDraft((current) => ({ ...current, name: event.target.value }))} placeholder="Planning drawing or completion record" />
+            </label>
+            <label className="text-xs font-semibold">Designer or builder named in source (optional)
+              <input className="mt-1 block w-full border p-2 text-sm" value={historicDraft.provider} onChange={(event) => setHistoricDraft((current) => ({ ...current, provider: event.target.value }))} placeholder="Practice or contractor" />
+            </label>
+            <label className="text-xs font-semibold">Source link
+              <input required type="url" className="mt-1 block w-full border p-2 text-sm" value={historicDraft.url} onChange={(event) => setHistoricDraft((current) => ({ ...current, url: event.target.value }))} placeholder="https://..." />
+            </label>
+            <button type="submit" disabled={!ownershipRecord.databaseId || historicBusy} className="bg-emerald-700 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50 sm:justify-self-start">{historicBusy ? "Linking..." : "Link source"}</button>
+          </form>
+          {!ownershipRecord.databaseId ? <p className="mt-2 text-xs text-amber-800">Save this home to your secure account before linking sources.</p> : null}
+          {historicStatus ? <p className="mt-2 text-xs" role="status">{historicStatus}</p> : null}
+          {historicLinks.length ? <ul className="mt-4 divide-y border-t text-sm">{historicLinks.map((link, index) => <li key={`${link.documentationUrl}-${index}`} className="flex flex-wrap items-center justify-between gap-2 py-2"><span>{link.stage === "build" ? "Build" : "Design"}: {link.name}</span><a href={link.documentationUrl} target="_blank" rel="noopener noreferrer" className="text-blue-700 underline">View source</a></li>)}</ul> : null}
+        </section> : null}
       </div>
       </div>
 
@@ -10152,7 +10255,7 @@ const BuildingDashboard = () => {
   const navigate = useNavigate();
   const accessParams = new URLSearchParams(location.search);
   const storedRole = window.localStorage.getItem("wbp-user-role") || "";
-  const accessRole = accessParams.get("role") || storedRole;
+  const accessRole = accessParams.get("role") || storedRole || "homeowner";
   const roleDetails = {
     architect: { label: "Architect", phase: "Design", focus: "Design intent and specification" },
     builder: { label: "Builder", phase: "Build", focus: "Delivery, quality and commissioning" },
@@ -10164,7 +10267,7 @@ const BuildingDashboard = () => {
     ? routeIndex
     : BUILDINGS.findIndex((building) => building.id === "new");
   const [activeIndex, setActiveIndex] = useState(defaultIndex >= 0 ? defaultIndex : 0);
-  const [isTestAccount, setIsTestAccount] = useState(false);
+  const [canSwitchWorkspace, setCanSwitchWorkspace] = useState(false);
   const [bridgewoodValue, setBridgewoodValue] = useState(readCachedBridgewoodValue);
   const bridgewoodTokens = bridgewoodValue.credits;
   const touchStartX = useRef(null);
@@ -10174,10 +10277,23 @@ const BuildingDashboard = () => {
 
   useEffect(() => {
     let mounted = true;
-    supabase.auth.getSession().then(({ data }) => {
-      if (mounted) setIsTestAccount(data.session?.user.email?.toLowerCase() === TEST_PROFESSIONAL_EMAIL);
-    });
-    return () => { mounted = false; };
+    const checkAccess = async () => {
+      const { data } = await supabase.auth.getUser();
+      if (!mounted || !data.user) return;
+      if (hasFullWorkspaceAccess(data.user)) {
+        setCanSwitchWorkspace(true);
+        return;
+      }
+      try {
+        const history = await loadLinkedHistoricOutline(data.user);
+        if (mounted) setCanSwitchWorkspace(history.length > 0);
+      } catch {
+        if (mounted) setCanSwitchWorkspace(false);
+      }
+    };
+    checkAccess();
+    window.addEventListener("wbp:historic-source-linked", checkAccess);
+    return () => { mounted = false; window.removeEventListener("wbp:historic-source-linked", checkAccess); };
   }, []);
 
   const logOut = async () => {
@@ -10315,31 +10431,11 @@ const BuildingDashboard = () => {
             ))}
           </div>
 
-          <div className="flex shrink-0 items-center justify-end gap-2 sm:gap-3">
-            <p className="text-xs text-gray-500 hidden lg:block">
-              Swipe left or right to switch buildings
-            </p>
-            {isTestAccount ? (
-              <button
-                type="button"
-                onClick={() => navigate("/login")}
-                className="shrink-0 border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:border-gray-500 hover:text-black"
-              >
-                Switch workspace
-              </button>
-            ) : null}
-            <button
-              type="button"
-              onClick={logOut}
-              className="shrink-0 border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:border-gray-500 hover:text-black"
-            >
-              Log out
-            </button>
-          </div>
+          <p className="hidden shrink-0 text-xs text-gray-500 lg:block">Swipe left or right to switch buildings</p>
         </div>
       </div>
 
-      {activeBuilding.id === "new" && roleDetails ? (
+      {roleDetails ? (
         <section className="border-b border-emerald-200 bg-emerald-50 px-4 py-3">
           <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-3">
@@ -10351,9 +10447,10 @@ const BuildingDashboard = () => {
                 <p className="m-0 text-xs text-gray-600">{roleDetails.focus}</p>
               </div>
             </div>
-            <p className="m-0 text-xs font-semibold text-emerald-800">
-              Design &rarr; Procurement &rarr; Build &rarr; Commission &rarr; Occupancy
-            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              {canSwitchWorkspace ? <button type="button" onClick={() => navigate("/workspaces")} className="border border-emerald-700 bg-white px-3 py-2 text-xs font-semibold text-emerald-900 hover:bg-emerald-100">Switch workspace</button> : null}
+              <button type="button" onClick={logOut} className="border border-emerald-700 bg-white px-3 py-2 text-xs font-semibold text-emerald-900 hover:bg-emerald-100">Log out</button>
+            </div>
           </div>
         </section>
       ) : null}

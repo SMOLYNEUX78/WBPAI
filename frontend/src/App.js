@@ -10,6 +10,7 @@ import {
 import BuildingDashboard from "./pages/performance/BuildingDashboard";
 import supabase from "./supabaseClient";
 import { isProfessionalEmailAllowed, TEST_PROFESSIONAL_EMAIL } from "./professionalEmail";
+import { hasFullWorkspaceAccess, loadLinkedHistoricOutline } from "./workspaceAccess";
 
 const AUTH_INTENT_KEY = "wbp-auth-intent:v1";
 
@@ -162,6 +163,7 @@ const RoleGateway = () => {
 
     if (intent.profile?.organisationName && intent.role !== "homeowner") {
       window.localStorage.setItem(`wbp-${intent.role}-profile-${session.user.id}`, JSON.stringify(intent.profile));
+      window.localStorage.setItem(`wbp-organisation-profile-${session.user.id}`, JSON.stringify(intent.profile));
     }
 
     window.localStorage.removeItem(AUTH_INTENT_KEY);
@@ -236,6 +238,7 @@ const RoleGateway = () => {
       postcode: formData.get("postcode") || "",
       serviceArea: formData.get("serviceArea") || "",
       logoName: formData.get("logo")?.name || "",
+      requestedStages: formData.getAll("workspaceStages"),
     };
     const intent = {
       role: selectedRole,
@@ -431,6 +434,15 @@ const RoleGateway = () => {
                       )}
                     </select>
                   </label>
+                  <fieldset className="wbp-access-field wbp-field-wide">
+                    <legend>Stages managed by your organisation</legend>
+                    <div className="mt-2 flex flex-wrap gap-4 text-sm">
+                      <label><input type="checkbox" name="workspaceStages" value="architect" defaultChecked={selectedRole === "architect"} /> Design</label>
+                      <label><input type="checkbox" name="workspaceStages" value="builder" defaultChecked={selectedRole === "builder"} /> Build</label>
+                      <label><input type="checkbox" name="workspaceStages" value="homeowner" /> Occupy</label>
+                    </div>
+                    <p className="mt-2 text-xs">Multiple stages can be requested, but switching is enabled only after organisation access is verified.</p>
+                  </fieldset>
                   <label className="wbp-access-field">
                     <span>Companies House / statutory registration</span>
                     <input name="registrationNumber" type="text" placeholder="Registration number" required />
@@ -532,6 +544,66 @@ const RoleGateway = () => {
   );
 };
 
+const WorkspaceSwitcher = ({ historicalOnly = false }) => {
+  const navigate = useNavigate();
+  const [access, setAccess] = useState({ loading: true, full: false, history: [], error: "" });
+  const openRole = (role, path) => {
+    window.localStorage.setItem("wbp-user-role", role);
+    navigate(path);
+  };
+
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      const { data, error } = await supabase.auth.getUser();
+      if (!active) return;
+      if (error || !data.user) {
+        setAccess({ loading: false, full: false, history: [], error: "Your session has expired. Sign in again." });
+        return;
+      }
+      try {
+        const full = hasFullWorkspaceAccess(data.user);
+        const history = full && !historicalOnly ? [] : await loadLinkedHistoricOutline(data.user);
+        if (active) setAccess({ loading: false, full, history, error: "" });
+      } catch (historyError) {
+        if (active) setAccess({ loading: false, full: hasFullWorkspaceAccess(data.user), history: [], error: historyError.message });
+      }
+    };
+    load();
+    return () => { active = false; };
+  }, [historicalOnly]);
+
+  if (access.loading) return <main className="p-6 text-sm">Checking workspace access...</main>;
+  if (historicalOnly && !access.history.length) return <main className="mx-auto max-w-5xl p-6"><h1 className="text-xl font-bold">Historic record unavailable</h1><p className="mt-2 text-sm">Link source evidence to your saved home profile before opening this view.</p><button type="button" className="mt-4 border px-4 py-2" onClick={() => openRole("homeowner", "/dashboard/new")}>Return to Occupy</button></main>;
+
+  return <main className="mx-auto max-w-5xl space-y-6 p-5 sm:p-8">
+    <header className="flex flex-wrap items-center justify-between gap-3 border-b pb-4">
+      <div><p className="text-xs font-semibold uppercase text-emerald-700">Whole Build Profile</p><h1 className="text-2xl font-bold">{historicalOnly ? "Historic building outline" : "Switch workspace"}</h1></div>
+      <button type="button" className="border px-4 py-2 text-sm" onClick={() => openRole("homeowner", "/dashboard/new")}>Back to Occupy</button>
+    </header>
+    {access.error ? <p role="alert" className="border border-amber-300 bg-amber-50 p-3 text-sm">{access.error}</p> : null}
+    {historicalOnly ? <>
+      <p className="text-sm text-gray-600">Owner-linked source material only. These records are not a verified design, construction or professional handover record.</p>
+      {access.history.map(({ building, links }) => <section key={building.id} className="border p-4">
+        <h2 className="font-semibold">{building.address?.address || building.record_reference}</h2>
+        <p className="text-xs text-gray-600">{building.record_reference} · Designer and builder identities remain unverified unless stated in a source.</p>
+        <div className="mt-4 divide-y">{links.map((link, index) => <div key={`${link.documentationUrl}-${index}`} className="py-3 text-sm">
+          <p className="font-semibold">{link.name}</p>
+          <p className="text-gray-600">{link.stage === "build" ? "Build" : "Design"}{link.provider ? ` · ${link.provider} (owner supplied)` : " · Organisation not identified"}</p>
+          <a href={link.documentationUrl} target="_blank" rel="noopener noreferrer" className="break-all text-blue-700 underline">View source</a>
+        </div>)}</div>
+      </section>)}
+    </> : <div className="grid gap-3 sm:grid-cols-2">
+      <button type="button" className="border p-5 text-left hover:border-emerald-600" onClick={() => openRole("homeowner", "/dashboard/new?role=homeowner&phase=occupy")}><strong className="block">Occupy</strong><span className="text-sm text-gray-600">Your home and measured performance</span></button>
+      {access.full ? <>
+        <button type="button" className="border p-5 text-left hover:border-emerald-600" onClick={() => openRole("architect", "/workspace/architect")}><strong className="block">Design</strong><span className="text-sm text-gray-600">Organisation design portfolio</span></button>
+        <button type="button" className="border p-5 text-left hover:border-emerald-600" onClick={() => openRole("builder", "/workspace/builder")}><strong className="block">Build</strong><span className="text-sm text-gray-600">Organisation build portfolio</span></button>
+      </> : null}
+      {access.history.length ? <button type="button" className="border p-5 text-left hover:border-emerald-600" onClick={() => openRole("homeowner", "/workspace/history")}><strong className="block">Historic design &amp; build</strong><span className="text-sm text-gray-600">Read-only outline from sources linked to your home</span></button> : null}
+    </div>}
+  </main>;
+};
+
 const ProfessionalWorkspace = () => {
   const { role } = useParams();
   const location = useLocation();
@@ -539,13 +611,15 @@ const ProfessionalWorkspace = () => {
   const isBuilder = role === "builder";
   const [profile, setProfile] = useState(location.state?.profile?.organisationName ? location.state.profile : {});
   const [isTestAccount, setIsTestAccount] = useState(false);
+  const [canSwitchWorkspace, setCanSwitchWorkspace] = useState(false);
   useEffect(() => {
     let active = true;
     supabase.auth.getUser().then(({ data }) => {
       if (!active || !data.user) return;
       setIsTestAccount(data.user.email?.toLowerCase() === TEST_PROFESSIONAL_EMAIL);
+      setCanSwitchWorkspace(hasFullWorkspaceAccess(data.user));
       try {
-        const cached = JSON.parse(window.localStorage.getItem(`wbp-${role}-profile-${data.user.id}`) || "{}");
+        const cached = JSON.parse(window.localStorage.getItem(`wbp-${role}-profile-${data.user.id}`) || window.localStorage.getItem(`wbp-organisation-profile-${data.user.id}`) || "{}");
         setProfile(location.state?.profile?.organisationName ? location.state.profile : cached);
       } catch {
         setProfile({});
@@ -623,7 +697,7 @@ const ProfessionalWorkspace = () => {
       <header className="wbp-professional-nav">
         <strong>Whole Build Profile</strong>
         <div className="wbp-professional-nav-actions">
-          {isTestAccount ? <button type="button" onClick={() => navigate("/login")}>Switch workspace</button> : null}
+          {canSwitchWorkspace ? <button type="button" onClick={() => navigate("/workspaces")}>Switch workspace</button> : null}
           <button type="button" onClick={logOut}>Log out</button>
         </div>
       </header>
@@ -756,6 +830,8 @@ const App = () => (
     <Routes>
       <Route path="/" element={<SplashScreen />} />
       <Route path="/login" element={<RoleGateway />} />
+      <Route path="/workspaces" element={<AuthenticatedRoute><WorkspaceSwitcher /></AuthenticatedRoute>} />
+      <Route path="/workspace/history" element={<AuthenticatedRoute><WorkspaceSwitcher historicalOnly /></AuthenticatedRoute>} />
       <Route path="/workspace/:role" element={<AuthenticatedRoute requireProfessionalEmail><ProfessionalWorkspace /></AuthenticatedRoute>} />
       <Route path="/dashboard/*" element={<AuthenticatedRoute><BuildingDashboard /></AuthenticatedRoute>} />
     </Routes>
