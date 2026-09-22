@@ -9133,7 +9133,7 @@ const BuildingDashboard = () => {
   const roleDetails = {
     architect: { label: "Architect", phase: "Design", focus: "Design intent and specification" },
     builder: { label: "Builder", phase: "Build", focus: "Delivery, quality and commissioning" },
-    homeowner: { label: "Homeowner", phase: "Occupancy", focus: "Handover and measured performance" },
+    homeowner: { label: "Homeowner", phase: "Occupy", focus: "Handover and measured performance" },
   }[accessRole];
   const routeSection = location.pathname.split("/").filter(Boolean)[1] || "new";
   const routeIndex = BUILDINGS.findIndex((building) => building.id === routeSection);
@@ -9147,6 +9147,12 @@ const BuildingDashboard = () => {
   const [dragOffset, setDragOffset] = useState(0);
 
   const activeBuilding = BUILDINGS[activeIndex];
+
+  const logOut = () => {
+    window.localStorage.removeItem("wbp-user-role");
+    window.localStorage.removeItem("wbp-user-email");
+    navigate("/login");
+  };
 
   const goToBuilding = (nextIndex) => {
     const wrappedIndex = (nextIndex + BUILDINGS.length) % BUILDINGS.length;
@@ -9277,9 +9283,18 @@ const BuildingDashboard = () => {
             ))}
           </div>
 
-          <p className="text-xs text-gray-500 hidden sm:block">
-            Swipe left or right to switch buildings
-          </p>
+          <div className="flex shrink-0 items-center gap-3">
+            <p className="text-xs text-gray-500 hidden lg:block">
+              Swipe left or right to switch buildings
+            </p>
+            <button
+              type="button"
+              onClick={logOut}
+              className="shrink-0 border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:border-gray-500 hover:text-black"
+            >
+              Log out
+            </button>
+          </div>
         </div>
       </div>
 

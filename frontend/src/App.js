@@ -12,25 +12,26 @@ const PROFILE_SIGNALS = ["Building", "Energy", "Health", "Evidence"];
 const ACCESS_ROLES = [
   {
     id: "architect",
-    label: "Architect",
+    label: "Design",
     phase: "Design",
-    detail: "Design intent, specifications and compliance evidence",
+    detail: "Create the building record, design intent and compliance evidence",
+    position: "left",
   },
   {
     id: "builder",
-    label: "Builder",
+    label: "Build",
     phase: "Build",
-    detail: "Delivery records, materials, quality checks and commissioning",
+    detail: "Continue the record through delivery, quality checks and commissioning",
+    position: "center",
   },
   {
     id: "homeowner",
-    label: "Homeowner",
-    phase: "Occupancy",
-    detail: "Handover, operation, comfort and post-occupancy performance",
+    label: "Occupy",
+    phase: "Occupy",
+    detail: "Start or import a record for handover and post-occupancy performance",
+    position: "right",
   },
 ];
-
-const BUILDING_PHASES = ["Design", "Procurement", "Build", "Commission", "Occupancy"];
 
 const SplashScreen = () => {
   const navigate = useNavigate();
@@ -85,9 +86,8 @@ const SplashScreen = () => {
         <div className="wbp-profile-lockup">
           <div className="wbp-profile-name">
             <strong>WBP</strong>
-            <span>001</span>
+            <span>Whole Build Profile</span>
           </div>
-          <p>Whole Build Profile</p>
           <div className="wbp-profile-status">
             <span className="wbp-status-marker" aria-hidden="true" />
             <span>Building Confidence</span>
@@ -100,7 +100,9 @@ const SplashScreen = () => {
 
 const RoleGateway = () => {
   const navigate = useNavigate();
-  const [selectedRole, setSelectedRole] = useState("architect");
+  const [selectedRole, setSelectedRole] = useState("");
+  const [authMode, setAuthMode] = useState("signin");
+  const [occupyMode, setOccupyMode] = useState("new");
   const [email, setEmail] = useState("");
   const activeRole = ACCESS_ROLES.find((role) => role.id === selectedRole);
 
@@ -108,91 +110,110 @@ const RoleGateway = () => {
     event.preventDefault();
     window.localStorage.setItem("wbp-user-role", selectedRole);
     window.localStorage.setItem("wbp-user-email", email.trim());
-    navigate(`/dashboard/new?role=${selectedRole}&phase=${activeRole.phase.toLowerCase()}`);
+    navigate(`/dashboard/new?role=${selectedRole}&phase=${activeRole.phase.toLowerCase()}&record=${occupyMode}`);
   };
 
   return (
     <main className="wbp-access-shell">
       <section className="wbp-access-header">
-        <div>
-          <span className="wbp-access-mark">WBP</span>
-          <p>Whole Build Profile</p>
-        </div>
-        <span className="wbp-access-state">Building record access</span>
+        <span className="wbp-access-mark">Whole Build Profile</span>
       </section>
 
-      <section className="wbp-access-layout">
-        <div className="wbp-access-intro">
-          <p className="wbp-access-kicker">One building. One continuous record.</p>
-          <h1>Continue the profile from design to post-occupancy.</h1>
-          <p className="wbp-access-copy">
-            Each project contributor records the decisions, evidence and measured
-            outcomes they are responsible for.
-          </p>
+      <section className="wbp-access-intro">
+        <p>Building Trust</p>
+        <h1>A digital ecosystem incentivising better outcomes</h1>
+      </section>
 
-          <ol className="wbp-lifecycle" aria-label="Building lifecycle">
-            {BUILDING_PHASES.map((phase, index) => (
-              <li className={phase === activeRole.phase ? "is-active" : ""} key={phase}>
-                <span>{String(index + 1).padStart(2, "0")}</span>
-                {phase}
-              </li>
-            ))}
-          </ol>
-        </div>
-
-        <form className="wbp-access-panel" onSubmit={openWorkspace}>
-          <div>
-            <p className="wbp-access-kicker">Sign in as</p>
-            <h2>Select your project role</h2>
-          </div>
-
-          <div className="wbp-role-selector" role="radiogroup" aria-label="Project role">
-            {ACCESS_ROLES.map((role) => (
-              <button
-                type="button"
-                role="radio"
-                aria-checked={selectedRole === role.id}
-                className={selectedRole === role.id ? "is-selected" : ""}
-                key={role.id}
-                onClick={() => setSelectedRole(role.id)}
-              >
-                {role.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="wbp-role-summary">
-            <span>{activeRole.phase} workspace</span>
-            <p>{activeRole.detail}</p>
-          </div>
-
-          <label className="wbp-access-field">
-            <span>Email address</span>
-            <input
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              placeholder="name@organisation.co.uk"
-              required
-            />
-          </label>
-
-          <label className="wbp-access-field">
-            <span>Password</span>
-            <input type="password" placeholder="Enter password" required />
-          </label>
-
-          <button className="wbp-access-submit" type="submit">
-            Open workspace
-            <span aria-hidden="true">&#8594;</span>
+      <section className="wbp-route-bands" aria-label="Choose a building lifecycle stage">
+        {ACCESS_ROLES.map((role, index) => (
+          <button
+            type="button"
+            className={`wbp-route-band is-${role.position}`}
+            key={role.id}
+            onClick={() => setSelectedRole(role.id)}
+          >
+            <span className="wbp-route-number">0{index + 1}</span>
+            <span className="wbp-route-copy">
+              <strong>{role.label}</strong>
+              <small>{role.detail}</small>
+            </span>
+            <span className="wbp-route-arrow" aria-hidden="true">&#8594;</span>
           </button>
-
-          <p className="wbp-access-note">
-            Prototype access screen. Secure organisation accounts will be connected
-            before live project use.
-          </p>
-        </form>
+        ))}
       </section>
+
+      {activeRole ? (
+        <div className="wbp-auth-backdrop" role="presentation" onMouseDown={() => setSelectedRole("")}>
+          <section
+            className="wbp-auth-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="wbp-auth-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="wbp-auth-close"
+              aria-label="Close"
+              onClick={() => setSelectedRole("")}
+            >
+              &#215;
+            </button>
+
+            <div className="wbp-auth-heading">
+              <p>{activeRole.label} workspace</p>
+              <h2 id="wbp-auth-title">
+                {authMode === "signin" ? "Welcome back" : "Create your account"}
+              </h2>
+              <span>{activeRole.detail}</span>
+            </div>
+
+            <div className="wbp-auth-tabs" role="tablist" aria-label="Account access">
+              <button type="button" className={authMode === "signin" ? "is-active" : ""} onClick={() => setAuthMode("signin")}>Sign in</button>
+              <button type="button" className={authMode === "signup" ? "is-active" : ""} onClick={() => setAuthMode("signup")}>Sign up</button>
+            </div>
+
+            <form className="wbp-auth-form" onSubmit={openWorkspace}>
+              {authMode === "signup" ? (
+                <label className="wbp-access-field">
+                  <span>Full name</span>
+                  <input type="text" placeholder="Your name" required />
+                </label>
+              ) : null}
+
+              <label className="wbp-access-field">
+                <span>Email address</span>
+                <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="name@organisation.co.uk" required />
+              </label>
+
+              <label className="wbp-access-field">
+                <span>Password</span>
+                <input type="password" placeholder="Enter password" required />
+              </label>
+
+              {selectedRole === "homeowner" ? (
+                <fieldset className="wbp-record-choice">
+                  <legend>Building record</legend>
+                  <label className={occupyMode === "new" ? "is-selected" : ""}>
+                    <input type="radio" name="record" value="new" checked={occupyMode === "new"} onChange={() => setOccupyMode("new")} />
+                    <span><strong>Start a new record</strong><small>Create a profile for an existing home.</small></span>
+                  </label>
+                  <label className={occupyMode === "import" ? "is-selected" : ""}>
+                    <input type="radio" name="record" value="import" checked={occupyMode === "import"} onChange={() => setOccupyMode("import")} />
+                    <span><strong>Import a handed-over record</strong><small>Continue a profile created during Design or Build.</small></span>
+                  </label>
+                  {occupyMode === "import" ? <input className="wbp-record-code" type="text" placeholder="WBP record or handover code" required /> : null}
+                </fieldset>
+              ) : null}
+
+              <button className="wbp-access-submit" type="submit">
+                {authMode === "signin" ? "Open workspace" : "Create account"}
+                <span aria-hidden="true">&#8594;</span>
+              </button>
+            </form>
+          </section>
+        </div>
+      ) : null}
     </main>
   );
 };
