@@ -7296,6 +7296,27 @@ const NewBuildingSetupPanel = () => {
     authorityToCreate: false,
     privacyAccepted: false,
   });
+  const [profileEditMode, setProfileEditMode] = useState(false);
+  const [ownershipEvidence, setOwnershipEvidence] = useState(() => {
+    try {
+      const savedRecord = JSON.parse(window.localStorage.getItem("wbp-new-building-passport") || "null");
+      return savedRecord?.ownershipEvidence || {
+        route: "title-register",
+        titleNumber: savedRecord?.titleNumber || "",
+        fileName: "",
+        declarationAccepted: false,
+        status: "not-started",
+      };
+    } catch {
+      return {
+        route: "title-register",
+        titleNumber: "",
+        fileName: "",
+        declarationAccepted: false,
+        status: "not-started",
+      };
+    }
+  });
   const [propertySearch, setPropertySearch] = useState(() => {
     try {
       const cached = JSON.parse(window.localStorage.getItem(PROPERTY_DISCOVERY_CACHE_KEY) || "null");
@@ -7407,6 +7428,76 @@ const NewBuildingSetupPanel = () => {
       legalOwnerName: value,
       custodianName: value,
     }));
+  };
+
+  const startProfileEdit = () => {
+    setOwnershipDraft((current) => ({
+      ...current,
+      ownershipType: ownershipRecord?.ownershipType || current.ownershipType,
+      legalOwnerName: ownershipRecord?.legalOwnerName || current.legalOwnerName,
+      tenure: ownershipRecord?.tenure || current.tenure,
+      custodianName: ownershipRecord?.custodianName || current.custodianName,
+      uprn: ownershipRecord?.uprn || current.uprn,
+      titleNumber: ownershipRecord?.titleNumber || current.titleNumber,
+      authorityToCreate: ownershipRecord?.authorityToCreate ?? current.authorityToCreate,
+      privacyAccepted: ownershipRecord?.privacyAccepted ?? current.privacyAccepted,
+    }));
+    setProfileEditMode(true);
+  };
+
+  const saveProfileDetails = (event) => {
+    event.preventDefault();
+    if (!ownershipRecord) return;
+    const updatedAt = new Date().toISOString();
+    const nextRecord = {
+      ...ownershipRecord,
+      ownershipType: ownershipDraft.ownershipType,
+      legalOwnerName: ownershipDraft.legalOwnerName.trim(),
+      tenure: ownershipDraft.tenure,
+      custodianName: ownershipDraft.legalOwnerName.trim(),
+      updatedAt,
+      history: [
+        ...(ownershipRecord.history || []),
+        {
+          event: "Home profile details updated",
+          actor: ownershipDraft.legalOwnerName.trim(),
+          timestamp: updatedAt,
+        },
+      ],
+    };
+    window.localStorage.setItem("wbp-new-building-passport", JSON.stringify(nextRecord));
+    setOwnershipRecord(nextRecord);
+    setProfileEditMode(false);
+  };
+
+  const saveOwnershipEvidence = (event) => {
+    event.preventDefault();
+    if (!ownershipRecord || !ownershipEvidence.declarationAccepted) return;
+    const updatedAt = new Date().toISOString();
+    const nextEvidence = {
+      ...ownershipEvidence,
+      titleNumber: ownershipEvidence.titleNumber.trim(),
+      status: "ready-for-review",
+      submittedAt: updatedAt,
+    };
+    const nextRecord = {
+      ...ownershipRecord,
+      titleNumber: nextEvidence.titleNumber,
+      ownershipEvidence: nextEvidence,
+      ownershipVerificationStatus: "ready-for-review",
+      updatedAt,
+      history: [
+        ...(ownershipRecord.history || []),
+        {
+          event: "Ownership evidence prepared for review",
+          actor: ownershipRecord.legalOwnerName,
+          timestamp: updatedAt,
+        },
+      ],
+    };
+    window.localStorage.setItem("wbp-new-building-passport", JSON.stringify(nextRecord));
+    setOwnershipEvidence(nextEvidence);
+    setOwnershipRecord(nextRecord);
   };
 
   const updatePropertySearch = (field, value) => {
@@ -7879,19 +7970,102 @@ const NewBuildingSetupPanel = () => {
           <div className="mx-auto max-w-4xl border border-emerald-200 bg-emerald-50 p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <p className="text-xs font-bold uppercase text-emerald-700">Active building passport</p>
+                <p className="text-xs font-bold uppercase text-emerald-700">Home profile created</p>
                 <h3 className="mt-1 text-lg font-bold">{ownershipRecord.recordId}</h3>
-                <p className="mt-1 text-sm text-gray-700">Custodian: {ownershipRecord.custodianName} · Legal owner: {ownershipRecord.legalOwnerName}</p>
+                <p className="mt-1 text-sm text-gray-700">Created by {ownershipRecord.legalOwnerName}</p>
               </div>
-              <span className="bg-emerald-700 px-2 py-1 text-xs font-bold uppercase text-white">Occupy · Genesis recorded</span>
+              <div className="flex flex-wrap gap-2">
+                <span className="border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-bold uppercase text-amber-900">
+                  {ownershipRecord.ownershipVerificationStatus === "ready-for-review" ? "Evidence awaiting review" : "Ownership unverified"}
+                </span>
+                <span className="border border-gray-300 bg-white px-2 py-1 text-xs font-bold uppercase text-gray-700">Not transferable</span>
+              </div>
             </div>
             <div className="mt-4 grid gap-3 border-t border-emerald-200 pt-3 text-xs text-gray-700 sm:grid-cols-3">
               <p><strong>Ownership:</strong><br />{ownershipRecord.ownershipType.replaceAll("-", " ")}</p>
               <p><strong>Tenure:</strong><br />{ownershipRecord.tenure.replaceAll("-", " ")}</p>
-              <p className="break-all"><strong>Genesis evidence hash:</strong><br />{ownershipRecord.genesisHash.slice(0, 24)}…</p>
+              <p><strong>Property number:</strong><br />{ownershipRecord.uprn || "Can be added later"}</p>
+            </div>
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-emerald-200 pt-3">
+              <p className="text-xs text-gray-600">This is an owner-created profile. WBP has not yet verified legal ownership.</p>
+              <button type="button" onClick={startProfileEdit} className="border border-emerald-700 bg-white px-3 py-2 text-xs font-bold text-emerald-800">Edit profile</button>
             </div>
           </div>
         )}
+
+        {ownershipRecord && profileEditMode ? (
+          <form onSubmit={saveProfileDetails} className="mx-auto mt-4 max-w-4xl border border-gray-300 bg-white p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-base font-bold">Edit profile</h3>
+                <p className="mt-1 text-xs text-gray-600">Correct the profile while ownership is being checked. Its record ID will not change.</p>
+              </div>
+              <button type="button" onClick={() => setProfileEditMode(false)} className="text-xs font-semibold underline">Cancel</button>
+            </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <label className="space-y-1"><span className="text-xs font-semibold">Your name</span><input required className="w-full border border-gray-300 p-2 text-sm" value={ownershipDraft.legalOwnerName} onChange={(event) => updateRetailOwnerName(event.target.value)} /></label>
+              <label className="space-y-1"><span className="text-xs font-semibold">You are the</span><select className="w-full border border-gray-300 p-2 text-sm" value={ownershipDraft.ownershipType} onChange={(event) => updateOwnershipDraft("ownershipType", event.target.value)}><option value="owner-occupier">Homeowner living here</option><option value="private-landlord">Homeowner letting the property</option><option value="shared-ownership">Shared owner</option><option value="leaseholder">Leaseholder</option><option value="managing-agent">Authorised representative</option></select></label>
+              <label className="space-y-1"><span className="text-xs font-semibold">The home is</span><select className="w-full border border-gray-300 p-2 text-sm" value={ownershipDraft.tenure} onChange={(event) => updateOwnershipDraft("tenure", event.target.value)}><option value="freehold">Freehold</option><option value="leasehold">Leasehold</option><option value="commonhold">Commonhold</option><option value="shared-ownership">Shared ownership</option><option value="other">Not sure</option></select></label>
+            </div>
+            <button type="submit" className="mt-4 bg-emerald-700 px-4 py-2 text-sm font-bold text-white">Save changes</button>
+          </form>
+        ) : null}
+
+        {ownershipRecord ? (
+          <section className="mx-auto mt-4 max-w-4xl border border-amber-200 bg-white p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-bold uppercase text-amber-700">Ownership check</p>
+                <h3 className="mt-1 text-base font-bold">Show that you can manage this home profile</h3>
+                <p className="mt-1 max-w-2xl text-xs text-gray-600">Choose the most convenient evidence. Creating the profile does not transfer the property or replace HM Land Registry.</p>
+              </div>
+              <span className={`px-2 py-1 text-xs font-bold uppercase ${ownershipEvidence.status === "ready-for-review" ? "bg-amber-100 text-amber-900" : "bg-gray-100 text-gray-700"}`}>
+                {ownershipEvidence.status === "ready-for-review" ? "Ready for review" : "Not started"}
+              </span>
+            </div>
+
+            <form onSubmit={saveOwnershipEvidence} className="mt-4">
+              <div className="grid gap-3 sm:grid-cols-3">
+                <label className="border border-gray-200 p-3 text-sm">
+                  <span className="block text-xs font-bold">Evidence route</span>
+                  <select className="mt-2 w-full border border-gray-300 p-2 text-sm" value={ownershipEvidence.route} onChange={(event) => setOwnershipEvidence((current) => ({ ...current, route: event.target.value, status: "not-started" }))}>
+                    <option value="title-register">Title register or official copy</option>
+                    <option value="conveyancer">Conveyancer or solicitor confirmation</option>
+                    <option value="shared-owner">Shared ownership or lease evidence</option>
+                    <option value="representative">Owner authority for a representative</option>
+                  </select>
+                </label>
+                <label className="border border-gray-200 p-3 text-sm">
+                  <span className="block text-xs font-bold">Title number, if known</span>
+                  <input className="mt-2 w-full border border-gray-300 p-2 text-sm uppercase" value={ownershipEvidence.titleNumber} onChange={(event) => setOwnershipEvidence((current) => ({ ...current, titleNumber: event.target.value }))} placeholder="For example, SK123456" />
+                </label>
+                <label className="border border-gray-200 p-3 text-sm">
+                  <span className="block text-xs font-bold">Choose supporting document</span>
+                  <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="mt-2 block w-full text-xs" onChange={(event) => setOwnershipEvidence((current) => ({ ...current, fileName: event.target.files?.[0]?.name || "", status: "not-started" }))} />
+                  <span className="mt-2 block text-[11px] text-gray-500">The file is not uploaded or stored yet. Secure document storage must be connected first.</span>
+                </label>
+              </div>
+              <label className="mt-4 flex items-start gap-3 text-sm text-gray-700">
+                <input type="checkbox" className="mt-1" checked={ownershipEvidence.declarationAccepted} onChange={(event) => setOwnershipEvidence((current) => ({ ...current, declarationAccepted: event.target.checked }))} />
+                <span>I confirm that these details are accurate and that WBP may use them only to check my authority to manage this home profile.</span>
+              </label>
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                <a href="https://www.gov.uk/search-property-information-land-registry" target="_blank" rel="noreferrer" className="text-xs font-semibold text-blue-800 underline">Get property information from HM Land Registry</a>
+                <button type="submit" disabled={!ownershipEvidence.declarationAccepted} className="bg-amber-500 px-4 py-2 text-sm font-bold text-black disabled:cursor-not-allowed disabled:opacity-40">Save evidence details</button>
+              </div>
+            </form>
+
+            <details className="mt-4 border-t border-gray-200 pt-3">
+              <summary className="cursor-pointer text-xs font-bold text-gray-700">How WBP protects this information</summary>
+              <div className="mt-3 grid gap-2 text-xs text-gray-600 sm:grid-cols-2">
+                <p><strong>Private by default:</strong> ownership and identity evidence is not part of the public or transferable building record.</p>
+                <p><strong>Minimum evidence:</strong> WBP should retain verification results and document hashes where possible, rather than unnecessary document copies.</p>
+                <p><strong>Separate household data:</strong> names, health information and occupancy behaviour must remain separate from property evidence.</p>
+                <p><strong>Your control:</strong> a production account must support access, correction, deletion requests and a clear retention period.</p>
+              </div>
+            </details>
+          </section>
+        ) : null}
 
         {ownershipRecord ? <div className="mx-auto mt-4 max-w-3xl bg-white rounded border p-4 space-y-3">
           <h3 className="text-base font-semibold text-center">Matterport Data</h3>
