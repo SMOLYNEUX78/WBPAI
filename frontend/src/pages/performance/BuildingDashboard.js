@@ -7285,6 +7285,15 @@ const NewBuildingSetupPanel = () => {
       return null;
     }
   });
+  const [passportSaveStatus, setPassportSaveStatus] = useState(() => {
+    try {
+      const savedRecord = JSON.parse(window.localStorage.getItem("wbp-new-building-passport") || "null");
+      return savedRecord?.databaseId ? "saved" : savedRecord ? "local-only" : "idle";
+    } catch {
+      return "idle";
+    }
+  });
+  const [passportSaveError, setPassportSaveError] = useState("");
   const [ownershipDraft, setOwnershipDraft] = useState({
     ownershipType: "owner-occupier",
     legalOwnerName: "",
@@ -7445,7 +7454,7 @@ const NewBuildingSetupPanel = () => {
     setProfileEditMode(true);
   };
 
-  const saveProfileDetails = (event) => {
+  const saveProfileDetails = async (event) => {
     event.preventDefault();
     if (!ownershipRecord) return;
     const updatedAt = new Date().toISOString();
@@ -7468,6 +7477,19 @@ const NewBuildingSetupPanel = () => {
     window.localStorage.setItem("wbp-new-building-passport", JSON.stringify(nextRecord));
     setOwnershipRecord(nextRecord);
     setProfileEditMode(false);
+    if (ownershipRecord.databaseId) {
+      setPassportSaveStatus("saving");
+      setPassportSaveError("");
+      try {
+        const securedRecord = await persistPassportRecord(nextRecord);
+        window.localStorage.setItem("wbp-new-building-passport", JSON.stringify(securedRecord));
+        setOwnershipRecord(securedRecord);
+        setPassportSaveStatus("saved");
+      } catch (error) {
+        setPassportSaveStatus("error");
+        setPassportSaveError(error?.message || "Your changes remain on this browser but could not be saved to your secure account.");
+      }
+    }
   };
 
   const saveOwnershipEvidence = (event) => {
@@ -7688,6 +7710,108 @@ const NewBuildingSetupPanel = () => {
     );
   };
 
+  const persistPassportRecord = async (record) => {
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) {
+      throw new Error("Your secure session has expired. Sign in again to save this profile.");
+    }
+
+    const userId = authData.user.id;
+    const buildingPayload = {
+      record_reference: record.recordId,
+      uprn: record.uprn || record.propertyDiscovery?.uprn || null,
+      address: {
+        address: record.propertyDiscovery?.address || "",
+        postcode: record.propertyDiscovery?.postcode || "",
+        local_authority: record.propertyDiscovery?.localAuthority || "",
+      },
+      ownership_type: record.ownershipType,
+      tenure: record.tenure,
+      lifecycle_stage: "occupy",
+      legal_owner_name: record.legalOwnerName,
+      custodian_user_id: userId,
+      genesis_hash: record.genesisHash,
+      passport_status: "draft",
+      ownership_verification_status: record.ownershipVerificationStatus || "unverified",
+      privacy_notice_version: "homeowner-v1",
+      privacy_notice_accepted_at: record.privacyAccepted ? record.createdAt : null,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { data: existingRecord, error: lookupError } = await supabase
+      .from("WBPBuildingRecords")
+      .select("id")
+      .eq("record_reference", record.recordId)
+      .maybeSingle();
+    if (lookupError) throw lookupError;
+
+    let databaseRecord = existingRecord;
+    if (existingRecord?.id) {
+      const { data, error } = await supabase
+        .from("WBPBuildingRecords")
+        .update(buildingPayload)
+        .eq("id", existingRecord.id)
+        .select("id")
+        .single();
+      if (error) throw error;
+      databaseRecord = data;
+    } else {
+      const { data, error } = await supabase
+        .from("WBPBuildingRecords")
+        .insert(buildingPayload)
+        .select("id")
+        .single();
+      if (error) throw error;
+      databaseRecord = data;
+
+      if (record.propertyDiscovery) {
+        const discovery = record.propertyDiscovery;
+        const { error: discoveryError } = await supabase
+          .from("WBPPropertyDiscoverySnapshots")
+          .insert({
+            building_record_id: databaseRecord.id,
+            snapshot_version: discovery.version || 1,
+            searched_address: discovery.address,
+            postcode: discovery.postcode || null,
+            uprn: discovery.uprn || null,
+            latitude: discovery.latitude || null,
+            longitude: discovery.longitude || null,
+            local_authority: discovery.localAuthority || null,
+            discovered_sources: discovery.sources || [],
+            planning_records: discovery.planningRecords || [],
+            owner_confirmed_at: discovery.confirmedAt || null,
+            discovered_at: discovery.discoveredAt || record.createdAt,
+            created_by: userId,
+          });
+        if (discoveryError) throw discoveryError;
+      }
+    }
+
+    await supabase.from("WBPAuditEvents").insert({
+      building_record_id: databaseRecord.id,
+      actor_user_id: userId,
+      event_type: existingRecord?.id ? "home-profile-updated" : "home-profile-created",
+      event_data: { record_reference: record.recordId },
+    });
+
+    return { ...record, databaseId: databaseRecord.id, storageState: "supabase" };
+  };
+
+  const secureExistingPassport = async () => {
+    if (!ownershipRecord) return;
+    setPassportSaveStatus("saving");
+    setPassportSaveError("");
+    try {
+      const securedRecord = await persistPassportRecord(ownershipRecord);
+      window.localStorage.setItem("wbp-new-building-passport", JSON.stringify(securedRecord));
+      setOwnershipRecord(securedRecord);
+      setPassportSaveStatus("saved");
+    } catch (error) {
+      setPassportSaveStatus("error");
+      setPassportSaveError(error?.message || "The profile could not be saved securely.");
+    }
+  };
+
   const createBuildingPassport = async (event) => {
     event.preventDefault();
     const recordId = `WBP-${new Date().getFullYear()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
@@ -7728,6 +7852,17 @@ const NewBuildingSetupPanel = () => {
 
     window.localStorage.setItem("wbp-new-building-passport", JSON.stringify(nextRecord));
     setOwnershipRecord(nextRecord);
+    setPassportSaveStatus("saving");
+    setPassportSaveError("");
+    try {
+      const securedRecord = await persistPassportRecord(nextRecord);
+      window.localStorage.setItem("wbp-new-building-passport", JSON.stringify(securedRecord));
+      setOwnershipRecord(securedRecord);
+      setPassportSaveStatus("saved");
+    } catch (error) {
+      setPassportSaveStatus("error");
+      setPassportSaveError(error?.message || "The profile is saved on this browser, but not yet in your secure account.");
+    }
   };
 
   const handleSensorDraftChange = (field, value) => {
@@ -7979,6 +8114,9 @@ const NewBuildingSetupPanel = () => {
                   {ownershipRecord.ownershipVerificationStatus === "ready-for-review" ? "Evidence awaiting review" : "Ownership unverified"}
                 </span>
                 <span className="border border-gray-300 bg-white px-2 py-1 text-xs font-bold uppercase text-gray-700">Not transferable</span>
+                <span className={`border px-2 py-1 text-xs font-bold uppercase ${passportSaveStatus === "saved" ? "border-emerald-300 bg-white text-emerald-800" : "border-gray-300 bg-gray-100 text-gray-700"}`}>
+                  {passportSaveStatus === "saved" ? "Saved securely" : passportSaveStatus === "saving" ? "Saving..." : "Browser only"}
+                </span>
               </div>
             </div>
             <div className="mt-4 grid gap-3 border-t border-emerald-200 pt-3 text-xs text-gray-700 sm:grid-cols-3">
@@ -7988,8 +8126,12 @@ const NewBuildingSetupPanel = () => {
             </div>
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-emerald-200 pt-3">
               <p className="text-xs text-gray-600">This is an owner-created profile. WBP has not yet verified legal ownership.</p>
-              <button type="button" onClick={startProfileEdit} className="border border-emerald-700 bg-white px-3 py-2 text-xs font-bold text-emerald-800">Edit profile</button>
+              <div className="flex flex-wrap gap-2">
+                {passportSaveStatus !== "saved" ? <button type="button" disabled={passportSaveStatus === "saving"} onClick={secureExistingPassport} className="bg-emerald-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">{passportSaveStatus === "saving" ? "Saving..." : "Save to secure account"}</button> : null}
+                <button type="button" onClick={startProfileEdit} className="border border-emerald-700 bg-white px-3 py-2 text-xs font-bold text-emerald-800">Edit profile</button>
+              </div>
             </div>
+            {passportSaveError ? <p className="mt-3 border border-red-200 bg-red-50 p-2 text-xs text-red-800">{passportSaveError}</p> : null}
           </div>
         )}
 
@@ -9833,7 +9975,8 @@ const BuildingDashboard = () => {
 
   const activeBuilding = BUILDINGS[activeIndex];
 
-  const logOut = () => {
+  const logOut = async () => {
+    await supabase.auth.signOut();
     window.localStorage.removeItem("wbp-user-role");
     window.localStorage.removeItem("wbp-user-email");
     navigate("/login");

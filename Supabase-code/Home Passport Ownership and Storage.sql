@@ -114,9 +114,13 @@ grant execute on function private.wbp_user_manages_building(uuid) to authenticat
 revoke all on public."WBPUserProfiles" from anon;
 revoke all on public."WBPOwnershipClaims" from anon;
 revoke all on public."WBPAuditEvents" from anon;
+revoke all on public."WBPBuildingRecords" from anon;
+revoke all on public."WBPPropertyDiscoverySnapshots" from anon;
 grant select, insert, update on public."WBPUserProfiles" to authenticated;
 grant select, insert, update on public."WBPOwnershipClaims" to authenticated;
 grant select, insert on public."WBPAuditEvents" to authenticated;
+grant select, insert, update on public."WBPBuildingRecords" to authenticated;
+grant select, insert, update on public."WBPPropertyDiscoverySnapshots" to authenticated;
 
 drop policy if exists "users manage their own profile" on public."WBPUserProfiles";
 create policy "users manage their own profile"

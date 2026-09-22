@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   BrowserRouter as Router,
   Routes,
@@ -8,6 +8,9 @@ import {
   useParams,
 } from "react-router-dom";
 import BuildingDashboard from "./pages/performance/BuildingDashboard";
+import supabase from "./supabaseClient";
+
+const AUTH_INTENT_KEY = "wbp-auth-intent:v1";
 
 const PROFILE_SIGNALS = ["Building", "Energy", "Health", "Evidence"];
 
@@ -106,12 +109,74 @@ const RoleGateway = () => {
   const [authMode, setAuthMode] = useState("signin");
   const [occupyMode, setOccupyMode] = useState("new");
   const [email, setEmail] = useState("");
+  const [authStatus, setAuthStatus] = useState("idle");
+  const [authMessage, setAuthMessage] = useState("");
   const activeRole = ACCESS_ROLES.find((role) => role.id === selectedRole);
 
-  const openWorkspace = (event) => {
+  const finishAuthenticatedAccess = useCallback(async (session, intent) => {
+    if (!session?.user || !intent?.role) return;
+    window.localStorage.setItem("wbp-user-role", intent.role);
+    window.localStorage.setItem("wbp-user-email", session.user.email || intent.email || "");
+
+    if (intent.profile?.contactName) {
+      await supabase.from("WBPUserProfiles").upsert({
+        user_id: session.user.id,
+        display_name: intent.profile.contactName,
+        updated_at: new Date().toISOString(),
+      });
+    }
+
+    if (intent.profile?.organisationName && intent.role !== "homeowner") {
+      window.localStorage.setItem(`wbp-${intent.role}-profile`, JSON.stringify(intent.profile));
+    }
+
+    window.localStorage.removeItem(AUTH_INTENT_KEY);
+    if (intent.role !== "homeowner") {
+      navigate(`/workspace/${intent.role}`, { state: { profile: intent.profile || {} } });
+      return;
+    }
+
+    navigate(`/dashboard/new?role=homeowner&phase=occupy&record=${intent.occupyMode || "new"}`);
+  }, [navigate]);
+
+  useEffect(() => {
+    let mounted = true;
+    const resumeAuthenticatedAccess = async () => {
+      const { data } = await supabase.auth.getSession();
+      if (!mounted || !data.session) return;
+      let intent = null;
+      try {
+        intent = JSON.parse(window.localStorage.getItem(AUTH_INTENT_KEY) || "null");
+      } catch {
+        intent = null;
+      }
+      if (intent?.role) {
+        await finishAuthenticatedAccess(data.session, intent);
+      }
+    };
+    resumeAuthenticatedAccess();
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event !== "SIGNED_IN" || !session) return;
+      let intent = null;
+      try {
+        intent = JSON.parse(window.localStorage.getItem(AUTH_INTENT_KEY) || "null");
+      } catch {
+        intent = null;
+      }
+      if (intent?.role) {
+        window.setTimeout(() => finishAuthenticatedAccess(session, intent), 0);
+      }
+    });
+    return () => {
+      mounted = false;
+      listener.subscription.unsubscribe();
+    };
+  }, [finishAuthenticatedAccess]);
+
+  const openWorkspace = async (event) => {
     event.preventDefault();
-    window.localStorage.setItem("wbp-user-role", selectedRole);
-    window.localStorage.setItem("wbp-user-email", email.trim());
+    setAuthStatus("sending");
+    setAuthMessage("");
     const formData = new FormData(event.currentTarget);
     const profile = {
       organisationName: formData.get("organisationName") || "",
@@ -129,17 +194,40 @@ const RoleGateway = () => {
       serviceArea: formData.get("serviceArea") || "",
       logoName: formData.get("logo")?.name || "",
     };
+    const intent = {
+      role: selectedRole,
+      occupyMode,
+      email: email.trim(),
+      profile,
+      authMode,
+      createdAt: new Date().toISOString(),
+    };
+    window.localStorage.setItem(AUTH_INTENT_KEY, JSON.stringify(intent));
 
-    if (authMode === "signup" && selectedRole !== "homeowner") {
-      window.localStorage.setItem(`wbp-${selectedRole}-profile`, JSON.stringify(profile));
-    }
-
-    if (selectedRole !== "homeowner") {
-      navigate(`/workspace/${selectedRole}`, { state: { profile } });
+    const { data: currentSession } = await supabase.auth.getSession();
+    if (currentSession.session) {
+      await finishAuthenticatedAccess(currentSession.session, intent);
       return;
     }
 
-    navigate(`/dashboard/new?role=${selectedRole}&phase=${activeRole.phase.toLowerCase()}&record=${occupyMode}`);
+    const { error } = await supabase.auth.signInWithOtp({
+      email: email.trim(),
+      options: {
+        shouldCreateUser: authMode === "signup",
+        emailRedirectTo: `${window.location.origin}/login`,
+        data: {
+          role: selectedRole,
+          display_name: profile.contactName || undefined,
+        },
+      },
+    });
+    if (error) {
+      setAuthStatus("error");
+      setAuthMessage(error.message);
+      return;
+    }
+    setAuthStatus("sent");
+    setAuthMessage(`We sent a secure sign-in link to ${email.trim()}. Open it on this device to continue.`);
   };
 
   return (
@@ -202,6 +290,17 @@ const RoleGateway = () => {
               <button type="button" className={authMode === "signup" ? "is-active" : ""} onClick={() => setAuthMode("signup")}>Sign up</button>
             </div>
 
+            {authStatus === "sent" ? (
+              <div className="wbp-auth-form" role="status">
+                <div className="wbp-link-success">
+                  <strong>Check your email</strong>
+                  <p>{authMessage}</p>
+                </div>
+                <button type="button" className="wbp-access-submit" onClick={() => { setAuthStatus("idle"); setAuthMessage(""); }}>
+                  Use a different email
+                </button>
+              </div>
+            ) : (
             <form className="wbp-auth-form" onSubmit={openWorkspace}>
               {authMode === "signup" ? (
                 <label className="wbp-access-field">
@@ -292,11 +391,6 @@ const RoleGateway = () => {
                 <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="name@organisation.co.uk" required />
               </label>
 
-              <label className="wbp-access-field">
-                <span>Password</span>
-                <input type="password" placeholder="Enter password" required />
-              </label>
-
               {selectedRole === "homeowner" ? (
                 <fieldset className="wbp-record-choice">
                   <legend>Building record</legend>
@@ -312,11 +406,14 @@ const RoleGateway = () => {
                 </fieldset>
               ) : null}
 
-              <button className="wbp-access-submit" type="submit">
-                {authMode === "signin" ? "Open workspace" : "Create account"}
+              {authStatus === "error" ? <p className="wbp-link-success" role="alert">{authMessage}</p> : null}
+
+              <button className="wbp-access-submit" type="submit" disabled={authStatus === "sending"}>
+                {authStatus === "sending" ? "Sending secure link..." : authMode === "signin" ? "Email me a sign-in link" : "Create account"}
                 <span aria-hidden="true">&#8594;</span>
               </button>
             </form>
+            )}
           </section>
         </div>
       ) : null}
@@ -354,7 +451,8 @@ const ProfessionalWorkspace = () => {
         { id: "WBP-014", name: "Felixstowe Homes Programme", stage: "Planning", status: "Client review" },
       ];
 
-  const logOut = () => {
+  const logOut = async () => {
+    await supabase.auth.signOut();
     window.localStorage.removeItem("wbp-user-role");
     window.localStorage.removeItem("wbp-user-email");
     navigate("/login");
@@ -488,13 +586,48 @@ const ProfessionalWorkspace = () => {
   );
 };
 
+const AuthenticatedRoute = ({ children }) => {
+  const navigate = useNavigate();
+  const [authReady, setAuthReady] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    supabase.auth.getSession().then(({ data }) => {
+      if (!mounted) return;
+      if (!data.session) {
+        navigate("/login", { replace: true });
+        return;
+      }
+      setAuthReady(true);
+    });
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!mounted) return;
+      if (!session) {
+        setAuthReady(false);
+        navigate("/login", { replace: true });
+      } else {
+        setAuthReady(true);
+      }
+    });
+    return () => {
+      mounted = false;
+      listener.subscription.unsubscribe();
+    };
+  }, [navigate]);
+
+  if (!authReady) {
+    return <main className="flex min-h-screen items-center justify-center bg-white text-sm font-semibold text-gray-600">Checking secure access...</main>;
+  }
+  return children;
+};
+
 const App = () => (
   <Router>
     <Routes>
       <Route path="/" element={<SplashScreen />} />
       <Route path="/login" element={<RoleGateway />} />
-      <Route path="/workspace/:role" element={<ProfessionalWorkspace />} />
-      <Route path="/dashboard/*" element={<BuildingDashboard />} />
+      <Route path="/workspace/:role" element={<AuthenticatedRoute><ProfessionalWorkspace /></AuthenticatedRoute>} />
+      <Route path="/dashboard/*" element={<AuthenticatedRoute><BuildingDashboard /></AuthenticatedRoute>} />
     </Routes>
   </Router>
 );
