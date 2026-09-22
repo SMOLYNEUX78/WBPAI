@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import App from "./App";
 import supabase from "./supabaseClient";
 
@@ -25,17 +25,39 @@ test.each(["architect", "builder"])("%s portfolio profile can be edited and save
   supabase.auth.getSession.mockResolvedValue({ data: { session } });
   supabase.auth.getUser.mockResolvedValue({ data: { user: session.user } });
   supabase.auth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: jest.fn() } } });
-  window.localStorage.setItem(`wbp-${role}-profile-${session.user.id}`, JSON.stringify({ organisationName: "Original organisation", registrationNumber: "12345" }));
+  window.localStorage.setItem(`wbp-${role}-profile-${session.user.id}`, JSON.stringify({ organisationName: "Original organisation", registrationNumber: "12345", phone: "01234 567890", address: "1 High Street", city: "Woodbridge", postcode: "IP12 1AA", serviceArea: "Suffolk" }));
   window.history.pushState({}, "", `/workspace/${role}`);
 
   render(<App />);
   expect(await screen.findByRole("heading", { name: "Original organisation" })).toBeInTheDocument();
+  expect(screen.getByText("01234 567890")).toBeInTheDocument();
+  expect(screen.getByText("1 High Street, Woodbridge, IP12 1AA")).toBeInTheDocument();
+  expect(screen.getByText("Suffolk")).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Edit profile" }));
   fireEvent.change(screen.getByRole("textbox", { name: "Organisation name" }), { target: { value: "Updated organisation" } });
   fireEvent.click(screen.getByRole("button", { name: "Save profile" }));
 
   expect(screen.getByRole("heading", { name: "Updated organisation" })).toBeInTheDocument();
   expect(JSON.parse(window.localStorage.getItem(`wbp-${role}-profile-${session.user.id}`)).organisationName).toBe("Updated organisation");
+});
+
+test("portfolio image upload appears in the banner after saving", async () => {
+  const session = { user: { id: "logo-test-user", email: "wbpai25@gmail.com" } };
+  supabase.auth.getSession.mockResolvedValue({ data: { session } });
+  supabase.auth.getUser.mockResolvedValue({ data: { user: session.user } });
+  supabase.auth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: jest.fn() } } });
+  window.localStorage.setItem(`wbp-architect-profile-${session.user.id}`, JSON.stringify({ organisationName: "Example Studio", organisationType: "Architectural practice", registrationNumber: "12345" }));
+  window.history.pushState({}, "", "/workspace/architect");
+
+  const { container } = render(<App />);
+  fireEvent.click(await screen.findByRole("button", { name: "Edit profile" }));
+  const file = new File([new Uint8Array([137, 80, 78, 71])], "logo.png", { type: "image/png" });
+  fireEvent.change(screen.getByLabelText(/Upload image/), { target: { files: [file] } });
+  expect(await screen.findByAltText("Profile preview")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Save profile" }));
+
+  expect(container.querySelector(".wbp-organisation-logo img")).toBeInTheDocument();
+  expect(JSON.parse(window.localStorage.getItem(`wbp-architect-profile-${session.user.id}`)).logoDataUrl).toMatch(/^data:image\/png;base64,/);
 });
 
 test("Design new project opens a design-stage intake rather than the homeowner form", async () => {
@@ -48,8 +70,9 @@ test("Design new project opens a design-stage intake rather than the homeowner f
   render(<App />);
   fireEvent.click(await screen.findByRole("button", { name: /New project/i }));
   expect(await screen.findByRole("heading", { name: "New design project" })).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Evidence" }));
-  expect(screen.getByRole("heading", { name: "Drawings, models and evidence" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Import existing project" })).toBeInTheDocument();
+  fireEvent.click(within(screen.getByRole("navigation", { name: "Design project sections" })).getByRole("button", { name: "Evidence" }));
+  expect(screen.getByRole("heading", { name: "Existing documents" })).toBeInTheDocument();
   expect(window.location.pathname).toBe("/workspace/architect/project/new");
 });
 

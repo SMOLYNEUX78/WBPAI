@@ -14,6 +14,19 @@ import { isProfessionalEmailAllowed, TEST_PROFESSIONAL_EMAIL } from "./professio
 import { hasFullWorkspaceAccess, loadLinkedHistoricOutline } from "./workspaceAccess";
 
 const AUTH_INTENT_KEY = "wbp-auth-intent:v1";
+const PROFILE_IMAGE_LIMIT_BYTES = 750 * 1024;
+
+const readProfileImage = (file) => new Promise((resolve, reject) => {
+  if (!file || !file.size) { resolve(""); return; }
+  if (!["image/png", "image/jpeg", "image/webp"].includes(file.type) || file.size > PROFILE_IMAGE_LIMIT_BYTES) {
+    reject(new Error("Use a PNG, JPG or WebP image smaller than 750 KB."));
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "");
+  reader.onerror = () => reject(new Error("Could not read the profile image."));
+  reader.readAsDataURL(file);
+});
 
 const PROFILE_SIGNALS = ["Building", "Energy", "Health", "Evidence"];
 
@@ -241,6 +254,15 @@ const RoleGateway = () => {
       logoName: formData.get("logo")?.name || "",
       requestedStages: formData.getAll("workspaceStages"),
     };
+    if (selectedRole !== "homeowner") {
+      try {
+        profile.logoDataUrl = await readProfileImage(formData.get("logo"));
+      } catch (error) {
+        setAuthStatus("error");
+        setAuthMessage(error.message);
+        return;
+      }
+    }
     const intent = {
       role: selectedRole,
       occupyMode,
@@ -612,6 +634,7 @@ const ProfessionalWorkspace = () => {
   const isBuilder = role === "builder";
   const [profile, setProfile] = useState(location.state?.profile?.organisationName ? location.state.profile : {});
   const [profileUserId, setProfileUserId] = useState("");
+  const [profileEmail, setProfileEmail] = useState("");
   const [editingProfile, setEditingProfile] = useState(false);
   const [profileDraft, setProfileDraft] = useState({});
   const [profileStatus, setProfileStatus] = useState("");
@@ -622,6 +645,7 @@ const ProfessionalWorkspace = () => {
     supabase.auth.getUser().then(({ data }) => {
       if (!active || !data.user) return;
       setProfileUserId(data.user.id);
+      setProfileEmail(data.user.email || "");
       setIsTestAccount(data.user.email?.toLowerCase() === TEST_PROFESSIONAL_EMAIL);
       try {
         const cached = JSON.parse(window.localStorage.getItem(`wbp-${role}-profile-${data.user.id}`) || window.localStorage.getItem(`wbp-organisation-profile-${data.user.id}`) || "{}");
@@ -642,6 +666,18 @@ const ProfessionalWorkspace = () => {
     return () => { active = false; };
   }, [isBuilder]);
   const organisationName = profile.organisationName || (isBuilder ? "Build organisation" : "Design organisation");
+  const profileDetails = [
+    ["Registration", profile.registrationNumber],
+    ["Professional body", profile.professionalRegistration],
+    ["VAT", profile.vatNumber],
+    ["Contact", [profile.contactName, profile.jobTitle].filter(Boolean).join(" · ")],
+    ["Email", profileEmail],
+    ["Telephone", profile.phone],
+    ["Website", profile.website],
+    ["Head office", [profile.address, profile.city, profile.postcode].filter(Boolean).join(", ")],
+    ["Operating area", profile.serviceArea],
+    ["Stages", Array.isArray(profile.requestedStages) ? profile.requestedStages.map((stage) => ({ architect: "Design", builder: "Build", homeowner: "Occupy" })[stage] || stage).join(" · ") : ""],
+  ].filter(([, value]) => value);
   const startProfileEdit = () => {
     setProfileDraft({ ...profile });
     setProfileStatus("");
@@ -654,10 +690,24 @@ const ProfessionalWorkspace = () => {
       return;
     }
     const updated = Object.fromEntries(Object.entries(profileDraft).map(([key, value]) => [key, typeof value === "string" ? value.trim() : value]));
-    window.localStorage.setItem(`wbp-${role}-profile-${profileUserId}`, JSON.stringify(updated));
+    try {
+      window.localStorage.setItem(`wbp-${role}-profile-${profileUserId}`, JSON.stringify(updated));
+    } catch {
+      setProfileStatus("Could not save this profile in the browser. Try a smaller image.");
+      return;
+    }
     setProfile(updated);
     setEditingProfile(false);
     setProfileStatus("Profile saved in this browser. Organisation details remain unverified.");
+  };
+  const updateProfileImage = async (file) => {
+    try {
+      const logoDataUrl = await readProfileImage(file);
+      if (logoDataUrl) setProfileDraft((current) => ({ ...current, logoDataUrl, logoName: file.name }));
+      setProfileStatus("");
+    } catch (error) {
+      setProfileStatus(error.message);
+    }
   };
   const [showLinkRecord, setShowLinkRecord] = useState(false);
   const [showIssueHandover, setShowIssueHandover] = useState(false);
@@ -732,7 +782,7 @@ const ProfessionalWorkspace = () => {
 
       <section className="wbp-professional-hero">
         <div className="wbp-organisation-logo" aria-hidden="true">
-          {profile.logoName ? profile.logoName.slice(0, 2).toUpperCase() : organisationName.slice(0, 2).toUpperCase()}
+          {profile.logoDataUrl ? <img src={profile.logoDataUrl} alt="" /> : organisationName.slice(0, 2).toUpperCase()}
         </div>
         <div>
           <p>{isBuilder ? "Build portfolio" : "Design portfolio"}</p>
@@ -741,15 +791,15 @@ const ProfessionalWorkspace = () => {
         </div>
         <div className="wbp-organisation-meta">
           <span>{isTestAccount ? "Test account · Organisation not verified" : "Self-declared · Organisation not verified"}</span>
-          <span>{profile.registrationNumber || "Registration pending"}</span>
-          <span>{profile.city || "Head office pending"}</span>
           <button type="button" onClick={startProfileEdit} className="wbp-profile-edit-button">Edit profile</button>
         </div>
+        <dl className="wbp-organisation-details">{profileDetails.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{label === "Website" && /^https:\/\//i.test(value) ? <a href={value} target="_blank" rel="noopener noreferrer">{value}</a> : value}</dd></div>)}</dl>
       </section>
 
       {editingProfile ? <form className="wbp-professional-profile-editor" onSubmit={saveProfile}>
         <div className="wbp-profile-editor-heading"><h2>Edit organisation profile</h2><p>Changes are saved in this browser and do not verify the organisation.</p></div>
         <div className="wbp-profile-editor-grid">
+          <div className="wbp-profile-image-editor"><span>Profile image / company logo</span><div>{profileDraft.logoDataUrl ? <img src={profileDraft.logoDataUrl} alt="Profile preview" /> : <span className="wbp-profile-image-placeholder">{organisationName.slice(0, 2).toUpperCase()}</span>}<label className="wbp-access-field"><span>Upload image (PNG, JPG or WebP, under 750 KB)</span><input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => { updateProfileImage(event.target.files?.[0]); event.target.value = ""; }} /></label>{profileDraft.logoDataUrl ? <button type="button" onClick={() => setProfileDraft((current) => ({ ...current, logoDataUrl: "", logoName: "" }))}>Remove image</button> : null}</div></div>
           {[
             ["organisationName", "Organisation name", true],
             ["organisationType", "Organisation type", true],
