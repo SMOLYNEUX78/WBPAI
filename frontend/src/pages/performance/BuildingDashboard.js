@@ -3,7 +3,6 @@ import { createPortal } from "react-dom";
 import { useLocation, useNavigate } from "react-router-dom";
 import AnalogGauge from "../../components/AnalogGauge";
 import supabase from "../../supabaseClient";
-import { hasFullWorkspaceAccess } from "../../workspaceAccess";
 import govukCrown from "../../assets/govuk-crown.png";
 import matterportMark from "../../assets/matterport-mark.png";
 
@@ -10382,23 +10381,12 @@ const BuildingDashboard = () => {
     ? routeIndex
     : BUILDINGS.findIndex((building) => building.id === "new");
   const [activeIndex, setActiveIndex] = useState(defaultIndex >= 0 ? defaultIndex : 0);
-  const [canSwitchWorkspace, setCanSwitchWorkspace] = useState(false);
   const [bridgewoodValue, setBridgewoodValue] = useState(readCachedBridgewoodValue);
   const bridgewoodTokens = bridgewoodValue.credits;
   const touchStartX = useRef(null);
   const [dragOffset, setDragOffset] = useState(0);
 
   const activeBuilding = BUILDINGS[activeIndex];
-
-  useEffect(() => {
-    let mounted = true;
-    const checkAccess = async () => {
-      const { data } = await supabase.auth.getUser();
-      if (mounted) setCanSwitchWorkspace(Boolean(data?.user && hasFullWorkspaceAccess(data.user)));
-    };
-    checkAccess();
-    return () => { mounted = false; };
-  }, []);
 
   const logOut = async () => {
     await supabase.auth.signOut();
@@ -10536,7 +10524,7 @@ const BuildingDashboard = () => {
           </div>
 
           <div className="flex shrink-0 items-center gap-3">
-            {canSwitchWorkspace ? <button type="button" onClick={() => navigate("/workspaces")} className="border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-900 hover:bg-gray-100">Switch workspace</button> : null}
+            <button type="button" onClick={() => navigate("/login")} className="border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-900 hover:bg-gray-100">Switch workspace</button>
             <p className="hidden text-xs text-gray-500 lg:block">Swipe left or right to switch buildings</p>
           </div>
         </div>
