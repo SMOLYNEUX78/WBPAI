@@ -47,7 +47,8 @@ test("test account switches workspaces without requesting another email link", a
   await waitFor(() => expect(design).toBeEnabled());
   fireEvent.click(design);
   fireEvent.click(await screen.findByRole("button", { name: "Switch workspace" }));
-  const occupy = await screen.findByRole("button", { name: /Occupy Your home and measured performance/i });
+  expect(window.location.pathname).toBe("/login");
+  const occupy = await screen.findByRole("button", { name: /Occupy Start or import a record/i });
   fireEvent.click(occupy);
 
   expect(await screen.findByText("Dashboard test view")).toBeInTheDocument();

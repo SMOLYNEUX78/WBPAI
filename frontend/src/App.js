@@ -615,14 +615,12 @@ const ProfessionalWorkspace = () => {
   const [profileDraft, setProfileDraft] = useState({});
   const [profileStatus, setProfileStatus] = useState("");
   const [isTestAccount, setIsTestAccount] = useState(false);
-  const [canSwitchWorkspace, setCanSwitchWorkspace] = useState(false);
   useEffect(() => {
     let active = true;
     supabase.auth.getUser().then(({ data }) => {
       if (!active || !data.user) return;
       setProfileUserId(data.user.id);
       setIsTestAccount(data.user.email?.toLowerCase() === TEST_PROFESSIONAL_EMAIL);
-      setCanSwitchWorkspace(hasFullWorkspaceAccess(data.user));
       try {
         const cached = JSON.parse(window.localStorage.getItem(`wbp-${role}-profile-${data.user.id}`) || window.localStorage.getItem(`wbp-organisation-profile-${data.user.id}`) || "{}");
         setProfile(location.state?.profile?.organisationName ? location.state.profile : cached);
@@ -719,7 +717,7 @@ const ProfessionalWorkspace = () => {
       <header className="wbp-professional-nav">
         <strong>Whole Build Profile</strong>
         <div className="wbp-professional-nav-actions">
-          {canSwitchWorkspace ? <button type="button" onClick={() => navigate("/workspaces")}>Switch workspace</button> : null}
+          <button type="button" onClick={() => navigate("/login")}>Switch workspace</button>
           <button type="button" onClick={logOut}>Log out</button>
         </div>
       </header>
