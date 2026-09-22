@@ -630,6 +630,7 @@ code {
 .wbp-organisation-meta { display: grid; gap: 5px; justify-items: end; color: #4b5563; font-size: 12px; }
 .wbp-workspace-actions { display: flex; gap: 10px; padding: 25px clamp(20px, 4vw, 58px) 0; }
 .wbp-workspace-actions button.is-primary { border-color: #047857; background: #047857; color: #ffffff; }
+.wbp-workspace-actions button:disabled { cursor: not-allowed; opacity: 0.5; }
 .wbp-link-record {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(280px, 0.8fr);

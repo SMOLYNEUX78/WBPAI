@@ -128,7 +128,7 @@ const RoleGateway = () => {
     }
 
     if (intent.profile?.organisationName && intent.role !== "homeowner") {
-      window.localStorage.setItem(`wbp-${intent.role}-profile`, JSON.stringify(intent.profile));
+      window.localStorage.setItem(`wbp-${intent.role}-profile-${session.user.id}`, JSON.stringify(intent.profile));
     }
 
     window.localStorage.removeItem(AUTH_INTENT_KEY);
@@ -447,14 +447,20 @@ const ProfessionalWorkspace = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const isBuilder = role === "builder";
-  const storedProfile = (() => {
-    try {
-      return JSON.parse(window.localStorage.getItem(`wbp-${role}-profile`) || "{}");
-    } catch {
-      return {};
-    }
-  })();
-  const profile = location.state?.profile?.organisationName ? location.state.profile : storedProfile;
+  const [profile, setProfile] = useState(location.state?.profile?.organisationName ? location.state.profile : {});
+  useEffect(() => {
+    let active = true;
+    supabase.auth.getUser().then(({ data }) => {
+      if (!active || !data.user) return;
+      try {
+        const cached = JSON.parse(window.localStorage.getItem(`wbp-${role}-profile-${data.user.id}`) || "{}");
+        setProfile(location.state?.profile?.organisationName ? location.state.profile : cached);
+      } catch {
+        setProfile({});
+      }
+    });
+    return () => { active = false; };
+  }, [role, location.state]);
   const organisationName = profile.organisationName || (isBuilder ? "Build organisation" : "Design organisation");
   const [showLinkRecord, setShowLinkRecord] = useState(false);
   const [showIssueHandover, setShowIssueHandover] = useState(false);
@@ -537,6 +543,7 @@ const ProfessionalWorkspace = () => {
           <span>{profile.organisationType || (isBuilder ? "Contractor profile" : "Design practice profile")}</span>
         </div>
         <div className="wbp-organisation-meta">
+          <span>Self-declared · Organisation not verified</span>
           <span>{profile.registrationNumber || "Registration pending"}</span>
           <span>{profile.city || "Head office pending"}</span>
         </div>
@@ -547,9 +554,9 @@ const ProfessionalWorkspace = () => {
           + New project
         </button>
         {isBuilder ? (
-          <button type="button" onClick={() => setShowLinkRecord((current) => !current)}>Link design record</button>
+          <button type="button" disabled title="Organisation verification is required before accepting a handover" onClick={() => setShowLinkRecord((current) => !current)}>Link design record</button>
         ) : (
-          <button type="button" onClick={() => setShowIssueHandover((current) => !current)}>Issue build handover</button>
+          <button type="button" disabled title="Organisation verification is required before issuing a handover" onClick={() => setShowIssueHandover((current) => !current)}>Issue build handover</button>
         )}
       </section>
 
@@ -589,10 +596,10 @@ const ProfessionalWorkspace = () => {
 
       <section className="wbp-project-register">
         <div className="wbp-register-heading">
-          <div><p>Registered projects</p><h2>{projects.length} active records</h2></div>
+          <div><p>Example projects</p><h2>{projects.length} sample records</h2></div>
           <input type="search" placeholder="Search projects" aria-label="Search projects" />
         </div>
-        <div className="wbp-project-table" role="table" aria-label="Registered projects">
+        <div className="wbp-project-table" role="table" aria-label="Example projects">
           <div className="wbp-project-row is-heading" role="row">
             <span>WBP ID</span><span>Project</span><span>Stage</span><span>Status</span><span aria-hidden="true" />
           </div>
