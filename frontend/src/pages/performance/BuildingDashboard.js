@@ -8213,18 +8213,18 @@ const NewBuildingSetupPanel = () => {
                 <p><strong>Your control:</strong> a production account must support access, correction, deletion requests and a clear retention period.</p>
               </div>
             </details>
-            <a href="https://www.gov.uk/search-property-information-land-registry" target="_blank" rel="noopener noreferrer" className="mt-4 flex flex-wrap items-center gap-3 border-t border-gray-200 pt-4 text-sm text-gray-700 hover:text-blue-800">
-              <span className="bg-black px-2 py-1 text-xs font-extrabold text-white" aria-hidden="true">GOV.UK</span>
-              <span>Get property information from <strong className="text-blue-800 underline">HM Land Registry</strong></span>
-              <span aria-hidden="true">&#8599;</span>
+            <a href="https://www.gov.uk/search-property-information-land-registry" target="_blank" rel="noopener noreferrer" className="mt-4 flex items-center gap-3 border border-amber-300 bg-amber-50 p-3 text-sm font-semibold text-gray-900 transition-colors hover:bg-amber-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-700">
+              <span className="shrink-0 bg-black px-2 py-1 text-xs font-extrabold text-white" aria-hidden="true">GOV.UK</span>
+              <span>Get property information from HM Land Registry</span>
+              <span className="ml-auto shrink-0 text-lg" aria-hidden="true">&#8599;</span>
             </a>
           </section>
         ) : null}
 
         {ownershipRecord ? <div className="mx-auto mt-4 max-w-4xl bg-white rounded border p-4 space-y-3">
-          <h3 className="text-base font-semibold text-center">Matterport Data</h3>
+          <h3 className="text-base font-semibold">Matterport Data</h3>
 
-          <div className="flex flex-wrap gap-2 justify-center">
+          <div className="flex flex-wrap gap-2">
             <button
               type="button"
               className={`px-3 py-2 rounded border text-sm font-semibold ${
@@ -8275,10 +8275,10 @@ const NewBuildingSetupPanel = () => {
               </div>
             </div>
           ) : null}
-          <a href="https://matterport.com/3d-camera-app" target="_blank" rel="noopener noreferrer" className="flex flex-wrap items-center gap-3 border-t border-gray-200 pt-4 text-sm text-gray-700 hover:text-blue-800">
-            <span className="text-base font-bold text-gray-900" aria-hidden="true">matterport</span>
-            <span>Scan your home in the <strong className="text-blue-800 underline">Matterport app</strong></span>
-            <span aria-hidden="true">&#8599;</span>
+          <a href="https://matterport.com/3d-camera-app" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 border border-sky-300 bg-sky-50 p-3 text-sm font-semibold text-gray-900 transition-colors hover:bg-sky-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-700">
+            <span className="shrink-0 text-base font-bold text-gray-900" aria-hidden="true">matterport</span>
+            <span>Scan your home with the Matterport app</span>
+            <span className="ml-auto shrink-0 text-lg" aria-hidden="true">&#8599;</span>
           </a>
         </div> : null}
       </div>
