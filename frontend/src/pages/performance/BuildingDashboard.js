@@ -9357,7 +9357,7 @@ const readCachedBridgewoodValue = () => {
   }
 };
 
-const PortfolioDashboardPanel = ({
+export const PortfolioDashboardPanel = ({
   bridgewoodTokens,
   onOpenBuilding,
   onOpenExchange,
@@ -9369,6 +9369,21 @@ const PortfolioDashboardPanel = ({
   const [propertyPage, setPropertyPage] = useState(1);
   const riskOptions = ["All", "Damp", "Cold", "IAQ", "Heat loss", "Overheat", "Monitor", "Good"];
   const riskPriority = { Damp: 1, IAQ: 2, Cold: 3, "Heat loss": 4, Overheat: 5, Monitor: 6, Good: 7 };
+  const sortColumns = [
+    { key: "property", label: "Home" },
+    { key: "health", label: "Health" },
+    { key: "energy", label: "Energy" },
+    { key: "priority", label: "Priority" },
+    { key: "evidence", label: "Evidence" },
+  ];
+  const selectPropertySort = (key) => {
+    if (propertySort === key) {
+      setPropertySortDirection((current) => current === "asc" ? "desc" : "asc");
+    } else {
+      setPropertySort(key);
+      setPropertySortDirection(["health", "energy", "evidence"].includes(key) ? "desc" : "asc");
+    }
+  };
   const filteredProperties = PORTFOLIO_PROPERTIES
     .filter((property) => {
       const matchesRisk = riskFilter === "All" || property.risk === riskFilter;
@@ -9389,7 +9404,8 @@ const PortfolioDashboardPanel = ({
         stage: [a.retrofit, b.retrofit],
       };
       const [aValue, bValue] = values[propertySort] || values.priority;
-      return direction * (typeof aValue === "string" ? aValue.localeCompare(bValue) : aValue - bValue);
+      const compared = typeof aValue === "string" ? aValue.localeCompare(bValue) : aValue - bValue;
+      return direction * compared || a.id.localeCompare(b.id);
     });
   const propertyPageSize = 25;
   const propertyPageCount = Math.max(1, Math.ceil(filteredProperties.length / propertyPageSize));
@@ -9525,20 +9541,21 @@ const PortfolioDashboardPanel = ({
 
       <section className="grid min-w-0 border-b border-gray-200 lg:grid-cols-[minmax(0,2fr)_minmax(260px,1fr)]">
         <div className="min-w-0 px-3 py-5 sm:px-5">
-          <div className="mb-3 flex items-center justify-between gap-3">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-lg font-bold">Property register</h2>
               <p className="text-xs text-gray-500">{filteredProperties.length} of {PORTFOLIO_PROPERTIES.length} homes</p>
             </div>
-          </div>
-          <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-[minmax(180px,1fr)_140px_160px_42px]">
             <input
               type="search"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Search homes"
-              className="col-span-2 min-w-0 border border-gray-300 px-3 py-2 text-sm sm:col-span-1"
+              aria-label="Search homes"
+              className="min-w-0 flex-1 border border-gray-300 px-3 py-2 text-sm sm:max-w-xs"
             />
+          </div>
+          <div className="mb-3 flex flex-wrap gap-2">
             <select value={riskFilter} onChange={(event) => setRiskFilter(event.target.value)} className="min-w-0 border border-gray-300 bg-white px-2 py-2 text-sm" aria-label="Filter properties by priority">
               {riskOptions.map((risk) => <option key={risk} value={risk}>{risk === "All" ? "All priorities" : risk}</option>)}
             </select>
@@ -9555,11 +9572,15 @@ const PortfolioDashboardPanel = ({
               {propertySortDirection === "asc" ? "↑" : "↓"}
             </button>
           </div>
-          <div className="border border-gray-200">
-            <div className="hidden grid-cols-[minmax(170px,1.35fr)_64px_64px_minmax(90px,0.8fr)_minmax(95px,0.9fr)] gap-2 bg-gray-100 px-3 py-2 text-xs font-semibold uppercase text-gray-600 md:grid">
-              <span>Home</span><span>Health</span><span>Energy</span><span>Priority</span><span>Evidence</span>
+          <div className="border border-gray-200" role="table" aria-label="Property register">
+            <div className="hidden grid-cols-[minmax(170px,1.35fr)_64px_64px_minmax(90px,0.8fr)_minmax(95px,0.9fr)] gap-2 bg-gray-100 px-3 py-2 text-xs font-semibold uppercase text-gray-600 md:grid" role="row">
+              {sortColumns.map(({ key, label }) => <span key={key} role="columnheader" aria-sort={propertySort === key ? propertySortDirection === "asc" ? "ascending" : "descending" : "none"}>
+                <button type="button" onClick={() => selectPropertySort(key)} className="flex w-full items-center gap-1 text-left hover:text-gray-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700" title={`Sort by ${label.toLowerCase()}`}>
+                  {label}<span aria-hidden="true" className="text-[11px]">{propertySort === key ? propertySortDirection === "asc" ? "↑" : "↓" : "↕"}</span>
+                </button>
+              </span>)}
             </div>
-            <div className="divide-y divide-gray-200">
+            <div className="divide-y divide-gray-200" role="group" aria-label="Property register results">
               {pagedProperties.map((property) => (
                 <button
                   key={property.id}
