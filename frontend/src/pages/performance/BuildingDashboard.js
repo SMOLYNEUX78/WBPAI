@@ -126,8 +126,13 @@ const BUILDINGS = [
   },
   {
     ...HOME_BUILDING,
-    id: "cc",
+    id: "home",
     name: "WBP-001",
+  },
+  {
+    ...HOME_BUILDING,
+    id: "cc",
+    name: "WBP-001cc",
     subtitle: "Carbon credit token workspace",
     dataSourceId: "home",
   },
@@ -6691,7 +6696,7 @@ const BuildingDashboardPanel = ({ building }) => {
         )}
       </div>
 
-      <div className="bg-gray-100 p-4 rounded shadow">
+      {isCarbonCreditTab && <div className="bg-gray-100 p-4 rounded shadow">
         <h2 className="mb-3 text-lg font-bold">WBP Carbon Credit</h2>
 
         <div className="relative bg-white rounded border p-4 space-y-4">
@@ -6815,7 +6820,7 @@ const BuildingDashboardPanel = ({ building }) => {
             </p>
           </button>
         </div>
-      </div>
+      </div>}
 
       {activeMrvEvidenceField && typeof document !== "undefined"
         ? createPortal(
@@ -10016,8 +10021,7 @@ const BuildingDashboard = () => {
   }, [location.pathname, navigate]);
 
   const openBuildingById = (buildingId) => {
-    const navigationId = buildingId === "home" ? "cc" : buildingId;
-    const buildingIndex = BUILDINGS.findIndex((building) => building.id === navigationId);
+    const buildingIndex = BUILDINGS.findIndex((building) => building.id === buildingId);
     if (buildingIndex >= 0) {
       goToBuilding(buildingIndex);
     }
