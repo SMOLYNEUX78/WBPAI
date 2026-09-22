@@ -111,6 +111,7 @@ const RoleGateway = () => {
   const [email, setEmail] = useState("");
   const [authStatus, setAuthStatus] = useState("idle");
   const [authMessage, setAuthMessage] = useState("");
+  const [existingSessionEmail, setExistingSessionEmail] = useState("");
   const activeRole = ACCESS_ROLES.find((role) => role.id === selectedRole);
 
   const finishAuthenticatedAccess = useCallback(async (session, intent) => {
@@ -202,14 +203,20 @@ const RoleGateway = () => {
       authMode,
       createdAt: new Date().toISOString(),
     };
-    window.localStorage.setItem(AUTH_INTENT_KEY, JSON.stringify(intent));
-
     const { data: currentSession } = await supabase.auth.getSession();
     if (currentSession.session) {
+      const signedInEmail = currentSession.session.user.email || "";
+      if (authMode === "signup" || signedInEmail.toLowerCase() !== email.trim().toLowerCase()) {
+        setExistingSessionEmail(signedInEmail);
+        setAuthStatus("error");
+        setAuthMessage(`You're already signed in as ${signedInEmail}. Sign out before using another account.`);
+        return;
+      }
       await finishAuthenticatedAccess(currentSession.session, intent);
       return;
     }
 
+    window.localStorage.setItem(AUTH_INTENT_KEY, JSON.stringify(intent));
     const { error } = await supabase.auth.signInWithOtp({
       email: email.trim(),
       options: {
@@ -222,10 +229,12 @@ const RoleGateway = () => {
       },
     });
     if (error) {
+      window.localStorage.removeItem(AUTH_INTENT_KEY);
       setAuthStatus("error");
       setAuthMessage(error.message);
       return;
     }
+    setExistingSessionEmail("");
     setAuthStatus("sent");
     setAuthMessage(`We sent a secure sign-in link to ${email.trim()}. Open it on this device to continue.`);
   };
@@ -407,6 +416,18 @@ const RoleGateway = () => {
               ) : null}
 
               {authStatus === "error" ? <p className="wbp-link-success" role="alert">{authMessage}</p> : null}
+
+              {authStatus === "error" && existingSessionEmail ? (
+                <button type="button" className="wbp-access-submit" onClick={async () => {
+                  await supabase.auth.signOut();
+                  window.localStorage.removeItem(AUTH_INTENT_KEY);
+                  setExistingSessionEmail("");
+                  setAuthStatus("idle");
+                  setAuthMessage("");
+                }}>
+                  Sign out of {existingSessionEmail}
+                </button>
+              ) : null}
 
               <button className="wbp-access-submit" type="submit" disabled={authStatus === "sending"}>
                 {authStatus === "sending" ? "Sending secure link..." : authMode === "signin" ? "Email me a sign-in link" : "Create account"}
