@@ -8,6 +8,7 @@ test("new building sections keep ownership first and separate the inputs", () =>
   render(<MemoryRouter><NewBuildingSetupPanel /></MemoryRouter>);
 
   expect(screen.getByRole("heading", { name: "New Building" })).toBeInTheDocument();
+  expect(screen.getByRole("tablist").closest("section")).toContainElement(screen.getByRole("heading", { name: "New Building" }));
   fireEvent.click(screen.getByRole("tab", { name: "Measurements" }));
   expect(screen.getByText("Create the ownership record before adding measurements.")).toBeInTheDocument();
 

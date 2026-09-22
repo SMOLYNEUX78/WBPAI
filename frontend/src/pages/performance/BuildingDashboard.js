@@ -7962,8 +7962,9 @@ export const NewBuildingSetupPanel = () => {
   }, []);
 
   return (
-    <div className="bg-white p-4 flex flex-col space-y-6">
-      <header className="flex flex-wrap items-center gap-x-6 gap-y-3 border-b border-gray-200 pb-3">
+    <div className="bg-white p-4">
+      <section className="bg-gray-100 p-4 rounded shadow">
+      <header className="mb-4 flex flex-wrap items-center gap-x-6 gap-y-3 border-b border-gray-200 pb-3">
       <h2 className="text-lg font-bold">New Building</h2>
       <nav className="flex flex-wrap gap-2" role="tablist" aria-label="New building sections">
         {[["ownership", "Ownership"], ["measurements", "Measurements"], ["performance", "Performance"], ["carbon", "Carbon Context"]].map(([id, label]) => (
@@ -7993,7 +7994,7 @@ export const NewBuildingSetupPanel = () => {
       <div ref={setupPanelRef} id="new-building-panel" role="tabpanel" aria-labelledby={`new-building-tab-${setupTab}`} className="overflow-hidden">
       <div ref={setupContentRef}>
       <div style={{ display: setupTab === "ownership" ? undefined : "none" }}>
-      <div className="bg-gray-100 p-4 rounded shadow">
+      <div className="min-w-0">
         {!ownershipRecord ? (
           <form onSubmit={createBuildingPassport} className="mx-auto max-w-4xl border border-emerald-200 bg-white p-4 sm:p-5">
             <div className="border-b border-gray-200 pb-4">
@@ -8295,7 +8296,7 @@ export const NewBuildingSetupPanel = () => {
       </div>
 
       <div style={{ display: setupTab === "measurements" ? undefined : "none" }}>
-      <div className="bg-gray-100 p-4 rounded shadow">
+      <div className="min-w-0">
         <h2 className="text-lg font-bold mb-3">Measurements</h2>
         {ownershipRecord ? <div className="mx-auto mt-4 max-w-4xl bg-white rounded border p-4 space-y-3">
           <h3 className="text-base font-semibold">Matterport Data</h3>
@@ -8487,7 +8488,7 @@ export const NewBuildingSetupPanel = () => {
       </div>
 
       <div style={{ display: setupTab === "performance" ? undefined : "none" }}>
-      <div className="bg-gray-100 p-4 rounded shadow">
+      <div className="min-w-0">
         <h2 className="text-lg font-bold mb-3">Performance</h2>
         <div className="grid gap-4 md:grid-cols-2 items-start">
           <div className="bg-white rounded border p-4 space-y-4">
@@ -8853,7 +8854,7 @@ export const NewBuildingSetupPanel = () => {
       </div>
 
       <div style={{ display: setupTab === "carbon" ? undefined : "none" }}>
-      <div className="bg-gray-100 p-4 rounded shadow">
+      <div className="min-w-0">
         <h2 className="text-lg font-bold mb-3">Carbon Context</h2>
         <div className="mt-4 bg-white rounded border p-4 space-y-4">
           <div>
@@ -8957,6 +8958,7 @@ export const NewBuildingSetupPanel = () => {
       </div>
       </div>
       </div>
+      </section>
     </div>
   );
 };
