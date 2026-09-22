@@ -3,6 +3,7 @@ import App from "./App";
 import supabase from "./supabaseClient";
 
 jest.mock("./supabaseClient", () => ({
+  from: jest.fn(() => ({ select: jest.fn(() => ({ order: jest.fn().mockResolvedValue({ data: [], error: null }) })) })),
   auth: {
     getSession: jest.fn(),
     getUser: jest.fn(),
@@ -14,6 +15,10 @@ jest.mock("./supabaseClient", () => ({
   },
 }));
 jest.mock("./pages/performance/BuildingDashboard", () => () => "Dashboard test view");
+
+beforeEach(() => {
+  supabase.from.mockImplementation(() => ({ select: () => ({ order: () => Promise.resolve({ data: [], error: null }) }) }));
+});
 
 test.each(["architect", "builder"])("%s portfolio profile can be edited and saved", async (role) => {
   const session = { user: { id: "profile-test-user", email: "wbpai25@gmail.com" } };
@@ -33,6 +38,21 @@ test.each(["architect", "builder"])("%s portfolio profile can be edited and save
   expect(JSON.parse(window.localStorage.getItem(`wbp-${role}-profile-${session.user.id}`)).organisationName).toBe("Updated organisation");
 });
 
+test("Design new project opens a design-stage intake rather than the homeowner form", async () => {
+  const session = { user: { id: "design-test-user", email: "wbpai25@gmail.com" } };
+  supabase.auth.getSession.mockResolvedValue({ data: { session } });
+  supabase.auth.getUser.mockResolvedValue({ data: { user: session.user } });
+  supabase.auth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: jest.fn() } } });
+  window.history.pushState({}, "", "/workspace/architect");
+
+  render(<App />);
+  fireEvent.click(await screen.findByRole("button", { name: /New project/i }));
+  expect(await screen.findByRole("heading", { name: "New design project" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Evidence" }));
+  expect(screen.getByRole("heading", { name: "Drawings, models and evidence" })).toBeInTheDocument();
+  expect(window.location.pathname).toBe("/workspace/architect/project/new");
+});
+
 test("test account switches workspaces without requesting another email link", async () => {
   const session = { user: { id: "test-user", email: "wbpai25@gmail.com" } };
   supabase.auth.getSession.mockResolvedValue({ data: { session } });
@@ -49,6 +69,7 @@ test("test account switches workspaces without requesting another email link", a
   fireEvent.click(await screen.findByRole("button", { name: "Switch workspace" }));
   expect(window.location.pathname).toBe("/login");
   const occupy = await screen.findByRole("button", { name: /Occupy Start or import a record/i });
+  await waitFor(() => expect(occupy).toBeEnabled());
   fireEvent.click(occupy);
 
   expect(await screen.findByText("Dashboard test view")).toBeInTheDocument();

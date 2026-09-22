@@ -8,6 +8,7 @@ import {
   useParams,
 } from "react-router-dom";
 import BuildingDashboard from "./pages/performance/BuildingDashboard";
+import DesignProject from "./DesignProject";
 import supabase from "./supabaseClient";
 import { isProfessionalEmailAllowed, TEST_PROFESSIONAL_EMAIL } from "./professionalEmail";
 import { hasFullWorkspaceAccess, loadLinkedHistoricOutline } from "./workspaceAccess";
@@ -614,6 +615,7 @@ const ProfessionalWorkspace = () => {
   const [editingProfile, setEditingProfile] = useState(false);
   const [profileDraft, setProfileDraft] = useState({});
   const [profileStatus, setProfileStatus] = useState("");
+  const [designProjects, setDesignProjects] = useState([]);
   const [isTestAccount, setIsTestAccount] = useState(false);
   useEffect(() => {
     let active = true;
@@ -630,6 +632,15 @@ const ProfessionalWorkspace = () => {
     });
     return () => { active = false; };
   }, [role, location.state]);
+  useEffect(() => {
+    if (isBuilder) return;
+    let active = true;
+    supabase.from("WBPDesignProjects").select("id,title,site_address,design_stage,updated_at")
+      .order("updated_at", { ascending: false }).then(({ data }) => {
+        if (active) setDesignProjects(data || []);
+      });
+    return () => { active = false; };
+  }, [isBuilder]);
   const organisationName = profile.organisationName || (isBuilder ? "Build organisation" : "Design organisation");
   const startProfileEdit = () => {
     setProfileDraft({ ...profile });
@@ -659,10 +670,7 @@ const ProfessionalWorkspace = () => {
         { id: "WBP-001", name: "14 Bridgewood Road", stage: "Pre-construction", status: "Design record available" },
         { id: "WBP-018", name: "Rendlesham Housing Phase 1", stage: "Build", status: "Evidence in progress" },
       ]
-    : [
-        { id: "WBP-001", name: "14 Bridgewood Road", stage: "Technical design", status: "Design record active" },
-        { id: "WBP-014", name: "Felixstowe Homes Programme", stage: "Planning", status: "Client review" },
-      ];
+    : designProjects.map((item) => ({ id: item.id, name: item.title, stage: item.design_stage, status: "Design record", route: `/workspace/architect/project/${item.id}` }));
 
   const logOut = async () => {
     await supabase.auth.signOut();
@@ -763,7 +771,7 @@ const ProfessionalWorkspace = () => {
       {profileStatus ? <p className="wbp-profile-save-status" role="status">{profileStatus}</p> : null}
 
       <section className="wbp-workspace-actions">
-        <button type="button" className="is-primary" onClick={() => navigate(`/dashboard/new?role=${role}&phase=${isBuilder ? "build" : "design"}`)}>
+        <button type="button" className="is-primary" onClick={() => navigate(isBuilder ? "/dashboard/new?role=builder&phase=build" : "/workspace/architect/project/new")}>
           + New project
         </button>
         {isBuilder ? (
@@ -809,15 +817,15 @@ const ProfessionalWorkspace = () => {
 
       <section className="wbp-project-register">
         <div className="wbp-register-heading">
-          <div><p>Example projects</p><h2>{projects.length} sample records</h2></div>
+          <div><p>{isBuilder ? "Example projects" : "Design projects"}</p><h2>{projects.length} {isBuilder ? "sample" : "saved"} record{projects.length === 1 ? "" : "s"}</h2></div>
           <input type="search" placeholder="Search projects" aria-label="Search projects" />
         </div>
-        <div className="wbp-project-table" role="table" aria-label="Example projects">
+        <div className="wbp-project-table" role="table" aria-label={isBuilder ? "Example projects" : "Design projects"}>
           <div className="wbp-project-row is-heading" role="row">
             <span>WBP ID</span><span>Project</span><span>Stage</span><span>Status</span><span aria-hidden="true" />
           </div>
           {projects.map((project) => (
-            <button className="wbp-project-row" type="button" role="row" key={project.id} onClick={() => navigate("/dashboard/new")}>
+            <button className="wbp-project-row" type="button" role="row" key={project.id} onClick={() => navigate(project.route || "/dashboard/new")}>
               <span>{project.id}</span><strong>{project.name}</strong><span>{project.stage}</span><span>{project.status}</span><span aria-hidden="true">&#8594;</span>
             </button>
           ))}
@@ -877,6 +885,7 @@ const App = () => (
       <Route path="/workspaces" element={<AuthenticatedRoute><WorkspaceSwitcher /></AuthenticatedRoute>} />
       <Route path="/workspace/history" element={<AuthenticatedRoute><WorkspaceSwitcher historicalOnly /></AuthenticatedRoute>} />
       <Route path="/workspace/:role" element={<AuthenticatedRoute requireProfessionalEmail><ProfessionalWorkspace /></AuthenticatedRoute>} />
+      <Route path="/workspace/architect/project/:projectId" element={<AuthenticatedRoute requireProfessionalEmail><DesignProject /></AuthenticatedRoute>} />
       <Route path="/dashboard/*" element={<AuthenticatedRoute><BuildingDashboard /></AuthenticatedRoute>} />
     </Routes>
   </Router>

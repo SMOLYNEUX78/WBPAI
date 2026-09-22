@@ -659,6 +659,23 @@ code {
 .wbp-profile-editor-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
 .wbp-profile-editor-actions button.is-primary { border-color: #047857; background: #047857; color: #ffffff; }
 .wbp-profile-save-status { margin: 12px clamp(20px, 4vw, 58px) 0; color: #047857; font-size: 13px; font-weight: 700; }
+.wbp-design-project { min-height: 100vh; background: #f8fafc; color: #111827; }
+.wbp-design-project-header { display: flex; align-items: end; justify-content: space-between; gap: 18px; padding: 26px clamp(18px, 4vw, 58px); border-bottom: 1px solid #bfdbfe; background: #dbeafe; }
+.wbp-design-project-header h1 { margin: 12px 0 4px; font-size: 28px; }
+.wbp-design-project-header p, .wbp-design-fields > p { margin: 0; color: #4b5563; font-size: 13px; }
+.wbp-design-project-header button, .wbp-design-secondary, .wbp-design-list button { min-height: 36px; padding: 0 12px; border: 1px solid #6b7280; background: #fff; color: #111827; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.wbp-design-project-header button[type="submit"] { border-color: #047857; background: #047857; color: #fff; }
+.wbp-design-tabs { display: flex; gap: 4px; overflow-x: auto; padding: 12px clamp(18px, 4vw, 58px); border-bottom: 1px solid #e5e7eb; background: #fff; }
+.wbp-design-tabs button { flex: 0 0 auto; min-height: 38px; padding: 0 13px; border: 1px solid #d1d5db; background: #fff; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.wbp-design-tabs button[aria-current="page"] { border-color: #1d4ed8; background: #dbeafe; }
+.wbp-design-fields { margin: 22px clamp(18px, 4vw, 58px); padding: 24px; border: 1px solid #e5e7eb; background: #fff; }
+.wbp-design-fields h2 { margin: 0 0 18px; font-size: 19px; }
+.wbp-design-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 16px; }
+.wbp-design-fields textarea { width: 100%; box-sizing: border-box; padding: 10px; border: 1px solid #9ca3af; font: inherit; resize: vertical; }
+.wbp-design-fields .wbp-design-secondary { margin-top: 16px; }
+.wbp-design-list { margin: 18px 0 0; padding: 0; list-style: none; }
+.wbp-design-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 0; border-top: 1px solid #e5e7eb; font-size: 13px; }
+.wbp-design-status { margin: 0 clamp(18px, 4vw, 58px) 24px; color: #065f46; font-size: 13px; font-weight: 700; }
 .wbp-workspace-actions { display: flex; gap: 10px; padding: 25px clamp(20px, 4vw, 58px) 0; }
 .wbp-workspace-actions button.is-primary { border-color: #047857; background: #047857; color: #ffffff; }
 .wbp-workspace-actions button:disabled { cursor: not-allowed; opacity: 0.5; }
@@ -701,6 +718,9 @@ button.wbp-project-row:hover { background: #f9fafb; }
   .wbp-organisation-meta { grid-column: 1 / -1; align-items: start; justify-items: start; padding-top: 8px; border-top: 1px solid rgba(17, 24, 39, 0.14); }
   .wbp-professional-profile-editor { margin: 15px 15px 0; padding: 16px; }
   .wbp-profile-editor-grid { grid-template-columns: 1fr; }
+  .wbp-design-project-header { align-items: start; flex-direction: column; }
+  .wbp-design-grid { grid-template-columns: 1fr; }
+  .wbp-design-fields { padding: 16px; }
   .wbp-workspace-actions { padding: 18px 15px 0; }
   .wbp-workspace-actions button { flex: 1; padding: 0 10px; }
   .wbp-link-record { grid-template-columns: 1fr; margin: 15px 15px 0; padding: 16px; }
