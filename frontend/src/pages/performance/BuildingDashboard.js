@@ -8269,6 +8269,14 @@ export const NewBuildingSetupPanel = () => {
               </span>
             </div>
           </div>
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-emerald-200 pt-3">
+            <p className="text-xs text-gray-600">This is an owner-created profile. WBP has not yet verified legal ownership.</p>
+            <div className="flex flex-wrap gap-2">
+              {passportSaveStatus !== "saved" ? <button type="button" disabled={passportSaveStatus === "saving"} onClick={secureExistingPassport} className="bg-emerald-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">{passportSaveStatus === "saving" ? "Saving..." : "Save to secure account"}</button> : null}
+              <button type="button" onClick={() => { setSetupTab("ownership"); startProfileEdit(); }} className="border border-emerald-700 bg-white px-3 py-2 text-xs font-bold text-emerald-800">Edit profile</button>
+            </div>
+          </div>
+          {passportSaveError ? <p className="mt-3 border border-red-200 bg-red-50 p-2 text-xs text-red-800">{passportSaveError}</p> : null}
           <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-emerald-200 pt-3">
             <div>
               <h3 id="baseline-readiness-heading" className="text-sm font-bold text-emerald-950">Baseline readiness</h3>
@@ -8286,14 +8294,6 @@ export const NewBuildingSetupPanel = () => {
             </ul>
             <p className="mt-2 text-xs text-gray-600">Submission is not audit approval. A verifier must review the evidence before the baseline can be locked.</p>
           </details>
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-emerald-200 pt-3">
-            <p className="text-xs text-gray-600">This is an owner-created profile. WBP has not yet verified legal ownership.</p>
-            <div className="flex flex-wrap gap-2">
-              {passportSaveStatus !== "saved" ? <button type="button" disabled={passportSaveStatus === "saving"} onClick={secureExistingPassport} className="bg-emerald-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">{passportSaveStatus === "saving" ? "Saving..." : "Save to secure account"}</button> : null}
-              <button type="button" onClick={() => { setSetupTab("ownership"); startProfileEdit(); }} className="border border-emerald-700 bg-white px-3 py-2 text-xs font-bold text-emerald-800">Edit profile</button>
-            </div>
-          </div>
-          {passportSaveError ? <p className="mt-3 border border-red-200 bg-red-50 p-2 text-xs text-red-800">{passportSaveError}</p> : null}
         </div>
       ) : null}
       <div ref={setupPanelRef} id="new-building-panel" role="tabpanel" aria-labelledby={`new-building-tab-${setupTab}`} className="overflow-hidden">
