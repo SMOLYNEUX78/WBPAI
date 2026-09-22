@@ -7257,6 +7257,26 @@ const BuildingDashboardPanel = ({ building }) => {
 };
 
 const NewBuildingSetupPanel = () => {
+  const location = useLocation();
+  const recordMode = new URLSearchParams(location.search).get("record") || "new";
+  const [ownershipRecord, setOwnershipRecord] = useState(() => {
+    try {
+      return JSON.parse(window.localStorage.getItem("wbp-new-building-passport") || "null");
+    } catch {
+      return null;
+    }
+  });
+  const [ownershipDraft, setOwnershipDraft] = useState({
+    ownershipType: "owner-occupier",
+    legalOwnerName: "",
+    tenure: "freehold",
+    custodianName: "",
+    occupierName: "",
+    uprn: "",
+    titleNumber: "",
+    authorityToCreate: false,
+    privacyAccepted: false,
+  });
   const [setupMode, setSetupMode] = useState("api");
   const [apiDetails, setApiDetails] = useState("");
   const [modelInput, setModelInput] = useState("");
@@ -7312,6 +7332,7 @@ const NewBuildingSetupPanel = () => {
       (manualData.latitude && manualData.longitude && manualData.internalArea)
   );
   const baselineReadinessSteps = [
+    { label: "Ownership and custodianship", complete: Boolean(ownershipRecord) },
     { label: "Building profile", complete: hasCompleteBuildingProfile },
     { label: "Energy consent", complete: energyConsent },
     { label: "13-month energy history", complete: Boolean(historicalDataFileName) },
@@ -7332,6 +7353,50 @@ const NewBuildingSetupPanel = () => {
       ...current,
       [field]: value,
     }));
+  };
+
+  const updateOwnershipDraft = (field, value) => {
+    setOwnershipDraft((current) => ({ ...current, [field]: value }));
+  };
+
+  const createBuildingPassport = async (event) => {
+    event.preventDefault();
+    const recordId = `WBP-${new Date().getFullYear()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+    const createdAt = new Date().toISOString();
+    const canonicalPayload = JSON.stringify({
+      recordId,
+      createdAt,
+      lifecycleStage: "occupy",
+      ...ownershipDraft,
+    });
+    let genesisHash = "hash-pending";
+
+    if (window.crypto?.subtle) {
+      const bytes = new TextEncoder().encode(canonicalPayload);
+      const digest = await window.crypto.subtle.digest("SHA-256", bytes);
+      genesisHash = Array.from(new Uint8Array(digest))
+        .map((byte) => byte.toString(16).padStart(2, "0"))
+        .join("");
+    }
+
+    const nextRecord = {
+      recordId,
+      createdAt,
+      lifecycleStage: "occupy",
+      custodianStatus: "active",
+      genesisHash,
+      ...ownershipDraft,
+      history: [
+        {
+          event: "Building passport created",
+          actor: ownershipDraft.custodianName || ownershipDraft.legalOwnerName,
+          timestamp: createdAt,
+        },
+      ],
+    };
+
+    window.localStorage.setItem("wbp-new-building-passport", JSON.stringify(nextRecord));
+    setOwnershipRecord(nextRecord);
   };
 
   const handleSensorDraftChange = (field, value) => {
@@ -7384,7 +7449,115 @@ const NewBuildingSetupPanel = () => {
       <div className="bg-gray-100 p-4 rounded shadow">
         <h2 className="text-lg font-bold mb-3">New Building</h2>
 
-        <div className="mx-auto max-w-3xl bg-white rounded border p-4 space-y-3">
+        {!ownershipRecord ? (
+          <form onSubmit={createBuildingPassport} className="mx-auto max-w-4xl border border-emerald-200 bg-white p-4 sm:p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3 border-b border-gray-200 pb-4">
+              <div>
+                <p className="text-xs font-bold uppercase text-emerald-700">Building passport foundation</p>
+                <h3 className="mt-1 text-lg font-bold">Ownership and custodianship</h3>
+                <p className="mt-1 max-w-2xl text-sm text-gray-600">
+                  Establish who legally owns the property, who controls this digital record and who occupies the building before adding design, construction or monitoring evidence.
+                </p>
+              </div>
+              <span className="border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-800">
+                Required first
+              </span>
+            </div>
+
+            {recordMode === "import" ? (
+              <div className="mt-4 border-l-4 border-blue-500 bg-blue-50 p-3 text-sm text-blue-900">
+                You selected an imported handover record. Enter the existing WBP reference below once supplied; the sender and evidence history will be verified before custodianship changes.
+              </div>
+            ) : null}
+
+            <div className="mt-5 grid gap-4 md:grid-cols-2">
+              <label className="space-y-1">
+                <span className="text-xs font-semibold text-gray-700">Ownership arrangement</span>
+                <select className="w-full border border-gray-300 p-2 text-sm" value={ownershipDraft.ownershipType} onChange={(event) => updateOwnershipDraft("ownershipType", event.target.value)}>
+                  <option value="owner-occupier">Owner occupier</option>
+                  <option value="private-landlord">Private landlord</option>
+                  <option value="housing-association">Housing association</option>
+                  <option value="local-authority">Local authority</option>
+                  <option value="developer-new-build">Developer / new-build sale</option>
+                  <option value="shared-ownership">Shared ownership</option>
+                  <option value="leaseholder">Leaseholder</option>
+                  <option value="managing-agent">Managing agent acting for owner</option>
+                </select>
+              </label>
+              <label className="space-y-1">
+                <span className="text-xs font-semibold text-gray-700">Tenure</span>
+                <select className="w-full border border-gray-300 p-2 text-sm" value={ownershipDraft.tenure} onChange={(event) => updateOwnershipDraft("tenure", event.target.value)}>
+                  <option value="freehold">Freehold</option>
+                  <option value="leasehold">Leasehold</option>
+                  <option value="commonhold">Commonhold</option>
+                  <option value="shared-ownership">Shared ownership</option>
+                  <option value="social-tenancy">Social tenancy</option>
+                  <option value="private-tenancy">Private tenancy</option>
+                  <option value="other">Other / pending verification</option>
+                </select>
+              </label>
+              <label className="space-y-1">
+                <span className="text-xs font-semibold text-gray-700">Legal owner / owning organisation</span>
+                <input required className="w-full border border-gray-300 p-2 text-sm" value={ownershipDraft.legalOwnerName} onChange={(event) => updateOwnershipDraft("legalOwnerName", event.target.value)} placeholder="Name shown in the ownership evidence" />
+              </label>
+              <label className="space-y-1">
+                <span className="text-xs font-semibold text-gray-700">Digital record custodian</span>
+                <input required className="w-full border border-gray-300 p-2 text-sm" value={ownershipDraft.custodianName} onChange={(event) => updateOwnershipDraft("custodianName", event.target.value)} placeholder="Person or organisation responsible for the WBP" />
+              </label>
+              <label className="space-y-1">
+                <span className="text-xs font-semibold text-gray-700">Current occupier / household reference</span>
+                <input className="w-full border border-gray-300 p-2 text-sm" value={ownershipDraft.occupierName} onChange={(event) => updateOwnershipDraft("occupierName", event.target.value)} placeholder="Optional; keep personal data minimal" />
+              </label>
+              <label className="space-y-1">
+                <span className="text-xs font-semibold text-gray-700">UPRN</span>
+                <input className="w-full border border-gray-300 p-2 text-sm" value={ownershipDraft.uprn} onChange={(event) => updateOwnershipDraft("uprn", event.target.value)} placeholder="Unique Property Reference Number" />
+              </label>
+              <label className="space-y-1">
+                <span className="text-xs font-semibold text-gray-700">Land Registry title number</span>
+                <input className="w-full border border-gray-300 p-2 text-sm" value={ownershipDraft.titleNumber} onChange={(event) => updateOwnershipDraft("titleNumber", event.target.value)} placeholder="Optional; access restricted" />
+              </label>
+              {recordMode === "import" ? (
+                <label className="space-y-1">
+                  <span className="text-xs font-semibold text-gray-700">Existing WBP handover reference</span>
+                  <input required className="w-full border border-gray-300 p-2 text-sm" placeholder="WBP record or handover code" />
+                </label>
+              ) : null}
+            </div>
+
+            <div className="mt-5 grid gap-3 border-t border-gray-200 pt-4">
+              <label className="flex items-start gap-3 text-sm text-gray-700">
+                <input type="checkbox" className="mt-1" checked={ownershipDraft.authorityToCreate} onChange={(event) => updateOwnershipDraft("authorityToCreate", event.target.checked)} />
+                <span>I confirm I own this property or have authority from the owner to establish and administer its Whole Build Profile.</span>
+              </label>
+              <label className="flex items-start gap-3 text-sm text-gray-700">
+                <input type="checkbox" className="mt-1" checked={ownershipDraft.privacyAccepted} onChange={(event) => updateOwnershipDraft("privacyAccepted", event.target.checked)} />
+                <span>I understand that property evidence and personal occupant data will be kept as separate permission classes.</span>
+              </label>
+            </div>
+
+            <button type="submit" disabled={!ownershipDraft.legalOwnerName.trim() || !ownershipDraft.custodianName.trim() || !ownershipDraft.authorityToCreate || !ownershipDraft.privacyAccepted} className="mt-5 bg-emerald-700 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-40">
+              Establish building passport
+            </button>
+          </form>
+        ) : (
+          <div className="mx-auto max-w-4xl border border-emerald-200 bg-emerald-50 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-bold uppercase text-emerald-700">Active building passport</p>
+                <h3 className="mt-1 text-lg font-bold">{ownershipRecord.recordId}</h3>
+                <p className="mt-1 text-sm text-gray-700">Custodian: {ownershipRecord.custodianName} · Legal owner: {ownershipRecord.legalOwnerName}</p>
+              </div>
+              <span className="bg-emerald-700 px-2 py-1 text-xs font-bold uppercase text-white">Occupy · Genesis recorded</span>
+            </div>
+            <div className="mt-4 grid gap-3 border-t border-emerald-200 pt-3 text-xs text-gray-700 sm:grid-cols-3">
+              <p><strong>Ownership:</strong><br />{ownershipRecord.ownershipType.replaceAll("-", " ")}</p>
+              <p><strong>Tenure:</strong><br />{ownershipRecord.tenure.replaceAll("-", " ")}</p>
+              <p className="break-all"><strong>Genesis evidence hash:</strong><br />{ownershipRecord.genesisHash.slice(0, 24)}…</p>
+            </div>
+          </div>
+        )}
+
+        {ownershipRecord ? <div className="mx-auto mt-4 max-w-3xl bg-white rounded border p-4 space-y-3">
           <h3 className="text-base font-semibold text-center">Matterport Data</h3>
 
           {setupMode === "api" ? (
@@ -7438,9 +7611,10 @@ const NewBuildingSetupPanel = () => {
               </div>
             </div>
           ) : null}
-        </div>
+        </div> : null}
       </div>
 
+      {ownershipRecord ? <>
       {setupMode === "api" && apiDetails ? (
         <div className="bg-gray-100 p-4 rounded shadow">
           <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_360px]">
@@ -8042,6 +8216,7 @@ const NewBuildingSetupPanel = () => {
           </div>
         </div>
       </div>
+      </> : null}
     </div>
   );
 };

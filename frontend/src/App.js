@@ -339,8 +339,11 @@ const ProfessionalWorkspace = () => {
   const profile = location.state?.profile?.organisationName ? location.state.profile : storedProfile;
   const organisationName = profile.organisationName || (isBuilder ? "Build organisation" : "Design organisation");
   const [showLinkRecord, setShowLinkRecord] = useState(false);
+  const [showIssueHandover, setShowIssueHandover] = useState(false);
   const [linkCode, setLinkCode] = useState("");
   const [linkedRecord, setLinkedRecord] = useState("");
+  const [handoverRecipient, setHandoverRecipient] = useState("");
+  const [issuedHandover, setIssuedHandover] = useState(null);
   const projects = isBuilder
     ? [
         { id: "WBP-001", name: "14 Bridgewood Road", stage: "Pre-construction", status: "Design record available" },
@@ -355,6 +358,47 @@ const ProfessionalWorkspace = () => {
     window.localStorage.removeItem("wbp-user-role");
     window.localStorage.removeItem("wbp-user-email");
     navigate("/login");
+  };
+
+  const issueDesignHandover = () => {
+    const handover = {
+      code: `WBP-HO-${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
+      recordId: "WBP-001",
+      from: organisationName,
+      to: handoverRecipient.trim(),
+      type: "design-to-build",
+      status: "offered",
+      issuedAt: new Date().toISOString(),
+      transferableEvidence: [
+        "Design intent",
+        "Drawings and specifications",
+        "Planning and compliance evidence",
+        "Energy and performance model",
+      ],
+      excludedData: ["Personal client correspondence", "Occupant-private data"],
+    };
+    window.localStorage.setItem("wbp-pending-handover", JSON.stringify(handover));
+    setIssuedHandover(handover);
+  };
+
+  const acceptDesignHandover = () => {
+    let offeredHandover = null;
+    try {
+      offeredHandover = JSON.parse(window.localStorage.getItem("wbp-pending-handover") || "null");
+    } catch {
+      offeredHandover = null;
+    }
+    const acceptedCode = linkCode.trim();
+    const isVerified = offeredHandover?.code === acceptedCode;
+    const receipt = {
+      ...(offeredHandover || {}),
+      code: acceptedCode,
+      status: isVerified ? "accepted" : "pending-verification",
+      acceptedBy: organisationName,
+      acceptedAt: new Date().toISOString(),
+    };
+    window.localStorage.setItem("wbp-latest-handover-receipt", JSON.stringify(receipt));
+    setLinkedRecord(`${receipt.recordId || "WBP record"} · ${receipt.status.replaceAll("-", " ")}`);
   };
 
   return (
@@ -385,8 +429,30 @@ const ProfessionalWorkspace = () => {
         </button>
         {isBuilder ? (
           <button type="button" onClick={() => setShowLinkRecord((current) => !current)}>Link design record</button>
-        ) : null}
+        ) : (
+          <button type="button" onClick={() => setShowIssueHandover((current) => !current)}>Issue build handover</button>
+        )}
       </section>
+
+      {!isBuilder && showIssueHandover ? (
+        <section className="wbp-link-record wbp-handover-panel">
+          <div>
+            <strong>Issue a controlled Design → Build handover</strong>
+            <p>The building record remains intact while the selected evidence manifest is offered to the appointed contractor.</p>
+          </div>
+          <div>
+            <input value={handoverRecipient} onChange={(event) => setHandoverRecipient(event.target.value)} placeholder="Appointed contractor organisation" />
+            <button type="button" disabled={!handoverRecipient.trim()} onClick={issueDesignHandover}>Generate handover</button>
+          </div>
+          <div className="wbp-handover-manifest">
+            <div><span>Transferable property evidence</span><p>Design intent · Drawings and specifications · Planning/compliance · Performance model</p></div>
+            <div><span>Excluded private information</span><p>Personal correspondence · Occupant-private data</p></div>
+          </div>
+          {issuedHandover ? (
+            <p className="wbp-link-success">Handover offered to {issuedHandover.to}. Code: <strong>{issuedHandover.code}</strong></p>
+          ) : null}
+        </section>
+      ) : null}
 
       {isBuilder && showLinkRecord ? (
         <section className="wbp-link-record">
@@ -396,7 +462,7 @@ const ProfessionalWorkspace = () => {
           </div>
           <div>
             <input value={linkCode} onChange={(event) => setLinkCode(event.target.value)} placeholder="WBP design record code" />
-            <button type="button" disabled={!linkCode.trim()} onClick={() => setLinkedRecord(linkCode.trim())}>Link record</button>
+            <button type="button" disabled={!linkCode.trim()} onClick={acceptDesignHandover}>Link record</button>
           </div>
           {linkedRecord ? <p className="wbp-link-success">{linkedRecord} linked to this Build portfolio.</p> : null}
         </section>
