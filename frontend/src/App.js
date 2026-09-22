@@ -3,7 +3,9 @@ import {
   BrowserRouter as Router,
   Routes,
   Route,
+  useLocation,
   useNavigate,
+  useParams,
 } from "react-router-dom";
 import BuildingDashboard from "./pages/performance/BuildingDashboard";
 
@@ -110,6 +112,33 @@ const RoleGateway = () => {
     event.preventDefault();
     window.localStorage.setItem("wbp-user-role", selectedRole);
     window.localStorage.setItem("wbp-user-email", email.trim());
+    const formData = new FormData(event.currentTarget);
+    const profile = {
+      organisationName: formData.get("organisationName") || "",
+      organisationType: formData.get("organisationType") || "",
+      registrationNumber: formData.get("registrationNumber") || "",
+      professionalRegistration: formData.get("professionalRegistration") || "",
+      vatNumber: formData.get("vatNumber") || "",
+      contactName: formData.get("fullName") || "",
+      jobTitle: formData.get("jobTitle") || "",
+      phone: formData.get("phone") || "",
+      website: formData.get("website") || "",
+      address: formData.get("address") || "",
+      city: formData.get("city") || "",
+      postcode: formData.get("postcode") || "",
+      serviceArea: formData.get("serviceArea") || "",
+      logoName: formData.get("logo")?.name || "",
+    };
+
+    if (authMode === "signup" && selectedRole !== "homeowner") {
+      window.localStorage.setItem(`wbp-${selectedRole}-profile`, JSON.stringify(profile));
+    }
+
+    if (selectedRole !== "homeowner") {
+      navigate(`/workspace/${selectedRole}`, { state: { profile } });
+      return;
+    }
+
     navigate(`/dashboard/new?role=${selectedRole}&phase=${activeRole.phase.toLowerCase()}&record=${occupyMode}`);
   };
 
@@ -177,8 +206,85 @@ const RoleGateway = () => {
               {authMode === "signup" ? (
                 <label className="wbp-access-field">
                   <span>Full name</span>
-                  <input type="text" placeholder="Your name" required />
+                  <input name="fullName" type="text" placeholder="Your name" required />
                 </label>
+              ) : null}
+
+              {authMode === "signup" && selectedRole !== "homeowner" ? (
+                <fieldset className="wbp-organisation-fields">
+                  <legend>Organisation profile</legend>
+                  <label className="wbp-access-field wbp-field-wide">
+                    <span>Organisation name</span>
+                    <input name="organisationName" type="text" placeholder="Registered organisation name" required />
+                  </label>
+                  <label className="wbp-access-field">
+                    <span>Organisation type</span>
+                    <select name="organisationType" required defaultValue="">
+                      <option value="" disabled>Select type</option>
+                      {selectedRole === "architect" ? (
+                        <>
+                          <option>Architectural practice</option>
+                          <option>Local authority</option>
+                          <option>Housing association</option>
+                          <option>Design consultancy</option>
+                          <option>Developer</option>
+                        </>
+                      ) : (
+                        <>
+                          <option>Main contractor</option>
+                          <option>Specialist contractor</option>
+                          <option>Developer / contractor</option>
+                          <option>Local authority</option>
+                          <option>Housing association</option>
+                        </>
+                      )}
+                    </select>
+                  </label>
+                  <label className="wbp-access-field">
+                    <span>Companies House / statutory registration</span>
+                    <input name="registrationNumber" type="text" placeholder="Registration number" required />
+                  </label>
+                  <label className="wbp-access-field">
+                    <span>{selectedRole === "architect" ? "ARB / RIBA / professional registration" : "CIOB / FMB / professional registration"}</span>
+                    <input name="professionalRegistration" type="text" placeholder="Body and membership number" />
+                  </label>
+                  <label className="wbp-access-field">
+                    <span>VAT number</span>
+                    <input name="vatNumber" type="text" placeholder="Optional" />
+                  </label>
+                  <label className="wbp-access-field">
+                    <span>Primary contact role</span>
+                    <input name="jobTitle" type="text" placeholder="Director, project lead, contracts manager" required />
+                  </label>
+                  <label className="wbp-access-field">
+                    <span>Telephone</span>
+                    <input name="phone" type="tel" placeholder="Organisation telephone" required />
+                  </label>
+                  <label className="wbp-access-field wbp-field-wide">
+                    <span>Website</span>
+                    <input name="website" type="url" placeholder="https://" />
+                  </label>
+                  <label className="wbp-access-field wbp-field-wide">
+                    <span>Head office address</span>
+                    <input name="address" type="text" placeholder="Building and street" required />
+                  </label>
+                  <label className="wbp-access-field">
+                    <span>Town / city</span>
+                    <input name="city" type="text" required />
+                  </label>
+                  <label className="wbp-access-field">
+                    <span>Postcode</span>
+                    <input name="postcode" type="text" required />
+                  </label>
+                  <label className="wbp-access-field wbp-field-wide">
+                    <span>Operating area</span>
+                    <input name="serviceArea" type="text" placeholder="Regions or local authority areas served" required />
+                  </label>
+                  <label className="wbp-access-field wbp-field-wide">
+                    <span>Company logo / profile image</span>
+                    <input name="logo" type="file" accept="image/png,image/jpeg,image/webp" />
+                  </label>
+                </fieldset>
               ) : null}
 
               <label className="wbp-access-field">
@@ -218,11 +324,110 @@ const RoleGateway = () => {
   );
 };
 
+const ProfessionalWorkspace = () => {
+  const { role } = useParams();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const isBuilder = role === "builder";
+  const storedProfile = (() => {
+    try {
+      return JSON.parse(window.localStorage.getItem(`wbp-${role}-profile`) || "{}");
+    } catch {
+      return {};
+    }
+  })();
+  const profile = location.state?.profile?.organisationName ? location.state.profile : storedProfile;
+  const organisationName = profile.organisationName || (isBuilder ? "Build organisation" : "Design organisation");
+  const [showLinkRecord, setShowLinkRecord] = useState(false);
+  const [linkCode, setLinkCode] = useState("");
+  const [linkedRecord, setLinkedRecord] = useState("");
+  const projects = isBuilder
+    ? [
+        { id: "WBP-001", name: "14 Bridgewood Road", stage: "Pre-construction", status: "Design record available" },
+        { id: "WBP-018", name: "Rendlesham Housing Phase 1", stage: "Build", status: "Evidence in progress" },
+      ]
+    : [
+        { id: "WBP-001", name: "14 Bridgewood Road", stage: "Technical design", status: "Design record active" },
+        { id: "WBP-014", name: "Felixstowe Homes Programme", stage: "Planning", status: "Client review" },
+      ];
+
+  const logOut = () => {
+    window.localStorage.removeItem("wbp-user-role");
+    window.localStorage.removeItem("wbp-user-email");
+    navigate("/login");
+  };
+
+  return (
+    <main className={`wbp-professional-shell is-${isBuilder ? "build" : "design"}`}>
+      <header className="wbp-professional-nav">
+        <strong>Whole Build Profile</strong>
+        <button type="button" onClick={logOut}>Log out</button>
+      </header>
+
+      <section className="wbp-professional-hero">
+        <div className="wbp-organisation-logo" aria-hidden="true">
+          {profile.logoName ? profile.logoName.slice(0, 2).toUpperCase() : organisationName.slice(0, 2).toUpperCase()}
+        </div>
+        <div>
+          <p>{isBuilder ? "Build portfolio" : "Design portfolio"}</p>
+          <h1>{organisationName}</h1>
+          <span>{profile.organisationType || (isBuilder ? "Contractor profile" : "Design practice profile")}</span>
+        </div>
+        <div className="wbp-organisation-meta">
+          <span>{profile.registrationNumber || "Registration pending"}</span>
+          <span>{profile.city || "Head office pending"}</span>
+        </div>
+      </section>
+
+      <section className="wbp-workspace-actions">
+        <button type="button" className="is-primary" onClick={() => navigate(`/dashboard/new?role=${role}&phase=${isBuilder ? "build" : "design"}`)}>
+          + New project
+        </button>
+        {isBuilder ? (
+          <button type="button" onClick={() => setShowLinkRecord((current) => !current)}>Link design record</button>
+        ) : null}
+      </section>
+
+      {isBuilder && showLinkRecord ? (
+        <section className="wbp-link-record">
+          <div>
+            <strong>Continue an awarded design</strong>
+            <p>Enter the WBP handover code supplied by the architect, client, local authority or housing association.</p>
+          </div>
+          <div>
+            <input value={linkCode} onChange={(event) => setLinkCode(event.target.value)} placeholder="WBP design record code" />
+            <button type="button" disabled={!linkCode.trim()} onClick={() => setLinkedRecord(linkCode.trim())}>Link record</button>
+          </div>
+          {linkedRecord ? <p className="wbp-link-success">{linkedRecord} linked to this Build portfolio.</p> : null}
+        </section>
+      ) : null}
+
+      <section className="wbp-project-register">
+        <div className="wbp-register-heading">
+          <div><p>Registered projects</p><h2>{projects.length} active records</h2></div>
+          <input type="search" placeholder="Search projects" aria-label="Search projects" />
+        </div>
+        <div className="wbp-project-table" role="table" aria-label="Registered projects">
+          <div className="wbp-project-row is-heading" role="row">
+            <span>WBP ID</span><span>Project</span><span>Stage</span><span>Status</span><span aria-hidden="true" />
+          </div>
+          {projects.map((project) => (
+            <button className="wbp-project-row" type="button" role="row" key={project.id} onClick={() => navigate("/dashboard/new")}>
+              <span>{project.id}</span><strong>{project.name}</strong><span>{project.stage}</span><span>{project.status}</span><span aria-hidden="true">&#8594;</span>
+            </button>
+          ))}
+        </div>
+      </section>
+    </main>
+  );
+};
+
 const App = () => (
   <Router>
     <Routes>
       <Route path="/" element={<SplashScreen />} />
       <Route path="/login" element={<RoleGateway />} />
+      <Route path="/workspace/:role" element={<ProfessionalWorkspace />} />
       <Route path="/dashboard/*" element={<BuildingDashboard />} />
     </Routes>
   </Router>
