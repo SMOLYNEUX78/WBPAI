@@ -36,15 +36,38 @@ create table if not exists public."WBPDesignProjects" (
 create table if not exists public."WBPDesignEvidence" (
   id uuid primary key default gen_random_uuid(),
   project_id uuid not null references public."WBPDesignProjects"(id) on delete cascade,
-  category text not null check (category in ('drawing', 'render', 'model', 'specification', 'methodology', 'planning', 'other')),
+  category text not null check (category in ('brief', 'drawing', 'render', 'model', 'specification', 'methodology', 'planning', 'other')),
   title text not null,
-  storage_reference text not null,
-  evidence_hash text not null,
-  mime_type text not null,
-  byte_size bigint not null,
+  revision text not null default '',
+  source_organisation text not null default '',
+  document_date date,
+  source_url text not null default '',
+  storage_reference text,
+  evidence_hash text,
+  mime_type text,
+  byte_size bigint,
   uploaded_by uuid not null references auth.users(id),
   created_at timestamptz not null default now()
 );
+
+alter table public."WBPDesignEvidence"
+  add column if not exists revision text not null default '',
+  add column if not exists source_organisation text not null default '',
+  add column if not exists document_date date,
+  add column if not exists source_url text not null default '';
+
+alter table public."WBPDesignEvidence"
+  alter column storage_reference drop not null,
+  alter column evidence_hash drop not null,
+  alter column mime_type drop not null,
+  alter column byte_size drop not null;
+alter table public."WBPDesignEvidence" drop constraint if exists "wbp_design_evidence_source_check";
+alter table public."WBPDesignEvidence" add constraint "wbp_design_evidence_source_check"
+  check (storage_reference is not null or source_url <> '');
+
+alter table public."WBPDesignEvidence" drop constraint if exists "WBPDesignEvidence_category_check";
+alter table public."WBPDesignEvidence" add constraint "WBPDesignEvidence_category_check"
+  check (category in ('brief', 'drawing', 'render', 'model', 'specification', 'methodology', 'planning', 'other'));
 
 create index if not exists wbp_design_projects_creator_idx on public."WBPDesignProjects" (created_by, updated_at desc);
 create index if not exists wbp_design_evidence_project_idx on public."WBPDesignEvidence" (project_id, created_at desc);

@@ -10,8 +10,8 @@ const emptyProject = {
   target_heating_demand_kwh_m2_yr: "", health_strategy: "", water_strategy: "", carbon_strategy: "", compliance_notes: "",
   product_schedule: [],
 };
-const documentCategories = ["drawing", "render", "model", "specification", "methodology", "planning", "other"];
-const tabs = ["Overview", "Design", "Performance", "Products", "Evidence"];
+const documentCategories = ["brief", "drawing", "render", "model", "specification", "methodology", "planning", "other"];
+const tabs = ["Import", "Overview", "Design", "Performance", "Products", "Evidence"];
 
 const Field = ({ label, value, onChange, multiline = false, required = false, placeholder = "", type = "text" }) => <label className="wbp-access-field">
   <span>{label}</span>
@@ -24,14 +24,28 @@ export default function DesignProject() {
   const navigate = useNavigate();
   const [project, setProject] = useState(emptyProject);
   const [savedId, setSavedId] = useState(projectId === "new" ? "" : projectId);
-  const [tab, setTab] = useState("Overview");
+  const [tab, setTab] = useState("Import");
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
   const [evidence, setEvidence] = useState([]);
-  const [category, setCategory] = useState("drawing");
+  const [category, setCategory] = useState("brief");
+  const [evidenceMode, setEvidenceMode] = useState("upload");
   const [documentTitle, setDocumentTitle] = useState("");
+  const [revision, setRevision] = useState("");
+  const [sourceOrganisation, setSourceOrganisation] = useState("");
+  const [documentDate, setDocumentDate] = useState("");
+  const [sourceUrl, setSourceUrl] = useState("");
   const [product, setProduct] = useState({ element: "", manufacturer: "", model: "", performance: "", embodied_carbon: "" });
   const update = (key, value) => setProject((current) => ({ ...current, [key]: value }));
+  const hasEvidence = (...categories) => evidence.some((item) => categories.includes(item.category));
+  const gaps = [
+    { label: "Project brief", ready: Boolean(project.brief.trim() || hasEvidence("brief")), section: "Overview" },
+    { label: "Drawings", ready: hasEvidence("drawing"), section: "Evidence" },
+    { label: "Specification", ready: Boolean(project.product_schedule?.length || hasEvidence("specification")), section: "Products" },
+    { label: "Design and construction approach", ready: Boolean(project.design_intent.trim() && project.methodology.trim()), section: "Design" },
+    { label: "Energy targets", ready: project.target_eui_kwh_m2_yr !== "" && project.target_eui_kwh_m2_yr != null, section: "Performance" },
+    { label: "3D model or renders", ready: Boolean(project.model_url.trim() || hasEvidence("model", "render")), section: "Design" },
+  ];
 
   useEffect(() => {
     if (projectId === "new") return;
@@ -48,8 +62,7 @@ export default function DesignProject() {
     return () => { active = false; };
   }, [projectId]);
 
-  const save = async (event) => {
-    event.preventDefault();
+  const saveProject = async () => {
     setBusy(true);
     setStatus("");
     try {
@@ -71,6 +84,7 @@ export default function DesignProject() {
       setSavedId(data.id);
       if (!savedId) navigate(`/workspace/architect/project/${data.id}`, { replace: true });
       setStatus("Design project saved. Evidence remains self-declared until reviewed.");
+      return data.id;
     } catch (error) {
       setStatus(error.code === "PGRST205" || /schema cache|does not exist/i.test(error.message)
         ? "Design project tables are not installed yet. Run Design Projects.sql in Supabase before saving."
@@ -78,6 +92,16 @@ export default function DesignProject() {
     } finally {
       setBusy(false);
     }
+    return null;
+  };
+  const save = (event) => {
+    event.preventDefault();
+    saveProject();
+  };
+
+  const createImportShell = async () => {
+    const id = await saveProject();
+    if (id) setTab("Evidence");
   };
 
   const upload = async (file) => {
@@ -85,6 +109,9 @@ export default function DesignProject() {
     if (!savedId) { setStatus("Save the design project before uploading files."); return; }
     if (!["application/pdf", "image/jpeg", "image/png"].includes(file.type) || file.size > 10 * 1024 * 1024) {
       setStatus("Use a PDF, JPG or PNG no larger than 10 MB."); return;
+    }
+    if (sourceUrl && !/^https:\/\//i.test(sourceUrl)) {
+      setStatus("Use an HTTPS source URL or leave it blank."); return;
     }
     setBusy(true);
     let path = "";
@@ -98,16 +125,53 @@ export default function DesignProject() {
       if (uploadError) throw uploadError;
       const { data, error } = await supabase.from("WBPDesignEvidence").insert({
         project_id: savedId, category, title: documentTitle.trim() || file.name,
+        revision: revision.trim(), source_organisation: sourceOrganisation.trim(),
+        document_date: documentDate || null, source_url: sourceUrl.trim(),
         storage_reference: path, evidence_hash: evidenceHash, mime_type: file.type,
         byte_size: file.size, uploaded_by: auth.user.id,
       }).select("*").single();
       if (error) throw error;
       setEvidence((current) => [data, ...current]);
       setDocumentTitle("");
+      setRevision("");
+      setDocumentDate("");
+      setSourceUrl("");
       setStatus("Evidence uploaded privately. It has not been verified.");
     } catch (error) {
       if (path) await supabase.storage.from("wbp-private-evidence").remove([path]);
       setStatus(`Upload failed: ${error.message}`);
+    } finally { setBusy(false); }
+  };
+
+  const linkEvidence = async () => {
+    if (!savedId) { setStatus("Save the design project before linking documents."); return; }
+    if (!documentTitle.trim()) { setStatus("Enter a document title."); return; }
+    let url;
+    try {
+      url = new URL(sourceUrl.trim());
+      if (url.protocol !== "https:") throw new Error();
+    } catch {
+      setStatus("Enter a valid HTTPS document link."); return;
+    }
+    setBusy(true);
+    setStatus("");
+    try {
+      const { data: auth, error: authError } = await supabase.auth.getUser();
+      if (authError || !auth.user) throw new Error("Sign in again to link evidence.");
+      const { data, error } = await supabase.from("WBPDesignEvidence").insert({
+        project_id: savedId, category, title: documentTitle.trim(),
+        revision: revision.trim(), source_organisation: sourceOrganisation.trim(),
+        document_date: documentDate || null, source_url: url.href, uploaded_by: auth.user.id,
+      }).select("*").single();
+      if (error) throw error;
+      setEvidence((current) => [data, ...current]);
+      setDocumentTitle("");
+      setRevision("");
+      setDocumentDate("");
+      setSourceUrl("");
+      setStatus("Document link saved. Its contents are not copied or verified by WBP.");
+    } catch (error) {
+      setStatus(`Could not link document: ${error.message}`);
     } finally { setBusy(false); }
   };
 
@@ -127,6 +191,14 @@ export default function DesignProject() {
     <header className="wbp-design-project-header"><div><button type="button" onClick={() => navigate("/workspace/architect")}>← Design portfolio</button><h1>{savedId ? project.title || "Design project" : "New design project"}</h1><p>Design-stage record · self-declared until reviewed</p></div><button type="submit" form="wbp-design-form" disabled={busy}>{busy ? "Saving..." : "Save project"}</button></header>
     <nav className="wbp-design-tabs" aria-label="Design project sections">{tabs.map((item) => <button type="button" key={item} aria-current={tab === item ? "page" : undefined} onClick={() => setTab(item)}>{item}</button>)}</nav>
     <form id="wbp-design-form" onSubmit={save}>
+      {tab === "Import" ? <section className="wbp-design-fields"><h2>Import existing project</h2>
+        <p>Start with the documents your practice already has. Attach them to a project shell, then fill only the WBP details still missing. Files are indexed by your metadata; their contents are not automatically read.</p>
+        {!savedId ? <div className="wbp-design-import-start"><Field label="Project name" value={project.title} onChange={(value) => update("title", value)} required /><Field label="Site address" value={project.site_address} onChange={(value) => update("site_address", value)} /><button type="button" disabled={busy || !project.title.trim()} onClick={createImportShell}>Create project and add documents</button></div>
+          : <button type="button" className="wbp-design-secondary" onClick={() => setTab("Evidence")}>Add existing documents</button>}
+        <div className="wbp-design-gap-heading"><h3>WBP information check</h3><span>{gaps.filter((item) => item.ready).length}/{gaps.length} present</span></div>
+        <ul className="wbp-design-gap-list">{gaps.map((item) => <li key={item.label}><span className={item.ready ? "is-present" : "is-missing"}>{item.ready ? "Present" : "To add"}</span><strong>{item.label}</strong><button type="button" onClick={() => setTab(item.section)}>{item.section}</button></li>)}</ul>
+        <p className="wbp-design-import-note">“Present” means a document is attached or a field has been entered, not that WBP has checked its contents or quality.</p>
+      </section> : null}
       {tab === "Overview" ? <section className="wbp-design-fields"><h2>Project overview</h2><div className="wbp-design-grid">
         <Field label="Project name" value={project.title} onChange={(value) => update("title", value)} required />
         <Field label="Site address" value={project.site_address} onChange={(value) => update("site_address", value)} />
@@ -160,7 +232,22 @@ export default function DesignProject() {
       </div></section> : null}
       {tab === "Products" ? <section className="wbp-design-fields"><h2>Product schedule</h2><div className="wbp-design-grid">{["element", "manufacturer", "model", "performance", "embodied_carbon"].map((field) => <Field key={field} label={{ element: "Building element", manufacturer: "Manufacturer", model: "Product / model", performance: "Performance specification", embodied_carbon: "Embodied carbon / EPD reference" }[field]} value={product[field]} onChange={(value) => setProduct((current) => ({ ...current, [field]: value }))} />)}</div><button type="button" className="wbp-design-secondary" onClick={addProduct}>Add product</button>{(project.product_schedule || []).length ? <ul className="wbp-design-list">{project.product_schedule.map((item) => <li key={item.id}><strong>{item.element}</strong> · {item.manufacturer} {item.model}<button type="button" onClick={() => update("product_schedule", project.product_schedule.filter((entry) => entry.id !== item.id))}>Remove</button></li>)}</ul> : <p>No products added yet.</p>}</section> : null}
     </form>
-    {tab === "Evidence" ? <section className="wbp-design-fields"><h2>Drawings, models and evidence</h2><p>Upload plans, sections, renders, specifications and planning documents. Files are private and unverified; only PDF, JPG and PNG are accepted for now. Linkable 3D model formats can be added in a later integration.</p><div className="wbp-design-grid"><label className="wbp-access-field"><span>Category</span><select value={category} onChange={(event) => setCategory(event.target.value)}>{documentCategories.map((item) => <option key={item} value={item}>{item[0].toUpperCase() + item.slice(1)}</option>)}</select></label><Field label="Document title" value={documentTitle} onChange={setDocumentTitle} /><label className="wbp-access-field"><span>File (10 MB maximum)</span><input type="file" accept=".pdf,.jpg,.jpeg,.png" disabled={!savedId || busy} onChange={(event) => { upload(event.target.files?.[0]); event.target.value = ""; }} /></label></div>{!savedId ? <p>Save the project before uploading files.</p> : null}<ul className="wbp-design-list">{evidence.map((item) => <li key={item.id}><span><strong>{item.title}</strong> · {item.category} · unverified</span><button type="button" onClick={() => openEvidence(item.storage_reference)}>Open</button></li>)}</ul></section> : null}
+    {tab === "Evidence" ? <section className="wbp-design-fields"><h2>Existing documents</h2>
+      <p>Attach a private copy or reference an existing document. Uploads accept PDF, JPG and PNG up to 10 MB. For large CAD/BIM files, link the source instead; an external link does not preserve or verify its contents.</p>
+      <div className="wbp-design-evidence-modes" role="group" aria-label="Document source"><button type="button" aria-pressed={evidenceMode === "upload"} onClick={() => setEvidenceMode("upload")}>Upload file</button><button type="button" aria-pressed={evidenceMode === "link"} onClick={() => setEvidenceMode("link")}>Link existing document</button></div>
+      <div className="wbp-design-grid">
+        <label className="wbp-access-field"><span>Document category</span><select value={category} onChange={(event) => setCategory(event.target.value)}>{documentCategories.map((item) => <option key={item} value={item}>{item[0].toUpperCase() + item.slice(1)}</option>)}</select></label>
+        <Field label="Document title" value={documentTitle} onChange={setDocumentTitle} placeholder="e.g. General arrangement - ground floor" />
+        <Field label="Revision / issue" value={revision} onChange={setRevision} placeholder="e.g. P03" />
+        <Field label="Issued by / source organisation" value={sourceOrganisation} onChange={setSourceOrganisation} placeholder="Practice or consultant" />
+        <label className="wbp-access-field"><span>Document date</span><input type="date" value={documentDate} onChange={(event) => setDocumentDate(event.target.value)} /></label>
+        <Field label={evidenceMode === "link" ? "Document URL" : "Original source link (optional)"} value={sourceUrl} onChange={setSourceUrl} placeholder="https://..." />
+        {evidenceMode === "upload" ? <label className="wbp-access-field"><span>Choose file (10 MB maximum)</span><input type="file" accept=".pdf,.jpg,.jpeg,.png" disabled={!savedId || busy} onChange={(event) => { upload(event.target.files?.[0]); event.target.value = ""; }} /></label> : null}
+      </div>
+      {evidenceMode === "link" ? <button type="button" className="wbp-design-secondary" disabled={!savedId || busy} onClick={linkEvidence}>Save document link</button> : null}
+      {!savedId ? <p>Save the project before adding documents.</p> : null}
+      <ul className="wbp-design-list">{evidence.map((item) => <li key={item.id}><span><strong>{item.title}</strong> · {item.category}{item.revision ? ` · Rev ${item.revision}` : ""}{item.source_organisation ? ` · ${item.source_organisation}` : ""} · {item.storage_reference ? "private file" : "external reference"} · unverified</span>{item.storage_reference ? <button type="button" onClick={() => openEvidence(item.storage_reference)}>Open</button> : <a href={item.source_url} target="_blank" rel="noopener noreferrer">Open source</a>}</li>)}</ul>
+    </section> : null}
     {status ? <p className="wbp-design-status" role="status">{status}</p> : null}
   </main>;
 }
