@@ -7401,6 +7401,14 @@ const NewBuildingSetupPanel = () => {
     setOwnershipDraft((current) => ({ ...current, [field]: value }));
   };
 
+  const updateRetailOwnerName = (value) => {
+    setOwnershipDraft((current) => ({
+      ...current,
+      legalOwnerName: value,
+      custodianName: value,
+    }));
+  };
+
   const updatePropertySearch = (field, value) => {
     setPropertySearch((current) => ({ ...current, [field]: value }));
   };
@@ -7563,10 +7571,25 @@ const NewBuildingSetupPanel = () => {
 
   const confirmPropertyDiscovery = () => {
     if (!propertyDiscovery) return;
+    const uprn = propertySearch.uprn.trim();
     const confirmedSnapshot = {
       ...propertyDiscovery,
+      uprn,
       confirmedAt: new Date().toISOString(),
+      sources: propertyDiscovery.sources.map((source) =>
+        source.id === "ownership"
+          ? {
+              ...source,
+              status: uprn ? "found" : "action",
+              detail: uprn
+                ? `UPRN ${uprn} added by the homeowner`
+                : "Property number can be added later",
+              provenance: uprn ? "Homeowner confirmed" : "Pending",
+            }
+          : source
+      ),
     };
+    setOwnershipDraft((current) => ({ ...current, uprn }));
     setPropertyDiscovery(confirmedSnapshot);
     window.localStorage.setItem(
       PROPERTY_DISCOVERY_CACHE_KEY,
@@ -7668,17 +7691,12 @@ const NewBuildingSetupPanel = () => {
 
         {!ownershipRecord ? (
           <form onSubmit={createBuildingPassport} className="mx-auto max-w-4xl border border-emerald-200 bg-white p-4 sm:p-5">
-            <div className="flex flex-wrap items-start justify-between gap-3 border-b border-gray-200 pb-4">
-              <div>
-                <p className="text-xs font-bold uppercase text-emerald-700">Building passport foundation</p>
-                <h3 className="mt-1 text-lg font-bold">Ownership and custodianship</h3>
-                <p className="mt-1 max-w-2xl text-sm text-gray-600">
-                  Establish who legally owns the property, who controls this digital record and who occupies the building before adding design, construction or monitoring evidence.
-                </p>
-              </div>
-              <span className="border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-800">
-                Required first
-              </span>
+            <div className="border-b border-gray-200 pb-4">
+              <p className="text-xs font-bold uppercase text-emerald-700">New home profile</p>
+              <h3 className="mt-1 text-xl font-bold">Let’s set up your home</h3>
+              <p className="mt-1 max-w-2xl text-sm text-gray-600">
+                Find the address, confirm it is yours and create the profile. Documents and monitoring can be added afterwards.
+              </p>
             </div>
 
             {recordMode === "import" ? (
@@ -7688,17 +7706,10 @@ const NewBuildingSetupPanel = () => {
             ) : null}
 
             <section className="mt-5 border border-gray-200 bg-gray-50 p-3 sm:p-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <p className="text-xs font-bold uppercase text-blue-700">Find my property</p>
-                  <h4 className="mt-1 text-base font-bold">Build the profile from trusted records</h4>
-                  <p className="mt-1 max-w-2xl text-xs text-gray-600">
-                    Enter the address once. WBP will confirm its postcode location, search available public planning records and prepare protected EPC and ownership checks.
-                  </p>
-                </div>
-                <span className="border border-blue-200 bg-white px-2 py-1 text-xs font-semibold text-blue-800">
-                  Discovery first
-                </span>
+              <div>
+                <p className="text-xs font-bold uppercase text-blue-700">Step 1 of 2</p>
+                <h4 className="mt-1 text-base font-bold">Find your home</h4>
+                <p className="mt-1 text-sm text-gray-600">Enter the address exactly as you normally use it.</p>
               </div>
 
               <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,2fr)_minmax(130px,1fr)]">
@@ -7727,7 +7738,7 @@ const NewBuildingSetupPanel = () => {
                     disabled={discoveryStatus === "loading"}
                     className="w-full bg-blue-700 px-4 py-2 text-sm font-bold text-white disabled:cursor-wait disabled:opacity-60"
                   >
-                    {discoveryStatus === "loading" ? "Searching records..." : propertyDiscovery ? "Refresh records" : "Find property records"}
+                    {discoveryStatus === "loading" ? "Checking address..." : propertyDiscovery ? "Check again" : "Check address"}
                   </button>
                 </div>
               </div>
@@ -7736,126 +7747,133 @@ const NewBuildingSetupPanel = () => {
                 <p className="mt-3 border border-red-200 bg-red-50 p-2 text-xs text-red-800">{discoveryError}</p>
               ) : null}
 
-              <p className="mt-3 text-xs text-gray-500">
-                This currently checks the postcode location and public records around it. Exact address validation and automatic UPRN retrieval will switch on through the OS Places connector; no manual UPRN is required from you.
-              </p>
-
               {propertyDiscovery ? (
-                <div className="mt-4 space-y-3">
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    {propertyDiscovery.sources.map((source) => (
-                      <article key={source.id} className={`border p-3 ${sourceStatusClasses[source.status] || sourceStatusClasses.unavailable}`}>
-                        <div className="flex items-start justify-between gap-2">
-                          <strong className="text-sm">{source.label}</strong>
-                          <span className="shrink-0 text-[10px] font-bold uppercase">{source.status}</span>
-                        </div>
-                        <p className="mt-1 text-xs">{source.detail}</p>
-                        <p className="mt-2 text-[10px] opacity-75">Source: {source.provenance}</p>
-                      </article>
-                    ))}
+                <div className="mt-4 space-y-3 border-t border-gray-200 pt-4">
+                  <div className="border border-emerald-200 bg-emerald-50 p-3 text-emerald-900">
+                    <p className="text-sm font-bold">Home location found</p>
+                    <p className="mt-1 text-xs">
+                      {propertyDiscovery.address}, {propertyDiscovery.postcode}
+                      {propertyDiscovery.localAuthority ? ` · ${propertyDiscovery.localAuthority}` : ""}
+                    </p>
                   </div>
 
-                  {propertyDiscovery.planningRecords.length ? (
-                    <details className="border border-gray-200 bg-white p-3">
-                      <summary className="cursor-pointer text-sm font-bold">
-                        Review {propertyDiscovery.planningRecords.length} planning and design record{propertyDiscovery.planningRecords.length === 1 ? "" : "s"}
-                      </summary>
-                      <div className="mt-3 grid gap-2">
-                        {propertyDiscovery.planningRecords.slice(0, 12).map((record, index) => (
-                          <div key={`${record.reference}-${index}`} className="border-t border-gray-100 pt-2 text-xs">
-                            <p className="font-semibold">{record.name}</p>
-                            <p className="text-gray-600">{record.dataset.replaceAll("-", " ")}{record.reference ? ` · ${record.reference}` : ""}</p>
-                            {record.documentationUrl ? (
-                              <a className="text-blue-700 underline" href={record.documentationUrl} target="_blank" rel="noreferrer">Open source record</a>
-                            ) : null}
+                  <div className="border border-blue-200 bg-white p-3">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-bold">Add your property number</p>
+                        <p className="mt-1 max-w-xl text-xs text-gray-600">
+                          The UPRN is your home’s permanent reference number. It helps us avoid duplicate profiles and is free to find.
+                        </p>
+                      </div>
+                      <a
+                        href="https://www.findmyaddress.co.uk/search"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="border border-blue-700 bg-white px-3 py-2 text-xs font-bold text-blue-800"
+                      >
+                        Find it free
+                      </a>
+                    </div>
+                    <label className="mt-3 block space-y-1">
+                      <span className="text-xs font-semibold text-gray-700">Property number (UPRN)</span>
+                      <input
+                        inputMode="numeric"
+                        className="w-full border border-gray-300 p-2 text-sm sm:max-w-sm"
+                        value={propertySearch.uprn}
+                        onChange={(event) => updatePropertySearch("uprn", event.target.value.replace(/\D/g, ""))}
+                        placeholder="Paste the number here"
+                      />
+                    </label>
+                    <p className="mt-2 text-[11px] text-gray-500">FindMyAddress opens separately because its licence does not allow it to be embedded in WBP.</p>
+                  </div>
+
+                  <details className="border border-gray-200 bg-white p-3">
+                    <summary className="cursor-pointer text-xs font-semibold text-gray-700">What did WBP check?</summary>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                      {propertyDiscovery.sources
+                        .filter((source) => ["address", "planning"].includes(source.id))
+                        .map((source) => (
+                          <div key={source.id} className={`border p-3 text-xs ${sourceStatusClasses[source.status] || sourceStatusClasses.unavailable}`}>
+                            <p className="font-bold">{source.label}</p>
+                            <p className="mt-1">{source.detail}</p>
                           </div>
                         ))}
-                      </div>
-                    </details>
-                  ) : null}
+                    </div>
+                  </details>
 
                   <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 pt-3">
                     <p className="text-xs text-gray-600">
                       {propertyDiscovery.confirmedAt
-                        ? `Confirmed ${new Date(propertyDiscovery.confirmedAt).toLocaleDateString("en-GB")}`
-                        : "Check the address and records before continuing. Inferred data remains clearly labelled."}
+                        ? "Home confirmed"
+                        : propertySearch.uprn.trim()
+                        ? "UPRN added. Confirm this is the correct home."
+                        : "You can continue without the UPRN and add it later."}
                     </p>
                     {!propertyDiscovery.confirmedAt ? (
                       <button type="button" onClick={confirmPropertyDiscovery} className="border border-emerald-700 bg-white px-3 py-2 text-xs font-bold text-emerald-800">
-                        Confirm property match
+                        Use this home
                       </button>
                     ) : (
-                      <span className="bg-emerald-700 px-3 py-2 text-xs font-bold text-white">Property confirmed</span>
+                      <span className="bg-emerald-700 px-3 py-2 text-xs font-bold text-white">Home confirmed</span>
                     )}
                   </div>
                 </div>
               ) : null}
             </section>
 
-            <div className="mt-5 grid gap-4 md:grid-cols-2">
-              <label className="space-y-1">
-                <span className="text-xs font-semibold text-gray-700">Ownership arrangement</span>
-                <select className="w-full border border-gray-300 p-2 text-sm" value={ownershipDraft.ownershipType} onChange={(event) => updateOwnershipDraft("ownershipType", event.target.value)}>
-                  <option value="owner-occupier">Owner occupier</option>
-                  <option value="private-landlord">Private landlord</option>
-                  <option value="housing-association">Housing association</option>
-                  <option value="local-authority">Local authority</option>
-                  <option value="developer-new-build">Developer / new-build sale</option>
-                  <option value="shared-ownership">Shared ownership</option>
-                  <option value="leaseholder">Leaseholder</option>
-                  <option value="managing-agent">Managing agent acting for owner</option>
-                </select>
-              </label>
-              <label className="space-y-1">
-                <span className="text-xs font-semibold text-gray-700">Tenure</span>
-                <select className="w-full border border-gray-300 p-2 text-sm" value={ownershipDraft.tenure} onChange={(event) => updateOwnershipDraft("tenure", event.target.value)}>
-                  <option value="freehold">Freehold</option>
-                  <option value="leasehold">Leasehold</option>
-                  <option value="commonhold">Commonhold</option>
-                  <option value="shared-ownership">Shared ownership</option>
-                  <option value="social-tenancy">Social tenancy</option>
-                  <option value="private-tenancy">Private tenancy</option>
-                  <option value="other">Other / pending verification</option>
-                </select>
-              </label>
-              <label className="space-y-1">
-                <span className="text-xs font-semibold text-gray-700">Legal owner / owning organisation</span>
-                <input required className="w-full border border-gray-300 p-2 text-sm" value={ownershipDraft.legalOwnerName} onChange={(event) => updateOwnershipDraft("legalOwnerName", event.target.value)} placeholder="Name shown in the ownership evidence" />
-              </label>
-              <label className="space-y-1">
-                <span className="text-xs font-semibold text-gray-700">Digital record custodian</span>
-                <input required className="w-full border border-gray-300 p-2 text-sm" value={ownershipDraft.custodianName} onChange={(event) => updateOwnershipDraft("custodianName", event.target.value)} placeholder="Person or organisation responsible for the WBP" />
-              </label>
-              <label className="space-y-1">
-                <span className="text-xs font-semibold text-gray-700">Current occupier / household reference</span>
-                <input className="w-full border border-gray-300 p-2 text-sm" value={ownershipDraft.occupierName} onChange={(event) => updateOwnershipDraft("occupierName", event.target.value)} placeholder="Optional; keep personal data minimal" />
-              </label>
-              <label className="space-y-1">
-                <span className="text-xs font-semibold text-gray-700">Land Registry title number</span>
-                <input className="w-full border border-gray-300 p-2 text-sm" value={ownershipDraft.titleNumber} onChange={(event) => updateOwnershipDraft("titleNumber", event.target.value)} placeholder="Optional; access restricted" />
-              </label>
-              {recordMode === "import" ? (
-                <label className="space-y-1">
-                  <span className="text-xs font-semibold text-gray-700">Existing WBP handover reference</span>
-                  <input required className="w-full border border-gray-300 p-2 text-sm" placeholder="WBP record or handover code" />
-                </label>
-              ) : null}
-            </div>
+            {propertyDiscovery?.confirmedAt ? (
+              <section className="mt-5 border border-gray-200 bg-white p-3 sm:p-4">
+                <p className="text-xs font-bold uppercase text-emerald-700">Step 2 of 2</p>
+                <h4 className="mt-1 text-base font-bold">About you</h4>
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                  <label className="space-y-1">
+                    <span className="text-xs font-semibold text-gray-700">Your name</span>
+                    <input required className="w-full border border-gray-300 p-2 text-sm" value={ownershipDraft.legalOwnerName} onChange={(event) => updateRetailOwnerName(event.target.value)} placeholder="Property owner’s name" />
+                  </label>
+                  <label className="space-y-1">
+                    <span className="text-xs font-semibold text-gray-700">You are the</span>
+                    <select className="w-full border border-gray-300 p-2 text-sm" value={ownershipDraft.ownershipType} onChange={(event) => updateOwnershipDraft("ownershipType", event.target.value)}>
+                      <option value="owner-occupier">Homeowner living here</option>
+                      <option value="private-landlord">Homeowner letting the property</option>
+                      <option value="shared-ownership">Shared owner</option>
+                      <option value="leaseholder">Leaseholder</option>
+                      <option value="managing-agent">Authorised representative</option>
+                    </select>
+                  </label>
+                  <label className="space-y-1">
+                    <span className="text-xs font-semibold text-gray-700">The home is</span>
+                    <select className="w-full border border-gray-300 p-2 text-sm" value={ownershipDraft.tenure} onChange={(event) => updateOwnershipDraft("tenure", event.target.value)}>
+                      <option value="freehold">Freehold</option>
+                      <option value="leasehold">Leasehold</option>
+                      <option value="commonhold">Commonhold</option>
+                      <option value="shared-ownership">Shared ownership</option>
+                      <option value="other">Not sure</option>
+                    </select>
+                  </label>
+                  {recordMode === "import" ? (
+                    <label className="space-y-1">
+                      <span className="text-xs font-semibold text-gray-700">Handover code</span>
+                      <input required className="w-full border border-gray-300 p-2 text-sm" placeholder="WBP record or handover code" />
+                    </label>
+                  ) : null}
+                </div>
 
-            <div className="mt-5 grid gap-3 border-t border-gray-200 pt-4">
-              <label className="flex items-start gap-3 text-sm text-gray-700">
-                <input type="checkbox" className="mt-1" checked={ownershipDraft.authorityToCreate} onChange={(event) => updateOwnershipDraft("authorityToCreate", event.target.checked)} />
-                <span>I confirm I own this property or have authority from the owner to establish and administer its Whole Build Profile.</span>
-              </label>
-              <label className="flex items-start gap-3 text-sm text-gray-700">
-                <input type="checkbox" className="mt-1" checked={ownershipDraft.privacyAccepted} onChange={(event) => updateOwnershipDraft("privacyAccepted", event.target.checked)} />
-                <span>I understand that property evidence and personal occupant data will be kept as separate permission classes.</span>
-              </label>
-            </div>
+                <div className="mt-5 grid gap-3 border-t border-gray-200 pt-4">
+                  <label className="flex items-start gap-3 text-sm text-gray-700">
+                    <input type="checkbox" className="mt-1" checked={ownershipDraft.authorityToCreate} onChange={(event) => updateOwnershipDraft("authorityToCreate", event.target.checked)} />
+                    <span>I confirm that I own this home or have the owner’s permission to create its profile.</span>
+                  </label>
+                  <label className="flex items-start gap-3 text-sm text-gray-700">
+                    <input type="checkbox" className="mt-1" checked={ownershipDraft.privacyAccepted} onChange={(event) => updateOwnershipDraft("privacyAccepted", event.target.checked)} />
+                    <span>I agree to keep household information private and separate from the transferable building record.</span>
+                  </label>
+                </div>
 
-            <button type="submit" disabled={!propertyDiscovery?.confirmedAt || !ownershipDraft.legalOwnerName.trim() || !ownershipDraft.custodianName.trim() || !ownershipDraft.authorityToCreate || !ownershipDraft.privacyAccepted} className="mt-5 bg-emerald-700 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-40">
-              Establish building passport
-            </button>
+                <button type="submit" disabled={!ownershipDraft.legalOwnerName.trim() || !ownershipDraft.authorityToCreate || !ownershipDraft.privacyAccepted} className="mt-5 w-full bg-emerald-700 px-4 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto">
+                  Create home profile
+                </button>
+              </section>
+            ) : null}
           </form>
         ) : (
           <div className="mx-auto max-w-4xl border border-emerald-200 bg-emerald-50 p-4">
