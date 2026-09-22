@@ -698,12 +698,8 @@ code {
 .wbp-design-gap-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-top: 28px; padding-top: 18px; border-top: 1px solid #e5e7eb; }
 .wbp-design-gap-heading h3 { margin: 0; font-size: 16px; }
 .wbp-design-gap-heading span { font-size: 13px; font-weight: 700; }
-.wbp-design-gap-list { padding: 0; margin: 12px 0; list-style: none; }
-.wbp-design-gap-list li { display: grid; grid-template-columns: 72px minmax(0, 1fr) auto; align-items: center; gap: 12px; min-height: 45px; border-top: 1px solid #e5e7eb; font-size: 13px; }
-.wbp-design-gap-list li > span { font-weight: 750; }
-.wbp-design-gap-list .is-present { color: #047857; }
-.wbp-design-gap-list .is-missing { color: #92400e; }
-.wbp-design-gap-list button { border: 0; background: none; color: #1d4ed8; font: inherit; font-weight: 750; cursor: pointer; }
+.wbp-design-readiness-track { height: 10px; margin-top: 12px; overflow: hidden; background: #d1fae5; }
+.wbp-design-readiness-fill { height: 100%; background: #047857; transition: width 280ms ease-out; }
 .wbp-design-fields .wbp-design-import-note { margin-top: 14px; }
 .wbp-workspace-actions { display: flex; gap: 10px; padding: 25px clamp(20px, 4vw, 58px) 0; }
 .wbp-workspace-actions button.is-primary { border-color: #047857; background: #047857; color: #ffffff; }

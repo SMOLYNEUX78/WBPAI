@@ -24,6 +24,12 @@ test("new Design project saves to the design-stage table", async () => {
   </MemoryRouter>);
   expect(screen.getByRole("heading", { name: "Import existing project" })).toBeInTheDocument();
   expect(screen.getByText("0/6 present")).toBeInTheDocument();
+  expect(screen.getByRole("progressbar", { name: "Project readiness" })).toHaveAttribute("aria-valuenow", "0");
+  expect(screen.queryByRole("heading", { name: "WBP information check" })).not.toBeInTheDocument();
+  fireEvent.click(within(screen.getByRole("navigation", { name: "Design project sections" })).getByRole("button", { name: "Overview" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "Project brief and success criteria" }), { target: { value: "Low-energy housing" } });
+  fireEvent.click(within(screen.getByRole("navigation", { name: "Design project sections" })).getByRole("button", { name: "Import" }));
+  expect(screen.getByRole("progressbar", { name: "Project readiness" })).toHaveAttribute("aria-valuenow", "17");
   fireEvent.change(screen.getByRole("textbox", { name: "Project name" }), { target: { value: "New low-energy homes" } });
   fireEvent.click(screen.getByRole("button", { name: "Create project and add documents" }));
 

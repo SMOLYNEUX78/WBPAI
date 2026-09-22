@@ -46,6 +46,8 @@ export default function DesignProject() {
     { label: "Energy targets", ready: project.target_eui_kwh_m2_yr !== "" && project.target_eui_kwh_m2_yr != null, section: "Performance" },
     { label: "3D model or renders", ready: Boolean(project.model_url.trim() || hasEvidence("model", "render")), section: "Design" },
   ];
+  const readyCount = gaps.filter((item) => item.ready).length;
+  const readinessPercent = Math.round((readyCount / gaps.length) * 100);
 
   useEffect(() => {
     if (projectId === "new") return;
@@ -195,9 +197,13 @@ export default function DesignProject() {
         <p>Start with the documents your practice already has. Attach them to a project shell, then fill only the WBP details still missing. Files are indexed by your metadata; their contents are not automatically read.</p>
         {!savedId ? <div className="wbp-design-import-start"><Field label="Project name" value={project.title} onChange={(value) => update("title", value)} required /><Field label="Site address" value={project.site_address} onChange={(value) => update("site_address", value)} /><button type="button" disabled={busy || !project.title.trim()} onClick={createImportShell}>Create project and add documents</button></div>
           : <button type="button" className="wbp-design-secondary" onClick={() => setTab("Evidence")}>Add existing documents</button>}
-        <div className="wbp-design-gap-heading"><h3>WBP information check</h3><span>{gaps.filter((item) => item.ready).length}/{gaps.length} present</span></div>
-        <ul className="wbp-design-gap-list">{gaps.map((item) => <li key={item.label}><span className={item.ready ? "is-present" : "is-missing"}>{item.ready ? "Present" : "To add"}</span><strong>{item.label}</strong><button type="button" onClick={() => setTab(item.section)}>{item.section}</button></li>)}</ul>
-        <p className="wbp-design-import-note">“Present” means a document is attached or a field has been entered, not that WBP has checked its contents or quality.</p>
+        <div className="wbp-design-readiness">
+          <div className="wbp-design-gap-heading"><h3>Project readiness</h3><span>{readyCount}/{gaps.length} present</span></div>
+          <div className="wbp-design-readiness-track" role="progressbar" aria-label="Project readiness" aria-valuemin={0} aria-valuemax={100} aria-valuenow={readinessPercent}>
+            <div className="wbp-design-readiness-fill" style={{ width: `${readinessPercent}%` }} />
+          </div>
+          <p className="wbp-design-import-note">Entered information and attached documents remain unverified until reviewed.</p>
+        </div>
       </section> : null}
       {tab === "Overview" ? <section className="wbp-design-fields"><h2>Project overview</h2><div className="wbp-design-grid">
         <Field label="Project name" value={project.title} onChange={(value) => update("title", value)} required />
