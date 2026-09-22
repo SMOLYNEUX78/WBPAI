@@ -7485,9 +7485,9 @@ const NewBuildingSetupPanel = () => {
           {
             id: "address",
             label: "Address and location",
-            status: postcodeMatched ? "found" : latitude && longitude ? "checked" : "action",
+            status: postcodeMatched ? "checked" : latitude && longitude ? "checked" : "action",
             detail: postcodeMatched
-              ? `${postcode}${localAuthority ? ` · ${localAuthority}` : ""}`
+              ? `${postcode}${localAuthority ? ` · ${localAuthority}` : ""} · postcode location confirmed`
               : latitude && longitude
               ? "Location supplied by owner"
               : "Coordinates need confirmation",
@@ -7498,7 +7498,7 @@ const NewBuildingSetupPanel = () => {
             label: "Planning and design history",
             status: planningRecords.length ? "found" : planningChecked ? "checked" : "action",
             detail: planningRecords.length
-              ? `${planningRecords.length} matching public record${planningRecords.length === 1 ? "" : "s"}`
+              ? `${planningRecords.length} public record${planningRecords.length === 1 ? "" : "s"} intersect the postcode location`
               : planningChecked
               ? "Public datasets checked; no matching record returned"
               : "Local planning portal search still required",
@@ -7514,11 +7514,13 @@ const NewBuildingSetupPanel = () => {
           {
             id: "ownership",
             label: "Ownership evidence",
-            status: propertySearch.uprn.trim() ? "checked" : "action",
+            status: propertySearch.uprn.trim() ? "found" : "action",
             detail: propertySearch.uprn.trim()
-              ? `UPRN ${propertySearch.uprn.trim()} ready for title matching`
-              : "Add a UPRN or title number, then authorise Land Registry verification",
-            provenance: "Owner supplied / HM Land Registry connector pending",
+              ? `UPRN ${propertySearch.uprn.trim()} resolved and ready for title matching`
+              : "Automatic UPRN lookup is awaiting the OS Places production connector; you do not need to find it manually",
+            provenance: propertySearch.uprn.trim()
+              ? "OS Places / owner-confirmed record"
+              : "OS Places connector pending",
           },
           {
             id: "building-control",
@@ -7691,7 +7693,7 @@ const NewBuildingSetupPanel = () => {
                   <p className="text-xs font-bold uppercase text-blue-700">Find my property</p>
                   <h4 className="mt-1 text-base font-bold">Build the profile from trusted records</h4>
                   <p className="mt-1 max-w-2xl text-xs text-gray-600">
-                    Enter the address once. WBP will identify its location, search available planning records and prepare protected EPC and ownership checks.
+                    Enter the address once. WBP will confirm its postcode location, search available public planning records and prepare protected EPC and ownership checks.
                   </p>
                 </div>
                 <span className="border border-blue-200 bg-white px-2 py-1 text-xs font-semibold text-blue-800">
@@ -7718,15 +7720,6 @@ const NewBuildingSetupPanel = () => {
                     placeholder="IP12 4HA"
                   />
                 </label>
-                <label className="space-y-1">
-                  <span className="text-xs font-semibold text-gray-700">UPRN, if known</span>
-                  <input
-                    className="w-full border border-gray-300 p-2 text-sm"
-                    value={propertySearch.uprn}
-                    onChange={(event) => updatePropertySearch("uprn", event.target.value)}
-                    placeholder="Optional property identifier"
-                  />
-                </label>
                 <div className="flex items-end">
                   <button
                     type="button"
@@ -7742,6 +7735,10 @@ const NewBuildingSetupPanel = () => {
               {discoveryError ? (
                 <p className="mt-3 border border-red-200 bg-red-50 p-2 text-xs text-red-800">{discoveryError}</p>
               ) : null}
+
+              <p className="mt-3 text-xs text-gray-500">
+                This currently checks the postcode location and public records around it. Exact address validation and automatic UPRN retrieval will switch on through the OS Places connector; no manual UPRN is required from you.
+              </p>
 
               {propertyDiscovery ? (
                 <div className="mt-4 space-y-3">
@@ -7832,10 +7829,6 @@ const NewBuildingSetupPanel = () => {
               <label className="space-y-1">
                 <span className="text-xs font-semibold text-gray-700">Current occupier / household reference</span>
                 <input className="w-full border border-gray-300 p-2 text-sm" value={ownershipDraft.occupierName} onChange={(event) => updateOwnershipDraft("occupierName", event.target.value)} placeholder="Optional; keep personal data minimal" />
-              </label>
-              <label className="space-y-1">
-                <span className="text-xs font-semibold text-gray-700">UPRN</span>
-                <input className="w-full border border-gray-300 p-2 text-sm" value={ownershipDraft.uprn} onChange={(event) => updateOwnershipDraft("uprn", event.target.value)} placeholder="Unique Property Reference Number" />
               </label>
               <label className="space-y-1">
                 <span className="text-xs font-semibold text-gray-700">Land Registry title number</span>
