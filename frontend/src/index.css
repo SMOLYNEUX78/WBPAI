@@ -394,7 +394,24 @@ code {
 .wbp-access-header {
   min-height: 70px;
   padding: 14px clamp(22px, 4vw, 64px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
+
+.wbp-test-password-trigger, .wbp-test-link-toggle {
+  border: 0;
+  background: transparent;
+  color: #047857;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.wbp-test-password-trigger { white-space: nowrap; }
+.wbp-test-link-toggle { justify-self: start; padding: 0; text-decoration: underline; }
+.wbp-test-password-status { margin: 0; color: #374151; font-size: 13px; }
 
 .wbp-access-mark {
   color: #111827;

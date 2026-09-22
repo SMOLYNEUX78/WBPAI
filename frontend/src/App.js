@@ -115,7 +115,31 @@ const RoleGateway = () => {
   const [existingSessionEmail, setExistingSessionEmail] = useState("");
   const [testSession, setTestSession] = useState(null);
   const [sessionReady, setSessionReady] = useState(false);
+  const [useTestEmailLink, setUseTestEmailLink] = useState(false);
+  const [passwordSetupOpen, setPasswordSetupOpen] = useState(false);
+  const [passwordSetupStatus, setPasswordSetupStatus] = useState("");
   const activeRole = ACCESS_ROLES.find((role) => role.id === selectedRole);
+  const testPasswordSignIn = authMode === "signin" && email.trim().toLowerCase() === TEST_PROFESSIONAL_EMAIL && !useTestEmailLink;
+
+  const setTestPassword = async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    const password = formData.get("password");
+    if (password.length < 12 || password !== formData.get("confirmPassword")) {
+      setPasswordSetupStatus("Use at least 12 characters and make sure both passwords match.");
+      return;
+    }
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (sessionData.session?.user.email?.toLowerCase() !== TEST_PROFESSIONAL_EMAIL) {
+      setPasswordSetupStatus("Sign in to the test account on this device first.");
+      return;
+    }
+    setPasswordSetupStatus("Saving password...");
+    const { error } = await supabase.auth.updateUser({ password });
+    setPasswordSetupStatus(error ? error.message : "Password saved. You can now sign in on your phone without an email link.");
+    if (!error) form.reset();
+  };
 
   const finishAuthenticatedAccess = useCallback(async (session, intent) => {
     if (!session?.user || !intent?.role) return;
@@ -234,6 +258,20 @@ const RoleGateway = () => {
       return;
     }
 
+    if (testPasswordSignIn) {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password: formData.get("password"),
+      });
+      if (error || !data.session) {
+        setAuthStatus("error");
+        setAuthMessage(error?.message || "Sign in failed. Check your password and try again.");
+        return;
+      }
+      await finishAuthenticatedAccess(data.session, intent);
+      return;
+    }
+
     window.localStorage.setItem(AUTH_INTENT_KEY, JSON.stringify(intent));
     const { error } = await supabase.auth.signInWithOtp({
       email: email.trim(),
@@ -261,7 +299,23 @@ const RoleGateway = () => {
     <main className="wbp-access-shell">
       <section className="wbp-access-header">
         <span className="wbp-access-mark">Whole Build Profile</span>
+        {testSession && <button type="button" className="wbp-test-password-trigger" onClick={() => { setPasswordSetupOpen(true); setPasswordSetupStatus(""); }}>Set test password</button>}
       </section>
+
+      {passwordSetupOpen && testSession && (
+        <div className="wbp-auth-backdrop" role="presentation" onMouseDown={() => setPasswordSetupOpen(false)}>
+          <section className="wbp-auth-modal" role="dialog" aria-modal="true" aria-labelledby="wbp-password-title" onMouseDown={(event) => event.stopPropagation()}>
+            <button type="button" className="wbp-auth-close" aria-label="Close" onClick={() => setPasswordSetupOpen(false)}>&#215;</button>
+            <div className="wbp-auth-heading"><h2 id="wbp-password-title">Set test password</h2><span>For wbpai25@gmail.com. Use this password to sign in on other devices without an email link.</span></div>
+            <form className="wbp-auth-form" onSubmit={setTestPassword}>
+              <label className="wbp-access-field"><span>New password</span><input name="password" type="password" autoComplete="new-password" minLength="12" required /></label>
+              <label className="wbp-access-field"><span>Confirm password</span><input name="confirmPassword" type="password" autoComplete="new-password" minLength="12" required /></label>
+              {passwordSetupStatus && <p className="wbp-test-password-status" role="status">{passwordSetupStatus}</p>}
+              <button className="wbp-access-submit" type="submit">Save password</button>
+            </form>
+          </section>
+        </div>
+      )}
 
       <section className="wbp-access-intro">
         <p>Building Trust</p>
@@ -429,6 +483,13 @@ const RoleGateway = () => {
                 <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder={selectedRole === "homeowner" ? "you@example.com" : "name@organisation.co.uk"} required />
               </label>
 
+              {testPasswordSignIn && <label className="wbp-access-field"><span>Password</span><input name="password" type="password" autoComplete="current-password" required /></label>}
+              {authMode === "signin" && email.trim().toLowerCase() === TEST_PROFESSIONAL_EMAIL && (
+                <button type="button" className="wbp-test-link-toggle" onClick={() => { setUseTestEmailLink(!useTestEmailLink); setAuthStatus("idle"); setAuthMessage(""); }}>
+                  {useTestEmailLink ? "Use password instead" : "Use email link instead"}
+                </button>
+              )}
+
               {selectedRole === "homeowner" ? (
                 <fieldset className="wbp-record-choice">
                   <legend>Building record</legend>
@@ -459,7 +520,7 @@ const RoleGateway = () => {
               ) : null}
 
               <button className="wbp-access-submit" type="submit" disabled={authStatus === "sending"}>
-                {authStatus === "sending" ? "Sending secure link..." : authMode === "signin" ? "Email me a sign-in link" : "Create account"}
+                {authStatus === "sending" ? (testPasswordSignIn ? "Signing in..." : "Sending secure link...") : testPasswordSignIn ? "Sign in with password" : authMode === "signin" ? "Email me a sign-in link" : "Create account"}
                 <span aria-hidden="true">&#8594;</span>
               </button>
             </form>
