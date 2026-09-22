@@ -9,6 +9,7 @@ import {
 } from "react-router-dom";
 import BuildingDashboard from "./pages/performance/BuildingDashboard";
 import supabase from "./supabaseClient";
+import { isProfessionalEmailAllowed, TEST_PROFESSIONAL_EMAIL } from "./professionalEmail";
 
 const AUTH_INTENT_KEY = "wbp-auth-intent:v1";
 
@@ -116,6 +117,12 @@ const RoleGateway = () => {
 
   const finishAuthenticatedAccess = useCallback(async (session, intent) => {
     if (!session?.user || !intent?.role) return;
+    if (intent.role !== "homeowner" && !isProfessionalEmailAllowed(session.user.email)) {
+      window.localStorage.removeItem(AUTH_INTENT_KEY);
+      setAuthStatus("error");
+      setAuthMessage("Use a company email address for Design or Build access.");
+      return;
+    }
     window.localStorage.setItem("wbp-user-role", intent.role);
     window.localStorage.setItem("wbp-user-email", session.user.email || intent.email || "");
 
@@ -178,6 +185,11 @@ const RoleGateway = () => {
     event.preventDefault();
     setAuthStatus("sending");
     setAuthMessage("");
+    if (selectedRole !== "homeowner" && !isProfessionalEmailAllowed(email)) {
+      setAuthStatus("error");
+      setAuthMessage("Use a company email address for Design or Build access.");
+      return;
+    }
     const formData = new FormData(event.currentTarget);
     const profile = {
       organisationName: formData.get("organisationName") || "",
@@ -396,8 +408,8 @@ const RoleGateway = () => {
               ) : null}
 
               <label className="wbp-access-field">
-                <span>Email address</span>
-                <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="name@organisation.co.uk" required />
+                <span>{selectedRole === "homeowner" ? "Email address" : "Company email address"}</span>
+                <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder={selectedRole === "homeowner" ? "you@example.com" : "name@organisation.co.uk"} required />
               </label>
 
               {selectedRole === "homeowner" ? (
@@ -448,10 +460,12 @@ const ProfessionalWorkspace = () => {
   const navigate = useNavigate();
   const isBuilder = role === "builder";
   const [profile, setProfile] = useState(location.state?.profile?.organisationName ? location.state.profile : {});
+  const [isTestAccount, setIsTestAccount] = useState(false);
   useEffect(() => {
     let active = true;
     supabase.auth.getUser().then(({ data }) => {
       if (!active || !data.user) return;
+      setIsTestAccount(data.user.email?.toLowerCase() === TEST_PROFESSIONAL_EMAIL);
       try {
         const cached = JSON.parse(window.localStorage.getItem(`wbp-${role}-profile-${data.user.id}`) || "{}");
         setProfile(location.state?.profile?.organisationName ? location.state.profile : cached);
@@ -543,7 +557,7 @@ const ProfessionalWorkspace = () => {
           <span>{profile.organisationType || (isBuilder ? "Contractor profile" : "Design practice profile")}</span>
         </div>
         <div className="wbp-organisation-meta">
-          <span>Self-declared · Organisation not verified</span>
+          <span>{isTestAccount ? "Test account · Organisation not verified" : "Self-declared · Organisation not verified"}</span>
           <span>{profile.registrationNumber || "Registration pending"}</span>
           <span>{profile.city || "Head office pending"}</span>
         </div>
@@ -614,7 +628,7 @@ const ProfessionalWorkspace = () => {
   );
 };
 
-const AuthenticatedRoute = ({ children }) => {
+const AuthenticatedRoute = ({ children, requireProfessionalEmail = false }) => {
   const navigate = useNavigate();
   const [authReady, setAuthReady] = useState(false);
 
@@ -626,11 +640,18 @@ const AuthenticatedRoute = ({ children }) => {
         navigate("/login", { replace: true });
         return;
       }
+      if (requireProfessionalEmail && !isProfessionalEmailAllowed(data.session.user.email)) {
+        navigate("/login", { replace: true });
+        return;
+      }
       setAuthReady(true);
     });
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!mounted) return;
       if (!session) {
+        setAuthReady(false);
+        navigate("/login", { replace: true });
+      } else if (requireProfessionalEmail && !isProfessionalEmailAllowed(session.user.email)) {
         setAuthReady(false);
         navigate("/login", { replace: true });
       } else {
@@ -641,7 +662,7 @@ const AuthenticatedRoute = ({ children }) => {
       mounted = false;
       listener.subscription.unsubscribe();
     };
-  }, [navigate]);
+  }, [navigate, requireProfessionalEmail]);
 
   if (!authReady) {
     return <main className="flex min-h-screen items-center justify-center bg-white text-sm font-semibold text-gray-600">Checking secure access...</main>;
@@ -654,7 +675,7 @@ const App = () => (
     <Routes>
       <Route path="/" element={<SplashScreen />} />
       <Route path="/login" element={<RoleGateway />} />
-      <Route path="/workspace/:role" element={<AuthenticatedRoute><ProfessionalWorkspace /></AuthenticatedRoute>} />
+      <Route path="/workspace/:role" element={<AuthenticatedRoute requireProfessionalEmail><ProfessionalWorkspace /></AuthenticatedRoute>} />
       <Route path="/dashboard/*" element={<AuthenticatedRoute><BuildingDashboard /></AuthenticatedRoute>} />
     </Routes>
   </Router>
