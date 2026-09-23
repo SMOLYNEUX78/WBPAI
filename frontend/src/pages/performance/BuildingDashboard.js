@@ -8283,9 +8283,9 @@ export const NewBuildingSetupPanel = () => {
   return (
     <div className="bg-white p-4">
       <section className="bg-gray-100 p-4 rounded shadow">
-      <header className="mb-4 flex flex-wrap items-center gap-x-6 gap-y-3 border-b border-gray-200 pb-3">
-      <h2 className="text-lg font-bold">New Building</h2>
-      <nav className="flex flex-wrap gap-2" role="tablist" aria-label="New building sections">
+      <header className="mb-4 flex min-w-0 flex-col gap-3 border-b border-gray-200 pb-3 lg:flex-row lg:items-center lg:gap-6">
+      <h2 className="shrink-0 text-lg font-bold">New Building</h2>
+      <nav className="grid w-full min-w-0 grid-cols-4 gap-1 lg:w-auto lg:gap-2" role="tablist" aria-label="New building sections">
         {[["ownership", "Ownership"], ["measurements", "Measurements"], ["performance", "Performance"], ["carbon", "Carbon Context"]].map(([id, label]) => (
           <button
             key={id}
@@ -8303,7 +8303,7 @@ export const NewBuildingSetupPanel = () => {
               tabs[nextIndex].focus();
               tabs[nextIndex].click();
             }}
-            className={`border px-3 py-2 text-sm font-semibold transition-colors ${setupTab === id ? "border-gray-900 bg-gray-900 text-white" : "border-gray-300 bg-white text-gray-700 hover:bg-gray-100"}`}
+            className={`min-h-[44px] min-w-0 border px-1 py-2 text-center text-[11px] font-semibold leading-tight [overflow-wrap:anywhere] transition-colors sm:px-2 sm:text-sm ${setupTab === id ? "border-gray-900 bg-gray-900 text-white" : "border-gray-300 bg-white text-gray-700 hover:bg-gray-100"}`}
           >
             {label}
           </button>
