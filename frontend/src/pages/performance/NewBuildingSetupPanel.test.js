@@ -27,6 +27,10 @@ test("baseline readiness stays above every setup tab for a created home profile"
   render(<MemoryRouter><NewBuildingSetupPanel /></MemoryRouter>);
 
   const banner = screen.getByText("Home profile created").closest(".bg-emerald-50");
+  expect(banner).not.toHaveTextContent("Ownership unverified");
+  expect(banner).not.toHaveTextContent("Not transferable");
+  expect(banner).not.toHaveTextContent("Saved securely");
+  expect(banner).not.toHaveTextContent("owner-created profile");
   expect(banner).toContainElement(screen.getByRole("heading", { name: "Baseline readiness" }));
   expect(banner).toContainElement(screen.getByRole("progressbar", { name: "Baseline readiness" }));
   expect(screen.getByText("Home profile created").parentElement).toContainElement(screen.getByRole("button", { name: "Edit profile" }));
