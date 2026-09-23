@@ -38,10 +38,7 @@ test.each(["architect", "builder"])("%s portfolio profile can be edited and save
 
   render(<App />);
   expect(await screen.findByRole("heading", { name: "Original organisation" })).toBeInTheDocument();
-  expect(screen.getByRole("navigation", { name: "Prototype pages" })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: role === "architect" ? "Design" : "Build" })).toHaveAttribute("aria-current", "page");
-  expect(screen.getByRole("button", { name: "WBP-001" })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "New" })).toBeInTheDocument();
+  expect(screen.queryByRole("navigation", { name: "Prototype pages" })).not.toBeInTheDocument();
   expect(screen.getByText(role === "architect" ? "Design intent and specification" : "Delivery, quality and commissioning").closest(".wbp-professional-stage-banner")).toHaveClass(role === "architect" ? "is-design" : "is-build");
   expect(screen.getByText(role === "architect" ? "Design portfolio" : "Build portfolio").parentElement).toContainElement(screen.getByRole("button", { name: "Edit profile" }));
   expect(screen.getByText("01234 567890")).toBeInTheDocument();

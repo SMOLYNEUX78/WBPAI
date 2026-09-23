@@ -10495,8 +10495,8 @@ const BuildingDashboard = () => {
   const storedRole = window.localStorage.getItem("wbp-user-role") || "";
   const accessRole = accessParams.get("role") || storedRole || "homeowner";
   const roleDetails = {
-    architect: { label: "Architect", phase: "Design", focus: "Design intent and specification" },
-    builder: { label: "Builder", phase: "Build", focus: "Delivery, quality and commissioning" },
+    architect: { label: "Design", phase: "Design", focus: "Design intent and specification" },
+    builder: { label: "Build", phase: "Build", focus: "Delivery, quality and commissioning" },
     homeowner: { label: "Occupant", phase: "Occupy", focus: "Handover and measured performance" },
   }[accessRole];
   const routeSection = location.pathname.split("/").filter(Boolean)[1] || "new";
@@ -10626,7 +10626,7 @@ const BuildingDashboard = () => {
     >
       <div className="sticky top-0 z-20 bg-white border-b px-4 py-3">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-          <PrototypeTabs activePath={`/dashboard/${activeBuilding.id}`} onDashboardTab={openBuildingById} />
+          {accessRole === "homeowner" ? <PrototypeTabs activePath={`/dashboard/${activeBuilding.id}`} onDashboardTab={openBuildingById} /> : null}
 
           <div className="flex shrink-0 items-center gap-3">
             <button type="button" onClick={() => navigate("/login")} className="border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-900 hover:bg-gray-100">Switch workspace</button>
