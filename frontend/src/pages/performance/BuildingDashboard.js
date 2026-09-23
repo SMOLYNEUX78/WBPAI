@@ -5701,16 +5701,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
       <div className="bg-gray-100 p-4 rounded shadow">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-lg font-bold">Building Input</h2>
-          {building.id === "home" && homePassportId ? (
-            <button type="button" onClick={() => setHomeSaleInfoOpen((open) => !open)}
-              aria-expanded={homeSaleInfoOpen}
-              className="max-w-full border border-emerald-700 bg-white px-3 py-2 text-xs font-bold text-emerald-900 hover:bg-emerald-50 [overflow-wrap:anywhere]"
-              title="Home profile and future home-sale exchange">
-              {homePassportId}
-            </button>
-          ) : null}
         </div>
-        {homeSaleInfoOpen ? <p className="mb-3 border border-emerald-200 bg-white p-3 text-xs text-gray-700">This is your home profile ID. A home-sale exchange is not available yet; this profile is not listed for sale.</p> : null}
 
         <div className="grid grid-cols-[minmax(112px,0.95fr)_minmax(0,1.65fr)] sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-2 sm:gap-5 items-stretch">
           <div className="min-w-0 self-stretch">
@@ -5749,7 +5740,26 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
 
           </div>
 
-          <div className="space-y-1.5 min-w-0 bg-white rounded border p-1.5 sm:p-2 h-full">
+          <div className="min-w-0 space-y-2">
+          {building.id === "home" && homePassportId ? (
+            <div className="border border-gray-200 bg-white p-2 sm:p-3">
+              <button type="button" disabled={!evidencePackExportReady}
+                onClick={() => setHomeSaleInfoOpen((open) => !open)}
+                aria-expanded={evidencePackExportReady ? homeSaleInfoOpen : undefined}
+                title={evidencePackExportReady ? "Home profile and future home-sale exchange" : "Unlocks when the audit evidence pack is ready"}
+                className={`w-full border px-3 py-2 text-left text-xs font-bold [overflow-wrap:anywhere] ${evidencePackExportReady ? "border-emerald-700 bg-emerald-50 text-emerald-900 hover:bg-emerald-100" : "cursor-not-allowed border-gray-200 bg-gray-100 text-gray-500"}`}>
+                {homePassportId} <span className="block text-[10px] font-medium">{evidencePackExportReady ? "Audit pack ready" : "Locked pending audit pack"}</span>
+              </button>
+              <div className="mt-3 flex items-center justify-between gap-2 text-xs font-semibold text-gray-700">
+                <span>Audit evidence</span><span>{evidencePackScore}%</span>
+              </div>
+              <div role="progressbar" aria-label="Audit evidence readiness" aria-valuenow={evidencePackScore} aria-valuemin={0} aria-valuemax={100} className="mt-1 h-2 overflow-hidden bg-gray-200">
+                <div className={`h-full transition-[width] duration-300 ${evidencePackScore >= 80 ? "bg-emerald-500" : evidencePackScore >= 50 ? "bg-amber-500" : "bg-red-500"}`} style={{ width: `${evidencePackScore}%` }} />
+              </div>
+              {evidencePackExportReady && homeSaleInfoOpen ? <p className="mt-2 text-xs text-gray-600">The audit pack is ready. The home-sale exchange is not available yet; this profile is not listed for sale.</p> : null}
+            </div>
+          ) : null}
+          <div className="space-y-1.5 min-w-0 bg-white rounded border p-1.5 sm:p-2">
             <div className="flex items-center justify-between gap-2">
               <h3 className="font-semibold text-xs min-[390px]:text-sm sm:text-base">
                 3D Model
@@ -5783,6 +5793,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
               </div>
             )}
 
+          </div>
           </div>
         </div>
       </div>
@@ -6856,25 +6867,6 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
                   MRV rail readiness for verifier review and portfolio batching.
                 </p>
               </div>
-              <div className="text-right">
-                <p className="text-2xl font-bold">{evidencePackScore}%</p>
-                <p className="text-[10px] uppercase text-gray-500">
-                  Audit ready
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-3 h-3 overflow-hidden rounded bg-gray-200">
-              <div
-                className={`h-full transition-all ${
-                  evidencePackScore >= 80
-                    ? "bg-emerald-500"
-                    : evidencePackScore >= 50
-                    ? "bg-amber-500"
-                    : "bg-red-500"
-                }`}
-                style={{ width: `${evidencePackScore}%` }}
-              />
             </div>
             <p className="mt-2 text-xs font-semibold text-gray-700">
               Click to view evidence requirements
@@ -7547,23 +7539,17 @@ export const NewBuildingSetupPanel = () => {
   const hasCompleteBuildingProfile = Boolean(
     buildingAddress && buildingLatitude && buildingLongitude && manualData.internalArea
   );
-  const hasWeatherAndArea = Boolean(buildingLatitude && buildingLongitude && manualData.internalArea);
-  const baselineReadinessSteps = [
-    { label: "Ownership and custodianship", complete: Boolean(ownershipRecord) },
-    { label: "Building profile", complete: hasCompleteBuildingProfile },
-    { label: "Energy consent", complete: energyConsent },
-    { label: "Historical energy evidence", complete: Boolean(carbonEvidence["energy-history"]) },
-    { label: "Weather/GIA ready", complete: hasWeatherAndArea },
-    { label: "IAQ monitoring started", complete: healthSensors.length > 0 },
-    { label: "Electricity tariff evidence", complete: Boolean(carbonEvidence["electricity-tariff"]) },
-    { label: "Heating-system evidence", complete: Boolean(carbonEvidence["heating-system"]) },
-    { label: "Baseline locked", complete: false },
+  const monitoringReadinessSteps = [
+    { label: "Home profile created", complete: Boolean(ownershipRecord) },
+    { label: "Address, location and internal area", complete: hasCompleteBuildingProfile },
+    { label: "Energy monitoring consent", complete: energyConsent },
+    { label: "Indoor sensor registered", complete: healthSensors.length > 0 },
   ];
-  const baselineCompleteCount = baselineReadinessSteps.filter(
+  const monitoringCompleteCount = monitoringReadinessSteps.filter(
     (step) => step.complete
   ).length;
-  const baselineProgress = Math.round(
-    (baselineCompleteCount / baselineReadinessSteps.length) * 100
+  const monitoringProgress = Math.round(
+    (monitoringCompleteCount / monitoringReadinessSteps.length) * 100
   );
 
   useEffect(() => {
@@ -8408,20 +8394,20 @@ export const NewBuildingSetupPanel = () => {
           ) : null}
           <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-emerald-200 pt-3">
             <div>
-              <h3 id="baseline-readiness-heading" className="text-sm font-bold text-emerald-950">Baseline readiness</h3>
-              <p className="text-xs text-gray-600">{baselineCompleteCount}/{baselineReadinessSteps.length} submitted</p>
+              <h3 id="monitoring-readiness-heading" className="text-sm font-bold text-emerald-950">Ready to monitor</h3>
+              <p className="text-xs text-gray-600">{monitoringCompleteCount}/{monitoringReadinessSteps.length} setup steps complete</p>
             </div>
-            <span className="text-sm font-bold text-emerald-900">{baselineProgress}%</span>
+            <span className="text-sm font-bold text-emerald-900">{monitoringProgress}%</span>
           </div>
-          <div role="progressbar" aria-label="Baseline readiness" aria-valuenow={baselineProgress} aria-valuemin={0} aria-valuemax={100} className="mt-2 h-2 overflow-hidden bg-emerald-200">
-            <div className="h-full bg-emerald-700 transition-[width] duration-300" style={{ width: `${baselineProgress}%` }} />
+          <div role="progressbar" aria-label="Ready to monitor" aria-valuenow={monitoringProgress} aria-valuemin={0} aria-valuemax={100} className="mt-2 h-2 overflow-hidden bg-emerald-200">
+            <div className="h-full bg-emerald-700 transition-[width] duration-300" style={{ width: `${monitoringProgress}%` }} />
           </div>
           <details className="mt-3 text-sm text-emerald-950">
             <summary className="cursor-pointer font-semibold">What’s needed</summary>
             <ul className="mt-2 grid gap-1 pl-5 text-xs text-gray-700 sm:grid-cols-2">
-              {baselineReadinessSteps.filter((step) => !step.complete).map((step) => <li key={step.label} className="list-disc">{step.label}</li>)}
+              {monitoringReadinessSteps.filter((step) => !step.complete).map((step) => <li key={step.label} className="list-disc">{step.label}</li>)}
             </ul>
-            <p className="mt-2 text-xs text-gray-600">Submission is not audit approval. A verifier must review the evidence before the baseline can be locked.</p>
+            <p className="mt-2 text-xs text-gray-600">Once monitoring starts, the audit evidence pack tracks the baseline and supporting evidence.</p>
           </details>
         </div>
       ) : null}

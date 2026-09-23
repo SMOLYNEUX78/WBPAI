@@ -9,7 +9,7 @@ test("new building sections keep ownership first and separate the inputs", () =>
 
   expect(screen.getByRole("heading", { name: "New Building" })).toBeInTheDocument();
   expect(screen.getByRole("tablist").closest("section")).toContainElement(screen.getByRole("heading", { name: "New Building" }));
-  expect(screen.queryByRole("heading", { name: "Baseline readiness" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: "Ready to monitor" })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("tab", { name: "Measurements" }));
   expect(screen.getByText("Create the ownership record before adding measurements.")).toBeInTheDocument();
 
@@ -22,7 +22,7 @@ test("new building sections keep ownership first and separate the inputs", () =>
   expect(screen.queryByRole("option", { name: "Renewable tariff - evidence uploaded" })).not.toBeInTheDocument();
 });
 
-test("baseline readiness stays above every setup tab for a created home profile", () => {
+test("monitoring setup stays above every tab without counting audit evidence", () => {
   window.localStorage.setItem("wbp-new-building-passport", JSON.stringify({ recordId: "WBP-TEST", legalOwnerName: "Test Owner", ownershipType: "owner-occupier", tenure: "freehold" }));
   render(<MemoryRouter><NewBuildingSetupPanel /></MemoryRouter>);
 
@@ -31,18 +31,18 @@ test("baseline readiness stays above every setup tab for a created home profile"
   expect(banner).not.toHaveTextContent("Not transferable");
   expect(banner).not.toHaveTextContent("Saved securely");
   expect(banner).not.toHaveTextContent("owner-created profile");
-  expect(banner).toContainElement(screen.getByRole("heading", { name: "Baseline readiness" }));
-  expect(banner).toContainElement(screen.getByRole("progressbar", { name: "Baseline readiness" }));
+  expect(banner).toContainElement(screen.getByRole("heading", { name: "Ready to monitor" }));
+  expect(banner).toContainElement(screen.getByRole("progressbar", { name: "Ready to monitor" }));
   expect(screen.getByText("Home profile created").parentElement).toContainElement(screen.getByRole("button", { name: "Edit profile" }));
   expect(screen.getByRole("button", { name: "Edit profile" }).compareDocumentPosition(screen.getByText("Ownership:")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  expect(screen.getByRole("progressbar", { name: "Baseline readiness" })).toHaveAttribute("aria-valuenow", "11");
+  expect(screen.getByRole("progressbar", { name: "Ready to monitor" })).toHaveAttribute("aria-valuenow", "25");
   expect(banner).toContainElement(screen.getByText("Ownership:"));
   expect(banner).toContainElement(screen.getByText("Tenure:"));
   expect(banner).toContainElement(screen.getByText("Property number:"));
-  expect(screen.getByText("Ownership:").compareDocumentPosition(screen.getByRole("progressbar", { name: "Baseline readiness" })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(screen.getByText("Ownership:").compareDocumentPosition(screen.getByRole("progressbar", { name: "Ready to monitor" })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   fireEvent.click(screen.getByText("What’s needed"));
-  expect(banner).toHaveTextContent("Historical energy evidence");
-  expect(banner).toHaveTextContent("A verifier must review the evidence");
+  expect(banner).toHaveTextContent("Energy monitoring consent");
+  expect(banner).not.toHaveTextContent("Baseline locked");
 
   for (const tab of ["Measurements", "Performance", "Carbon Context"]) {
     fireEvent.click(screen.getByRole("tab", { name: tab }));
