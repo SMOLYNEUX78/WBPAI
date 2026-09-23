@@ -237,9 +237,40 @@ const getEstimatedInternalArea = (modelId, building) => {
   return building.estimatedInternalArea;
 };
 
-const BuildingDashboardPanel = ({ building }) => {
+const BuildingDashboardPanel = ({ building, isActive = false }) => {
   const dataSourceBuildingId = building.dataSourceId || building.id;
   const isCarbonCreditTab = building.id === "cc";
+  const [homePassportId, setHomePassportId] = useState(() => {
+    if (building.id !== "home") return "";
+    try {
+      return JSON.parse(window.localStorage.getItem("wbp-new-building-passport") || "null")?.recordId || "";
+    } catch {
+      return "";
+    }
+  });
+  const [homeSaleInfoOpen, setHomeSaleInfoOpen] = useState(false);
+  useEffect(() => {
+    if (building.id !== "home" || !isActive) return;
+    try {
+      const cachedId = JSON.parse(window.localStorage.getItem("wbp-new-building-passport") || "null")?.recordId;
+      if (cachedId) setHomePassportId(cachedId);
+    } catch { /* The account lookup remains the source when browser data is invalid. */ }
+  }, [building.id, isActive]);
+  useEffect(() => {
+    if (building.id !== "home") return undefined;
+    let active = true;
+    const loadPassportId = async () => {
+      const { data: auth } = await supabase.auth.getUser();
+      if (!active || !auth?.user) return;
+      const { data, error } = await supabase.from("WBPBuildingRecords")
+        .select("record_reference")
+        .eq("custodian_user_id", auth.user.id)
+        .order("updated_at", { ascending: false }).limit(1).maybeSingle();
+      if (active && !error && data?.record_reference) setHomePassportId(data.record_reference);
+    };
+    loadPassportId();
+    return () => { active = false; };
+  }, [building.id]);
   const activeSeasonInfo = useMemo(() => getMeteorologicalSeason(), []);
   const [deepDivePanel, setDeepDivePanel] = useState(null);
   const [standardDeepDiveOpen, setStandardDeepDiveOpen] = useState(true);
@@ -5668,7 +5699,18 @@ const BuildingDashboardPanel = ({ building }) => {
       }`}
     >
       <div className="bg-gray-100 p-4 rounded shadow">
-        <h2 className="text-lg font-bold mb-3">Building Input</h2>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-lg font-bold">Building Input</h2>
+          {building.id === "home" && homePassportId ? (
+            <button type="button" onClick={() => setHomeSaleInfoOpen((open) => !open)}
+              aria-expanded={homeSaleInfoOpen}
+              className="max-w-full border border-emerald-700 bg-white px-3 py-2 text-xs font-bold text-emerald-900 hover:bg-emerald-50 [overflow-wrap:anywhere]"
+              title="Home profile and future home-sale exchange">
+              {homePassportId}
+            </button>
+          ) : null}
+        </div>
+        {homeSaleInfoOpen ? <p className="mb-3 border border-emerald-200 bg-white p-3 text-xs text-gray-700">This is your home profile ID. A home-sale exchange is not available yet; this profile is not listed for sale.</p> : null}
 
         <div className="grid grid-cols-[minmax(112px,0.95fr)_minmax(0,1.65fr)] sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-2 sm:gap-5 items-stretch">
           <div className="min-w-0 self-stretch">
@@ -10676,7 +10718,7 @@ const BuildingDashboard = () => {
                     onOpenPortfolio={() => openSectionById("portfolio")}
                   />
                 ) : (
-                  <BuildingDashboardPanel building={building} />
+                  <BuildingDashboardPanel building={building} isActive={isActiveSlide} />
                 )}
               </div>
             );
