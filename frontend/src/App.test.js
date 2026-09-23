@@ -4,6 +4,7 @@ import supabase from "./supabaseClient";
 
 jest.mock("./supabaseClient", () => ({
   from: jest.fn(() => ({ select: jest.fn(() => ({ order: jest.fn().mockResolvedValue({ data: [], error: null }) })) })),
+  rpc: jest.fn().mockResolvedValue({ data: [], error: null }),
   auth: {
     getSession: jest.fn(),
     getUser: jest.fn(),
@@ -18,6 +19,7 @@ jest.mock("./pages/performance/BuildingDashboard", () => () => "Dashboard test v
 
 beforeEach(() => {
   supabase.from.mockImplementation(() => ({ select: () => ({ order: () => Promise.resolve({ data: [], error: null }) }) }));
+  supabase.rpc.mockResolvedValue({ data: [], error: null });
 });
 
 test.each(["architect", "builder"])("%s portfolio profile can be edited and saved", async (role) => {

@@ -11,7 +11,7 @@ const emptyProject = {
   product_schedule: [],
 };
 const documentCategories = ["brief", "drawing", "render", "model", "specification", "methodology", "planning", "other"];
-const tabs = ["Import", "Overview", "Design", "Performance", "Products", "Evidence"];
+const tabs = ["Import", "Overview", "Design", "Performance", "Products", "Evidence", "Handover"];
 
 const Field = ({ label, value, onChange, multiline = false, required = false, placeholder = "", type = "text" }) => <label className="wbp-access-field">
   <span>{label}</span>
@@ -23,6 +23,7 @@ export default function DesignProject() {
   const { projectId } = useParams();
   const navigate = useNavigate();
   const [project, setProject] = useState(emptyProject);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [savedId, setSavedId] = useState(projectId === "new" ? "" : projectId);
   const [tab, setTab] = useState("Import");
   const [status, setStatus] = useState("");
@@ -36,7 +37,11 @@ export default function DesignProject() {
   const [documentDate, setDocumentDate] = useState("");
   const [sourceUrl, setSourceUrl] = useState("");
   const [product, setProduct] = useState({ element: "", manufacturer: "", model: "", performance: "", embodied_carbon: "" });
-  const update = (key, value) => setProject((current) => ({ ...current, [key]: value }));
+  const [handovers, setHandovers] = useState([]);
+  const [recipientEmail, setRecipientEmail] = useState("");
+  const [issueRevision, setIssueRevision] = useState("");
+  const [clientAuthority, setClientAuthority] = useState(false);
+  const update = (key, value) => { setHasUnsavedChanges(true); setProject((current) => ({ ...current, [key]: value })); };
   const hasEvidence = (...categories) => evidence.some((item) => categories.includes(item.category));
   const gaps = [
     { label: "Project brief", ready: Boolean(project.brief.trim() || hasEvidence("brief")), section: "Overview" },
@@ -59,6 +64,9 @@ export default function DesignProject() {
       else setProject({ ...emptyProject, ...data });
       const result = await supabase.from("WBPDesignEvidence").select("*").eq("project_id", projectId).order("created_at", { ascending: false });
       if (active && !result.error) setEvidence(result.data || []);
+      const handoverResult = await supabase.from("WBPDesignHandovers").select("id,revision,status,issued_at,accepted_at,manifest_hash").eq("project_id", projectId).order("issued_at", { ascending: false });
+      if (active && !handoverResult.error) setHandovers(handoverResult.data || []);
+      if (active && handoverResult.error) setStatus("Build handovers are not enabled yet. Run Design Build Handover.sql in Supabase.");
     };
     load();
     return () => { active = false; };
@@ -84,6 +92,7 @@ export default function DesignProject() {
       const { data, error } = await query.select("id").single();
       if (error) throw error;
       setSavedId(data.id);
+      setHasUnsavedChanges(false);
       if (!savedId) navigate(`/workspace/architect/project/${data.id}`, { replace: true });
       setStatus("Design project saved. Evidence remains self-declared until reviewed.");
       return data.id;
@@ -189,6 +198,28 @@ export default function DesignProject() {
     setProduct({ element: "", manufacturer: "", model: "", performance: "", embodied_carbon: "" });
   };
 
+  const issueHandover = async () => {
+    if (!savedId || hasUnsavedChanges || !recipientEmail.trim() || !issueRevision.trim() || !clientAuthority || readyCount !== gaps.length) return;
+    setBusy(true);
+    setStatus("");
+    try {
+      const { data, error } = await supabase.rpc("wbp_issue_design_handover", {
+        p_project_id: savedId, p_recipient_email: recipientEmail.trim(),
+        p_revision: issueRevision.trim(), p_client_authority_declared: true,
+      });
+      if (error) throw error;
+      const result = await supabase.from("WBPDesignHandovers").select("id,revision,status,issued_at,accepted_at,manifest_hash").eq("id", data).single();
+      if (result.error) throw result.error;
+      setHandovers((current) => [result.data, ...current]);
+      setRecipientEmail("");
+      setIssueRevision("");
+      setClientAuthority(false);
+      setStatus("Revision issued to the recipient account. They must accept before opening the package.");
+    } catch (error) {
+      setStatus(`Could not issue handover: ${error.message}`);
+    } finally { setBusy(false); }
+  };
+
   return <main className="wbp-design-project">
     <header className="wbp-design-project-header"><div><button type="button" onClick={() => navigate("/workspace/architect")}>← Design portfolio</button><h1>{savedId ? project.title || "Design project" : "New design project"}</h1><p>Design-stage record · self-declared until reviewed</p></div><button type="submit" form="wbp-design-form" disabled={busy}>{busy ? "Saving..." : "Save project"}</button></header>
     <nav className="wbp-design-tabs" aria-label="Design project sections">{tabs.map((item) => <button type="button" key={item} aria-current={tab === item ? "page" : undefined} onClick={() => setTab(item)}>{item}</button>)}</nav>
@@ -253,6 +284,31 @@ export default function DesignProject() {
       {evidenceMode === "link" ? <button type="button" className="wbp-design-secondary" disabled={!savedId || busy} onClick={linkEvidence}>Save document link</button> : null}
       {!savedId ? <p>Save the project before adding documents.</p> : null}
       <ul className="wbp-design-list">{evidence.map((item) => <li key={item.id}><span><strong>{item.title}</strong> · {item.category}{item.revision ? ` · Rev ${item.revision}` : ""}{item.source_organisation ? ` · ${item.source_organisation}` : ""} · {item.storage_reference ? "private file" : "external reference"} · unverified</span>{item.storage_reference ? <button type="button" onClick={() => openEvidence(item.storage_reference)}>Open</button> : <a href={item.source_url} target="_blank" rel="noopener noreferrer">Open source</a>}</li>)}</ul>
+    </section> : null}
+    {tab === "Handover" ? <section className="wbp-design-fields">
+      <h2>Build handover</h2>
+      <p>Review the issued design before a contractor receives it. This project and its documents remain editable and private; no handover has been issued.</p>
+      <div className="wbp-design-handover-summary">
+        <div><strong>Design record</strong><span>{project.title || "Untitled project"}</span><span>{project.design_stage.replaceAll("-", " ")} · {project.site_address || "Address pending"}</span></div>
+        <div><strong>Package coverage</strong><span>{readyCount}/{gaps.length} design items present</span><span>{evidence.length} document{evidence.length === 1 ? "" : "s"} attached or linked</span></div>
+      </div>
+      {gaps.some((item) => !item.ready) ? <div className="wbp-design-handover-missing">
+        <h3>Still to add</h3>
+        <ul>{gaps.filter((item) => !item.ready).map((item) => <li key={item.label}><span>{item.label}</span><button type="button" onClick={() => setTab(item.section)}>Open {item.section}</button></li>)}</ul>
+      </div> : <p>Core design information is present. It still needs review before issue.</p>}
+      <div className="wbp-design-handover-issue">
+        <h3>Issue for build</h3>
+        <p>Issues a fixed copy of this revision and its current document manifest. Later edits stay in the Design project.</p>
+        <div className="wbp-design-grid">
+          <Field label="Issue revision" value={issueRevision} onChange={setIssueRevision} placeholder="e.g. C01" />
+          <Field label="Builder account email" type="email" value={recipientEmail} onChange={setRecipientEmail} placeholder="builder@example.com" />
+        </div>
+        <label className="wbp-design-handover-authority"><input type="checkbox" checked={clientAuthority} onChange={(event) => setClientAuthority(event.target.checked)} /> I confirm I have the client’s authority to share this design package with the named builder.</label>
+        {hasUnsavedChanges ? <p className="wbp-design-import-note">Save project changes before issuing this revision.</p> : null}
+        <button type="button" className="wbp-design-secondary" disabled={busy || !savedId || hasUnsavedChanges || readyCount !== gaps.length || !issueRevision.trim() || !recipientEmail.trim() || !clientAuthority} onClick={issueHandover}>Issue revision</button>
+        <p className="wbp-design-import-note">Authority is self-declared, not independently verified. Uploaded files are locked on issue; external links are references only and their contents cannot be frozen by WBP. The builder must accept before accessing the package.</p>
+      </div>
+      {handovers.length ? <div className="wbp-design-handover-missing"><h3>Issued revisions</h3><ul>{handovers.map((handover) => <li key={handover.id}><span>{handover.revision} · {handover.status} · {new Date(handover.issued_at).toLocaleDateString()}</span><code title="Manifest SHA-256">{handover.manifest_hash.slice(0, 12)}</code></li>)}</ul></div> : null}
     </section> : null}
     {status ? <p className="wbp-design-status" role="status">{status}</p> : null}
   </main>;

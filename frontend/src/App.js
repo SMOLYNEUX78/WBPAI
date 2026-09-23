@@ -9,6 +9,7 @@ import {
 } from "react-router-dom";
 import BuildingDashboard from "./pages/performance/BuildingDashboard";
 import DesignProject from "./DesignProject";
+import BuildHandover from "./BuildHandover";
 import supabase from "./supabaseClient";
 import { isProfessionalEmailAllowed, TEST_PROFESSIONAL_EMAIL } from "./professionalEmail";
 import { hasFullWorkspaceAccess, loadLinkedHistoricOutline } from "./workspaceAccess";
@@ -639,6 +640,7 @@ const ProfessionalWorkspace = () => {
   const [profileDraft, setProfileDraft] = useState({});
   const [profileStatus, setProfileStatus] = useState("");
   const [designProjects, setDesignProjects] = useState([]);
+  const [buildInvitations, setBuildInvitations] = useState([]);
   const [isTestAccount, setIsTestAccount] = useState(false);
   useEffect(() => {
     let active = true;
@@ -663,6 +665,15 @@ const ProfessionalWorkspace = () => {
       .order("updated_at", { ascending: false }).then(({ data }) => {
         if (active) setDesignProjects(data || []);
       });
+    return () => { active = false; };
+  }, [isBuilder]);
+  useEffect(() => {
+    if (!isBuilder) return;
+    let active = true;
+    supabase.rpc("wbp_list_design_handover_invitations").then(({ data, error }) => {
+      if (active) setBuildInvitations(data || []);
+      if (active && error) setProfileStatus("Build handovers are not enabled yet. Run Design Build Handover.sql in Supabase.");
+    });
     return () => { active = false; };
   }, [isBuilder]);
   const organisationName = profile.organisationName || (isBuilder ? "Build organisation" : "Design organisation");
@@ -709,17 +720,8 @@ const ProfessionalWorkspace = () => {
       setProfileStatus(error.message);
     }
   };
-  const [showLinkRecord, setShowLinkRecord] = useState(false);
-  const [showIssueHandover, setShowIssueHandover] = useState(false);
-  const [linkCode, setLinkCode] = useState("");
-  const [linkedRecord, setLinkedRecord] = useState("");
-  const [handoverRecipient, setHandoverRecipient] = useState("");
-  const [issuedHandover, setIssuedHandover] = useState(null);
   const projects = isBuilder
-    ? [
-        { id: "WBP-001", name: "14 Bridgewood Road", stage: "Pre-construction", status: "Design record available" },
-        { id: "WBP-018", name: "Rendlesham Housing Phase 1", stage: "Build", status: "Evidence in progress" },
-      ]
+    ? buildInvitations.map((item) => ({ id: item.id.slice(0, 8), name: item.project_title, stage: `Revision ${item.revision}`, status: item.status, route: `/workspace/builder/handover/${item.id}` }))
     : designProjects.map((item) => ({ id: item.id, name: item.title, stage: item.design_stage, status: "Design record", route: `/workspace/architect/project/${item.id}` }));
 
   const logOut = async () => {
@@ -727,47 +729,6 @@ const ProfessionalWorkspace = () => {
     window.localStorage.removeItem("wbp-user-role");
     window.localStorage.removeItem("wbp-user-email");
     navigate("/login");
-  };
-
-  const issueDesignHandover = () => {
-    const handover = {
-      code: `WBP-HO-${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
-      recordId: "WBP-001",
-      from: organisationName,
-      to: handoverRecipient.trim(),
-      type: "design-to-build",
-      status: "offered",
-      issuedAt: new Date().toISOString(),
-      transferableEvidence: [
-        "Design intent",
-        "Drawings and specifications",
-        "Planning and compliance evidence",
-        "Energy and performance model",
-      ],
-      excludedData: ["Personal client correspondence", "Occupant-private data"],
-    };
-    window.localStorage.setItem("wbp-pending-handover", JSON.stringify(handover));
-    setIssuedHandover(handover);
-  };
-
-  const acceptDesignHandover = () => {
-    let offeredHandover = null;
-    try {
-      offeredHandover = JSON.parse(window.localStorage.getItem("wbp-pending-handover") || "null");
-    } catch {
-      offeredHandover = null;
-    }
-    const acceptedCode = linkCode.trim();
-    const isVerified = offeredHandover?.code === acceptedCode;
-    const receipt = {
-      ...(offeredHandover || {}),
-      code: acceptedCode,
-      status: isVerified ? "accepted" : "pending-verification",
-      acceptedBy: organisationName,
-      acceptedAt: new Date().toISOString(),
-    };
-    window.localStorage.setItem("wbp-latest-handover-receipt", JSON.stringify(receipt));
-    setLinkedRecord(`${receipt.recordId || "WBP record"} · ${receipt.status.replaceAll("-", " ")}`);
   };
 
   return (
@@ -824,53 +785,15 @@ const ProfessionalWorkspace = () => {
         <button type="button" className="is-primary" onClick={() => navigate(isBuilder ? "/dashboard/new?role=builder&phase=build" : "/workspace/architect/project/new")}>
           + New project
         </button>
-        {isBuilder ? (
-          <button type="button" disabled title="Organisation verification is required before accepting a handover" onClick={() => setShowLinkRecord((current) => !current)}>Link design record</button>
-        ) : (
-          <button type="button" disabled title="Organisation verification is required before issuing a handover" onClick={() => setShowIssueHandover((current) => !current)}>Issue build handover</button>
-        )}
+        {!isBuilder ? <button type="button" onClick={() => navigate("/workspace/architect/project/new")}>Prepare build handover</button> : null}
       </section>
-
-      {!isBuilder && showIssueHandover ? (
-        <section className="wbp-link-record wbp-handover-panel">
-          <div>
-            <strong>Issue a controlled Design → Build handover</strong>
-            <p>The building record remains intact while the selected evidence manifest is offered to the appointed contractor.</p>
-          </div>
-          <div>
-            <input value={handoverRecipient} onChange={(event) => setHandoverRecipient(event.target.value)} placeholder="Appointed contractor organisation" />
-            <button type="button" disabled={!handoverRecipient.trim()} onClick={issueDesignHandover}>Generate handover</button>
-          </div>
-          <div className="wbp-handover-manifest">
-            <div><span>Transferable property evidence</span><p>Design intent · Drawings and specifications · Planning/compliance · Performance model</p></div>
-            <div><span>Excluded private information</span><p>Personal correspondence · Occupant-private data</p></div>
-          </div>
-          {issuedHandover ? (
-            <p className="wbp-link-success">Handover offered to {issuedHandover.to}. Code: <strong>{issuedHandover.code}</strong></p>
-          ) : null}
-        </section>
-      ) : null}
-
-      {isBuilder && showLinkRecord ? (
-        <section className="wbp-link-record">
-          <div>
-            <strong>Continue an awarded design</strong>
-            <p>Enter the WBP handover code supplied by the architect, client, local authority or housing association.</p>
-          </div>
-          <div>
-            <input value={linkCode} onChange={(event) => setLinkCode(event.target.value)} placeholder="WBP design record code" />
-            <button type="button" disabled={!linkCode.trim()} onClick={acceptDesignHandover}>Link record</button>
-          </div>
-          {linkedRecord ? <p className="wbp-link-success">{linkedRecord} linked to this Build portfolio.</p> : null}
-        </section>
-      ) : null}
 
       <section className="wbp-project-register">
         <div className="wbp-register-heading">
-          <div><p>{isBuilder ? "Example projects" : "Design projects"}</p><h2>{projects.length} {isBuilder ? "sample" : "saved"} record{projects.length === 1 ? "" : "s"}</h2></div>
+          <div><p>{isBuilder ? "Design handovers" : "Design projects"}</p><h2>{projects.length} {isBuilder ? "received" : "saved"} record{projects.length === 1 ? "" : "s"}</h2></div>
           <input type="search" placeholder="Search projects" aria-label="Search projects" />
         </div>
-        <div className="wbp-project-table" role="table" aria-label={isBuilder ? "Example projects" : "Design projects"}>
+        <div className="wbp-project-table" role="table" aria-label={isBuilder ? "Design handovers" : "Design projects"}>
           <div className="wbp-project-row is-heading" role="row">
             <span>WBP ID</span><span>Project</span><span>Stage</span><span>Status</span><span aria-hidden="true" />
           </div>
@@ -936,6 +859,7 @@ const App = () => (
       <Route path="/workspace/history" element={<AuthenticatedRoute><WorkspaceSwitcher historicalOnly /></AuthenticatedRoute>} />
       <Route path="/workspace/:role" element={<AuthenticatedRoute requireProfessionalEmail><ProfessionalWorkspace /></AuthenticatedRoute>} />
       <Route path="/workspace/architect/project/:projectId" element={<AuthenticatedRoute requireProfessionalEmail><DesignProject /></AuthenticatedRoute>} />
+      <Route path="/workspace/builder/handover/:handoverId" element={<AuthenticatedRoute requireProfessionalEmail><BuildHandover /></AuthenticatedRoute>} />
       <Route path="/dashboard/*" element={<AuthenticatedRoute><BuildingDashboard /></AuthenticatedRoute>} />
     </Routes>
   </Router>
