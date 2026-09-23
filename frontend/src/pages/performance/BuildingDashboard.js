@@ -8318,22 +8318,22 @@ export const NewBuildingSetupPanel = () => {
               <h3 className="mt-1 text-lg font-bold">{ownershipRecord.recordId}</h3>
               <p className="mt-1 text-sm text-gray-700">Created by {ownershipRecord.legalOwnerName}</p>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <span className="border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-bold uppercase text-amber-900">
-                {ownershipRecord.ownershipVerificationStatus === "ready-for-review" ? "Evidence awaiting review" : "Ownership unverified"}
-              </span>
-              <span className="border border-gray-300 bg-white px-2 py-1 text-xs font-bold uppercase text-gray-700">Not transferable</span>
-              <span className={`border px-2 py-1 text-xs font-bold uppercase ${passportSaveStatus === "saved" ? "border-emerald-300 bg-white text-emerald-800" : "border-gray-300 bg-gray-100 text-gray-700"}`}>
-                {passportSaveStatus === "saved" ? "Saved securely" : passportSaveStatus === "saving" ? "Saving..." : "Browser only"}
-              </span>
+            <div className="flex min-w-0 flex-col items-end gap-2">
+              <button type="button" onClick={() => { setSetupTab("ownership"); startProfileEdit(); }} className="border border-emerald-700 bg-white px-3 py-2 text-xs font-bold text-emerald-800">Edit profile</button>
+              <div className="flex flex-wrap justify-end gap-2">
+                <span className="border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-bold uppercase text-amber-900">
+                  {ownershipRecord.ownershipVerificationStatus === "ready-for-review" ? "Evidence awaiting review" : "Ownership unverified"}
+                </span>
+                <span className="border border-gray-300 bg-white px-2 py-1 text-xs font-bold uppercase text-gray-700">Not transferable</span>
+                <span className={`border px-2 py-1 text-xs font-bold uppercase ${passportSaveStatus === "saved" ? "border-emerald-300 bg-white text-emerald-800" : "border-gray-300 bg-gray-100 text-gray-700"}`}>
+                  {passportSaveStatus === "saved" ? "Saved securely" : passportSaveStatus === "saving" ? "Saving..." : "Browser only"}
+                </span>
+              </div>
             </div>
           </div>
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-emerald-200 pt-3">
             <p className="text-xs text-gray-600">This is an owner-created profile. WBP has not yet verified legal ownership.</p>
-            <div className="flex flex-wrap gap-2">
-              {passportSaveStatus !== "saved" ? <button type="button" disabled={passportSaveStatus === "saving"} onClick={secureExistingPassport} className="bg-emerald-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">{passportSaveStatus === "saving" ? "Saving..." : "Save to secure account"}</button> : null}
-              <button type="button" onClick={() => { setSetupTab("ownership"); startProfileEdit(); }} className="border border-emerald-700 bg-white px-3 py-2 text-xs font-bold text-emerald-800">Edit profile</button>
-            </div>
+            {passportSaveStatus !== "saved" ? <button type="button" disabled={passportSaveStatus === "saving"} onClick={secureExistingPassport} className="bg-emerald-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">{passportSaveStatus === "saving" ? "Saving..." : "Save to secure account"}</button> : null}
           </div>
           {passportSaveError ? <p className="mt-3 border border-red-200 bg-red-50 p-2 text-xs text-red-800">{passportSaveError}</p> : null}
           {setupTab === "ownership" ? (
