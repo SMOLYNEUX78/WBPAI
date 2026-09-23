@@ -106,7 +106,8 @@ test("saved title evidence can be removed without clearing the home profile", ()
     ownershipEvidence: { route: "title-register", titleNumber: "SK123456", fileName: "title.pdf", status: "ready-for-review" },
   }));
   render(<MemoryRouter><NewBuildingSetupPanel /></MemoryRouter>);
-  expect(screen.getByText("Choose supporting document").parentElement.querySelector('input[type="file"]')).toBeDisabled();
+  expect(screen.getByText(/Do not upload a passport, driving licence or title document here/)).toBeInTheDocument();
+  expect(screen.queryByLabelText("Choose supporting document")).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Remove saved ownership details" }));
   const saved = JSON.parse(window.localStorage.getItem("wbp-new-building-passport"));
   expect(saved.recordId).toBe("WBP-TEST");

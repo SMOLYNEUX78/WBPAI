@@ -7368,27 +7368,57 @@ export const NewBuildingSetupPanel = () => {
   });
   const [profileEditMode, setProfileEditMode] = useState(false);
   const [profileLocationDraft, setProfileLocationDraft] = useState({ address: "", postcode: "" });
-  const [ownershipEvidence, setOwnershipEvidence] = useState(() => {
-    try {
-      const savedRecord = JSON.parse(window.localStorage.getItem("wbp-new-building-passport") || "null");
-      return savedRecord?.ownershipEvidence || {
-        route: "title-register",
-        titleNumber: savedRecord?.titleNumber || "",
-        fileName: "",
-        declarationAccepted: false,
-        status: "not-started",
-      };
-    } catch {
-      return {
-        route: "title-register",
-        titleNumber: "",
-        fileName: "",
-        declarationAccepted: false,
-        status: "not-started",
-      };
-    }
-  });
   const [ownershipCleanupStatus, setOwnershipCleanupStatus] = useState("");
+  const [ownershipClaim, setOwnershipClaim] = useState(null);
+  const [ownershipClaimBusy, setOwnershipClaimBusy] = useState(false);
+  const [ownershipClaimError, setOwnershipClaimError] = useState("");
+  const [ownershipDeclaration, setOwnershipDeclaration] = useState(false);
+  useEffect(() => {
+    if (!ownershipRecord?.databaseId) { setOwnershipClaim(null); return; }
+    let active = true;
+    const loadClaim = async () => {
+      const { data, error } = await supabase.from("WBPOwnershipClaims")
+        .select("id,status,identity_check_status,registry_check_status,created_at")
+        .eq("building_record_id", ownershipRecord.databaseId)
+        .order("created_at", { ascending: false }).limit(1).maybeSingle();
+      if (!active) return;
+      if (error) setOwnershipClaimError("Could not load the ownership-check status.");
+      else setOwnershipClaim(data);
+    };
+    loadClaim();
+    return () => { active = false; };
+  }, [ownershipRecord?.databaseId]);
+
+  const requestOwnershipVerification = async () => {
+    if (!ownershipRecord?.databaseId || !ownershipDeclaration) return;
+    setOwnershipClaimBusy(true);
+    setOwnershipClaimError("");
+    try {
+      const { data: auth, error: authError } = await supabase.auth.getUser();
+      if (authError || !auth.user) throw new Error("Sign in again before requesting a check.");
+      const claimType = {
+        "shared-ownership": "shared-owner",
+        "managing-agent": "authorised-representative",
+      }[ownershipRecord.ownershipType] || ownershipRecord.ownershipType;
+      const evidenceRoute = claimType === "authorised-representative" ? "owner-authority" : "title-register";
+      const { data, error } = await supabase.from("WBPOwnershipClaims").insert({
+        building_record_id: ownershipRecord.databaseId,
+        claimant_user_id: auth.user.id,
+        claim_type: claimType,
+        evidence_route: evidenceRoute,
+        declaration_text: "I declare that I am the named owner or authorised representative of this property and request identity and ownership checks.",
+        declaration_accepted_at: new Date().toISOString(),
+        status: "self-declared",
+      }).select("id,status,identity_check_status,registry_check_status,created_at").single();
+      if (error) throw error;
+      setOwnershipClaim(data);
+      setOwnershipDeclaration(false);
+    } catch (error) {
+      setOwnershipClaimError(error?.message || "The request could not be saved.");
+    } finally {
+      setOwnershipClaimBusy(false);
+    }
+  };
   const [propertySearch, setPropertySearch] = useState(() => {
     try {
       const cached = JSON.parse(window.localStorage.getItem(PROPERTY_DISCOVERY_CACHE_KEY) || "null");
@@ -7505,7 +7535,6 @@ export const NewBuildingSetupPanel = () => {
       };
       window.localStorage.setItem("wbp-new-building-passport", JSON.stringify(accountRecord));
       setOwnershipRecord(accountRecord);
-      setOwnershipEvidence({ route: "title-register", titleNumber: "", fileName: "", declarationAccepted: false, status: "not-started" });
       setOwnershipDraft((current) => ({ ...current, titleNumber: "" }));
       setPropertyDiscovery(discovery);
       setPassportSaveStatus("saved");
@@ -7886,16 +7915,9 @@ export const NewBuildingSetupPanel = () => {
     delete nextRecord.titleNumber;
     delete nextRecord.ownershipEvidence;
     window.localStorage.setItem("wbp-new-building-passport", JSON.stringify(nextRecord));
-    setOwnershipEvidence({ route: "title-register", titleNumber: "", fileName: "", declarationAccepted: false, status: "not-started" });
     setOwnershipDraft((current) => ({ ...current, titleNumber: "" }));
     setOwnershipRecord(nextRecord);
     setOwnershipCleanupStatus("Saved title number and filename removed from this browser.");
-    if (ownershipRecord.databaseId && ownershipRecord.ownershipVerificationStatus === "ready-for-review") {
-      const { error } = await supabase.from("WBPBuildingRecords")
-        .update({ ownership_verification_status: "unverified" })
-        .eq("id", ownershipRecord.databaseId);
-      if (error) setOwnershipCleanupStatus("Browser copy cleared. The account review status could not be reset; contact support before submitting ownership evidence again.");
-    }
   };
 
   const updatePropertySearch = (field, value) => {
@@ -8108,7 +8130,6 @@ export const NewBuildingSetupPanel = () => {
       custodian_user_id: userId,
       genesis_hash: record.genesisHash,
       passport_status: "draft",
-      ownership_verification_status: record.ownershipVerificationStatus || "unverified",
       privacy_notice_version: "homeowner-v1",
       privacy_notice_accepted_at: record.privacyAccepted ? record.createdAt : null,
       updated_at: new Date().toISOString(),
@@ -8630,33 +8651,24 @@ export const NewBuildingSetupPanel = () => {
                 <h3 className="mt-1 text-base font-bold">Show that you can manage this home profile</h3>
                 <p className="mt-1 max-w-2xl text-xs text-gray-600">Choose the most convenient evidence. Creating the profile does not transfer the property or replace HM Land Registry.</p>
               </div>
-              <span className={`px-2 py-1 text-xs font-bold uppercase ${ownershipEvidence.status === "ready-for-review" ? "bg-amber-100 text-amber-900" : "bg-gray-100 text-gray-700"}`}>
-                {ownershipEvidence.status === "ready-for-review" ? "Ready for review" : "Not started"}
+              <span className={`px-2 py-1 text-xs font-bold uppercase ${ownershipClaim ? "bg-amber-100 text-amber-900" : "bg-gray-100 text-gray-700"}`}>
+                {ownershipClaim?.status?.replaceAll("-", " ") || "Not started"}
               </span>
             </div>
 
             <div className="mt-4">
-              <p className="mb-3 border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950">Secure ownership upload is not connected yet. Please keep your title register on your device.</p>
-              <div className="grid gap-3 sm:grid-cols-3">
-                <label className="border border-gray-200 p-3 text-sm">
-                  <span className="block text-xs font-bold">Evidence route</span>
-                  <select disabled className="mt-2 w-full border border-gray-300 bg-gray-100 p-2 text-sm" value={ownershipEvidence.route} onChange={(event) => setOwnershipEvidence((current) => ({ ...current, route: event.target.value, status: "not-started" }))}>
-                    <option value="title-register">Title register or official copy</option>
-                    <option value="conveyancer">Conveyancer or solicitor confirmation</option>
-                    <option value="shared-owner">Shared ownership or lease evidence</option>
-                    <option value="representative">Owner authority for a representative</option>
-                  </select>
-                </label>
-                <label className="border border-gray-200 p-3 text-sm">
-                  <span className="block text-xs font-bold">Title number, if known</span>
-                  <input disabled className="mt-2 w-full border border-gray-300 bg-gray-100 p-2 text-sm uppercase" value={ownershipEvidence.titleNumber} readOnly placeholder="Secure entry coming soon" />
-                </label>
-                <label className="border border-gray-200 p-3 text-sm">
-                  <span className="block text-xs font-bold">Choose supporting document</span>
-                  <input type="file" aria-label="Choose supporting document" disabled accept=".pdf,.jpg,.jpeg,.png" className="mt-2 block w-full text-xs" />
-                  <span className="mt-2 block text-[11px] text-gray-500">The file is not uploaded or stored yet. Secure document storage must be connected first.</span>
-                </label>
+              <p className="mb-3 border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950">Identity and HM Land Registry checks are not connected yet. Do not upload a passport, driving licence or title document here.</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="border border-gray-200 p-3 text-sm"><strong>Identity</strong><p className="mt-1 text-xs text-gray-600">Passport or photocard driving licence, checked by an identity provider.</p><p className="mt-2 text-xs font-semibold">{ownershipClaim?.identity_check_status?.replaceAll("-", " ") || "Not started"}</p></div>
+                <div className="border border-gray-200 p-3 text-sm"><strong>Property ownership</strong><p className="mt-1 text-xs text-gray-600">Verified identity matched against HM Land Registry; joint owners or mismatches require review.</p><p className="mt-2 text-xs font-semibold">{ownershipClaim?.registry_check_status?.replaceAll("-", " ") || "Not started"}</p></div>
               </div>
+              {!ownershipClaim && ownershipRecord.databaseId ? <div className="mt-4 space-y-3">
+                <label className="flex items-start gap-2 text-xs text-gray-700"><input type="checkbox" checked={ownershipDeclaration} onChange={(event) => setOwnershipDeclaration(event.target.checked)} />I am the owner or am authorised to act for the owner, and I request an ownership check.</label>
+                <button type="button" disabled={!ownershipDeclaration || ownershipClaimBusy} onClick={requestOwnershipVerification} className="bg-emerald-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">{ownershipClaimBusy ? "Saving request..." : "Request ownership check"}</button>
+              </div> : null}
+              {!ownershipRecord.databaseId ? <p className="mt-3 text-xs text-amber-800">Save this home to your secure account before requesting verification.</p> : null}
+              {ownershipClaim && ownershipClaim.status !== "verified" ? <p className="mt-3 text-xs text-gray-600">Request saved. No identity or registry check has been performed until the verification service is connected.</p> : null}
+              {ownershipClaimError ? <p role="alert" className="mt-3 text-xs text-red-800">{ownershipClaimError}</p> : null}
               {(ownershipRecord.titleNumber || ownershipRecord.ownershipEvidence?.fileName || ownershipRecord.ownershipEvidence?.titleNumber) ? (
                 <button type="button" onClick={clearSavedOwnershipEvidence} className="mt-4 border border-red-300 bg-white px-3 py-2 text-xs font-bold text-red-800">Remove saved ownership details</button>
               ) : null}
