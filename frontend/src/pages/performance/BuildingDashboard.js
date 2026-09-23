@@ -240,20 +240,21 @@ const getEstimatedInternalArea = (modelId, building) => {
 const BuildingDashboardPanel = ({ building, isActive = false }) => {
   const dataSourceBuildingId = building.dataSourceId || building.id;
   const isCarbonCreditTab = building.id === "cc";
-  const [homePassportId, setHomePassportId] = useState(() => {
-    if (building.id !== "home") return "";
+  const [homePassport, setHomePassport] = useState(() => {
+    if (building.id !== "home") return null;
     try {
-      return JSON.parse(window.localStorage.getItem("wbp-new-building-passport") || "null")?.recordId || "";
+      return JSON.parse(window.localStorage.getItem("wbp-new-building-passport") || "null");
     } catch {
-      return "";
+      return null;
     }
   });
+  const homePassportId = homePassport?.recordId || "";
   const [homeSaleInfoOpen, setHomeSaleInfoOpen] = useState(false);
   useEffect(() => {
     if (building.id !== "home" || !isActive) return;
     try {
-      const cachedId = JSON.parse(window.localStorage.getItem("wbp-new-building-passport") || "null")?.recordId;
-      if (cachedId) setHomePassportId(cachedId);
+      const cached = JSON.parse(window.localStorage.getItem("wbp-new-building-passport") || "null");
+      if (cached?.recordId) setHomePassport(cached);
     } catch { /* The account lookup remains the source when browser data is invalid. */ }
   }, [building.id, isActive]);
   useEffect(() => {
@@ -263,10 +264,33 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
       const { data: auth } = await supabase.auth.getUser();
       if (!active || !auth?.user) return;
       const { data, error } = await supabase.from("WBPBuildingRecords")
-        .select("record_reference")
+        .select("id, record_reference, address, uprn, legal_owner_name, ownership_type, tenure, ownership_verification_status")
         .eq("custodian_user_id", auth.user.id)
         .order("updated_at", { ascending: false }).limit(1).maybeSingle();
-      if (active && !error && data?.record_reference) setHomePassportId(data.record_reference);
+      if (active && !error && data?.record_reference) {
+        const { data: snapshot } = await supabase.from("WBPPropertyDiscoverySnapshots")
+          .select("latitude, longitude, local_authority")
+          .eq("building_record_id", data.id)
+          .order("discovered_at", { ascending: false }).limit(1).maybeSingle();
+        if (!active) return;
+        setHomePassport((current) => ({
+          ...(current?.recordId === data.record_reference ? current : {}),
+          recordId: data.record_reference,
+          uprn: data.uprn || "",
+          legalOwnerName: data.legal_owner_name || "",
+          ownershipType: data.ownership_type || "",
+          tenure: data.tenure || "",
+          ownershipVerificationStatus: data.ownership_verification_status || "unverified",
+          propertyDiscovery: {
+            ...(current?.recordId === data.record_reference ? current.propertyDiscovery : {}),
+            address: data.address?.address || "",
+            postcode: data.address?.postcode || "",
+            latitude: snapshot?.latitude ?? null,
+            longitude: snapshot?.longitude ?? null,
+            localAuthority: snapshot?.local_authority || data.address?.local_authority || "",
+          },
+        }));
+      }
     };
     loadPassportId();
     return () => { active = false; };
@@ -5702,64 +5726,50 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-lg font-bold">Building Input</h2>
         </div>
-
-        <div className="grid grid-cols-[minmax(112px,0.95fr)_minmax(0,1.65fr)] sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-2 sm:gap-5 items-stretch">
-          <div className="min-w-0 self-stretch">
-            <div className="grid grid-cols-1 grid-rows-3 gap-1.5 sm:gap-3 h-full">
-              <div className="bg-white rounded border p-1.5 min-[390px]:p-2 sm:p-3 min-w-0 overflow-hidden flex flex-col justify-center">
-                <p className="text-[8px] min-[390px]:text-[9px] sm:text-xs uppercase tracking-normal sm:tracking-wide text-gray-500 leading-none">
-                  Address
-                </p>
-                <p className="font-semibold text-[clamp(8px,2.4vw,10px)] sm:text-sm mt-1 leading-tight break-words max-h-full overflow-hidden">
-                  {matterportMetadata.address}
-                </p>
-              </div>
-
-              <div className="bg-white rounded border p-1.5 min-[390px]:p-2 sm:p-3 min-w-0 overflow-hidden flex flex-col justify-center">
-                <p className="text-[8px] min-[390px]:text-[9px] sm:text-xs uppercase tracking-normal sm:tracking-wide text-gray-500 leading-none">
-                  <span className="sm:hidden">Coords</span>
-                  <span className="hidden sm:inline">Coordinates</span>
-                </p>
-                <p className="font-semibold text-[clamp(8px,2.4vw,10px)] sm:text-sm mt-1 leading-tight break-words max-h-full overflow-hidden">
-                  {matterportMetadata.latitude}, {matterportMetadata.longitude}
-                </p>
-              </div>
-
-              <div className="bg-white rounded border p-1.5 min-[390px]:p-2 sm:p-3 min-w-0 overflow-hidden flex flex-col justify-center">
-                <p className="text-[8px] min-[390px]:text-[9px] sm:text-xs uppercase tracking-normal sm:tracking-wide text-gray-500 leading-none">
-                  <span className="sm:hidden">Area</span>
-                  <span className="hidden sm:inline">Internal Area</span>
-                </p>
-                <p className="font-semibold text-[clamp(8px,2.4vw,10px)] sm:text-sm mt-1 leading-tight">
-                  {matterportMetadata.internalArea !== "--"
-                    ? `${matterportMetadata.internalArea} m2`
-                    : "Pending"}
-                </p>
-              </div>
+        {building.id === "home" && homePassportId ? (
+          <div className="mb-3 border border-gray-200 bg-white p-3">
+            <button type="button" onClick={() => setHomeSaleInfoOpen((open) => !open)} aria-expanded={homeSaleInfoOpen}
+              className="flex w-full flex-wrap items-center justify-between gap-2 text-left">
+              <span className="min-w-0 break-all text-sm font-bold text-gray-900">{homePassportId}</span>
+              <span className={`text-xs font-semibold ${evidencePackExportReady ? "text-emerald-700" : "text-amber-700"}`}>
+                {evidencePackExportReady ? "Audit pack ready" : "Locked pending audit pack"} {homeSaleInfoOpen ? "−" : "+"}
+              </span>
+            </button>
+            <div className="mt-2 flex justify-between text-xs font-semibold text-gray-700"><span>Audit evidence</span><span>{evidencePackScore}%</span></div>
+            <div role="progressbar" aria-label="Audit evidence readiness" aria-valuenow={evidencePackScore} aria-valuemin={0} aria-valuemax={100} className="mt-1 h-2 overflow-hidden bg-gray-200">
+              <div className={`h-full transition-[width] duration-300 ${evidencePackScore >= 80 ? "bg-emerald-500" : evidencePackScore >= 50 ? "bg-amber-500" : "bg-red-500"}`} style={{ width: `${evidencePackScore}%` }} />
             </div>
-
+            {homeSaleInfoOpen ? (
+              <div className="mt-4 grid gap-4 border-t border-gray-200 pt-3 text-xs sm:grid-cols-2">
+                <div><h3 className="font-bold">Carbon trading</h3><ul className="mt-2 list-disc space-y-1 pl-4 text-gray-700">
+                  {missingEvidenceItems.map((item) => <li key={item.label}>{item.label}: {item.detail}</li>)}
+                  {!verifierApprovalComplete ? <li>Independent verifier approval</li> : null}
+                  <li>Eligible trading route and buyer matching are not live yet</li>
+                </ul></div>
+                <div><h3 className="font-bold">Profile sale with the home</h3><ul className="mt-2 list-disc space-y-1 pl-4 text-gray-700">
+                  {!evidencePackExportReady ? <li>Complete the audit evidence pack</li> : null}
+                  {!['verified', 'approved'].includes(homePassport?.ownershipVerificationStatus) ? <li>Verify ownership and authority to transfer</li> : null}
+                  <li>Buyer handover and private-data permissions</li>
+                  <li>Blockchain token has not been minted</li>
+                  <li>Home-sale exchange is not live; this profile is not listed</li>
+                </ul></div>
+                <button type="button" onClick={() => setActiveMrvEvidenceField("overview")} className="w-fit border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-800 hover:bg-gray-50">Open audit evidence pack</button>
+              </div>
+            ) : null}
           </div>
+        ) : null}
 
-          <div className="min-w-0 space-y-2">
-          {building.id === "home" && homePassportId ? (
-            <div className="border border-gray-200 bg-white p-2 sm:p-3">
-              <button type="button" disabled={!evidencePackExportReady}
-                onClick={() => setHomeSaleInfoOpen((open) => !open)}
-                aria-expanded={evidencePackExportReady ? homeSaleInfoOpen : undefined}
-                title={evidencePackExportReady ? "Home profile and future home-sale exchange" : "Unlocks when the audit evidence pack is ready"}
-                className={`w-full border px-3 py-2 text-left text-xs font-bold [overflow-wrap:anywhere] ${evidencePackExportReady ? "border-emerald-700 bg-emerald-50 text-emerald-900 hover:bg-emerald-100" : "cursor-not-allowed border-gray-200 bg-gray-100 text-gray-500"}`}>
-                {homePassportId} <span className="block text-[10px] font-medium">{evidencePackExportReady ? "Audit pack ready" : "Locked pending audit pack"}</span>
-              </button>
-              <div className="mt-3 flex items-center justify-between gap-2 text-xs font-semibold text-gray-700">
-                <span>Audit evidence</span><span>{evidencePackScore}%</span>
-              </div>
-              <div role="progressbar" aria-label="Audit evidence readiness" aria-valuenow={evidencePackScore} aria-valuemin={0} aria-valuemax={100} className="mt-1 h-2 overflow-hidden bg-gray-200">
-                <div className={`h-full transition-[width] duration-300 ${evidencePackScore >= 80 ? "bg-emerald-500" : evidencePackScore >= 50 ? "bg-amber-500" : "bg-red-500"}`} style={{ width: `${evidencePackScore}%` }} />
-              </div>
-              {evidencePackExportReady && homeSaleInfoOpen ? <p className="mt-2 text-xs text-gray-600">The audit pack is ready. The home-sale exchange is not available yet; this profile is not listed for sale.</p> : null}
-            </div>
-          ) : null}
-          <div className="space-y-1.5 min-w-0 bg-white rounded border p-1.5 sm:p-2">
+        <div className="grid grid-cols-1 items-stretch gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)] sm:gap-5">
+          <dl className="grid min-w-0 grid-cols-2 gap-x-3 border border-gray-200 bg-white p-3 text-xs sm:grid-cols-1">
+            {[
+              ["Address", [homePassport?.propertyDiscovery?.address, homePassport?.propertyDiscovery?.postcode].filter(Boolean).join(", ") || matterportMetadata.address],
+              ["Coordinates", [homePassport?.propertyDiscovery?.latitude ?? matterportMetadata.latitude, homePassport?.propertyDiscovery?.longitude ?? matterportMetadata.longitude].filter((value) => value !== null && value !== undefined && value !== "").join(", ")],
+              ["Internal area", matterportMetadata.internalArea !== "--" ? `${matterportMetadata.internalArea} m2` : "Pending"],
+              ...(building.id === "home" ? [["Property number (UPRN)", homePassport?.uprn], ["Local authority", homePassport?.propertyDiscovery?.localAuthority], ["Created by", homePassport?.legalOwnerName], ["Ownership", homePassport?.ownershipType?.replaceAll("-", " ")], ["Tenure", homePassport?.tenure]] : []),
+            ].map(([label, value]) => <div key={label} className="min-w-0 border-b border-gray-100 py-1.5 last:border-0"><dt className="text-gray-500">{label}</dt><dd className="mt-0.5 break-words font-semibold text-gray-900">{value || "Pending"}</dd></div>)}
+          </dl>
+
+          <div className="flex min-w-0 flex-col border border-gray-200 bg-white p-2">
             <div className="flex items-center justify-between gap-2">
               <h3 className="font-semibold text-xs min-[390px]:text-sm sm:text-base">
                 3D Model
@@ -5783,17 +5793,16 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
               <iframe
                 title="Matterport model"
                 src={matterportEmbedUrl}
-                className="w-full h-[155px] min-[390px]:h-[175px] sm:h-[250px] border rounded bg-white"
+                className="min-h-[190px] w-full flex-1 border bg-white sm:min-h-[250px]"
                 allow="autoplay; fullscreen; xr-spatial-tracking; accelerometer; gyroscope; vr"
                 allowFullScreen
               />
             ) : (
-              <div className="w-full h-[155px] min-[390px]:h-[175px] sm:h-[250px] border rounded bg-white flex items-center justify-center text-gray-500 text-[10px] min-[390px]:text-xs sm:text-sm p-2 sm:p-6 text-center">
+              <div className="flex min-h-[190px] w-full flex-1 items-center justify-center border bg-white p-3 text-center text-sm text-gray-500 sm:min-h-[250px]">
                 3D model pending.
               </div>
             )}
 
-          </div>
           </div>
         </div>
       </div>
@@ -6848,30 +6857,6 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
             </p>
           </div>
         </div>
-      </div>}
-
-      {building.id === "home" && <div className="bg-gray-100 p-4 rounded shadow">
-          <button
-            type="button"
-            className={`w-full rounded border p-4 text-left shadow-sm transition hover:border-gray-400 ${
-              evidencePackExportReady
-                ? "border-emerald-200 bg-emerald-50"
-                : "border-amber-200 bg-amber-50"
-            }`}
-            onClick={() => setActiveMrvEvidenceField("overview")}
-          >
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h3 className="font-semibold">Audit Evidence Pack</h3>
-                <p className="text-xs text-gray-600">
-                  MRV rail readiness for verifier review and portfolio batching.
-                </p>
-              </div>
-            </div>
-            <p className="mt-2 text-xs font-semibold text-gray-700">
-              Click to view evidence requirements
-            </p>
-          </button>
       </div>}
 
       {building.id === "home" && activeMrvEvidenceField && typeof document !== "undefined"
