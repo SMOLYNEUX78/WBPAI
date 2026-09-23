@@ -769,17 +769,19 @@ const ProfessionalWorkspace = () => {
       </header>
 
       <section className="wbp-professional-hero">
+        <div className="wbp-professional-hero-topline">
+          <p>{isBuilder ? "Build portfolio" : "Design portfolio"}</p>
+          <button type="button" onClick={startProfileEdit} className="wbp-profile-edit-button">Edit profile</button>
+        </div>
         <div className="wbp-organisation-logo" aria-hidden="true">
           {profile.logoDataUrl ? <img src={profile.logoDataUrl} alt="" /> : organisationName.slice(0, 2).toUpperCase()}
         </div>
         <div>
-          <p>{isBuilder ? "Build portfolio" : "Design portfolio"}</p>
           <h1>{organisationName}</h1>
           <span>{profile.organisationType || (isBuilder ? "Contractor profile" : "Design practice profile")}</span>
         </div>
         <div className="wbp-organisation-meta">
           <span>{isTestAccount ? "Test account · Organisation not verified" : "Self-declared · Organisation not verified"}</span>
-          <button type="button" onClick={startProfileEdit} className="wbp-profile-edit-button">Edit profile</button>
         </div>
         <dl className="wbp-organisation-details">{profileDetails.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{label === "Website" && /^https:\/\//i.test(value) ? <a href={value} target="_blank" rel="noopener noreferrer">{value}</a> : value}</dd></div>)}</dl>
       </section>

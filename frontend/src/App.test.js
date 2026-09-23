@@ -38,6 +38,7 @@ test.each(["architect", "builder"])("%s portfolio profile can be edited and save
 
   render(<App />);
   expect(await screen.findByRole("heading", { name: "Original organisation" })).toBeInTheDocument();
+  expect(screen.getByText(role === "architect" ? "Design portfolio" : "Build portfolio").parentElement).toContainElement(screen.getByRole("button", { name: "Edit profile" }));
   expect(screen.getByText("01234 567890")).toBeInTheDocument();
   expect(screen.getByText("1 High Street, Woodbridge, IP12 1AA")).toBeInTheDocument();
   expect(screen.getByText("Suffolk")).toBeInTheDocument();

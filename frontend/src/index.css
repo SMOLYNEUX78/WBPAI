@@ -643,6 +643,8 @@ code {
   border-bottom: 1px solid #bfdbfe;
 }
 .wbp-professional-shell.is-build .wbp-professional-hero { background: #fef3c7; border-bottom-color: #fde68a; }
+.wbp-professional-hero-topline { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.wbp-professional-hero-topline p { margin: 0; }
 .wbp-organisation-logo { display: grid; width: 76px; height: 76px; place-items: center; overflow: hidden; background: #ffffff; color: #1e3a8a; font-size: 23px; font-weight: 850; }
 .wbp-organisation-logo img { width: 100%; height: 100%; object-fit: contain; }
 .wbp-professional-shell.is-build .wbp-organisation-logo { color: #854d0e; }
@@ -657,7 +659,6 @@ code {
 .wbp-organisation-details dd { margin: 0; overflow-wrap: anywhere; font-size: 13px; font-weight: 650; }
 .wbp-organisation-details a { color: #1d4ed8; text-decoration: underline; }
 .wbp-profile-edit-button, .wbp-profile-editor-actions button { min-height: 36px; padding: 0 14px; border: 1px solid #6b7280; background: #ffffff; color: #111827; font: inherit; font-size: 13px; font-weight: 750; cursor: pointer; }
-.wbp-profile-edit-button { margin-top: 6px; }
 .wbp-professional-profile-editor { margin: 20px clamp(20px, 4vw, 58px) 0; padding: 20px; border: 1px solid #d1d5db; background: #ffffff; }
 .wbp-profile-editor-heading h2 { margin: 0; font-size: 18px; }
 .wbp-profile-editor-heading p { margin: 5px 0 0; color: #6b7280; font-size: 13px; }
