@@ -7418,6 +7418,65 @@ export const NewBuildingSetupPanel = () => {
     placementNotes: "",
     metrics: ["temperature", "humidity"],
   });
+  useEffect(() => {
+    let active = true;
+    const loadAccountPassport = async () => {
+      const { data: auth, error: authError } = await supabase.auth.getUser();
+      if (!active || authError || !auth.user) return;
+      const { data: record, error } = await supabase.from("WBPBuildingRecords")
+        .select("*").eq("custodian_user_id", auth.user.id)
+        .order("updated_at", { ascending: false }).limit(1).maybeSingle();
+      if (!active) return;
+      if (error) { setPassportSaveError("Could not load your saved home profile from your account."); return; }
+      if (!record) {
+        try {
+          const cached = JSON.parse(window.localStorage.getItem("wbp-new-building-passport") || "null");
+          if (cached?.databaseId || (cached?.ownerUserId && cached.ownerUserId !== auth.user.id)) {
+            window.localStorage.removeItem("wbp-new-building-passport");
+            setOwnershipRecord(null);
+            setPassportSaveStatus("idle");
+          }
+        } catch { /* A malformed browser cache cannot override the account. */ }
+        return;
+      }
+      const { data: snapshot } = await supabase.from("WBPPropertyDiscoverySnapshots")
+        .select("*").eq("building_record_id", record.id)
+        .order("discovered_at", { ascending: false }).limit(1).maybeSingle();
+      if (!active) return;
+      const discovery = snapshot ? {
+        address: snapshot.searched_address || record.address?.address || "",
+        postcode: snapshot.postcode || record.address?.postcode || "",
+        uprn: snapshot.uprn || record.uprn || "",
+        latitude: snapshot.latitude,
+        longitude: snapshot.longitude,
+        localAuthority: snapshot.local_authority || record.address?.local_authority || "",
+        sources: snapshot.discovered_sources || [],
+        planningRecords: snapshot.planning_records || [],
+        confirmedAt: snapshot.owner_confirmed_at,
+        discoveredAt: snapshot.discovered_at,
+      } : {
+        address: record.address?.address || "", postcode: record.address?.postcode || "",
+        uprn: record.uprn || "", localAuthority: record.address?.local_authority || "",
+      };
+      const accountRecord = {
+        recordId: record.record_reference, databaseId: record.id, ownerUserId: auth.user.id,
+        createdAt: record.created_at, updatedAt: record.updated_at,
+        ownershipType: record.ownership_type, tenure: record.tenure,
+        legalOwnerName: record.legal_owner_name, custodianName: record.legal_owner_name,
+        uprn: record.uprn || "", genesisHash: record.genesis_hash,
+        ownershipVerificationStatus: record.ownership_verification_status,
+        privacyAccepted: Boolean(record.privacy_notice_accepted_at),
+        propertyDiscovery: discovery, storageState: "supabase",
+      };
+      window.localStorage.setItem("wbp-new-building-passport", JSON.stringify(accountRecord));
+      setOwnershipRecord(accountRecord);
+      setPropertyDiscovery(discovery);
+      setPassportSaveStatus("saved");
+      setPassportSaveError("");
+    };
+    loadAccountPassport();
+    return () => { active = false; };
+  }, []);
   const healthMetricOptions = [
     ["temperature", "Temperature"],
     ["humidity", "Humidity"],
@@ -8068,7 +8127,7 @@ export const NewBuildingSetupPanel = () => {
       event_data: { record_reference: record.recordId },
     });
 
-    return { ...record, databaseId: databaseRecord.id, storageState: "supabase" };
+    return { ...record, databaseId: databaseRecord.id, ownerUserId: userId, storageState: "supabase" };
   };
 
   const secureExistingPassport = async () => {

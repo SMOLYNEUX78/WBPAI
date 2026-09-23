@@ -18,7 +18,13 @@ jest.mock("./supabaseClient", () => ({
 jest.mock("./pages/performance/BuildingDashboard", () => () => "Dashboard test view");
 
 beforeEach(() => {
-  supabase.from.mockImplementation(() => ({ select: () => ({ order: () => Promise.resolve({ data: [], error: null }) }) }));
+  supabase.from.mockImplementation(() => ({
+    select: () => ({
+      order: () => Promise.resolve({ data: [], error: null }),
+      eq: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: null }) }) }),
+    }),
+    upsert: () => Promise.resolve({ error: null }),
+  }));
   supabase.rpc.mockResolvedValue({ data: [], error: null });
 });
 
@@ -41,6 +47,21 @@ test.each(["architect", "builder"])("%s portfolio profile can be edited and save
 
   expect(screen.getByRole("heading", { name: "Updated organisation" })).toBeInTheDocument();
   expect(JSON.parse(window.localStorage.getItem(`wbp-${role}-profile-${session.user.id}`)).organisationName).toBe("Updated organisation");
+});
+
+test("architect profile loads from the account without browser cache", async () => {
+  const session = { user: { id: "cloud-user", email: "wbpai25@gmail.com" } };
+  supabase.auth.getSession.mockResolvedValue({ data: { session } });
+  supabase.auth.getUser.mockResolvedValue({ data: { user: session.user } });
+  supabase.auth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: jest.fn() } } });
+  supabase.from.mockImplementation((table) => table === "WBPWorkspaceProfiles"
+    ? { select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { profile: { organisationName: "Cloud Studio", phone: "01234 000000" } }, error: null }) }) }) }) }
+    : { select: () => ({ order: async () => ({ data: [], error: null }) }) });
+  window.history.pushState({}, "", "/workspace/architect");
+
+  render(<App />);
+  expect(await screen.findByRole("heading", { name: "Cloud Studio" })).toBeInTheDocument();
+  expect(screen.getByText("01234 000000")).toBeInTheDocument();
 });
 
 test("portfolio image upload appears in the banner after saving", async () => {

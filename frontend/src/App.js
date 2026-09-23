@@ -179,6 +179,12 @@ const RoleGateway = () => {
     if (intent.profile?.organisationName && intent.role !== "homeowner") {
       window.localStorage.setItem(`wbp-${intent.role}-profile-${session.user.id}`, JSON.stringify(intent.profile));
       window.localStorage.setItem(`wbp-organisation-profile-${session.user.id}`, JSON.stringify(intent.profile));
+      await supabase.from("WBPWorkspaceProfiles").upsert({
+        user_id: session.user.id,
+        workspace_role: intent.role,
+        profile: intent.profile,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "user_id,workspace_role" });
     }
 
     window.localStorage.removeItem(AUTH_INTENT_KEY);
@@ -644,16 +650,31 @@ const ProfessionalWorkspace = () => {
   const [isTestAccount, setIsTestAccount] = useState(false);
   useEffect(() => {
     let active = true;
-    supabase.auth.getUser().then(({ data }) => {
+    supabase.auth.getUser().then(async ({ data }) => {
       if (!active || !data.user) return;
       setProfileUserId(data.user.id);
       setProfileEmail(data.user.email || "");
       setIsTestAccount(data.user.email?.toLowerCase() === TEST_PROFESSIONAL_EMAIL);
+      let cached = {};
       try {
-        const cached = JSON.parse(window.localStorage.getItem(`wbp-${role}-profile-${data.user.id}`) || window.localStorage.getItem(`wbp-organisation-profile-${data.user.id}`) || "{}");
+        cached = JSON.parse(window.localStorage.getItem(`wbp-${role}-profile-${data.user.id}`) || window.localStorage.getItem(`wbp-organisation-profile-${data.user.id}`) || "{}");
         setProfile(location.state?.profile?.organisationName ? location.state.profile : cached);
       } catch {
         setProfile({});
+      }
+      const result = await supabase.from("WBPWorkspaceProfiles").select("profile").eq("user_id", data.user.id).eq("workspace_role", role).maybeSingle();
+      if (!active) return;
+      if (result.data?.profile?.organisationName) {
+        setProfile(result.data.profile);
+        window.localStorage.setItem(`wbp-${role}-profile-${data.user.id}`, JSON.stringify(result.data.profile));
+      } else if (!result.error && cached.organisationName) {
+        const { error } = await supabase.from("WBPWorkspaceProfiles").upsert({
+          user_id: data.user.id, workspace_role: role, profile: cached,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "user_id,workspace_role" });
+        if (active && error) setProfileStatus("Profile is still stored in this browser. Cloud sync failed.");
+      } else if (result.error) {
+        setProfileStatus("Profile is still stored in this browser. Run Workspace Profiles.sql to enable account sync.");
       }
     });
     return () => { active = false; };
@@ -694,7 +715,7 @@ const ProfessionalWorkspace = () => {
     setProfileStatus("");
     setEditingProfile(true);
   };
-  const saveProfile = (event) => {
+  const saveProfile = async (event) => {
     event.preventDefault();
     if (!profileUserId) {
       setProfileStatus("Sign in again before saving your profile.");
@@ -709,7 +730,13 @@ const ProfessionalWorkspace = () => {
     }
     setProfile(updated);
     setEditingProfile(false);
-    setProfileStatus("Profile saved in this browser. Organisation details remain unverified.");
+    const { error } = await supabase.from("WBPWorkspaceProfiles").upsert({
+      user_id: profileUserId, workspace_role: role, profile: updated,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "user_id,workspace_role" });
+    setProfileStatus(error
+      ? "Saved in this browser, but account sync failed. Run Workspace Profiles.sql in Supabase."
+      : "Profile saved to your account. Organisation details remain unverified.");
   };
   const updateProfileImage = async (file) => {
     try {
@@ -758,7 +785,7 @@ const ProfessionalWorkspace = () => {
       </section>
 
       {editingProfile ? <form className="wbp-professional-profile-editor" onSubmit={saveProfile}>
-        <div className="wbp-profile-editor-heading"><h2>Edit organisation profile</h2><p>Changes are saved in this browser and do not verify the organisation.</p></div>
+        <div className="wbp-profile-editor-heading"><h2>Edit organisation profile</h2><p>Changes sync to your account when available. They do not verify the organisation.</p></div>
         <div className="wbp-profile-editor-grid">
           <div className="wbp-profile-image-editor"><span>Profile image / company logo</span><div>{profileDraft.logoDataUrl ? <img src={profileDraft.logoDataUrl} alt="Profile preview" /> : <span className="wbp-profile-image-placeholder">{organisationName.slice(0, 2).toUpperCase()}</span>}<label className="wbp-access-field"><span>Upload image (PNG, JPG or WebP, under 750 KB)</span><input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => { updateProfileImage(event.target.files?.[0]); event.target.value = ""; }} /></label>{profileDraft.logoDataUrl ? <button type="button" onClick={() => setProfileDraft((current) => ({ ...current, logoDataUrl: "", logoName: "" }))}>Remove image</button> : null}</div></div>
           {[
