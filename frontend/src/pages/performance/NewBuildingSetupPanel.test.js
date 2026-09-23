@@ -29,6 +29,7 @@ test("baseline readiness stays above every setup tab for a created home profile"
   const banner = screen.getByText("Home profile created").closest(".bg-emerald-50");
   expect(banner).toContainElement(screen.getByRole("heading", { name: "Baseline readiness" }));
   expect(banner).toContainElement(screen.getByRole("progressbar", { name: "Baseline readiness" }));
+  expect(screen.getByText("Home profile created").parentElement).toContainElement(screen.getByRole("button", { name: "Edit profile" }));
   expect(screen.getByRole("button", { name: "Edit profile" }).compareDocumentPosition(screen.getByText("Ownership:")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(screen.getByRole("progressbar", { name: "Baseline readiness" })).toHaveAttribute("aria-valuenow", "11");
   expect(banner).toContainElement(screen.getByText("Ownership:"));
