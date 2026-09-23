@@ -5,6 +5,7 @@ import AnalogGauge from "../../components/AnalogGauge";
 import supabase from "../../supabaseClient";
 import govukCrown from "../../assets/govuk-crown.png";
 import matterportMark from "../../assets/matterport-mark.png";
+import PrototypeTabs from "../../PrototypeTabs";
 
 const DEFAULT_MATTERPORT_URL = "https://my.matterport.com/show/?m=zHm8SwWeHiN";
 const HDD_BASE_TEMP_C = 15.5;
@@ -10496,7 +10497,7 @@ const BuildingDashboard = () => {
   const roleDetails = {
     architect: { label: "Architect", phase: "Design", focus: "Design intent and specification" },
     builder: { label: "Builder", phase: "Build", focus: "Delivery, quality and commissioning" },
-    homeowner: { label: "Homeowner", phase: "Occupy", focus: "Handover and measured performance" },
+    homeowner: { label: "Occupant", phase: "Occupy", focus: "Handover and measured performance" },
   }[accessRole];
   const routeSection = location.pathname.split("/").filter(Boolean)[1] || "new";
   const routeIndex = BUILDINGS.findIndex((building) => building.id === routeSection);
@@ -10625,26 +10626,7 @@ const BuildingDashboard = () => {
     >
       <div className="sticky top-0 z-20 bg-white border-b px-4 py-3">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-          <div className="flex min-w-0 w-full gap-2 overflow-x-auto pb-1 sm:w-auto sm:flex-1">
-            {BUILDINGS.map((building, index) => (
-              <React.Fragment key={building.id}>
-                {building.id === "museum" ? (
-                  <span className="mx-2 h-9 w-px shrink-0 self-center bg-gray-300" aria-hidden="true" />
-                ) : null}
-                <button
-                  type="button"
-                  className={`shrink-0 px-3 py-2 rounded border text-sm font-semibold sm:px-4 ${
-                    activeBuilding.id === building.id
-                      ? "bg-black text-white border-black"
-                      : "bg-white text-black border-gray-300"
-                  }`}
-                  onClick={() => goToBuilding(index)}
-                >
-                  {building.name}
-                </button>
-              </React.Fragment>
-            ))}
-          </div>
+          <PrototypeTabs activePath={`/dashboard/${activeBuilding.id}`} onDashboardTab={openBuildingById} />
 
           <div className="flex shrink-0 items-center gap-3">
             <button type="button" onClick={() => navigate("/login")} className="border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-900 hover:bg-gray-100">Switch workspace</button>
@@ -10654,10 +10636,10 @@ const BuildingDashboard = () => {
       </div>
 
       {roleDetails ? (
-        <section className="border-b border-emerald-200 bg-emerald-50 px-4 py-3">
+        <section className={`border-b px-4 py-3 ${accessRole === "architect" ? "border-blue-200 bg-blue-50" : accessRole === "builder" ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50"}`}>
           <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-3">
-              <span className="bg-emerald-700 px-2 py-1 text-xs font-bold uppercase text-white">
+              <span className={`px-2 py-1 text-xs font-bold uppercase text-white ${accessRole === "architect" ? "bg-blue-700" : accessRole === "builder" ? "bg-amber-700" : "bg-emerald-700"}`}>
                 {roleDetails.label}
               </span>
               <div>

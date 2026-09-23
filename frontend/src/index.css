@@ -616,6 +616,23 @@ code {
   border-bottom: 1px solid #d1d5db;
   background: #ffffff;
 }
+.wbp-professional-nav > nav { width: 0; }
+.wbp-professional-stage-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px clamp(20px, 4vw, 58px);
+  border-bottom: 1px solid #bfdbfe;
+  background: #eff6ff;
+}
+.wbp-professional-stage-banner.is-build { border-bottom-color: #fde68a; background: #fffbeb; }
+.wbp-professional-stage-banner > div { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.wbp-professional-stage-banner strong { background: #1d4ed8; padding: 5px 9px; color: white; font-size: 12px; text-transform: uppercase; }
+.wbp-professional-stage-banner.is-build strong { background: #b45309; }
+.wbp-professional-stage-banner span { color: #374151; font-size: 13px; }
+.wbp-professional-stage-banner button { border: 1px solid #93c5fd; background: white; padding: 8px 12px; color: #1e40af; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+.wbp-professional-stage-banner.is-build button { border-color: #fcd34d; color: #92400e; }
 .wbp-professional-nav strong { font-size: 20px; }
 .wbp-professional-nav-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 @media (max-width: 640px) {

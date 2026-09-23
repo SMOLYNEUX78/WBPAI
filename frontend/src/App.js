@@ -13,6 +13,7 @@ import BuildHandover from "./BuildHandover";
 import supabase from "./supabaseClient";
 import { isProfessionalEmailAllowed, TEST_PROFESSIONAL_EMAIL } from "./professionalEmail";
 import { hasFullWorkspaceAccess, loadLinkedHistoricOutline } from "./workspaceAccess";
+import PrototypeTabs from "./PrototypeTabs";
 
 const AUTH_INTENT_KEY = "wbp-auth-intent:v1";
 const PROFILE_IMAGE_LIMIT_BYTES = 750 * 1024;
@@ -761,12 +762,19 @@ const ProfessionalWorkspace = () => {
   return (
     <main className={`wbp-professional-shell is-${isBuilder ? "build" : "design"}`}>
       <header className="wbp-professional-nav">
-        <strong>Whole Build Profile</strong>
+        <PrototypeTabs activePath={`/workspace/${role}`} />
         <div className="wbp-professional-nav-actions">
           <button type="button" onClick={() => navigate("/login")}>Switch workspace</button>
-          <button type="button" onClick={logOut}>Log out</button>
         </div>
       </header>
+
+      <section className={`wbp-professional-stage-banner is-${isBuilder ? "build" : "design"}`}>
+        <div>
+          <strong>{isBuilder ? "Build" : "Design"}</strong>
+          <span>{isBuilder ? "Delivery, quality and commissioning" : "Design intent and specification"}</span>
+        </div>
+        <button type="button" onClick={logOut}>Log out</button>
+      </section>
 
       <section className="wbp-professional-hero">
         <div className="wbp-professional-hero-topline">
