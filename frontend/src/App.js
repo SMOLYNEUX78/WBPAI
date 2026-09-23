@@ -760,8 +760,9 @@ const ProfessionalWorkspace = () => {
 
   return (
     <main className={`wbp-professional-shell is-${isBuilder ? "build" : "design"}`}>
+      <div className="wbp-professional-sticky">
       <header className="wbp-professional-nav">
-        <strong>Whole Build Profile</strong>
+        <strong>WBP Prototype</strong>
         <div className="wbp-professional-nav-actions">
           <button type="button" onClick={() => navigate("/login")}>Switch workspace</button>
         </div>
@@ -774,6 +775,7 @@ const ProfessionalWorkspace = () => {
         </div>
         <button type="button" onClick={logOut}>Log out</button>
       </section>
+      </div>
 
       <section className="wbp-professional-hero">
         <div className="wbp-professional-hero-topline">

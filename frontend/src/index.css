@@ -607,6 +607,7 @@ code {
 
 /* Design and build organisation workspace */
 .wbp-professional-shell { min-height: 100vh; background: #f3f4f6; color: #111827; }
+.wbp-professional-sticky { position: sticky; top: 0; z-index: 20; }
 .wbp-professional-nav {
   display: flex;
   align-items: center;

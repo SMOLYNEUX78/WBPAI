@@ -10654,9 +10654,10 @@ const BuildingDashboard = () => {
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
-      <div className="sticky top-0 z-20 bg-white border-b px-4 py-3">
+      <div className="sticky top-0 z-20">
+      <div className="border-b bg-white px-4 py-3">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-          {accessRole === "homeowner" ? <PrototypeTabs activePath={`/dashboard/${activeBuilding.id}`} onDashboardTab={openBuildingById} /> : null}
+          {accessRole === "homeowner" ? <PrototypeTabs activePath={`/dashboard/${activeBuilding.id}`} onDashboardTab={openBuildingById} /> : <strong className="text-lg">WBP Prototype</strong>}
 
           <div className="flex shrink-0 items-center gap-3">
             <button type="button" onClick={() => navigate("/login")} className="border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-900 hover:bg-gray-100">Switch workspace</button>
@@ -10684,6 +10685,7 @@ const BuildingDashboard = () => {
           </div>
         </section>
       ) : null}
+      </div>
 
       <div className="overflow-hidden">
         <div

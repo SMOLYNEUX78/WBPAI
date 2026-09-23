@@ -39,6 +39,7 @@ test.each(["architect", "builder"])("%s portfolio profile can be edited and save
   render(<App />);
   expect(await screen.findByRole("heading", { name: "Original organisation" })).toBeInTheDocument();
   expect(screen.queryByRole("navigation", { name: "Prototype pages" })).not.toBeInTheDocument();
+  expect(screen.getByText("WBP Prototype").closest(".wbp-professional-sticky")).toContainElement(screen.getByText(role === "architect" ? "Design intent and specification" : "Delivery, quality and commissioning"));
   expect(screen.getByText(role === "architect" ? "Design intent and specification" : "Delivery, quality and commissioning").closest(".wbp-professional-stage-banner")).toHaveClass(role === "architect" ? "is-design" : "is-build");
   expect(screen.getByText(role === "architect" ? "Design portfolio" : "Build portfolio").parentElement).toContainElement(screen.getByRole("button", { name: "Edit profile" }));
   expect(screen.getByText("01234 567890")).toBeInTheDocument();

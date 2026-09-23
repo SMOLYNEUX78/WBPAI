@@ -2,8 +2,6 @@ import React from "react";
 import { useNavigate } from "react-router-dom";
 
 const TABS = [
-  { label: "Design", path: "/workspace/architect" },
-  { label: "Build", path: "/workspace/builder" },
   { label: "New", path: "/dashboard/new" },
   { label: "WBP-001", path: "/dashboard/home" },
   { label: "WBP-001cc", path: "/dashboard/cc" },
