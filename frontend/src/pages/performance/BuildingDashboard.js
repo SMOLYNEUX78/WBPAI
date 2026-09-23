@@ -6,6 +6,7 @@ import supabase from "../../supabaseClient";
 import govukCrown from "../../assets/govuk-crown.png";
 import matterportMark from "../../assets/matterport-mark.png";
 import PrototypeTabs from "../../PrototypeTabs";
+import { getReadinessGates } from "./readinessGates";
 
 const DEFAULT_MATTERPORT_URL = "https://my.matterport.com/show/?m=zHm8SwWeHiN";
 const HDD_BASE_TEMP_C = 15.5;
@@ -4802,8 +4803,16 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
     (evidencePackCompleteCount / evidencePackChecks.length) * 100
   );
   const evidencePackExportReady = evidencePackScore === 100;
-  const sellCreditsAvailable =
-    evidencePackExportReady && verifierApprovalComplete;
+  const profileEvidenceReady = evidencePackChecks
+    .filter((check) => check.category !== "Retrofit works")
+    .every((check) => check.complete);
+  const readinessGates = getReadinessGates({
+    ownershipStatus: homePassport?.ownershipVerificationStatus,
+    profileEvidenceReady,
+    carbonEvidenceReady: evidencePackExportReady,
+    verifierApproved: verifierApprovalComplete,
+  });
+  const sellCreditsAvailable = readinessGates.carbon.ready;
   const verifierRoutingStatus = evidencePackExportReady
     ? "Ready to route to selected verifier on export"
     : "Verifier routing unlocks when the evidence pack reaches 100%";
@@ -5732,7 +5741,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
               className="flex w-full flex-wrap items-center justify-between gap-2 text-left">
               <span className="min-w-0 break-all text-sm font-bold text-gray-900">{homePassportId}</span>
               <span className={`text-xs font-semibold ${evidencePackExportReady ? "text-emerald-700" : "text-amber-700"}`}>
-                {evidencePackExportReady ? "Audit pack ready" : "Locked pending audit pack"} {homeSaleInfoOpen ? "−" : "+"}
+                {evidencePackExportReady ? "Evidence pack complete" : "Evidence in progress"} {homeSaleInfoOpen ? "−" : "+"}
               </span>
             </button>
             <div className="mt-2 flex justify-between text-xs font-semibold text-gray-700"><span>Audit evidence</span><span>{evidencePackScore}%</span></div>
@@ -5740,20 +5749,24 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
               <div className={`h-full transition-[width] duration-300 ${evidencePackScore >= 80 ? "bg-emerald-500" : evidencePackScore >= 50 ? "bg-amber-500" : "bg-red-500"}`} style={{ width: `${evidencePackScore}%` }} />
             </div>
             {homeSaleInfoOpen ? (
-              <div className="mt-4 grid gap-4 border-t border-gray-200 pt-3 text-xs sm:grid-cols-2">
-                <div><h3 className="font-bold">Carbon trading</h3><ul className="mt-2 list-disc space-y-1 pl-4 text-gray-700">
-                  {missingEvidenceItems.map((item) => <li key={item.label}>{item.label}: {item.detail}</li>)}
-                  {!verifierApprovalComplete ? <li>Independent verifier approval</li> : null}
-                  <li>Eligible trading route and buyer matching are not live yet</li>
-                </ul></div>
-                <div><h3 className="font-bold">Profile sale with the home</h3><ul className="mt-2 list-disc space-y-1 pl-4 text-gray-700">
-                  {!evidencePackExportReady ? <li>Complete the audit evidence pack</li> : null}
-                  {!['verified', 'approved'].includes(homePassport?.ownershipVerificationStatus) ? <li>Verify ownership and authority to transfer</li> : null}
-                  <li>Buyer handover and private-data permissions</li>
-                  <li>Blockchain token has not been minted</li>
-                  <li>Home-sale exchange is not live; this profile is not listed</li>
-                </ul></div>
-                <button type="button" onClick={() => setActiveMrvEvidenceField("overview")} className="w-fit border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-800 hover:bg-gray-50">Open audit evidence pack</button>
+              <div className="mt-4 border-t border-gray-200 pt-3 text-xs">
+                <p className="text-gray-600">Monitoring and evidence collection stay available. Sales and transfer are separate checks.</p>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  {[
+                    ["Authority", readinessGates.authority],
+                    ["Data licensing", readinessGates.data],
+                    ["Carbon credits", readinessGates.carbon],
+                    ["Home-profile transfer", readinessGates.home],
+                  ].map(([label, gate]) => (
+                    <section key={label} className="min-w-0 border-l-2 border-amber-400 pl-3">
+                      <h3 className="font-bold text-gray-900">{label}</h3>
+                      <p className="mt-1 font-semibold text-amber-800">{gate.ready ? "Ready" : "Not yet available"}</p>
+                      {gate.missing.length > 0 ? <ul className="mt-2 list-disc space-y-1 pl-4 text-gray-700">{gate.missing.map((step) => <li key={step}>{step}</li>)}</ul> : null}
+                    </section>
+                  ))}
+                </div>
+                <p className="mt-3 text-gray-500">This WBP reference is not a minted blockchain token or a property listing.</p>
+                <button type="button" onClick={() => setActiveMrvEvidenceField("overview")} className="mt-3 border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-800 hover:bg-gray-50">Open audit evidence pack</button>
               </div>
             ) : null}
           </div>
