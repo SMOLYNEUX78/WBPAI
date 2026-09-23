@@ -7334,6 +7334,7 @@ export const NewBuildingSetupPanel = () => {
     privacyAccepted: false,
   });
   const [profileEditMode, setProfileEditMode] = useState(false);
+  const [profileLocationDraft, setProfileLocationDraft] = useState({ address: "", postcode: "" });
   const [ownershipEvidence, setOwnershipEvidence] = useState(() => {
     try {
       const savedRecord = JSON.parse(window.localStorage.getItem("wbp-new-building-passport") || "null");
@@ -7773,6 +7774,10 @@ export const NewBuildingSetupPanel = () => {
   };
 
   const startProfileEdit = () => {
+    setProfileLocationDraft({
+      address: ownershipRecord?.propertyDiscovery?.address || "",
+      postcode: ownershipRecord?.propertyDiscovery?.postcode || "",
+    });
     setOwnershipDraft((current) => ({
       ...current,
       ownershipType: ownershipRecord?.ownershipType || current.ownershipType,
@@ -7791,8 +7796,23 @@ export const NewBuildingSetupPanel = () => {
     event.preventDefault();
     if (!ownershipRecord) return;
     const updatedAt = new Date().toISOString();
+    const address = profileLocationDraft.address.trim();
+    const postcode = profileLocationDraft.postcode.trim().toUpperCase();
+    const uprn = ownershipDraft.uprn.trim();
+    const addressChanged = address !== (ownershipRecord.propertyDiscovery?.address || "")
+      || postcode !== (ownershipRecord.propertyDiscovery?.postcode || "");
+    const propertyDiscovery = {
+      ...(ownershipRecord.propertyDiscovery || {}),
+      address, postcode, uprn,
+      ...(addressChanged ? {
+        latitude: null, longitude: null, localAuthority: "", sources: [], planningRecords: [],
+        confirmedAt: null, discoveredAt: updatedAt,
+      } : {}),
+    };
     const nextRecord = {
       ...ownershipRecord,
+      uprn,
+      propertyDiscovery,
       ownershipType: ownershipDraft.ownershipType,
       legalOwnerName: ownershipDraft.legalOwnerName.trim(),
       tenure: ownershipDraft.tenure,
@@ -7809,6 +7829,7 @@ export const NewBuildingSetupPanel = () => {
     };
     window.localStorage.setItem("wbp-new-building-passport", JSON.stringify(nextRecord));
     setOwnershipRecord(nextRecord);
+    setPropertyDiscovery(propertyDiscovery);
     setProfileEditMode(false);
     if (ownershipRecord.databaseId) {
       setPassportSaveStatus("saving");
@@ -8097,23 +8118,34 @@ export const NewBuildingSetupPanel = () => {
       if (error) throw error;
       databaseRecord = data;
 
-      if (record.propertyDiscovery) {
-        const discovery = record.propertyDiscovery;
+    }
+
+    if (record.propertyDiscovery) {
+      const discovery = record.propertyDiscovery;
+      const { data: latest, error: snapshotError } = await supabase
+        .from("WBPPropertyDiscoverySnapshots")
+        .select("snapshot_version, searched_address, postcode, uprn")
+        .eq("building_record_id", databaseRecord.id)
+        .order("snapshot_version", { ascending: false }).limit(1).maybeSingle();
+      if (snapshotError) throw snapshotError;
+      if (!latest || latest.searched_address !== discovery.address
+        || (latest.postcode || "") !== (discovery.postcode || "")
+        || (latest.uprn || "") !== (discovery.uprn || "")) {
         const { error: discoveryError } = await supabase
           .from("WBPPropertyDiscoverySnapshots")
           .insert({
             building_record_id: databaseRecord.id,
-            snapshot_version: discovery.version || 1,
+            snapshot_version: (latest?.snapshot_version || 0) + 1,
             searched_address: discovery.address,
             postcode: discovery.postcode || null,
             uprn: discovery.uprn || null,
-            latitude: discovery.latitude || null,
-            longitude: discovery.longitude || null,
+            latitude: discovery.latitude ?? null,
+            longitude: discovery.longitude ?? null,
             local_authority: discovery.localAuthority || null,
             discovered_sources: discovery.sources || [],
             planning_records: discovery.planningRecords || [],
             owner_confirmed_at: discovery.confirmedAt || null,
-            discovered_at: discovery.discoveredAt || record.createdAt,
+            discovered_at: new Date().toISOString(),
             created_by: userId,
           });
         if (discoveryError) throw discoveryError;
@@ -8559,11 +8591,19 @@ export const NewBuildingSetupPanel = () => {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h3 className="text-base font-bold">Edit profile</h3>
-                <p className="mt-1 text-xs text-gray-600">Correct the profile while ownership is being checked. Its record ID will not change.</p>
+                <p className="mt-1 text-xs text-gray-600">Check the home and your details. This keeps the same home profile.</p>
               </div>
               <button type="button" onClick={() => setProfileEditMode(false)} className="text-xs font-semibold underline">Cancel</button>
             </div>
-            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            <h4 className="mt-4 text-sm font-bold">Your home</h4>
+            <div className="mt-2 grid gap-3 sm:grid-cols-2">
+              <label className="space-y-1"><span className="text-xs font-semibold">Address</span><input required className="w-full border border-gray-300 p-2 text-sm" value={profileLocationDraft.address} onChange={(event) => setProfileLocationDraft((current) => ({ ...current, address: event.target.value }))} /></label>
+              <label className="space-y-1"><span className="text-xs font-semibold">Postcode</span><input required className="w-full border border-gray-300 p-2 text-sm uppercase" value={profileLocationDraft.postcode} onChange={(event) => setProfileLocationDraft((current) => ({ ...current, postcode: event.target.value }))} /></label>
+              <label className="space-y-1"><span className="text-xs font-semibold">Property number (UPRN), if known</span><input inputMode="numeric" pattern="[0-9]*" className="w-full border border-gray-300 p-2 text-sm" value={ownershipDraft.uprn} onChange={(event) => updateOwnershipDraft("uprn", event.target.value)} /></label>
+            </div>
+            <p className="mt-2 text-xs text-gray-600">Changing the address clears its old location and planning matches. You can check the new address again afterwards.</p>
+            <h4 className="mt-4 text-sm font-bold">About you</h4>
+            <div className="mt-2 grid gap-3 sm:grid-cols-3">
               <label className="space-y-1"><span className="text-xs font-semibold">Your name</span><input required className="w-full border border-gray-300 p-2 text-sm" value={ownershipDraft.legalOwnerName} onChange={(event) => updateRetailOwnerName(event.target.value)} /></label>
               <label className="space-y-1"><span className="text-xs font-semibold">You are the</span><select className="w-full border border-gray-300 p-2 text-sm" value={ownershipDraft.ownershipType} onChange={(event) => updateOwnershipDraft("ownershipType", event.target.value)}><option value="owner-occupier">Homeowner living here</option><option value="private-landlord">Homeowner letting the property</option><option value="shared-ownership">Shared owner</option><option value="leaseholder">Leaseholder</option><option value="managing-agent">Authorised representative</option></select></label>
               <label className="space-y-1"><span className="text-xs font-semibold">The home is</span><select className="w-full border border-gray-300 p-2 text-sm" value={ownershipDraft.tenure} onChange={(event) => updateOwnershipDraft("tenure", event.target.value)}><option value="freehold">Freehold</option><option value="leasehold">Leasehold</option><option value="commonhold">Commonhold</option><option value="shared-ownership">Shared ownership</option><option value="other">Not sure</option></select></label>

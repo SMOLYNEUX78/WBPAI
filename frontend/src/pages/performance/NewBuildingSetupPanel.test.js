@@ -75,6 +75,26 @@ test("measurements reuse the ownership address and location", () => {
   expect(screen.getByPlaceholderText("Long")).toHaveValue(1.3048);
 });
 
+test("edit profile can correct the original address and UPRN without replacing the home", () => {
+  window.localStorage.setItem("wbp-new-building-passport", JSON.stringify({
+    recordId: "WBP-001", legalOwnerName: "Test Owner", ownershipType: "owner-occupier", tenure: "freehold", uprn: "100091142492",
+    propertyDiscovery: { address: "14 Bridgewood Road", postcode: "IP12 4HA", uprn: "100091142492", latitude: 52.0945, longitude: 1.3048, confirmedAt: "2026-09-01T00:00:00Z" },
+  }));
+  render(<MemoryRouter><NewBuildingSetupPanel /></MemoryRouter>);
+  fireEvent.click(screen.getByRole("button", { name: "Edit profile" }));
+  expect(screen.getByRole("textbox", { name: "Address" })).toHaveValue("14 Bridgewood Road");
+  expect(screen.getByRole("textbox", { name: "Property number (UPRN), if known" })).toHaveValue("100091142492");
+  fireEvent.change(screen.getByRole("textbox", { name: "Address" }), { target: { value: "16 Bridgewood Road" } });
+  fireEvent.change(screen.getByRole("textbox", { name: "Property number (UPRN), if known" }), { target: { value: "100091142493" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+  const saved = JSON.parse(window.localStorage.getItem("wbp-new-building-passport"));
+  expect(saved.recordId).toBe("WBP-001");
+  expect(saved.uprn).toBe("100091142493");
+  expect(saved.propertyDiscovery.address).toBe("16 Bridgewood Road");
+  expect(saved.propertyDiscovery.latitude).toBeNull();
+  expect(saved.propertyDiscovery.confirmedAt).toBeNull();
+});
+
 test("switching tabs preserves an in-progress carbon selection", () => {
   render(<MemoryRouter><NewBuildingSetupPanel /></MemoryRouter>);
   fireEvent.click(screen.getByRole("tab", { name: "Carbon Context" }));
