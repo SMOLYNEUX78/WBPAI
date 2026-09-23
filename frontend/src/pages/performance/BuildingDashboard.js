@@ -7388,6 +7388,7 @@ export const NewBuildingSetupPanel = () => {
       };
     }
   });
+  const [ownershipCleanupStatus, setOwnershipCleanupStatus] = useState("");
   const [propertySearch, setPropertySearch] = useState(() => {
     try {
       const cached = JSON.parse(window.localStorage.getItem(PROPERTY_DISCOVERY_CACHE_KEY) || "null");
@@ -7504,6 +7505,8 @@ export const NewBuildingSetupPanel = () => {
       };
       window.localStorage.setItem("wbp-new-building-passport", JSON.stringify(accountRecord));
       setOwnershipRecord(accountRecord);
+      setOwnershipEvidence({ route: "title-register", titleNumber: "", fileName: "", declarationAccepted: false, status: "not-started" });
+      setOwnershipDraft((current) => ({ ...current, titleNumber: "" }));
       setPropertyDiscovery(discovery);
       setPassportSaveStatus("saved");
       setPassportSaveError("");
@@ -7873,34 +7876,26 @@ export const NewBuildingSetupPanel = () => {
     }
   };
 
-  const saveOwnershipEvidence = (event) => {
-    event.preventDefault();
-    if (!ownershipRecord || !ownershipEvidence.declarationAccepted) return;
-    const updatedAt = new Date().toISOString();
-    const nextEvidence = {
-      ...ownershipEvidence,
-      titleNumber: ownershipEvidence.titleNumber.trim(),
-      status: "ready-for-review",
-      submittedAt: updatedAt,
-    };
+  const clearSavedOwnershipEvidence = async () => {
+    if (!ownershipRecord) return;
     const nextRecord = {
       ...ownershipRecord,
-      titleNumber: nextEvidence.titleNumber,
-      ownershipEvidence: nextEvidence,
-      ownershipVerificationStatus: "ready-for-review",
-      updatedAt,
-      history: [
-        ...(ownershipRecord.history || []),
-        {
-          event: "Ownership evidence prepared for review",
-          actor: ownershipRecord.legalOwnerName,
-          timestamp: updatedAt,
-        },
-      ],
+      ownershipVerificationStatus: ownershipRecord.ownershipVerificationStatus === "ready-for-review"
+        ? "unverified" : ownershipRecord.ownershipVerificationStatus,
     };
+    delete nextRecord.titleNumber;
+    delete nextRecord.ownershipEvidence;
     window.localStorage.setItem("wbp-new-building-passport", JSON.stringify(nextRecord));
-    setOwnershipEvidence(nextEvidence);
+    setOwnershipEvidence({ route: "title-register", titleNumber: "", fileName: "", declarationAccepted: false, status: "not-started" });
+    setOwnershipDraft((current) => ({ ...current, titleNumber: "" }));
     setOwnershipRecord(nextRecord);
+    setOwnershipCleanupStatus("Saved title number and filename removed from this browser.");
+    if (ownershipRecord.databaseId && ownershipRecord.ownershipVerificationStatus === "ready-for-review") {
+      const { error } = await supabase.from("WBPBuildingRecords")
+        .update({ ownership_verification_status: "unverified" })
+        .eq("id", ownershipRecord.databaseId);
+      if (error) setOwnershipCleanupStatus("Browser copy cleared. The account review status could not be reset; contact support before submitting ownership evidence again.");
+    }
   };
 
   const updatePropertySearch = (field, value) => {
@@ -8640,11 +8635,12 @@ export const NewBuildingSetupPanel = () => {
               </span>
             </div>
 
-            <form onSubmit={saveOwnershipEvidence} className="mt-4">
+            <div className="mt-4">
+              <p className="mb-3 border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950">Secure ownership upload is not connected yet. Please keep your title register on your device.</p>
               <div className="grid gap-3 sm:grid-cols-3">
                 <label className="border border-gray-200 p-3 text-sm">
                   <span className="block text-xs font-bold">Evidence route</span>
-                  <select className="mt-2 w-full border border-gray-300 p-2 text-sm" value={ownershipEvidence.route} onChange={(event) => setOwnershipEvidence((current) => ({ ...current, route: event.target.value, status: "not-started" }))}>
+                  <select disabled className="mt-2 w-full border border-gray-300 bg-gray-100 p-2 text-sm" value={ownershipEvidence.route} onChange={(event) => setOwnershipEvidence((current) => ({ ...current, route: event.target.value, status: "not-started" }))}>
                     <option value="title-register">Title register or official copy</option>
                     <option value="conveyancer">Conveyancer or solicitor confirmation</option>
                     <option value="shared-owner">Shared ownership or lease evidence</option>
@@ -8653,22 +8649,19 @@ export const NewBuildingSetupPanel = () => {
                 </label>
                 <label className="border border-gray-200 p-3 text-sm">
                   <span className="block text-xs font-bold">Title number, if known</span>
-                  <input className="mt-2 w-full border border-gray-300 p-2 text-sm uppercase" value={ownershipEvidence.titleNumber} onChange={(event) => setOwnershipEvidence((current) => ({ ...current, titleNumber: event.target.value }))} placeholder="For example, SK123456" />
+                  <input disabled className="mt-2 w-full border border-gray-300 bg-gray-100 p-2 text-sm uppercase" value={ownershipEvidence.titleNumber} readOnly placeholder="Secure entry coming soon" />
                 </label>
                 <label className="border border-gray-200 p-3 text-sm">
                   <span className="block text-xs font-bold">Choose supporting document</span>
-                  <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="mt-2 block w-full text-xs" onChange={(event) => setOwnershipEvidence((current) => ({ ...current, fileName: event.target.files?.[0]?.name || "", status: "not-started" }))} />
+                  <input type="file" aria-label="Choose supporting document" disabled accept=".pdf,.jpg,.jpeg,.png" className="mt-2 block w-full text-xs" />
                   <span className="mt-2 block text-[11px] text-gray-500">The file is not uploaded or stored yet. Secure document storage must be connected first.</span>
                 </label>
               </div>
-              <label className="mt-4 flex items-start gap-3 text-sm text-gray-700">
-                <input type="checkbox" className="mt-1" checked={ownershipEvidence.declarationAccepted} onChange={(event) => setOwnershipEvidence((current) => ({ ...current, declarationAccepted: event.target.checked }))} />
-                <span>I confirm that these details are accurate and that WBP may use them only to check my authority to manage this home profile.</span>
-              </label>
-              <div className="mt-4 flex justify-end">
-                <button type="submit" disabled={!ownershipEvidence.declarationAccepted} className="bg-amber-500 px-4 py-2 text-sm font-bold text-black disabled:cursor-not-allowed disabled:opacity-40">Save evidence details</button>
-              </div>
-            </form>
+              {(ownershipRecord.titleNumber || ownershipRecord.ownershipEvidence?.fileName || ownershipRecord.ownershipEvidence?.titleNumber) ? (
+                <button type="button" onClick={clearSavedOwnershipEvidence} className="mt-4 border border-red-300 bg-white px-3 py-2 text-xs font-bold text-red-800">Remove saved ownership details</button>
+              ) : null}
+              {ownershipCleanupStatus ? <p role="status" className="mt-2 text-xs text-gray-700">{ownershipCleanupStatus}</p> : null}
+            </div>
 
             <details className="mt-4 border-t border-gray-200 pt-3">
               <summary className="cursor-pointer text-xs font-bold text-gray-700">How WBP protects this information</summary>

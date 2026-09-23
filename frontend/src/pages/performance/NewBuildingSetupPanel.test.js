@@ -99,6 +99,24 @@ test("edit profile can correct the original address and UPRN without replacing t
   expect(saved.propertyDiscovery.confirmedAt).toBeNull();
 });
 
+test("saved title evidence can be removed without clearing the home profile", () => {
+  window.localStorage.setItem("wbp-new-building-passport", JSON.stringify({
+    recordId: "WBP-TEST", legalOwnerName: "Test Owner", ownershipType: "owner-occupier", tenure: "freehold", uprn: "100091142492",
+    titleNumber: "SK123456", ownershipVerificationStatus: "ready-for-review",
+    ownershipEvidence: { route: "title-register", titleNumber: "SK123456", fileName: "title.pdf", status: "ready-for-review" },
+  }));
+  render(<MemoryRouter><NewBuildingSetupPanel /></MemoryRouter>);
+  expect(screen.getByText("Choose supporting document").parentElement.querySelector('input[type="file"]')).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "Remove saved ownership details" }));
+  const saved = JSON.parse(window.localStorage.getItem("wbp-new-building-passport"));
+  expect(saved.recordId).toBe("WBP-TEST");
+  expect(saved.uprn).toBe("100091142492");
+  expect(saved.titleNumber).toBeUndefined();
+  expect(saved.ownershipEvidence).toBeUndefined();
+  expect(saved.ownershipVerificationStatus).toBe("unverified");
+  expect(screen.queryByRole("button", { name: "Remove saved ownership details" })).not.toBeInTheDocument();
+});
+
 test("switching tabs preserves an in-progress carbon selection", () => {
   render(<MemoryRouter><NewBuildingSetupPanel /></MemoryRouter>);
   fireEvent.click(screen.getByRole("tab", { name: "Carbon Context" }));
