@@ -7,6 +7,7 @@ import govukCrown from "../../assets/govuk-crown.png";
 import matterportMark from "../../assets/matterport-mark.png";
 import PrototypeTabs from "../../PrototypeTabs";
 import { getReadinessGates } from "./readinessGates";
+import { mergeMonthlyHlaRows } from "./monthlyHla";
 
 const DEFAULT_MATTERPORT_URL = "https://my.matterport.com/show/?m=zHm8SwWeHiN";
 const BRIDGEWOOD_UPRN = "100091142492";
@@ -689,6 +690,8 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
   const [rainHumiditySummary, setRainHumiditySummary] = useState(
     readCachedRainHumiditySummary
   );
+  const [monthlyHlaCoverage, setMonthlyHlaCoverage] = useState(null);
+  const monthlyHlaReadyRef = useRef(false);
   const [weeklyTrendData, setWeeklyTrendData] = useState(readCachedWeeklyTrendData);
   const [seasonalTrendArchive, setSeasonalTrendArchive] = useState(
     readCachedSeasonalTrendArchive
@@ -1576,6 +1579,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
 
     const snapshotRainHumiditySummary = snapshot.rain_humidity_summary;
     if (
+      !monthlyHlaReadyRef.current &&
       snapshotRainHumiditySummary &&
       typeof snapshotRainHumiditySummary === "object" &&
       Object.keys(snapshotRainHumiditySummary).length > 0
@@ -2013,6 +2017,38 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
     } catch (err) {
       console.error("Error fetching historical performance:", err.message);
     }
+  };
+
+  const fetchMonthlyHlaSummary = async () => {
+    const { data, error } = await supabase.from("BuildingMonthlyHlaSummary")
+      .select("month_start,summary,calculated_at")
+      .eq("building_id", dataSourceBuildingId)
+      .order("month_start", { ascending: true })
+      .limit(120);
+    if (error) {
+      monthlyHlaReadyRef.current = false;
+      setMonthlyHlaCoverage(null);
+      return null;
+    }
+    if (!data?.length) {
+      monthlyHlaReadyRef.current = true;
+      setMonthlyHlaCoverage(null);
+      return {
+        heatLossSummary: readCachedHeatLossSummary(),
+        heatExclusionSummary: readCachedHeatExclusionSummary(),
+      };
+    }
+    const merged = mergeMonthlyHlaRows(data);
+    if (!merged) return null;
+    monthlyHlaReadyRef.current = true;
+    setMonthlyHlaCoverage(merged.coverage);
+    setHeatLossSummary((current) => ({ ...current, ...merged.heatLossSummary }));
+    setHeatExclusionSummary(merged.heatExclusionSummary);
+    setRainHumiditySummary(merged.rainHumiditySummary);
+    localStorage.setItem(`${dataSourceBuildingId}:heatLossSummary`, JSON.stringify(merged.heatLossSummary));
+    localStorage.setItem(`${dataSourceBuildingId}:heatExclusionSummary`, JSON.stringify(merged.heatExclusionSummary));
+    localStorage.setItem(`${dataSourceBuildingId}:rainHumiditySummary`, JSON.stringify(merged.rainHumiditySummary));
+    return merged;
   };
 
   const fetchHeatLossSummary = async () => {
@@ -4225,8 +4261,9 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
 
       fetchExternalTemp();
       fetchIAQData();
-      fetchRainHumiditySummary();
       fetchWeeklyPerformanceTrend();
+      const monthlyHla = await fetchMonthlyHlaSummary();
+      if (!monthlyHla) fetchRainHumiditySummary();
 
       const hasSharedPerformance = Number.isFinite(
         Number(snapshot?.performance_summary?.value)
@@ -4237,8 +4274,8 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
       }
 
       if (!snapshot || !hasSharedPerformance) {
-        const nextHeatLossSummary = await fetchHeatLossSummary();
-        const nextHeatExclusionSummary = await fetchHeatExclusionSummary();
+        const nextHeatLossSummary = monthlyHla?.heatLossSummary || await fetchHeatLossSummary();
+        const nextHeatExclusionSummary = monthlyHla?.heatExclusionSummary || await fetchHeatExclusionSummary();
         await fetchLongTermBuildingPerformance({
           historicalPerformance: snapshot?.energy_summary?.totalDailyAverage,
           heatLossSummary: nextHeatLossSummary,
@@ -4266,15 +4303,16 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
 
       if (refreshCount % HEAVY_DASHBOARD_REFRESH_EVERY === 0) {
         await fetchLongTermAverage();
-        const nextHeatLossSummary = await fetchHeatLossSummary();
-        const nextHeatExclusionSummary = await fetchHeatExclusionSummary();
+        const monthlyHla = await fetchMonthlyHlaSummary();
+        const nextHeatLossSummary = monthlyHla?.heatLossSummary || await fetchHeatLossSummary();
+        const nextHeatExclusionSummary = monthlyHla?.heatExclusionSummary || await fetchHeatExclusionSummary();
         await fetchLongTermBuildingPerformance({
           historicalPerformance: snapshot?.energy_summary?.totalDailyAverage,
           heatLossSummary: nextHeatLossSummary,
           heatExclusionSummary: nextHeatExclusionSummary,
         });
         fetchWeeklyPerformanceTrend();
-        fetchRainHumiditySummary();
+        if (!monthlyHla) fetchRainHumiditySummary();
       }
     }, DASHBOARD_SNAPSHOT_REFRESH_MS);
 
@@ -6353,6 +6391,8 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
                     </span>{" "}
                     {isNewPerformanceDeepDive
                       ? projectedPerformanceDeepDive.hddSource
+                      : monthlyHlaCoverage
+                      ? `Monthly history (${monthlyHlaCoverage.months} month(s), ${monthlyHlaCoverage.from} to ${monthlyHlaCoverage.through})`
                       : heatLossSummary.hddSource === "legacy"
                       ? "Legacy museum daily totals"
                       : "Current building data"}
@@ -6364,6 +6404,8 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
                         ? "Low confidence / summer HDD sample"
                         : hasWeakHtcSample
                         ? "Low confidence / weak HTC sample"
+                        : monthlyHlaCoverage
+                        ? "Indicative monthly history / not independently verified"
                         : heatLossSummary.hlaConfidence === "audit-grade"
                         ? "Audit-grade daily baseline"
                         : heatLossSummary.hlaConfidence === "indicative"

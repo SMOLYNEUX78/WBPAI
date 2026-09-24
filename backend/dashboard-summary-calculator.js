@@ -211,6 +211,16 @@ async function fetchRainHumidityRows(buildingId) {
   };
 }
 
+async function hasMonthlyHlaHistory(buildingId) {
+  const { data, error } = await supabase
+    .from("BuildingMonthlyHlaSummary")
+    .select("month_start,summary")
+    .eq("building_id", buildingId)
+    .order("month_start", { ascending: false })
+    .limit(12);
+  return !error && data?.some((row) => Number(row.summary?.sourceReadings) > 0);
+}
+
 function buildEnergySummary(energyRows, carbonDailyRows = []) {
   const dailyRows = energyRows.filter(
     (row) => row.reading_type === "daily_total" && Number.isFinite(Number(row.usage_kwh))
@@ -527,17 +537,18 @@ function buildRainHumiditySummary({ sensorRows = [], rainRows, humidityRows, bui
 }
 
 async function upsertSummary(buildingId) {
+  const monthlyHlaReady = await hasMonthlyHlaHistory(buildingId);
   const [energyRows, carbonDailyRows, sensorRows, rainHumidityRows] = await Promise.all([
     fetchEnergyRows(buildingId),
     fetchCarbonDailyRows(buildingId),
     fetchSensorRows(buildingId),
-    fetchRainHumidityRows(buildingId),
+    monthlyHlaReady ? Promise.resolve(null) : fetchRainHumidityRows(buildingId),
   ]);
   const calculatedAt = new Date().toISOString();
   const energySummary = buildEnergySummary(energyRows, carbonDailyRows);
   const iaqSummary = buildSensorSummary(sensorRows);
   const weatherSummary = buildWeatherSummary(sensorRows);
-  const rainHumiditySummary = buildRainHumiditySummary({
+  const rainHumiditySummary = monthlyHlaReady ? {} : buildRainHumiditySummary({
     sensorRows,
     rainRows: rainHumidityRows.rainRows,
     humidityRows: rainHumidityRows.humidityRows,
@@ -556,8 +567,9 @@ async function upsertSummary(buildingId) {
       energy_rows: energyRows.length,
       compact_energy_days: carbonDailyRows.length,
       sensor_rows: sensorRows.length,
-      rain_rows: rainHumidityRows.rainRows.length,
-      rain_humidity_rows: rainHumidityRows.humidityRows.length,
+      rain_rows: rainHumidityRows?.rainRows.length || 0,
+      rain_humidity_rows: rainHumidityRows?.humidityRows.length || 0,
+      monthly_hla: monthlyHlaReady,
       energy_lookback_days: ENERGY_LOOKBACK_DAYS,
       sensor_lookback_days: SENSOR_LOOKBACK_DAYS,
       rain_humidity_lookback_days: RAIN_HUMIDITY_LOOKBACK_DAYS,
