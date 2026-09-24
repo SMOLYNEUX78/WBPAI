@@ -8,7 +8,6 @@ import matterportMark from "../../assets/matterport-mark.png";
 import PrototypeTabs from "../../PrototypeTabs";
 import { getReadinessGates } from "./readinessGates";
 import { mergeMonthlyHlaRows } from "./monthlyHla";
-import { fillMissingWeeklyEnergy } from "./weeklyEnergyFallback";
 
 const DEFAULT_MATTERPORT_URL = "https://my.matterport.com/show/?m=zHm8SwWeHiN";
 const BRIDGEWOOD_UPRN = "100091142492";
@@ -3490,32 +3489,24 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
       );
 
       const fetchEnergyIntervalRows = async () => {
-        const [intervalResult, dailyResult] = await Promise.all([
-          supabase
+        const rows = [];
+        for (let page = 0; page < 5; page += 1) {
+          const { data, error } = await supabase
             .from("EnergyReadings")
-            .select("timestamp, created_at, fuel_type, reading_type, usage_kwh")
+            .select("timestamp, fuel_type, usage_kwh")
             .eq("building_id", dataSourceBuildingId)
             .eq("reading_type", "interval_30m")
             .not("usage_kwh", "is", null)
             .gte("timestamp", trendWindowStart.toISOString())
             .lte("timestamp", trendWindowEnd.toISOString())
             .order("timestamp", { ascending: true })
-            .limit(5000),
-          supabase
-            .from("EnergyReadings")
-            .select("timestamp, created_at, fuel_type, reading_type, usage_kwh")
-            .eq("building_id", dataSourceBuildingId)
-            .eq("reading_type", "daily_total")
-            .not("usage_kwh", "is", null)
-            .gte("created_at", trendWindowStart.toISOString())
-            .order("created_at", { ascending: false })
-            .limit(3000),
-        ]);
-
-        if (intervalResult.error) throw intervalResult.error;
-        if (dailyResult.error) throw dailyResult.error;
-
-        return [...(intervalResult.data || []), ...(dailyResult.data || [])];
+            .order("id", { ascending: true })
+            .range(page * 1000, (page + 1) * 1000 - 1);
+          if (error) throw error;
+          rows.push(...(data || []));
+          if (!data || data.length < 1000) break;
+        }
+        return rows;
       };
 
       const fetchIaqTrendRows = async () => {
@@ -3573,18 +3564,10 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
         return data || [];
       };
 
-      const [energyIntervalRows, iaqTrendRows, outdoorTrendRows, compactEnergyResult] = await Promise.all([
+      const [energyIntervalRows, iaqTrendRows, outdoorTrendRows] = await Promise.all([
         fetchEnergyIntervalRows(),
         fetchIaqTrendRows(),
         fetchOutdoorTrendRows(),
-        supabase.from("CarbonSavingsDaily")
-          .select("saving_date, baseline_electricity_kwh, baseline_gas_kwh")
-          .eq("building_id", dataSourceBuildingId)
-          .eq("scenario", CARBON_SAVINGS_SCENARIO)
-          .gte("saving_date", trendWindowStart.toISOString().slice(0, 10))
-          .lte("saving_date", trendWindowEnd.toISOString().slice(0, 10))
-          .order("saving_date", { ascending: true })
-          .limit(40),
       ]);
 
       const weekdayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -3625,17 +3608,6 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
         const dayIndex = (date.getUTCDay() + 6) % 7;
         return dayIndex * 24 + date.getUTCHours();
       };
-      const getWeeklyDayStartSlot = (timestamp) => {
-        const date = new Date(timestamp);
-
-        if (Number.isNaN(date.getTime())) {
-          return null;
-        }
-
-        const dayIndex = (date.getUTCDay() + 6) % 7;
-        return dayIndex * 24;
-      };
-
       const electricRegulatedFractionForTrend =
         building.regulatedElectricFraction ?? (energySummary.hasGasData ? 0.15 : 0.35);
       const gasDailyAverageForTrend = Number(energySummary.gasDailyAverage);
@@ -3649,19 +3621,6 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
           ? clampScore((gasRegulatedDailyForTrend / gasDailyAverageForTrend) * 100) / 100
           : 1;
 
-      const intervalEnergyDays = new Set(
-        (energyIntervalRows || [])
-          .filter((row) => row.reading_type === "interval_30m")
-          .map((row) => {
-            const date = new Date(row.timestamp);
-            if (Number.isNaN(date.getTime())) {
-              return null;
-            }
-
-            return `${row.fuel_type}:${date.toISOString().slice(0, 10)}`;
-          })
-          .filter(Boolean)
-      );
       const pushEnergyUsage = (slot, fuelType, usageKwh) => {
         if (slot === null || !weeklyBuckets[slot] || !Number.isFinite(usageKwh)) {
           return;
@@ -3688,9 +3647,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
         }
       };
 
-      (energyIntervalRows || [])
-        .filter((row) => row.reading_type === "interval_30m")
-        .forEach((row) => {
+      (energyIntervalRows || []).forEach((row) => {
         const slot = getWeeklySlot(row.timestamp);
         const usageKwh = Number(row.usage_kwh);
 
@@ -3699,100 +3656,6 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
         }
 
         pushEnergyUsage(slot, row.fuel_type, usageKwh);
-      });
-
-      const dailyTotalsByFuelDay = (energyIntervalRows || [])
-        .filter((row) => row.reading_type === "daily_total")
-        .reduce((groups, row) => {
-          const date = new Date(row.timestamp);
-
-          if (Number.isNaN(date.getTime())) {
-            return groups;
-          }
-
-          const dayKey = `${row.fuel_type}:${date.toISOString().slice(0, 10)}`;
-
-          if (intervalEnergyDays.has(dayKey)) {
-            return groups;
-          }
-
-          groups[dayKey] = groups[dayKey] || [];
-          groups[dayKey].push(row);
-          return groups;
-        }, {});
-
-      Object.values(dailyTotalsByFuelDay).forEach((rows) => {
-        const sortedRows = [...rows].sort(
-          (a, b) =>
-            new Date(a.created_at || a.timestamp) -
-            new Date(b.created_at || b.timestamp)
-        );
-        let derivedIntervals = 0;
-        const rowsByHour = sortedRows.reduce((groups, row) => {
-          const slot = getWeeklySlot(row.created_at || row.timestamp);
-
-          if (slot === null) {
-            return groups;
-          }
-
-          groups[slot] = groups[slot] || [];
-          groups[slot].push(row);
-          return groups;
-        }, {});
-
-        Object.entries(rowsByHour).forEach(([slotKey, hourRows]) => {
-          if (hourRows.length < 2) {
-            return;
-          }
-
-          const firstRow = hourRows[0];
-          const lastRow = hourRows[hourRows.length - 1];
-          const firstValue = Number(firstRow.usage_kwh);
-          const lastValue = Number(lastRow.usage_kwh);
-          const firstTime = new Date(firstRow.created_at || firstRow.timestamp);
-          const lastTime = new Date(lastRow.created_at || lastRow.timestamp);
-          const elapsedHours =
-            (lastTime.getTime() - firstTime.getTime()) / (1000 * 60 * 60);
-          const deltaKwh = lastValue - firstValue;
-
-          if (
-            !Number.isFinite(deltaKwh) ||
-            !Number.isFinite(elapsedHours) ||
-            elapsedHours < 0.25 ||
-            deltaKwh < 0
-          ) {
-            return;
-          }
-
-          const hourlyKwh = deltaKwh / elapsedHours;
-          pushEnergyUsage(
-            Number(slotKey),
-            lastRow.fuel_type,
-            hourlyKwh / 2
-          );
-          derivedIntervals += 1;
-        });
-
-        if (derivedIntervals > 0) {
-          return;
-        }
-
-        const latestRow = sortedRows[sortedRows.length - 1];
-        const usageKwh = Number(latestRow?.usage_kwh);
-        const dayStartSlot = getWeeklyDayStartSlot(latestRow?.timestamp);
-        const halfHourlyEquivalentKwh = usageKwh / 48;
-
-        if (!Number.isFinite(halfHourlyEquivalentKwh)) {
-          return;
-        }
-
-        for (let hourOffset = 0; hourOffset < 24; hourOffset += 1) {
-          pushEnergyUsage(
-            dayStartSlot === null ? null : dayStartSlot + hourOffset,
-            latestRow.fuel_type,
-            halfHourlyEquivalentKwh
-          );
-        }
       });
 
       iaqTrendRows.forEach((row) => {
@@ -3931,12 +3794,6 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
         });
       };
       const trendValueKeys = [
-        "electricity",
-        "electricityRegulated",
-        "electricityUnregulated",
-        "gas",
-        "gasRegulated",
-        "gasUnregulated",
         "internalTemp",
         "externalTemp",
         "warmthBuffer",
@@ -3946,17 +3803,9 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
         "pm25",
         "vocs",
       ];
-      const energyCompleteTrend = compactEnergyResult.error
-        ? averagedWeeklyTrend
-        : fillMissingWeeklyEnergy(
-            averagedWeeklyTrend,
-            compactEnergyResult.data || [],
-            electricRegulatedFractionForTrend,
-            gasRegulatedFractionForTrend
-          );
       const displayWeeklyTrend = trendValueKeys.reduce(
         (rows, key) => fillSparseTrendMetric(rows, key),
-        energyCompleteTrend
+        averagedWeeklyTrend
       );
 
       applyWeeklyTrendData(displayWeeklyTrend, activeSeasonInfo);
@@ -5194,11 +5043,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
   const seasonalTrendLabel = selectedSeasonRecord
     ? `${selectedSeasonRecord.name} ${
         selectedSeasonRecord.status === "complete" ? "snapshot" : "season so far"
-      }: historical weekly hourly averages, Monday to Sunday${
-        selectedSeasonTrendData.some((point) => point.electricityDailyEstimated || point.gasDailyEstimated)
-          ? "; energy shown as daily average where half-hour data is unavailable"
-          : ""
-      }`
+      }: historical weekly hourly averages, Monday to Sunday`
     : `${selectedTrendSeason} data will appear once that season has readings`;
   const activeTrendMetrics = trendMetrics.filter((metric) =>
     selectedSeasonTrendData.some((day) => Number.isFinite(day[metric.key]))
@@ -5566,14 +5411,19 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
     return { x, y, value };
   };
   const trendPath = (data, ranges, metric) => {
-    const points = data
-      .map((pointData, index) => trendPoint(data, ranges, pointData, metric, index))
-      .filter(Boolean);
-
-    return points
-      .map((point, index) =>
-        `${index === 0 ? "M" : "L"} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`
-      )
+    let previousMeasured = false;
+    return data
+      .map((pointData, index) => {
+        const point = trendPoint(data, ranges, pointData, metric, index);
+        if (!point) {
+          previousMeasured = false;
+          return "";
+        }
+        const command = previousMeasured ? "L" : "M";
+        previousMeasured = true;
+        return `${command} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`;
+      })
+      .filter(Boolean)
       .join(" ");
   };
   const averageMetricValue = (data, metric) => {
