@@ -5755,7 +5755,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
           </div>
         ) : null}
 
-        <div className={dataSourceBuildingId === "home" ? "order-1 grid min-h-[170px] min-w-0 grid-cols-2 items-stretch sm:min-h-[190px] sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]" : "grid grid-cols-1 items-stretch gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)] sm:gap-5"}>
+        <div className={dataSourceBuildingId === "home" ? "order-1 grid min-h-[190px] min-w-0 grid-cols-2 items-stretch sm:min-h-[210px]" : "grid grid-cols-1 items-stretch gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)] sm:gap-5"}>
           <dl className={dataSourceBuildingId === "home" ? "order-2 min-w-0 px-3 py-2 text-xs sm:px-5" : "grid min-w-0 grid-cols-2 gap-x-3 border border-gray-200 bg-white p-3 text-xs sm:grid-cols-1"}>
             {dataSourceBuildingId === "home" ? (
               <div className="grid min-w-0 grid-cols-1 items-start gap-2 py-0.5 sm:grid-cols-[minmax(0,1fr)_auto]">
@@ -8233,7 +8233,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false }) => {
   return (
     <div className="bg-white">
       <section className="border-b border-emerald-200 bg-emerald-100 pb-3">
-        <div className="grid min-h-[150px] min-w-0 grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] items-stretch sm:min-h-[180px]">
+        <div className="grid min-h-[170px] min-w-0 grid-cols-2 items-stretch sm:min-h-[200px]">
           <div className="relative min-w-0">
             {embedUrl ? <iframe title="3D model preview" src={embedUrl} className="absolute inset-0 block h-full w-full border-0 bg-white" allow="autoplay; fullscreen; xr-spatial-tracking; accelerometer; gyroscope; vr" allowFullScreen />
               : <div className="absolute inset-0 flex items-center justify-center bg-white/70 p-2 text-center text-xs text-gray-500">3D model preview</div>}
