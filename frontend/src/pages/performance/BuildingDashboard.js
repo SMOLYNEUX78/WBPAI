@@ -6949,6 +6949,11 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
                     </button>
                   </div>
 
+                  <p className="border-l-2 border-amber-500 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+                    A complete evidence pack can be submitted for review. It does not itself verify ownership,
+                    issue carbon credits, license data, or transfer a property.
+                  </p>
+
                   <div className="space-y-3">
                     {groupedEvidencePackChecks.map((group) => (
                       <div key={group.category} className="space-y-2">

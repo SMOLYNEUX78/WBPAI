@@ -62,9 +62,10 @@
   .wbp-dashboard--occupy .wbp-occupy-panel { height: 100%; min-height: 0; overflow: hidden; gap: 12px; }
   .wbp-dashboard--occupy .wbp-occupy-panel > * + * { margin-top: 0; }
   .wbp-dashboard--occupy .wbp-occupy-panel > :first-child { flex: none; padding-bottom: 8px; }
-  .wbp-dashboard--occupy .wbp-occupy-panel > :first-child > .grid { min-height: 170px; }
+  .wbp-dashboard--occupy .wbp-occupy-panel > :first-child > .grid { min-height: 250px; }
   .wbp-dashboard--occupy .wbp-performance-stage { display: flex; flex: 1; min-height: 0; flex-direction: column; }
-  .wbp-dashboard--occupy .wbp-performance-content { display: flex; flex: 1; min-height: 0; flex-direction: column; }
-  .wbp-dashboard--occupy .wbp-performance-content > :first-child { flex: 1; min-height: 0; }
+  .wbp-dashboard--occupy .wbp-performance-content { display: flex; flex: 1; min-height: 0; flex-direction: column; justify-content: center; gap: 12px; }
+  .wbp-dashboard--occupy .wbp-performance-content > * + * { margin-top: 0; }
+  .wbp-dashboard--occupy .wbp-performance-content > :first-child { flex: none; }
   .wbp-dashboard--occupy .wbp-performance-stage .wbp-occupy-actions { flex: none; }
 }
