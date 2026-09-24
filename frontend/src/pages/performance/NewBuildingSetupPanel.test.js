@@ -15,6 +15,8 @@ test("new building sections keep ownership first and separate the inputs", () =>
   expect(profile).toHaveTextContent("3D model preview");
   expect(profile).toHaveTextContent("Address");
   expect(within(profile).getByText("Energy").parentElement.parentElement).toHaveClass("grid-cols-4");
+  expect(Array.from(within(within(profile).getByText("Energy").parentElement.parentElement).getAllByRole("heading")).map((heading) => heading.textContent))
+    .toEqual(["Ownership", "Energy", "Health", "Carbon context"]);
   expect(profile).not.toContainElement(screen.queryByRole("button", { name: "Edit profile" }));
   expect(profile.compareDocumentPosition(screen.getByRole("tablist")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(screen.queryByRole("heading", { name: "Ready to monitor" })).not.toBeInTheDocument();

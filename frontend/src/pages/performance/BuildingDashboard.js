@@ -9,6 +9,41 @@ import PrototypeTabs from "../../PrototypeTabs";
 import { getReadinessGates } from "./readinessGates";
 
 const DEFAULT_MATTERPORT_URL = "https://my.matterport.com/show/?m=zHm8SwWeHiN";
+const BRIDGEWOOD_UPRN = "100091142492";
+const isBridgewoodPassport = (record) => record?.uprn === BRIDGEWOOD_UPRN
+  || /\b14\s+bridgewood\b/i.test(record?.propertyDiscovery?.address || record?.address?.address || "");
+
+const ProfileSummaryColumns = ({ record, property, setup = {} }) => {
+  const carbon = setup.carbonSelections || {};
+  const rows = [
+    ["Ownership", [
+      ["Property number (UPRN)", record?.uprn],
+      ["Local authority", property?.localAuthority],
+      ["Created by", record?.legalOwnerName],
+      ["Type", record?.ownershipType?.replaceAll("-", " ")],
+      ["Tenure", record?.tenure],
+    ]],
+    ["Energy", [
+      ["Monitoring", setup.energyConsent ? "Consented" : "Pending"],
+      ["Selected historical file", setup.historicalDataFileName],
+    ]],
+    ["Health", [
+      ["Sensors", setup.healthSensors?.length ? `${setup.healthSensors.length} registered` : "Pending"],
+      ["Selected sensor file", setup.sensorEvidenceFileName],
+    ]],
+    ["Carbon context", [
+      ...["electricity", "fuel", "heating", "solar", "battery"].map((field) => [
+        field.charAt(0).toUpperCase() + field.slice(1), carbon[field]?.replaceAll("-", " "),
+      ]),
+    ]],
+  ];
+  return <div className="mx-3 mt-2 grid min-w-0 grid-cols-4 gap-2 border-t border-emerald-200 pt-2 text-[10px] leading-tight [overflow-wrap:anywhere] sm:mx-8 sm:gap-3 sm:text-xs lg:mx-12">
+    {rows.map(([heading, details]) => <div key={heading} className="min-w-0 border-r border-emerald-200 pr-2 last:border-0 last:pr-0">
+      <h3 className="mb-1 font-bold text-emerald-950">{heading}</h3>
+      {details.map(([label, value]) => <p key={label} className="mb-0.5 break-words text-gray-800"><span className="text-gray-600">{label}: </span><span className="font-semibold">{value || "Pending"}</span></p>)}
+    </div>)}
+  </div>;
+};
 const HDD_BASE_TEMP_C = 15.5;
 const FALLBACK_CARBON_PRICE_GBP_PER_TONNE = 65;
 const CARBON_SAVINGS_CALCULATION_VERSION = "enerphit-certified-v3";
@@ -238,18 +273,21 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
   const [homePassport, setHomePassport] = useState(() => {
     if (dataSourceBuildingId !== "home") return null;
     try {
-      return JSON.parse(window.localStorage.getItem("wbp-new-building-passport") || "null");
+      const cached = JSON.parse(window.localStorage.getItem("wbp-new-building-passport") || "null");
+      return isBridgewoodPassport(cached) ? cached : null;
     } catch {
       return null;
     }
   });
   const homePassportId = homePassport?.recordId || "";
+  const [homeSetup, setHomeSetup] = useState({});
+  const homePassportDatabaseId = homePassport?.databaseId;
   const [homeSaleInfoOpen, setHomeSaleInfoOpen] = useState(false);
   useEffect(() => {
     if (dataSourceBuildingId !== "home" || !isActive) return;
     try {
       const cached = JSON.parse(window.localStorage.getItem("wbp-new-building-passport") || "null");
-      if (cached?.recordId) setHomePassport(cached);
+      if (isBridgewoodPassport(cached)) setHomePassport(cached);
     } catch { /* The account lookup remains the source when browser data is invalid. */ }
   }, [dataSourceBuildingId, isActive]);
   useEffect(() => {
@@ -261,6 +299,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
       const { data, error } = await supabase.from("WBPBuildingRecords")
         .select("*")
         .eq("custodian_user_id", auth.user.id)
+        .eq("uprn", BRIDGEWOOD_UPRN)
         .order("updated_at", { ascending: false }).limit(1).maybeSingle();
       if (active && !error && data?.record_reference) {
         const { data: snapshot } = await supabase.from("WBPPropertyDiscoverySnapshots")
@@ -271,6 +310,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
         setHomePassport((current) => ({
           ...(current?.recordId === data.record_reference ? current : {}),
           recordId: data.record_reference,
+          databaseId: data.id,
           uprn: data.uprn || "",
           legalOwnerName: data.legal_owner_name || "",
           otherOwnerName: data.other_owner_name || "",
@@ -291,6 +331,22 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
     loadPassportId();
     return () => { active = false; };
   }, [dataSourceBuildingId, isActive]);
+  useEffect(() => {
+    if (dataSourceBuildingId !== "home" || !isActive) return;
+    try {
+      setHomeSetup(JSON.parse(window.localStorage.getItem(`${homePassportId}:setupSections`) || "null") || {});
+    } catch { setHomeSetup({}); }
+  }, [dataSourceBuildingId, homePassportId, isActive]);
+  useEffect(() => {
+    if (dataSourceBuildingId !== "home" || !homePassportDatabaseId || !isActive) return undefined;
+    let active = true;
+    supabase.from("WBPBuildingSetupDeclarations").select("setup_data")
+      .eq("building_record_id", homePassportDatabaseId).maybeSingle()
+      .then(({ data, error }) => {
+        if (active && !error && data?.setup_data) setHomeSetup(data.setup_data);
+      });
+    return () => { active = false; };
+  }, [dataSourceBuildingId, homePassportDatabaseId, isActive]);
   const activeSeasonInfo = useMemo(() => getMeteorologicalSeason(), []);
   const [deepDivePanel, setDeepDivePanel] = useState(null);
   const [standardDeepDiveOpen, setStandardDeepDiveOpen] = useState(true);
@@ -5798,36 +5854,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
           </div>
         </div>
         {dataSourceBuildingId === "home" ? (
-          <div className="order-2 mx-3 mt-2 grid min-w-0 grid-cols-4 gap-2 border-t border-emerald-200 pt-2 text-[10px] leading-tight [overflow-wrap:anywhere] sm:mx-8 sm:gap-3 sm:text-xs lg:mx-12">
-            {[
-              ["Energy", [
-                ["Supplier", "Pending"],
-                ["Tariff", "Pending"],
-                ["Meter source", "Glow"],
-              ]],
-              ["Health", [
-                ["Sensors", roomIaqData.length ? "Dyson" : "Pending"],
-                ["Locations", roomIaqData.length ? roomIaqData.map((room) => room.label).join(", ") : "Pending"],
-                ["Feeds", roomIaqData.length ? `${roomIaqData.length} recorded` : "Pending"],
-              ]],
-              ["Carbon context", [
-                ["Fuel", energySummary.hasGasData ? "Electricity + gas" : "Electricity"],
-                ["Baseline", baselineConfidence.label],
-                ["Metered", `${baselineMeteredDays} days`],
-              ]],
-              ["Ownership", [
-                ["Owner", homePassport?.legalOwnerName || "Pending"],
-                ...(homePassport?.ownershipType === "shared-ownership" ? [["Other owner", homePassport?.otherOwnerName || "Pending"]] : []),
-                ["Tenure", homePassport?.tenure || "Pending"],
-                ["UPRN", homePassport?.uprn || "Pending"],
-              ]],
-            ].map(([heading, rows]) => (
-              <div key={heading} className="min-w-0 border-r border-emerald-200 pr-2 last:border-0 last:pr-0">
-                <h3 className="mb-1 font-bold text-emerald-950">{heading}</h3>
-                {rows.map(([label, value]) => <p key={label} className="mb-0.5 text-gray-800"><span className="text-gray-600">{label}: </span>{value}</p>)}
-              </div>
-            ))}
-          </div>
+          <div className="order-2"><ProfileSummaryColumns record={homePassport} property={homePassport?.propertyDiscovery} setup={homeSetup} /></div>
         ) : null}
       </div>
 
@@ -7659,13 +7686,47 @@ export const NewBuildingSetupPanel = ({ freshStart = false }) => {
       setHealthSensors(Array.isArray(saved.healthSensors) ? saved.healthSensors : []);
       setCarbonSelections((current) => ({ ...current, ...saved.carbonSelections }));
       if (saved.modelInput) setModelInput(saved.modelInput);
+      setHistoricalDataFileName(saved.historicalDataFileName || "");
+      setSensorEvidenceFileName(saved.sensorEvidenceFileName || "");
     } catch { /* Invalid local draft is ignored. */ }
   }, [freshStart, setupRecordId]);
-  const saveSetupSection = () => {
-    window.localStorage.setItem(ownershipRecord?.recordId ? `${ownershipRecord.recordId}:setupSections` : "wbp-new-building-setup-draft", JSON.stringify({
-      manualData, modelInput, energyConsent, healthSensors, carbonSelections,
-    }));
+  useEffect(() => {
+    if (!ownershipRecord?.databaseId || freshStart) return undefined;
+    let active = true;
+    supabase.from("WBPBuildingSetupDeclarations").select("setup_data")
+      .eq("building_record_id", ownershipRecord.databaseId).maybeSingle()
+      .then(({ data, error }) => {
+        if (!active || error || !data?.setup_data) return;
+        const saved = data.setup_data;
+        setManualData((current) => ({ ...current, ...saved.manualData }));
+        setEnergyConsent(Boolean(saved.energyConsent));
+        setHealthSensors(Array.isArray(saved.healthSensors) ? saved.healthSensors : []);
+        setCarbonSelections((current) => ({ ...current, ...saved.carbonSelections }));
+        setHistoricalDataFileName(saved.historicalDataFileName || "");
+        setSensorEvidenceFileName(saved.sensorEvidenceFileName || "");
+        if (saved.modelInput) setModelInput(saved.modelInput);
+        window.localStorage.setItem(`${ownershipRecord.recordId}:setupSections`, JSON.stringify(saved));
+      });
+    return () => { active = false; };
+  }, [freshStart, ownershipRecord?.databaseId, ownershipRecord?.recordId]);
+  const saveSetupSection = async () => {
+    const setup = {
+      manualData, modelInput, energyConsent, historicalDataFileName, healthSensors, sensorEvidenceFileName, carbonSelections,
+    };
+    window.localStorage.setItem(ownershipRecord?.recordId ? `${ownershipRecord.recordId}:setupSections` : "wbp-new-building-setup-draft", JSON.stringify(setup));
     if (ownershipRecord?.recordId) window.localStorage.removeItem("wbp-new-building-setup-draft");
+    if (ownershipRecord?.databaseId) {
+      const { data: auth } = await supabase.auth.getUser();
+      if (auth?.user) {
+        const { error } = await supabase.from("WBPBuildingSetupDeclarations").upsert({
+          building_record_id: ownershipRecord.databaseId,
+          setup_data: setup,
+          updated_by: auth.user.id,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "building_record_id" });
+        if (!error) { setSectionSaveStatus(`${setupTab} saved to account`); return; }
+      }
+    }
     setSectionSaveStatus(`${setupTab} saved on this device`);
   };
 
@@ -8245,18 +8306,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false }) => {
             <p className="break-words text-xs text-gray-700">Internal area: {manualData.internalArea ? `${manualData.internalArea} m2` : isBridgewoodProfile ? `${HOME_BUILDING.estimatedInternalArea} m2 (model estimate)` : "Pending"}</p>
           </div>
         </div>
-        <div className="mx-3 mt-2 grid min-w-0 grid-cols-4 gap-2 border-t border-emerald-200 pt-2 text-[10px] [overflow-wrap:anywhere] sm:mx-8 sm:gap-3 sm:text-xs lg:mx-12">
-          <div className="min-w-0"><h4 className="font-bold text-emerald-950">Energy</h4><p className="text-gray-700">Monitoring: {energyConsent ? "Consented" : "Pending"}</p><p className="text-gray-700">Historical data: {historicalDataFileName || "Pending"}</p></div>
-          <div className="min-w-0"><h4 className="font-bold text-emerald-950">Health</h4><p className="text-gray-700">Sensors: {healthSensors.length ? `${healthSensors.length} registered` : "Pending"}</p><p className="text-gray-700">Sensor evidence: {sensorEvidenceFileName || "Pending"}</p></div>
-          <div className="min-w-0"><h4 className="font-bold text-emerald-950">Carbon context</h4><p className="text-gray-700">Electricity: {carbonSelections.electricity.replaceAll("-", " ")}</p><p className="text-gray-700">Fuel: {carbonSelections.fuel.replaceAll("-", " ")}</p><p className="text-gray-700">Heating: {carbonSelections.heating.replaceAll("-", " ")}</p><p className="text-gray-700">Solar: {carbonSelections.solar.replaceAll("-", " ")}</p><p className="text-gray-700">Battery: {carbonSelections.battery.replaceAll("-", " ")}</p></div>
-          <dl className="min-w-0"><dt className="font-bold text-emerald-950">Ownership</dt>{[
-                ["Property number (UPRN)", ownershipRecord?.uprn],
-                ["Local authority", ownershipProperty?.localAuthority],
-                ["Created by", ownershipRecord?.legalOwnerName],
-                ["Type", ownershipRecord?.ownershipType?.replaceAll("-", " ")],
-                ["Tenure", ownershipRecord?.tenure],
-              ].map(([label, value]) => <div key={label} className="break-words text-gray-700"><dt className="inline">{label}: </dt><dd className="inline font-semibold text-gray-900">{value || "Pending"}</dd></div>)}</dl>
-        </div>
+        <ProfileSummaryColumns record={ownershipRecord} property={ownershipProperty} setup={{ energyConsent, historicalDataFileName, healthSensors, sensorEvidenceFileName, carbonSelections }} />
         {ownershipRecord ? <>
           {passportSaveStatus !== "saved" ? <div className="mx-3 mt-4 flex justify-end sm:mx-8 lg:mx-12"><button type="button" disabled={passportSaveStatus === "saving"} onClick={secureExistingPassport} className="bg-emerald-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">{passportSaveStatus === "saving" ? "Saving..." : "Save to secure account"}</button></div> : null}
           {passportSaveError ? <p className="mx-3 mt-3 border border-red-200 bg-red-50 p-2 text-xs text-red-800 sm:mx-8 lg:mx-12">{passportSaveError}</p> : null}
@@ -9133,7 +9183,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false }) => {
 
       </div>
       </div>
-      {setupTab !== "ownership" ? <div className="mt-4 flex items-center justify-end gap-3 border-t border-gray-200 pt-4"><span role="status" className="text-xs text-gray-600">{sectionSaveStatus === `${setupTab} saved on this device` ? "Saved on this device" : ""}</span><button type="button" onClick={saveSetupSection} className="bg-emerald-700 px-4 py-2 text-sm font-bold text-white">Save {setupTab === "carbon" ? "carbon context" : setupTab}</button></div> : null}
+      {setupTab !== "ownership" ? <div className="mt-4 flex items-center justify-end gap-3 border-t border-gray-200 pt-4"><span role="status" className="text-xs text-gray-600">{sectionSaveStatus === `${setupTab} saved on this device` ? "Saved on this device" : sectionSaveStatus === `${setupTab} saved to account` ? "Saved to account" : ""}</span><button type="button" onClick={saveSetupSection} className="bg-emerald-700 px-4 py-2 text-sm font-bold text-white">Save {setupTab === "carbon" ? "carbon context" : setupTab}</button></div> : null}
       </div>
       </div>
       </section>
