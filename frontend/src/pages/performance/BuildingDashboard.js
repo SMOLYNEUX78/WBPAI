@@ -33,12 +33,6 @@ const MIN_FULL_YEAR_METERED_DAYS = 300;
 const SEASON_NAMES = ["Summer", "Autumn", "Winter", "Spring"];
 
 const PROPERTY_DISCOVERY_CACHE_KEY = "wbp-property-discovery-draft:v1";
-const HISTORIC_EVIDENCE_TYPES = [
-  { id: "historic-planning-permission", label: "Planning permission" },
-  { id: "historic-design-plan", label: "Design plans" },
-  { id: "historic-building-control", label: "Building control / completion" },
-  { id: "historic-builder-record", label: "Builder / construction record" },
-];
 const CARBON_EVIDENCE_TYPES = [
   { id: "energy-history", label: "Historical energy records", help: "Bills covering the baseline period. A reviewer must confirm the actual date coverage." },
   { id: "electricity-tariff", label: "Electricity tariff", help: "A supplier bill or tariff confirmation showing the account, dates and product." },
@@ -242,7 +236,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
   const dataSourceBuildingId = building.dataSourceId || building.id;
   const isCarbonCreditTab = building.id === "cc";
   const [homePassport, setHomePassport] = useState(() => {
-    if (building.id !== "home") return null;
+    if (dataSourceBuildingId !== "home") return null;
     try {
       return JSON.parse(window.localStorage.getItem("wbp-new-building-passport") || "null");
     } catch {
@@ -252,20 +246,20 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
   const homePassportId = homePassport?.recordId || "";
   const [homeSaleInfoOpen, setHomeSaleInfoOpen] = useState(false);
   useEffect(() => {
-    if (building.id !== "home" || !isActive) return;
+    if (dataSourceBuildingId !== "home" || !isActive) return;
     try {
       const cached = JSON.parse(window.localStorage.getItem("wbp-new-building-passport") || "null");
       if (cached?.recordId) setHomePassport(cached);
     } catch { /* The account lookup remains the source when browser data is invalid. */ }
-  }, [building.id, isActive]);
+  }, [dataSourceBuildingId, isActive]);
   useEffect(() => {
-    if (building.id !== "home") return undefined;
+    if (dataSourceBuildingId !== "home" || !isActive) return undefined;
     let active = true;
     const loadPassportId = async () => {
       const { data: auth } = await supabase.auth.getUser();
       if (!active || !auth?.user) return;
       const { data, error } = await supabase.from("WBPBuildingRecords")
-        .select("id, record_reference, address, uprn, legal_owner_name, ownership_type, tenure, ownership_verification_status")
+        .select("*")
         .eq("custodian_user_id", auth.user.id)
         .order("updated_at", { ascending: false }).limit(1).maybeSingle();
       if (active && !error && data?.record_reference) {
@@ -279,6 +273,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
           recordId: data.record_reference,
           uprn: data.uprn || "",
           legalOwnerName: data.legal_owner_name || "",
+          otherOwnerName: data.other_owner_name || "",
           ownershipType: data.ownership_type || "",
           tenure: data.tenure || "",
           ownershipVerificationStatus: data.ownership_verification_status || "unverified",
@@ -295,7 +290,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
     };
     loadPassportId();
     return () => { active = false; };
-  }, [building.id]);
+  }, [dataSourceBuildingId, isActive]);
   const activeSeasonInfo = useMemo(() => getMeteorologicalSeason(), []);
   const [deepDivePanel, setDeepDivePanel] = useState(null);
   const [standardDeepDiveOpen, setStandardDeepDiveOpen] = useState(true);
@@ -699,10 +694,6 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
 
   const matterportModelId = useMemo(
     () => extractMatterportModelId(matterportInput),
-    [matterportInput]
-  );
-  const matterportShareUrl = useMemo(
-    () => normalizeMatterportUrl(matterportInput),
     [matterportInput]
   );
   const matterportEmbedUrl = useMemo(
@@ -4685,13 +4676,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
       (mrvEvidence.architectName?.trim() ||
         mrvEvidence.retrofitCoordinatorName?.trim())
   );
-  const ownershipRecordComplete = Boolean(
-    mrvEvidence.ownershipRecordReference?.trim() ||
-      mrvEvidence.ownershipRecordFileName
-  );
-  const ownershipConsentComplete = Boolean(
-    mrvEvidence.ownershipConsent && ownershipRecordComplete
-  );
+  const carbonRightsDeclared = Boolean(mrvEvidence.ownershipConsent);
   const verifierApprovalComplete =
     mrvEvidence.verifierStatus === "approved" &&
     Boolean(mrvEvidence.verifierName?.trim());
@@ -4754,16 +4739,13 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
       complete: interventionComplete && deliveryTeamComplete,
     },
     {
-      category: "Retrofit works",
-      label: "Ownership and consent",
+      category: "Carbon rights",
+      label: "Credit assignment declaration",
       fieldKey: "ownership",
-      detail: ownershipConsentComplete
-        ? `Ownership record captured: ${
-            mrvEvidence.ownershipRecordFileName ||
-            mrvEvidence.ownershipRecordReference
-          }`
-        : "Needs ownership record plus credit assignment and no-double-counting declaration",
-      complete: ownershipConsentComplete,
+      detail: carbonRightsDeclared
+        ? "No-double-counting declaration recorded"
+        : "Needs credit assignment and no-double-counting declaration",
+      complete: carbonRightsDeclared,
     },
   ];
   const evidencePackCompleteCount = evidencePackChecks.filter(
@@ -4780,6 +4762,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
     "Monitoring inputs",
     "Baseline performance",
     "Retrofit works",
+    "Carbon rights",
   ];
   const groupedEvidencePackChecks = evidencePackCategories
     .map((category) => ({
@@ -4804,7 +4787,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
   );
   const evidencePackExportReady = evidencePackScore === 100;
   const profileEvidenceReady = evidencePackChecks
-    .filter((check) => check.category !== "Retrofit works")
+    .filter((check) => check.category === "Monitoring inputs" || check.category === "Baseline performance")
     .every((check) => check.complete);
   const readinessGates = getReadinessGates({
     ownershipStatus: homePassport?.ownershipVerificationStatus,
@@ -5731,12 +5714,12 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
         isCarbonCreditTab ? "min-h-0" : "min-h-screen"
       }`}
     >
-      <div className="bg-gray-100 p-4 rounded shadow">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+      <div className={dataSourceBuildingId === "home" ? "-mx-4 -mt-4 flex flex-col bg-emerald-100 pb-3" : "bg-gray-100 p-4 rounded shadow"}>
+        {dataSourceBuildingId !== "home" ? <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-lg font-bold">Building Input</h2>
-        </div>
+        </div> : null}
         {building.id === "home" && homePassportId ? (
-          <div className="mb-3 border border-gray-200 bg-white p-3">
+          <div className={dataSourceBuildingId === "home" ? "order-3 mx-3 mt-3 border-t border-emerald-200 pt-3 text-xs sm:mx-8 lg:mx-12" : "mb-3 border border-gray-200 bg-white p-3"}>
             <button type="button" onClick={() => setHomeSaleInfoOpen((open) => !open)} aria-expanded={homeSaleInfoOpen}
               className="flex w-full flex-wrap items-center justify-between gap-2 text-left">
               <span className="min-w-0 break-all text-sm font-bold text-gray-900">{homePassportId}</span>
@@ -5772,52 +5755,80 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
           </div>
         ) : null}
 
-        <div className="grid grid-cols-1 items-stretch gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)] sm:gap-5">
-          <dl className="grid min-w-0 grid-cols-2 gap-x-3 border border-gray-200 bg-white p-3 text-xs sm:grid-cols-1">
+        <div className={dataSourceBuildingId === "home" ? "order-1 grid min-h-[170px] min-w-0 grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] items-stretch sm:min-h-[190px]" : "grid grid-cols-1 items-stretch gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)] sm:gap-5"}>
+          <dl className={dataSourceBuildingId === "home" ? "order-2 min-w-0 px-3 py-2 text-xs sm:px-5" : "grid min-w-0 grid-cols-2 gap-x-3 border border-gray-200 bg-white p-3 text-xs sm:grid-cols-1"}>
+            {dataSourceBuildingId === "home" ? (
+              <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-2 py-0.5">
+                <div className="min-w-0">
+                  <dt className="text-gray-600">Address</dt>
+                  <dd className="break-words text-sm font-semibold text-gray-900 sm:text-base">
+                    <span className="block">{homePassport?.propertyDiscovery?.address || matterportMetadata.address || "Pending"}</span>
+                    <span className="block">{homePassport?.propertyDiscovery?.postcode || ""}</span>
+                  </dd>
+                </div>
+                <button type="button" disabled title="Home-profile sales are not available yet" className="max-w-[105px] break-all border border-emerald-300 bg-white/60 px-1.5 py-1 text-[9px] font-semibold leading-tight text-emerald-900 opacity-70 sm:max-w-none sm:px-2 sm:text-[10px]">
+                  {homePassportId || "WBP-2026-P42TCE"}
+                </button>
+              </div>
+            ) : null}
             {[
-              ["Address", [homePassport?.propertyDiscovery?.address, homePassport?.propertyDiscovery?.postcode].filter(Boolean).join(", ") || matterportMetadata.address],
+              ...(dataSourceBuildingId === "home" ? [] : [["Address", [homePassport?.propertyDiscovery?.address, homePassport?.propertyDiscovery?.postcode].filter(Boolean).join(", ") || matterportMetadata.address]]),
               ["Coordinates", [homePassport?.propertyDiscovery?.latitude ?? matterportMetadata.latitude, homePassport?.propertyDiscovery?.longitude ?? matterportMetadata.longitude].filter((value) => value !== null && value !== undefined && value !== "").join(", ")],
               ["Internal area", matterportMetadata.internalArea !== "--" ? `${matterportMetadata.internalArea} m2` : "Pending"],
-              ...(building.id === "home" ? [["Property number (UPRN)", homePassport?.uprn], ["Local authority", homePassport?.propertyDiscovery?.localAuthority], ["Created by", homePassport?.legalOwnerName], ["Ownership", homePassport?.ownershipType?.replaceAll("-", " ")], ["Tenure", homePassport?.tenure]] : []),
-            ].map(([label, value]) => <div key={label} className="min-w-0 border-b border-gray-100 py-1.5 last:border-0"><dt className="text-gray-500">{label}</dt><dd className="mt-0.5 break-words font-semibold text-gray-900">{value || "Pending"}</dd></div>)}
+            ].map(([label, value]) => <div key={label} className={dataSourceBuildingId === "home" ? "min-w-0 py-0.5" : "min-w-0 border-b border-gray-100 py-1.5 last:border-0"}><dt className="text-gray-600">{label}</dt><dd className={`break-words font-semibold text-gray-900 ${dataSourceBuildingId === "home" && label === "Address" ? "text-base" : ""}`}>{value || "Pending"}</dd></div>)}
           </dl>
 
-          <div className="flex min-w-0 flex-col border border-gray-200 bg-white p-2">
-            <div className="flex items-center justify-between gap-2">
-              <h3 className="font-semibold text-xs min-[390px]:text-sm sm:text-base">
-                3D Model
-              </h3>
-
-              {matterportShareUrl ? (
-                <div className="flex justify-end text-right">
-                  <a
-                    className="text-blue-700 text-[10px] min-[390px]:text-xs sm:text-sm underline leading-tight"
-                    href={matterportShareUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Open
-                  </a>
-                </div>
-              ) : null}
-            </div>
+          <div className={dataSourceBuildingId === "home" ? "relative order-1 min-w-0" : "flex min-w-0 flex-col border border-gray-200 bg-white p-2"}>
+            {dataSourceBuildingId !== "home" ? <h3 className="font-semibold text-xs min-[390px]:text-sm sm:text-base">3D Model</h3> : null}
 
             {matterportEmbedUrl ? (
               <iframe
                 title="Matterport model"
                 src={matterportEmbedUrl}
-                className="min-h-[190px] w-full flex-1 border bg-white sm:min-h-[250px]"
+                className={dataSourceBuildingId === "home" ? "absolute inset-0 block h-full w-full border-0 bg-white" : "min-h-[190px] w-full flex-1 border bg-white sm:min-h-[250px]"}
                 allow="autoplay; fullscreen; xr-spatial-tracking; accelerometer; gyroscope; vr"
                 allowFullScreen
               />
             ) : (
-              <div className="flex min-h-[190px] w-full flex-1 items-center justify-center border bg-white p-3 text-center text-sm text-gray-500 sm:min-h-[250px]">
+              <div className={dataSourceBuildingId === "home" ? "absolute inset-0 flex items-center justify-center bg-white/70 p-3 text-center text-sm text-gray-500" : "flex min-h-[190px] w-full flex-1 items-center justify-center border bg-white p-3 text-center text-sm text-gray-500 sm:min-h-[250px]"}>
                 3D model pending.
               </div>
             )}
 
           </div>
         </div>
+        {dataSourceBuildingId === "home" ? (
+          <div className="order-2 mx-3 mt-2 grid min-w-0 grid-cols-4 gap-2 border-t border-emerald-200 pt-2 text-[10px] leading-tight [overflow-wrap:anywhere] sm:mx-8 sm:gap-3 sm:text-xs lg:mx-12">
+            {[
+              ["Energy", [
+                ["Supplier", "Pending"],
+                ["Tariff", "Pending"],
+                ["Meter source", "Glow"],
+              ]],
+              ["Health", [
+                ["Sensors", roomIaqData.length ? "Dyson" : "Pending"],
+                ["Locations", roomIaqData.length ? roomIaqData.map((room) => room.label).join(", ") : "Pending"],
+                ["Feeds", roomIaqData.length ? `${roomIaqData.length} recorded` : "Pending"],
+              ]],
+              ["Carbon context", [
+                ["Fuel", energySummary.hasGasData ? "Electricity + gas" : "Electricity"],
+                ["Baseline", baselineConfidence.label],
+                ["Metered", `${baselineMeteredDays} days`],
+              ]],
+              ["Ownership", [
+                ["Owner", homePassport?.legalOwnerName || "Pending"],
+                ...(homePassport?.ownershipType === "shared-ownership" ? [["Other owner", homePassport?.otherOwnerName || "Pending"]] : []),
+                ["Tenure", homePassport?.tenure || "Pending"],
+                ["UPRN", homePassport?.uprn || "Pending"],
+              ]],
+            ].map(([heading, rows]) => (
+              <div key={heading} className="min-w-0 border-r border-emerald-200 pr-2 last:border-0 last:pr-0">
+                <h3 className="mb-1 font-bold text-emerald-950">{heading}</h3>
+                {rows.map(([label, value]) => <p key={label} className="mb-0.5 text-gray-800"><span className="text-gray-600">{label}: </span>{value}</p>)}
+              </div>
+            ))}
+          </div>
+        ) : null}
       </div>
 
       <div className="bg-gray-100 p-3 sm:p-4 rounded shadow">
@@ -7033,7 +7044,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
                             : activeMrvEvidenceField === "intervention"
                             ? "Complete Intervention Evidence"
                             : activeMrvEvidenceField === "ownership"
-                            ? "Complete Ownership Declaration"
+                            ? "Complete Carbon Rights Declaration"
                             : "Complete Verifier Approval"}
                         </h4>
                         <p className="text-sm text-gray-600">
@@ -7217,45 +7228,6 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
 
               {activeMrvEvidenceField === "ownership" ? (
                 <>
-                  <label className="block space-y-1">
-                    <span className="font-semibold text-gray-700">
-                      Property ownership / authority record
-                    </span>
-                    <input
-                      type="text"
-                      value={mrvEvidence.ownershipRecordReference || ""}
-                      onChange={(event) =>
-                        updateMrvEvidence({
-                          ownershipRecordReference: event.target.value,
-                        })
-                      }
-                      placeholder="Land Registry title number, tenancy authority, asset ID or consent record"
-                      className="w-full rounded border border-gray-300 px-3 py-2"
-                    />
-                  </label>
-
-                  <label className="block space-y-1">
-                    <span className="font-semibold text-gray-700">
-                      Upload ownership record
-                    </span>
-                    <input
-                      type="file"
-                      accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,application/pdf,image/*"
-                      onChange={(event) =>
-                        updateMrvEvidence({
-                          ownershipRecordFileName:
-                            event.target.files?.[0]?.name || "",
-                        })
-                      }
-                      className="block w-full rounded border border-gray-300 px-3 py-2 text-sm"
-                    />
-                    <span className="block text-xs text-gray-600">
-                      {mrvEvidence.ownershipRecordFileName
-                        ? `Selected: ${mrvEvidence.ownershipRecordFileName}`
-                        : "Stores the document reference for the evidence pack; durable file storage can be connected later."}
-                    </span>
-                  </label>
-
                   <label className="flex items-start gap-2 rounded border border-gray-200 bg-gray-50 p-3">
                     <input
                       type="checkbox"
@@ -7331,15 +7303,15 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
   );
 };
 
-export const NewBuildingSetupPanel = () => {
+export const NewBuildingSetupPanel = ({ freshStart = false }) => {
   const [setupTab, setSetupTab] = useState("ownership");
-  const historicSectionRef = useRef(null);
   const setupPanelRef = useRef(null);
   const setupContentRef = useRef(null);
   const previousPanelHeightRef = useRef(null);
   const location = useLocation();
   const recordMode = new URLSearchParams(location.search).get("record") || "new";
   const [ownershipRecord, setOwnershipRecord] = useState(() => {
+    if (freshStart) return null;
     try {
       return JSON.parse(window.localStorage.getItem("wbp-new-building-passport") || "null");
     } catch {
@@ -7347,6 +7319,7 @@ export const NewBuildingSetupPanel = () => {
     }
   });
   const [passportSaveStatus, setPassportSaveStatus] = useState(() => {
+    if (freshStart) return "idle";
     try {
       const savedRecord = JSON.parse(window.localStorage.getItem("wbp-new-building-passport") || "null");
       return savedRecord?.databaseId ? "saved" : savedRecord ? "local-only" : "idle";
@@ -7358,6 +7331,7 @@ export const NewBuildingSetupPanel = () => {
   const [ownershipDraft, setOwnershipDraft] = useState({
     ownershipType: "owner-occupier",
     legalOwnerName: "",
+    otherOwnerName: "",
     tenure: "freehold",
     custodianName: "",
     occupierName: "",
@@ -7366,13 +7340,17 @@ export const NewBuildingSetupPanel = () => {
     authorityToCreate: false,
     privacyAccepted: false,
   });
-  const [profileEditMode, setProfileEditMode] = useState(false);
-  const [profileLocationDraft, setProfileLocationDraft] = useState({ address: "", postcode: "" });
   const [ownershipCleanupStatus, setOwnershipCleanupStatus] = useState("");
   const [ownershipClaim, setOwnershipClaim] = useState(null);
+  const identityUploadRef = useRef(null);
+  const ownershipUploadRef = useRef(null);
   const [ownershipClaimBusy, setOwnershipClaimBusy] = useState(false);
   const [ownershipClaimError, setOwnershipClaimError] = useState("");
   const [ownershipDeclaration, setOwnershipDeclaration] = useState(false);
+  const [identityDocumentType, setIdentityDocumentType] = useState("identity-passport");
+  const [ownershipDocuments, setOwnershipDocuments] = useState({});
+  const [ownershipUploadBusy, setOwnershipUploadBusy] = useState("");
+  const [ownershipUploadStatus, setOwnershipUploadStatus] = useState("");
   useEffect(() => {
     if (!ownershipRecord?.databaseId) { setOwnershipClaim(null); return; }
     let active = true;
@@ -7388,6 +7366,105 @@ export const NewBuildingSetupPanel = () => {
     loadClaim();
     return () => { active = false; };
   }, [ownershipRecord?.databaseId]);
+
+  useEffect(() => {
+    if (!ownershipRecord?.databaseId || !ownershipClaim?.id) { setOwnershipDocuments({}); return; }
+    let active = true;
+    const loadDocuments = async () => {
+      const { data, error } = await supabase.from("WBPEvidenceVersions")
+        .select("id,evidence_type,original_file_name,storage_reference,created_at,assurance_status")
+        .eq("building_record_id", ownershipRecord.databaseId)
+        .eq("ownership_claim_id", ownershipClaim.id)
+        .in("evidence_type", ["identity-passport", "identity-driving-licence", "ownership-title-register"])
+        .is("deleted_at", null)
+        .order("created_at", { ascending: false });
+      if (!active) return;
+      if (error) { setOwnershipUploadStatus("Could not load private ownership documents."); return; }
+      const latest = {};
+      (data || []).forEach((document) => { if (!latest[document.evidence_type]) latest[document.evidence_type] = document; });
+      setOwnershipDocuments(latest);
+    };
+    loadDocuments();
+    return () => { active = false; };
+  }, [ownershipRecord?.databaseId, ownershipClaim?.id]);
+
+  const uploadOwnershipDocument = async (evidenceType, file) => {
+    if (!file || !ownershipRecord?.databaseId || !ownershipClaim?.id) return;
+    if (!["application/pdf", "image/jpeg", "image/png"].includes(file.type) || file.size > 10 * 1024 * 1024) {
+      setOwnershipUploadStatus("Use a PDF, JPG or PNG file no larger than 10 MB.");
+      return;
+    }
+    setOwnershipUploadBusy(evidenceType);
+    setOwnershipUploadStatus("");
+    let path = "";
+    try {
+      const { data: auth, error: authError } = await supabase.auth.getUser();
+      if (authError || !auth.user) throw new Error("Sign in again before uploading.");
+      if (!window.crypto?.subtle) throw new Error("Secure file hashing is unavailable in this browser.");
+      const digest = await window.crypto.subtle.digest("SHA-256", await file.arrayBuffer());
+      const hash = Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+      const { data: previous, error: versionError } = await supabase.from("WBPEvidenceVersions")
+        .select("version_number").eq("building_record_id", ownershipRecord.databaseId)
+        .eq("ownership_claim_id", ownershipClaim.id)
+        .eq("evidence_type", evidenceType).order("version_number", { ascending: false }).limit(1);
+      if (versionError) throw versionError;
+      path = `${auth.user.id}/${ownershipRecord.databaseId}/${window.crypto.randomUUID()}`;
+      const { error: uploadError } = await supabase.storage.from("wbp-private-evidence")
+        .upload(path, file, { contentType: file.type, upsert: false });
+      if (uploadError) throw uploadError;
+      const { data, error: metadataError } = await supabase.from("WBPEvidenceVersions").insert({
+        building_record_id: ownershipRecord.databaseId,
+        ownership_claim_id: ownershipClaim.id,
+        evidence_type: evidenceType,
+        lifecycle_stage: "occupy",
+        version_number: (previous?.[0]?.version_number || 0) + 1,
+        storage_reference: path,
+        evidence_hash: hash,
+        original_file_name: file.name,
+        mime_type: file.type,
+        byte_size: file.size,
+        classification: "occupant-private",
+        assurance_status: "self-declared",
+        submitted_by: auth.user.id,
+      }).select("id,evidence_type,original_file_name,storage_reference,created_at,assurance_status").single();
+      if (metadataError) throw metadataError;
+      const nextDocuments = { ...ownershipDocuments, [evidenceType]: data };
+      setOwnershipDocuments(nextDocuments);
+      if (nextDocuments["ownership-title-register"] && (nextDocuments["identity-passport"] || nextDocuments["identity-driving-licence"])) {
+        setOwnershipUploadStatus("Both documents stored privately. The review service is not connected yet; ownership remains unverified.");
+      }
+      else setOwnershipUploadStatus(`${file.name} uploaded privately. Identity and ownership remain unverified.`);
+    } catch (error) {
+      if (path) await supabase.storage.from("wbp-private-evidence").remove([path]);
+      setOwnershipUploadStatus(`Upload failed: ${error.message}`);
+    } finally {
+      setOwnershipUploadBusy("");
+    }
+  };
+
+  const removeOwnershipDocument = async (document) => {
+    if (!document?.id || !document.storage_reference || !ownershipClaim?.id) return;
+    setOwnershipUploadBusy(document.evidence_type);
+    setOwnershipUploadStatus("");
+    try {
+      const { error: metadataError } = await supabase.from("WBPEvidenceVersions")
+        .update({ deleted_at: new Date().toISOString() }).eq("id", document.id);
+      if (metadataError) throw metadataError;
+      const { error: storageError } = await supabase.storage.from("wbp-private-evidence")
+        .remove([document.storage_reference]);
+      if (storageError) throw storageError;
+      setOwnershipDocuments((current) => {
+        const next = { ...current };
+        delete next[document.evidence_type];
+        return next;
+      });
+      setOwnershipUploadStatus("Document removed. The ownership check is incomplete until replacement evidence is submitted.");
+    } catch (error) {
+      setOwnershipUploadStatus(`Could not complete removal: ${error.message}`);
+    } finally {
+      setOwnershipUploadBusy("");
+    }
+  };
 
   const requestOwnershipVerification = async () => {
     if (!ownershipRecord?.databaseId || !ownershipDeclaration) return;
@@ -7413,6 +7490,7 @@ export const NewBuildingSetupPanel = () => {
       if (error) throw error;
       setOwnershipClaim(data);
       setOwnershipDeclaration(false);
+      window.requestAnimationFrame(() => setupPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
     } catch (error) {
       setOwnershipClaimError(error?.message || "The request could not be saved.");
     } finally {
@@ -7420,6 +7498,7 @@ export const NewBuildingSetupPanel = () => {
     }
   };
   const [propertySearch, setPropertySearch] = useState(() => {
+    if (freshStart) return { address: "", postcode: "", uprn: "", latitude: "", longitude: "" };
     try {
       const cached = JSON.parse(window.localStorage.getItem(PROPERTY_DISCOVERY_CACHE_KEY) || "null");
       return cached?.search || {
@@ -7434,42 +7513,30 @@ export const NewBuildingSetupPanel = () => {
     }
   });
   const [propertyDiscovery, setPropertyDiscovery] = useState(() => {
+    if (freshStart) return null;
     try {
       return JSON.parse(window.localStorage.getItem(PROPERTY_DISCOVERY_CACHE_KEY) || "null")?.snapshot || null;
     } catch {
       return null;
     }
   });
-  const [historicDraft, setHistoricDraft] = useState({ stage: "design", name: "", provider: "", url: "" });
-  const [historicLinks, setHistoricLinks] = useState([]);
-  const [historicStatus, setHistoricStatus] = useState("");
-  const [historicBusy, setHistoricBusy] = useState(false);
-  const [historicEvidenceType, setHistoricEvidenceType] = useState(HISTORIC_EVIDENCE_TYPES[0].id);
-  const [historicEvidence, setHistoricEvidence] = useState([]);
-  const [historicUploadBusy, setHistoricUploadBusy] = useState(false);
-  useEffect(() => {
-    if (new URLSearchParams(location.search).get("focus") !== "historic-evidence") return;
-    setSetupTab("ownership");
-    const timer = window.setTimeout(() => historicSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
-    return () => window.clearTimeout(timer);
-  }, [location.search]);
   const [discoveryStatus, setDiscoveryStatus] = useState("idle");
   const [discoveryError, setDiscoveryError] = useState("");
   const [setupMode, setSetupMode] = useState("manual");
   const [apiDetails, setApiDetails] = useState("");
   const [modelInput, setModelInput] = useState("");
-  const [manualData, setManualData] = useState({
-    address: "",
-    latitude: "",
-    longitude: "",
-    internalArea: "",
-  });
+  const [manualData, setManualData] = useState({ address: "", latitude: "", longitude: "", internalArea: "" });
+  useEffect(() => {
+    if (!ownershipRecord?.recordId) return;
+    if (modelInput.trim()) window.localStorage.setItem(`${ownershipRecord.recordId}:matterportModelInput`, modelInput.trim());
+  }, [modelInput, ownershipRecord?.recordId]);
   const [energyConsent, setEnergyConsent] = useState(false);
   const [historicalDataFileName, setHistoricalDataFileName] = useState("");
   const [carbonSelections, setCarbonSelections] = useState({ electricity: "unknown", fuel: "unknown", heating: "unknown", solar: "none", battery: "none" });
   const [carbonEvidence, setCarbonEvidence] = useState({});
   const [carbonEvidenceStatus, setCarbonEvidenceStatus] = useState("");
   const [carbonEvidenceBusy, setCarbonEvidenceBusy] = useState("");
+  const [sectionSaveStatus, setSectionSaveStatus] = useState("");
   const [healthSensors, setHealthSensors] = useState([]);
   const [sensorEvidenceFileName, setSensorEvidenceFileName] = useState("");
   const [sensorDraft, setSensorDraft] = useState({
@@ -7484,6 +7551,7 @@ export const NewBuildingSetupPanel = () => {
     metrics: ["temperature", "humidity"],
   });
   useEffect(() => {
+    if (freshStart) return;
     let active = true;
     const loadAccountPassport = async () => {
       const { data: auth, error: authError } = await supabase.auth.getUser();
@@ -7528,6 +7596,7 @@ export const NewBuildingSetupPanel = () => {
         createdAt: record.created_at, updatedAt: record.updated_at,
         ownershipType: record.ownership_type, tenure: record.tenure,
         legalOwnerName: record.legal_owner_name, custodianName: record.legal_owner_name,
+        otherOwnerName: record.other_owner_name || "",
         uprn: record.uprn || "", genesisHash: record.genesis_hash,
         ownershipVerificationStatus: record.ownership_verification_status,
         privacyAccepted: Boolean(record.privacy_notice_accepted_at),
@@ -7542,7 +7611,7 @@ export const NewBuildingSetupPanel = () => {
     };
     loadAccountPassport();
     return () => { active = false; };
-  }, []);
+  }, [freshStart]);
   const healthMetricOptions = [
     ["temperature", "Temperature"],
     ["humidity", "Humidity"],
@@ -7556,16 +7625,15 @@ export const NewBuildingSetupPanel = () => {
 
   const modelId = useMemo(() => extractMatterportModelId(modelInput), [modelInput]);
   const modelUrl = useMemo(() => normalizeMatterportUrl(modelInput), [modelInput]);
-  const embedUrl = useMemo(() => buildMatterportEmbedUrl(modelInput), [modelInput]);
   const ownershipProperty = ownershipRecord?.propertyDiscovery || propertyDiscovery;
+  const isBridgewoodProfile = /\b14\s+bridgewood\b/i.test(ownershipProperty?.address || "") || ownershipRecord?.uprn === "100091142492";
+  const savedBannerModel = ownershipRecord ? window.localStorage.getItem(`${ownershipRecord.recordId}:matterportModelInput`) : "";
+  const bannerModelInput = (freshStart ? [modelInput] : [modelInput, savedBannerModel, isBridgewoodProfile && HOME_BUILDING.defaultMatterportUrl])
+    .find((value) => extractMatterportModelId(value)) || "";
+  const embedUrl = useMemo(() => buildMatterportEmbedUrl(bannerModelInput), [bannerModelInput]);
   const buildingAddress = [ownershipProperty?.address, ownershipProperty?.postcode].filter(Boolean).join(", ");
   const buildingLatitude = manualData.latitude || ownershipProperty?.latitude || "";
   const buildingLongitude = manualData.longitude || ownershipProperty?.longitude || "";
-  const hasManualBuildingInput =
-    buildingAddress ||
-    buildingLatitude ||
-    buildingLongitude ||
-    manualData.internalArea;
   const hasCompleteBuildingProfile = Boolean(
     buildingAddress && buildingLatitude && buildingLongitude && manualData.internalArea
   );
@@ -7581,147 +7649,24 @@ export const NewBuildingSetupPanel = () => {
   const monitoringProgress = Math.round(
     (monitoringCompleteCount / monitoringReadinessSteps.length) * 100
   );
-
+  const setupRecordId = ownershipRecord?.recordId;
   useEffect(() => {
-    if (!ownershipRecord?.databaseId) return;
-    let active = true;
-    const load = async () => {
-      const { data, error } = await supabase.from("WBPPropertyDiscoverySnapshots")
-        .select("planning_records")
-        .eq("building_record_id", ownershipRecord.databaseId)
-        .order("discovered_at", { ascending: false })
-        .limit(1).maybeSingle();
-      if (!active) return;
-      if (error) setHistoricStatus(`Could not load historic sources: ${error.message}`);
-      else setHistoricLinks((data?.planning_records || []).filter((record) => record.ownerLinked === true));
-    };
-    load();
-    return () => { active = false; };
-  }, [ownershipRecord?.databaseId]);
-
-  const saveHistoricLink = async (event) => {
-    event.preventDefault();
-    if (!ownershipRecord?.databaseId) return;
-    let sourceUrl;
     try {
-      sourceUrl = new URL(historicDraft.url.trim());
-      if (sourceUrl.protocol !== "https:") throw new Error();
-    } catch {
-      setHistoricStatus("Enter an HTTPS link to the source document or public record.");
-      return;
-    }
-    setHistoricBusy(true);
-    setHistoricStatus("");
-    try {
-      const { data: auth, error: authError } = await supabase.auth.getUser();
-      if (authError || !auth.user) throw new Error("Sign in again to link a source.");
-      const { data: snapshot, error: loadError } = await supabase.from("WBPPropertyDiscoverySnapshots")
-        .select("id,planning_records")
-        .eq("building_record_id", ownershipRecord.databaseId)
-        .order("discovered_at", { ascending: false })
-        .limit(1).maybeSingle();
-      if (loadError) throw loadError;
-      if (!snapshot) throw new Error("Save the property's address check before linking historic sources.");
-      const link = {
-        ownerLinked: true,
-        stage: historicDraft.stage,
-        name: historicDraft.name.trim(),
-        provider: historicDraft.provider.trim(),
-        documentationUrl: sourceUrl.href,
-        provenance: "Owner-linked source; not professionally verified",
-        linkedAt: new Date().toISOString(),
-      };
-      const records = [...(snapshot.planning_records || []), link];
-      const { error: saveError } = await supabase.from("WBPPropertyDiscoverySnapshots")
-        .update({ planning_records: records }).eq("id", snapshot.id);
-      if (saveError) throw saveError;
-      setHistoricLinks(records.filter((record) => record.ownerLinked === true));
-      setHistoricDraft({ stage: "design", name: "", provider: "", url: "" });
-      setHistoricStatus("Source linked to this home. The historical outline is now available.");
-      window.dispatchEvent(new Event("wbp:historic-source-linked"));
-    } catch (error) {
-      setHistoricStatus(`Could not link source: ${error.message}`);
-    } finally {
-      setHistoricBusy(false);
-    }
-  };
-
-  useEffect(() => {
-    if (!ownershipRecord?.databaseId) return;
-    let active = true;
-    const load = async () => {
-      const { data, error } = await supabase.from("WBPEvidenceVersions")
-        .select("id,evidence_type,original_file_name,storage_reference,created_at,assurance_status")
-        .eq("building_record_id", ownershipRecord.databaseId)
-        .eq("lifecycle_stage", "occupy")
-        .order("created_at", { ascending: false });
-      if (!active) return;
-      if (error) setHistoricStatus(`Could not load uploads: ${error.message}`);
-      else setHistoricEvidence((data || []).filter((item) => HISTORIC_EVIDENCE_TYPES.some((type) => type.id === item.evidence_type)));
-    };
-    load();
-    return () => { active = false; };
-  }, [ownershipRecord?.databaseId]);
-
-  const uploadHistoricEvidence = async (file) => {
-    if (!file) return;
-    if (!ownershipRecord?.databaseId) {
-      setHistoricStatus("Save this home to your secure account before uploading documents.");
-      return;
-    }
-    if (!["application/pdf", "image/jpeg", "image/png"].includes(file.type) || file.size > 10 * 1024 * 1024) {
-      setHistoricStatus("Use a PDF, JPG or PNG file no larger than 10 MB.");
-      return;
-    }
-    setHistoricUploadBusy(true);
-    setHistoricStatus("");
-    let path = "";
-    try {
-      const { data: auth, error: authError } = await supabase.auth.getUser();
-      if (authError || !auth.user) throw new Error("Sign in again to upload evidence.");
-      if (!window.crypto?.subtle) throw new Error("Secure file hashing is unavailable in this browser.");
-      const digest = await window.crypto.subtle.digest("SHA-256", await file.arrayBuffer());
-      const hash = Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
-      const { data: previous, error: versionError } = await supabase.from("WBPEvidenceVersions")
-        .select("version_number").eq("building_record_id", ownershipRecord.databaseId)
-        .eq("evidence_type", historicEvidenceType).order("version_number", { ascending: false }).limit(1);
-      if (versionError) throw versionError;
-      path = `${auth.user.id}/${ownershipRecord.databaseId}/${window.crypto.randomUUID()}`;
-      const { error: uploadError } = await supabase.storage.from("wbp-private-evidence")
-        .upload(path, file, { contentType: file.type, upsert: false });
-      if (uploadError) throw uploadError;
-      const { data, error: metadataError } = await supabase.from("WBPEvidenceVersions").insert({
-        building_record_id: ownershipRecord.databaseId,
-        evidence_type: historicEvidenceType,
-        lifecycle_stage: "occupy",
-        version_number: (previous?.[0]?.version_number || 0) + 1,
-        storage_reference: path,
-        evidence_hash: hash,
-        original_file_name: file.name,
-        mime_type: file.type,
-        byte_size: file.size,
-        classification: "verifier-access",
-        assurance_status: "self-declared",
-        submitted_by: auth.user.id,
-      }).select("id,evidence_type,original_file_name,storage_reference,created_at,assurance_status").single();
-      if (metadataError) throw metadataError;
-      setHistoricEvidence((current) => [data, ...current]);
-      setHistoricStatus(`${file.name} uploaded privately. It has not been verified.`);
-    } catch (error) {
-      if (path) await supabase.storage.from("wbp-private-evidence").remove([path]);
-      setHistoricStatus(`Upload failed: ${error.message}`);
-    } finally {
-      setHistoricUploadBusy(false);
-    }
-  };
-
-  const openHistoricEvidence = async (path) => {
-    const { data, error } = await supabase.storage.from("wbp-private-evidence").createSignedUrl(path, 60);
-    if (error || !data?.signedUrl) {
-      setHistoricStatus(`Could not open document: ${error?.message || "Link unavailable"}`);
-      return;
-    }
-    window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+      const saved = JSON.parse((setupRecordId && window.localStorage.getItem(`${setupRecordId}:setupSections`)) || (freshStart || !setupRecordId ? window.localStorage.getItem("wbp-new-building-setup-draft") : null) || "null");
+      if (!saved) return;
+      setManualData((current) => ({ ...current, ...saved.manualData }));
+      setEnergyConsent(Boolean(saved.energyConsent));
+      setHealthSensors(Array.isArray(saved.healthSensors) ? saved.healthSensors : []);
+      setCarbonSelections((current) => ({ ...current, ...saved.carbonSelections }));
+      if (saved.modelInput) setModelInput(saved.modelInput);
+    } catch { /* Invalid local draft is ignored. */ }
+  }, [freshStart, setupRecordId]);
+  const saveSetupSection = () => {
+    window.localStorage.setItem(ownershipRecord?.recordId ? `${ownershipRecord.recordId}:setupSections` : "wbp-new-building-setup-draft", JSON.stringify({
+      manualData, modelInput, energyConsent, healthSensors, carbonSelections,
+    }));
+    if (ownershipRecord?.recordId) window.localStorage.removeItem("wbp-new-building-setup-draft");
+    setSectionSaveStatus(`${setupTab} saved on this device`);
   };
 
   useEffect(() => {
@@ -7830,79 +7775,6 @@ export const NewBuildingSetupPanel = () => {
       legalOwnerName: value,
       custodianName: value,
     }));
-  };
-
-  const startProfileEdit = () => {
-    setProfileLocationDraft({
-      address: ownershipRecord?.propertyDiscovery?.address || "",
-      postcode: ownershipRecord?.propertyDiscovery?.postcode || "",
-    });
-    setOwnershipDraft((current) => ({
-      ...current,
-      ownershipType: ownershipRecord?.ownershipType || current.ownershipType,
-      legalOwnerName: ownershipRecord?.legalOwnerName || current.legalOwnerName,
-      tenure: ownershipRecord?.tenure || current.tenure,
-      custodianName: ownershipRecord?.custodianName || current.custodianName,
-      uprn: ownershipRecord?.uprn || current.uprn,
-      titleNumber: ownershipRecord?.titleNumber || current.titleNumber,
-      authorityToCreate: ownershipRecord?.authorityToCreate ?? current.authorityToCreate,
-      privacyAccepted: ownershipRecord?.privacyAccepted ?? current.privacyAccepted,
-    }));
-    setProfileEditMode(true);
-  };
-
-  const saveProfileDetails = async (event) => {
-    event.preventDefault();
-    if (!ownershipRecord) return;
-    const updatedAt = new Date().toISOString();
-    const address = profileLocationDraft.address.trim();
-    const postcode = profileLocationDraft.postcode.trim().toUpperCase();
-    const uprn = ownershipDraft.uprn.trim();
-    const addressChanged = address !== (ownershipRecord.propertyDiscovery?.address || "")
-      || postcode !== (ownershipRecord.propertyDiscovery?.postcode || "");
-    const propertyDiscovery = {
-      ...(ownershipRecord.propertyDiscovery || {}),
-      address, postcode, uprn,
-      ...(addressChanged ? {
-        latitude: null, longitude: null, localAuthority: "", sources: [], planningRecords: [],
-        confirmedAt: null, discoveredAt: updatedAt,
-      } : {}),
-    };
-    const nextRecord = {
-      ...ownershipRecord,
-      uprn,
-      propertyDiscovery,
-      ownershipType: ownershipDraft.ownershipType,
-      legalOwnerName: ownershipDraft.legalOwnerName.trim(),
-      tenure: ownershipDraft.tenure,
-      custodianName: ownershipDraft.legalOwnerName.trim(),
-      updatedAt,
-      history: [
-        ...(ownershipRecord.history || []),
-        {
-          event: "Home profile details updated",
-          actor: ownershipDraft.legalOwnerName.trim(),
-          timestamp: updatedAt,
-        },
-      ],
-    };
-    window.localStorage.setItem("wbp-new-building-passport", JSON.stringify(nextRecord));
-    setOwnershipRecord(nextRecord);
-    setPropertyDiscovery(propertyDiscovery);
-    setProfileEditMode(false);
-    if (ownershipRecord.databaseId) {
-      setPassportSaveStatus("saving");
-      setPassportSaveError("");
-      try {
-        const securedRecord = await persistPassportRecord(nextRecord);
-        window.localStorage.setItem("wbp-new-building-passport", JSON.stringify(securedRecord));
-        setOwnershipRecord(securedRecord);
-        setPassportSaveStatus("saved");
-      } catch (error) {
-        setPassportSaveStatus("error");
-        setPassportSaveError(error?.message || "Your changes remain on this browser but could not be saved to your secure account.");
-      }
-    }
   };
 
   const clearSavedOwnershipEvidence = async () => {
@@ -8106,6 +7978,7 @@ export const NewBuildingSetupPanel = () => {
       PROPERTY_DISCOVERY_CACHE_KEY,
       JSON.stringify({ search: propertySearch, snapshot: confirmedSnapshot })
     );
+    window.requestAnimationFrame(() => setupPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
   };
 
   const persistPassportRecord = async (record) => {
@@ -8127,6 +8000,7 @@ export const NewBuildingSetupPanel = () => {
       tenure: record.tenure,
       lifecycle_stage: "occupy",
       legal_owner_name: record.legalOwnerName,
+      ...(record.ownershipType === "shared-ownership" ? { other_owner_name: record.otherOwnerName || null } : {}),
       custodian_user_id: userId,
       genesis_hash: record.genesisHash,
       passport_status: "draft",
@@ -8150,7 +8024,7 @@ export const NewBuildingSetupPanel = () => {
         .eq("id", existingRecord.id)
         .select("id")
         .single();
-      if (error) throw error;
+      if (error) throw new Error(error.message?.includes("other_owner_name") ? "Secure saving needs the new shared-owner field in Supabase. Run 'Add other owner to home profiles.sql' in the SQL editor, then press Save to secure account again." : error.message);
       databaseRecord = data;
     } else {
       const { data, error } = await supabase
@@ -8158,7 +8032,7 @@ export const NewBuildingSetupPanel = () => {
         .insert(buildingPayload)
         .select("id")
         .single();
-      if (error) throw error;
+      if (error) throw new Error(error.message?.includes("other_owner_name") ? "Secure saving needs the new shared-owner field in Supabase. Run 'Add other owner to home profiles.sql' in the SQL editor, then press Save to secure account again." : error.message);
       databaseRecord = data;
 
     }
@@ -8260,6 +8134,7 @@ export const NewBuildingSetupPanel = () => {
 
     window.localStorage.setItem("wbp-new-building-passport", JSON.stringify(nextRecord));
     setOwnershipRecord(nextRecord);
+    window.requestAnimationFrame(() => setupPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
     setPassportSaveStatus("saving");
     setPassportSaveError("");
     try {
@@ -8356,11 +8231,40 @@ export const NewBuildingSetupPanel = () => {
   }, []);
 
   return (
-    <div className="bg-white p-4">
-      <section className="bg-gray-100 p-4 rounded shadow">
-      <header className="mb-4 flex min-w-0 flex-col gap-3 border-b border-gray-200 pb-3 lg:flex-row lg:items-center lg:gap-6">
-      <h2 className="shrink-0 text-lg font-bold">New Building</h2>
-      <nav className="grid w-full min-w-0 grid-cols-4 gap-1 lg:w-auto lg:gap-2" role="tablist" aria-label="New building sections">
+    <div className="bg-white">
+      <section className="border-b border-emerald-200 bg-emerald-100 pb-3">
+        <div className="grid min-h-[150px] min-w-0 grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] items-stretch sm:min-h-[180px]">
+          <div className="relative min-w-0">
+            {embedUrl ? <iframe title="3D model preview" src={embedUrl} className="absolute inset-0 block h-full w-full border-0 bg-white" allow="autoplay; fullscreen; xr-spatial-tracking; accelerometer; gyroscope; vr" allowFullScreen />
+              : <div className="absolute inset-0 flex items-center justify-center bg-white/70 p-2 text-center text-xs text-gray-500">3D model preview</div>}
+          </div>
+          <div className="min-w-0 px-3 py-2 sm:px-5">
+            <p className="text-xs font-semibold text-emerald-900">Address</p>
+            <h3 className="break-words text-base font-bold text-gray-950">{buildingAddress || "House profile"}</h3>
+            <p className="mt-1 break-words text-xs text-gray-700">Coordinates: {[buildingLatitude, buildingLongitude].filter((value) => value !== "" && value !== null && value !== undefined).join(", ") || "Pending"}</p>
+            <p className="break-words text-xs text-gray-700">Internal area: {manualData.internalArea ? `${manualData.internalArea} m2` : isBridgewoodProfile ? `${HOME_BUILDING.estimatedInternalArea} m2 (model estimate)` : "Pending"}</p>
+          </div>
+        </div>
+        <div className="mx-3 mt-2 grid min-w-0 grid-cols-4 gap-2 border-t border-emerald-200 pt-2 text-[10px] [overflow-wrap:anywhere] sm:mx-8 sm:gap-3 sm:text-xs lg:mx-12">
+          <div className="min-w-0"><h4 className="font-bold text-emerald-950">Energy</h4><p className="text-gray-700">Monitoring: {energyConsent ? "Consented" : "Pending"}</p><p className="text-gray-700">Historical data: {historicalDataFileName || "Pending"}</p></div>
+          <div className="min-w-0"><h4 className="font-bold text-emerald-950">Health</h4><p className="text-gray-700">Sensors: {healthSensors.length ? `${healthSensors.length} registered` : "Pending"}</p><p className="text-gray-700">Sensor evidence: {sensorEvidenceFileName || "Pending"}</p></div>
+          <div className="min-w-0"><h4 className="font-bold text-emerald-950">Carbon context</h4><p className="text-gray-700">Electricity: {carbonSelections.electricity.replaceAll("-", " ")}</p><p className="text-gray-700">Fuel: {carbonSelections.fuel.replaceAll("-", " ")}</p><p className="text-gray-700">Heating: {carbonSelections.heating.replaceAll("-", " ")}</p><p className="text-gray-700">Solar: {carbonSelections.solar.replaceAll("-", " ")}</p><p className="text-gray-700">Battery: {carbonSelections.battery.replaceAll("-", " ")}</p></div>
+          <dl className="min-w-0"><dt className="font-bold text-emerald-950">Ownership</dt>{[
+                ["Property number (UPRN)", ownershipRecord?.uprn],
+                ["Local authority", ownershipProperty?.localAuthority],
+                ["Created by", ownershipRecord?.legalOwnerName],
+                ["Type", ownershipRecord?.ownershipType?.replaceAll("-", " ")],
+                ["Tenure", ownershipRecord?.tenure],
+              ].map(([label, value]) => <div key={label} className="break-words text-gray-700"><dt className="inline">{label}: </dt><dd className="inline font-semibold text-gray-900">{value || "Pending"}</dd></div>)}</dl>
+        </div>
+        {ownershipRecord ? <>
+          {passportSaveStatus !== "saved" ? <div className="mx-3 mt-4 flex justify-end sm:mx-8 lg:mx-12"><button type="button" disabled={passportSaveStatus === "saving"} onClick={secureExistingPassport} className="bg-emerald-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">{passportSaveStatus === "saving" ? "Saving..." : "Save to secure account"}</button></div> : null}
+          {passportSaveError ? <p className="mx-3 mt-3 border border-red-200 bg-red-50 p-2 text-xs text-red-800 sm:mx-8 lg:mx-12">{passportSaveError}</p> : null}
+        </> : null}
+      </section>
+      <section className="m-4 bg-gray-100 p-4 rounded shadow">
+      <header className="border-b border-gray-300">
+      <nav className="relative -mb-px grid w-full min-w-0 grid-cols-4 gap-1 sm:flex sm:justify-center" role="tablist" aria-label="New building sections">
         {[["ownership", "Ownership"], ["measurements", "Measurements"], ["performance", "Performance"], ["carbon", "Carbon Context"]].map(([id, label]) => (
           <button
             key={id}
@@ -8378,54 +8282,15 @@ export const NewBuildingSetupPanel = () => {
               tabs[nextIndex].focus();
               tabs[nextIndex].click();
             }}
-            className={`min-h-[44px] min-w-0 border px-1 py-2 text-center text-[11px] font-semibold leading-tight [overflow-wrap:anywhere] transition-colors sm:px-2 sm:text-sm ${setupTab === id ? "border-gray-900 bg-gray-900 text-white" : "border-gray-300 bg-white text-gray-700 hover:bg-gray-100"}`}
+            className={`min-h-[34px] min-w-0 border px-1 py-1.5 text-center text-[10px] font-semibold leading-tight [overflow-wrap:anywhere] transition-colors sm:px-3 sm:text-xs ${setupTab === id ? "border-gray-300 border-b-gray-100 bg-gray-100 text-gray-900" : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"}`}
           >
             {label}
           </button>
         ))}
       </nav>
       </header>
-      {ownershipRecord ? (
-        <div className="mx-auto mb-4 max-w-4xl border border-emerald-200 bg-emerald-50 p-4">
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-xs font-bold uppercase text-emerald-700">Home profile created</p>
-            <button type="button" onClick={() => { setSetupTab("ownership"); startProfileEdit(); }} className="shrink-0 border border-emerald-700 bg-white px-3 py-2 text-xs font-bold text-emerald-800">Edit profile</button>
-          </div>
-          <h3 className="mt-1 text-lg font-bold">{ownershipRecord.recordId}</h3>
-          <p className="mt-1 text-sm text-gray-700">Created by {ownershipRecord.legalOwnerName}</p>
-          {passportSaveStatus !== "saved" ? (
-            <div className="mt-4 flex justify-end border-t border-emerald-200 pt-3">
-              <button type="button" disabled={passportSaveStatus === "saving"} onClick={secureExistingPassport} className="bg-emerald-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">{passportSaveStatus === "saving" ? "Saving..." : "Save to secure account"}</button>
-            </div>
-          ) : null}
-          {passportSaveError ? <p className="mt-3 border border-red-200 bg-red-50 p-2 text-xs text-red-800">{passportSaveError}</p> : null}
-          {setupTab === "ownership" ? (
-            <div className="mt-4 grid gap-3 border-t border-emerald-200 pt-3 text-xs text-gray-700 sm:grid-cols-3">
-              <p><strong>Ownership:</strong><br />{ownershipRecord.ownershipType.replaceAll("-", " ")}</p>
-              <p><strong>Tenure:</strong><br />{ownershipRecord.tenure.replaceAll("-", " ")}</p>
-              <p><strong>Property number:</strong><br />{ownershipRecord.uprn || "Can be added later"}</p>
-            </div>
-          ) : null}
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-emerald-200 pt-3">
-            <div>
-              <h3 id="monitoring-readiness-heading" className="text-sm font-bold text-emerald-950">Ready to monitor</h3>
-              <p className="text-xs text-gray-600">{monitoringCompleteCount}/{monitoringReadinessSteps.length} setup steps complete</p>
-            </div>
-            <span className="text-sm font-bold text-emerald-900">{monitoringProgress}%</span>
-          </div>
-          <div role="progressbar" aria-label="Ready to monitor" aria-valuenow={monitoringProgress} aria-valuemin={0} aria-valuemax={100} className="mt-2 h-2 overflow-hidden bg-emerald-200">
-            <div className="h-full bg-emerald-700 transition-[width] duration-300" style={{ width: `${monitoringProgress}%` }} />
-          </div>
-          <details className="mt-3 text-sm text-emerald-950">
-            <summary className="cursor-pointer font-semibold">What’s needed</summary>
-            <ul className="mt-2 grid gap-1 pl-5 text-xs text-gray-700 sm:grid-cols-2">
-              {monitoringReadinessSteps.filter((step) => !step.complete).map((step) => <li key={step.label} className="list-disc">{step.label}</li>)}
-            </ul>
-            <p className="mt-2 text-xs text-gray-600">Once monitoring starts, the audit evidence pack tracks the baseline and supporting evidence.</p>
-          </details>
-        </div>
-      ) : null}
-      <div ref={setupPanelRef} id="new-building-panel" role="tabpanel" aria-labelledby={`new-building-tab-${setupTab}`} className="overflow-hidden">
+      {ownershipRecord ? <div className="mb-4 border-b border-gray-200 pb-4"><div className="flex items-center justify-between gap-3"><div><h3 className="text-sm font-bold text-emerald-950">Ready to monitor</h3><p className="text-xs text-gray-600">{monitoringCompleteCount}/{monitoringReadinessSteps.length} setup steps complete</p></div><span className="text-sm font-bold text-emerald-900">{monitoringProgress}%</span></div><div role="progressbar" aria-label="Ready to monitor" aria-valuenow={monitoringProgress} aria-valuemin={0} aria-valuemax={100} className="mt-2 h-2 overflow-hidden bg-emerald-200"><div className="h-full bg-emerald-700 transition-[width] duration-300" style={{ width: `${monitoringProgress}%` }} /></div><details className="mt-2 text-xs text-emerald-950"><summary className="cursor-pointer font-semibold">What’s needed</summary><ul className="mt-2 grid gap-1 pl-5 text-gray-700 sm:grid-cols-2">{monitoringReadinessSteps.filter((step) => !step.complete).map((step) => <li key={step.label} className="list-disc">{step.label}</li>)}</ul></details></div> : null}
+      <div ref={setupPanelRef} id="new-building-panel" role="tabpanel" aria-labelledby={`new-building-tab-${setupTab}`} className="overflow-hidden pt-4">
       <div ref={setupContentRef}>
       <div style={{ display: setupTab === "ownership" ? undefined : "none" }}>
       <div className="min-w-0">
@@ -8445,9 +8310,9 @@ export const NewBuildingSetupPanel = () => {
               </div>
             ) : null}
 
-            <section className="mt-5 border border-gray-200 bg-gray-50 p-3 sm:p-4">
+            {!propertyDiscovery?.confirmedAt ? <section className="mt-5 border border-gray-200 bg-gray-50 p-3 sm:p-4">
               <div>
-                <p className="text-xs font-bold uppercase text-blue-700">Step 1 of 2</p>
+                <p className="text-xs font-bold uppercase text-blue-700">Step 1 of 3</p>
                 <h4 className="mt-1 text-base font-bold">Find your home</h4>
                 <p className="mt-1 text-sm text-gray-600">Enter the address exactly as you normally use it.</p>
               </div>
@@ -8559,12 +8424,13 @@ export const NewBuildingSetupPanel = () => {
                   </div>
                 </div>
               ) : null}
-            </section>
+            </section> : null}
 
             {propertyDiscovery?.confirmedAt ? (
               <section className="mt-5 border border-gray-200 bg-white p-3 sm:p-4">
-                <p className="text-xs font-bold uppercase text-emerald-700">Step 2 of 2</p>
+                <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs font-bold uppercase text-emerald-700">Step 2 of 3</p><button type="button" onClick={() => { const updated = { ...propertyDiscovery, confirmedAt: null }; setPropertyDiscovery(updated); window.localStorage.setItem(PROPERTY_DISCOVERY_CACHE_KEY, JSON.stringify({ search: propertySearch, snapshot: updated })); }} className="text-xs font-semibold text-blue-700 underline">Change home</button></div>
                 <h4 className="mt-1 text-base font-bold">About you</h4>
+                <p className="mt-1 text-xs text-gray-600">{propertyDiscovery.address}, {propertyDiscovery.postcode}</p>
                 <div className="mt-4 grid gap-4 sm:grid-cols-2">
                   <label className="space-y-1">
                     <span className="text-xs font-semibold text-gray-700">Your name</span>
@@ -8580,6 +8446,7 @@ export const NewBuildingSetupPanel = () => {
                       <option value="managing-agent">Authorised representative</option>
                     </select>
                   </label>
+                  {ownershipDraft.ownershipType === "shared-ownership" ? <label className="space-y-1"><span className="text-xs font-semibold text-gray-700">Other owner’s name or organisation</span><input required className="w-full border border-gray-300 p-2 text-sm" value={ownershipDraft.otherOwnerName} onChange={(event) => updateOwnershipDraft("otherOwnerName", event.target.value)} placeholder="Name of the other owner" /></label> : null}
                   <label className="space-y-1">
                     <span className="text-xs font-semibold text-gray-700">The home is</span>
                     <select className="w-full border border-gray-300 p-2 text-sm" value={ownershipDraft.tenure} onChange={(event) => updateOwnershipDraft("tenure", event.target.value)}>
@@ -8609,7 +8476,7 @@ export const NewBuildingSetupPanel = () => {
                   </label>
                 </div>
 
-                <button type="submit" disabled={!ownershipDraft.legalOwnerName.trim() || !ownershipDraft.authorityToCreate || !ownershipDraft.privacyAccepted} className="mt-5 w-full bg-emerald-700 px-4 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto">
+                <button type="submit" disabled={!ownershipDraft.legalOwnerName.trim() || (ownershipDraft.ownershipType === "shared-ownership" && !ownershipDraft.otherOwnerName.trim()) || !ownershipDraft.authorityToCreate || !ownershipDraft.privacyAccepted} className="mt-5 w-full bg-emerald-700 px-4 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto">
                   Create home profile
                 </button>
               </section>
@@ -8617,37 +8484,11 @@ export const NewBuildingSetupPanel = () => {
           </form>
         ) : null}
 
-        {ownershipRecord && profileEditMode ? (
-          <form onSubmit={saveProfileDetails} className="mx-auto mt-4 max-w-4xl border border-gray-300 bg-white p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h3 className="text-base font-bold">Edit profile</h3>
-                <p className="mt-1 text-xs text-gray-600">Check the home and your details. This keeps the same home profile.</p>
-              </div>
-              <button type="button" onClick={() => setProfileEditMode(false)} className="text-xs font-semibold underline">Cancel</button>
-            </div>
-            <h4 className="mt-4 text-sm font-bold">Your home</h4>
-            <div className="mt-2 grid gap-3 sm:grid-cols-2">
-              <label className="space-y-1"><span className="text-xs font-semibold">Address</span><input required className="w-full border border-gray-300 p-2 text-sm" value={profileLocationDraft.address} onChange={(event) => setProfileLocationDraft((current) => ({ ...current, address: event.target.value }))} /></label>
-              <label className="space-y-1"><span className="text-xs font-semibold">Postcode</span><input required className="w-full border border-gray-300 p-2 text-sm uppercase" value={profileLocationDraft.postcode} onChange={(event) => setProfileLocationDraft((current) => ({ ...current, postcode: event.target.value }))} /></label>
-              <label className="space-y-1"><span className="text-xs font-semibold">Property number (UPRN), if known</span><input inputMode="numeric" pattern="[0-9]*" className="w-full border border-gray-300 p-2 text-sm" value={ownershipDraft.uprn} onChange={(event) => updateOwnershipDraft("uprn", event.target.value)} /></label>
-            </div>
-            <p className="mt-2 text-xs text-gray-600">Changing the address clears its old location and planning matches. You can check the new address again afterwards.</p>
-            <h4 className="mt-4 text-sm font-bold">About you</h4>
-            <div className="mt-2 grid gap-3 sm:grid-cols-3">
-              <label className="space-y-1"><span className="text-xs font-semibold">Your name</span><input required className="w-full border border-gray-300 p-2 text-sm" value={ownershipDraft.legalOwnerName} onChange={(event) => updateRetailOwnerName(event.target.value)} /></label>
-              <label className="space-y-1"><span className="text-xs font-semibold">You are the</span><select className="w-full border border-gray-300 p-2 text-sm" value={ownershipDraft.ownershipType} onChange={(event) => updateOwnershipDraft("ownershipType", event.target.value)}><option value="owner-occupier">Homeowner living here</option><option value="private-landlord">Homeowner letting the property</option><option value="shared-ownership">Shared owner</option><option value="leaseholder">Leaseholder</option><option value="managing-agent">Authorised representative</option></select></label>
-              <label className="space-y-1"><span className="text-xs font-semibold">The home is</span><select className="w-full border border-gray-300 p-2 text-sm" value={ownershipDraft.tenure} onChange={(event) => updateOwnershipDraft("tenure", event.target.value)}><option value="freehold">Freehold</option><option value="leasehold">Leasehold</option><option value="commonhold">Commonhold</option><option value="shared-ownership">Shared ownership</option><option value="other">Not sure</option></select></label>
-            </div>
-            <button type="submit" className="mt-4 bg-emerald-700 px-4 py-2 text-sm font-bold text-white">Save changes</button>
-          </form>
-        ) : null}
-
         {ownershipRecord ? (
           <section className="mx-auto mt-4 max-w-4xl border border-amber-200 bg-white p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <p className="text-xs font-bold uppercase text-amber-700">Ownership check</p>
+                <p className="text-xs font-bold uppercase text-amber-700">Step 3 of 3 · Ownership check</p>
                 <h3 className="mt-1 text-base font-bold">Show that you can manage this home profile</h3>
                 <p className="mt-1 max-w-2xl text-xs text-gray-600">Choose the most convenient evidence. Creating the profile does not transfer the property or replace HM Land Registry.</p>
               </div>
@@ -8657,10 +8498,11 @@ export const NewBuildingSetupPanel = () => {
             </div>
 
             <div className="mt-4">
-              <p className="mb-3 border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950">Identity and HM Land Registry checks are not connected yet. Do not upload a passport, driving licence or title document here.</p>
+              <p className="mb-3 border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950">Documents are kept private. Uploading them submits evidence only; identity and HM Land Registry matching are not automated yet, and no ownership status is verified by an upload.</p>
+              {!ownershipClaim ? <p className="mb-3 text-xs text-gray-700">Request the ownership check below to enable secure uploads.</p> : null}
               <div className="grid gap-3 sm:grid-cols-2">
-                <div className="border border-gray-200 p-3 text-sm"><strong>Identity</strong><p className="mt-1 text-xs text-gray-600">Passport or photocard driving licence, checked by an identity provider.</p><p className="mt-2 text-xs font-semibold">{ownershipClaim?.identity_check_status?.replaceAll("-", " ") || "Not started"}</p></div>
-                <div className="border border-gray-200 p-3 text-sm"><strong>Property ownership</strong><p className="mt-1 text-xs text-gray-600">Verified identity matched against HM Land Registry; joint owners or mismatches require review.</p><p className="mt-2 text-xs font-semibold">{ownershipClaim?.registry_check_status?.replaceAll("-", " ") || "Not started"}</p></div>
+                <div className="border border-gray-200 p-3 text-sm"><strong>Identity</strong><p className="mt-1 text-xs text-gray-600">Passport or photocard driving licence for later identity review.</p><p className="mt-2 text-xs font-semibold">{ownershipClaim?.identity_check_status?.replaceAll("-", " ") || "Not started"}</p><><label className="mt-3 block text-xs font-semibold">Document type<select className="mt-1 block w-full border p-2" value={identityDocumentType} onChange={(event) => setIdentityDocumentType(event.target.value)}><option value="identity-passport">Passport</option><option value="identity-driving-licence">Photocard driving licence</option></select></label><input ref={identityUploadRef} type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" aria-label="Identity document file" className="sr-only" onChange={(event) => { uploadOwnershipDocument(identityDocumentType, event.target.files?.[0]); event.target.value = ""; }} /><button type="button" disabled={Boolean(!ownershipClaim || ownershipUploadBusy || ownershipDocuments["identity-passport"] || ownershipDocuments["identity-driving-licence"])} onClick={() => identityUploadRef.current?.click()} className="mt-3 border border-emerald-700 bg-emerald-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">{ownershipUploadBusy === identityDocumentType ? "Uploading..." : "Upload photo ID"}</button><p className="mt-1 text-xs text-gray-500">PDF, JPG or PNG, up to 10 MB.</p>{(ownershipDocuments["identity-passport"] || ownershipDocuments["identity-driving-licence"]) ? <div className="mt-2 flex items-center justify-between gap-2 text-xs text-emerald-800"><span className="min-w-0 break-all">Submitted: {(ownershipDocuments["identity-passport"] || ownershipDocuments["identity-driving-licence"]).original_file_name} (unverified)</span><button type="button" disabled={Boolean(ownershipUploadBusy)} onClick={() => removeOwnershipDocument(ownershipDocuments["identity-passport"] || ownershipDocuments["identity-driving-licence"])} className="font-semibold text-red-700 underline disabled:opacity-50">Remove</button></div> : null}</></div>
+                <div className="border border-gray-200 p-3 text-sm"><strong>Property ownership</strong><p className="mt-1 text-xs text-gray-600">Title register or shared-ownership agreement for later comparison with the verified identity.</p><p className="mt-2 text-xs font-semibold">{ownershipClaim?.registry_check_status?.replaceAll("-", " ") || "Not started"}</p><><input ref={ownershipUploadRef} type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" aria-label="Ownership document file" className="sr-only" onChange={(event) => { uploadOwnershipDocument("ownership-title-register", event.target.files?.[0]); event.target.value = ""; }} /><button type="button" disabled={Boolean(!ownershipClaim || ownershipUploadBusy || ownershipDocuments["ownership-title-register"])} onClick={() => ownershipUploadRef.current?.click()} className="mt-3 border border-emerald-700 bg-emerald-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">{ownershipUploadBusy === "ownership-title-register" ? "Uploading..." : "Upload ownership document"}</button><p className="mt-1 text-xs text-gray-500">PDF, JPG or PNG, up to 10 MB.</p>{ownershipDocuments["ownership-title-register"] ? <div className="mt-2 flex items-center justify-between gap-2 text-xs text-emerald-800"><span className="min-w-0 break-all">Submitted: {ownershipDocuments["ownership-title-register"].original_file_name} (unverified)</span><button type="button" disabled={Boolean(ownershipUploadBusy)} onClick={() => removeOwnershipDocument(ownershipDocuments["ownership-title-register"])} className="font-semibold text-red-700 underline disabled:opacity-50">Remove</button></div> : null}</></div>
               </div>
               {!ownershipClaim && ownershipRecord.databaseId ? <div className="mt-4 space-y-3">
                 <label className="flex items-start gap-2 text-xs text-gray-700"><input type="checkbox" checked={ownershipDeclaration} onChange={(event) => setOwnershipDeclaration(event.target.checked)} />I am the owner or am authorised to act for the owner, and I request an ownership check.</label>
@@ -8669,6 +8511,7 @@ export const NewBuildingSetupPanel = () => {
               {!ownershipRecord.databaseId ? <p className="mt-3 text-xs text-amber-800">Save this home to your secure account before requesting verification.</p> : null}
               {ownershipClaim && ownershipClaim.status !== "verified" ? <p className="mt-3 text-xs text-gray-600">Request saved. No identity or registry check has been performed until the verification service is connected.</p> : null}
               {ownershipClaimError ? <p role="alert" className="mt-3 text-xs text-red-800">{ownershipClaimError}</p> : null}
+              {ownershipUploadStatus ? <p role="status" className="mt-3 text-xs text-gray-700">{ownershipUploadStatus}</p> : null}
               {(ownershipRecord.titleNumber || ownershipRecord.ownershipEvidence?.fileName || ownershipRecord.ownershipEvidence?.titleNumber) ? (
                 <button type="button" onClick={clearSavedOwnershipEvidence} className="mt-4 border border-red-300 bg-white px-3 py-2 text-xs font-bold text-red-800">Remove saved ownership details</button>
               ) : null}
@@ -8691,69 +8534,12 @@ export const NewBuildingSetupPanel = () => {
             </a>
           </section>
         ) : null}
-        {ownershipRecord ? <section ref={historicSectionRef} id="historic-evidence" className="mx-auto mt-4 max-w-4xl scroll-mt-32 border border-gray-200 bg-white p-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h3 className="text-base font-bold">Historical design / build evidence</h3>
-              <p className="mt-1 max-w-2xl text-xs text-gray-600">Add permission notices, plans, building control records or builder details. Uploaded documents are private and remain unverified until reviewed.</p>
-            </div>
-            <span className="text-xs text-gray-600">{historicLinks.length} source{historicLinks.length === 1 ? "" : "s"} linked</span>
-          </div>
-          <div className="mt-4 grid gap-2 border-t pt-3 text-xs sm:grid-cols-2">
-            {ownershipRecord.propertyDiscovery?.localAuthority?.toLowerCase().includes("east suffolk") ? <a href="https://publicaccess.eastsuffolk.gov.uk/online-applications/" target="_blank" rel="noopener noreferrer" className="border border-blue-200 bg-blue-50 p-3 font-semibold text-blue-900 underline">Search East Suffolk planning applications and drawings</a> : null}
-            <a href="https://www.gov.uk/search-register-planning-decisions" target="_blank" rel="noopener noreferrer" className="border border-blue-200 bg-blue-50 p-3 font-semibold text-blue-900 underline">Find another council's planning register</a>
-            {ownershipRecord.propertyDiscovery?.localAuthority?.toLowerCase().includes("east suffolk") ? <>
-              <a href={`mailto:land.charges@eastsuffolk.gov.uk?subject=${encodeURIComponent(`Property records enquiry: ${ownershipRecord.propertyDiscovery?.address || ""}`)}`} className="border border-gray-200 p-3 font-semibold text-gray-800 underline">Ask East Suffolk land charges about search records</a>
-              <a href="mailto:buildingcontrol@eastsuffolk.gov.uk?subject=Historic%20building%20control%20records" className="border border-gray-200 p-3 font-semibold text-gray-800 underline">Ask East Suffolk building control about completion records</a>
-            </> : null}
-          </div>
-          <p className="mt-2 text-xs text-gray-600">Planning registers may hold applications and submitted plans, but not necessarily original house plans or the builder's identity. Land charges are a separate record search.</p>
-          <div className="mt-4 border-t pt-3">
-            <h4 className="text-sm font-semibold">Upload a document</h4>
-            <div className="mt-2 flex flex-wrap items-end gap-2">
-              <label className="text-xs font-semibold">Document type
-                <select className="mt-1 block border p-2 text-sm" value={historicEvidenceType} onChange={(event) => setHistoricEvidenceType(event.target.value)}>{HISTORIC_EVIDENCE_TYPES.map((type) => <option key={type.id} value={type.id}>{type.label}</option>)}</select>
-              </label>
-              <label className="text-xs font-semibold">PDF, JPG or PNG (up to 10 MB)
-                <input type="file" accept=".pdf,.jpg,.jpeg,.png" disabled={!ownershipRecord.databaseId || historicUploadBusy} className="mt-1 block max-w-full text-sm" onChange={(event) => { uploadHistoricEvidence(event.target.files?.[0]); event.target.value = ""; }} />
-              </label>
-            </div>
-            {historicEvidence.length ? <ul className="mt-3 divide-y border-t text-xs">{historicEvidence.map((item) => <li key={item.id} className="flex flex-wrap items-center justify-between gap-2 py-2"><span>{HISTORIC_EVIDENCE_TYPES.find((type) => type.id === item.evidence_type)?.label}: {item.original_file_name} <span className="text-gray-500">(unverified)</span></span><button type="button" onClick={() => openHistoricEvidence(item.storage_reference)} className="font-semibold text-blue-700 underline">Open</button></li>)}</ul> : null}
-          </div>
-          {(ownershipRecord.propertyDiscovery?.planningRecords || []).some((record) => /^https:\/\//i.test(record.documentationUrl || "")) ? <details className="mt-4 border-t pt-3 text-xs">
-            <summary className="cursor-pointer font-semibold">Possible public records from the address check</summary>
-            <p className="mt-2 text-gray-600">These may only be near the postcode. Confirm the source belongs to this property before linking it.</p>
-            <div className="mt-2 space-y-2">{ownershipRecord.propertyDiscovery.planningRecords.filter((record) => /^https:\/\//i.test(record.documentationUrl || "")).map((record, index) => <div key={`${record.documentationUrl}-${index}`} className="flex flex-wrap items-center justify-between gap-2 border p-2">
-              <span className="min-w-0 break-words">{record.name || record.reference || "Planning record"}</span>
-              <button type="button" className="border border-blue-700 px-2 py-1 font-semibold text-blue-800" onClick={() => setHistoricDraft((current) => ({ ...current, stage: "design", name: record.name || record.reference || "Planning record", url: record.documentationUrl }))}>Use as source</button>
-            </div>)}</div>
-          </details> : null}
-          <form onSubmit={saveHistoricLink} className="mt-4 grid gap-3 sm:grid-cols-2">
-            <label className="text-xs font-semibold">Stage
-              <select className="mt-1 block w-full border p-2 text-sm" value={historicDraft.stage} onChange={(event) => setHistoricDraft((current) => ({ ...current, stage: event.target.value }))}><option value="design">Design</option><option value="build">Build</option></select>
-            </label>
-            <label className="text-xs font-semibold">Document or record title
-              <input required className="mt-1 block w-full border p-2 text-sm" value={historicDraft.name} onChange={(event) => setHistoricDraft((current) => ({ ...current, name: event.target.value }))} placeholder="Planning drawing or completion record" />
-            </label>
-            <label className="text-xs font-semibold">Designer or builder named in source (optional)
-              <input className="mt-1 block w-full border p-2 text-sm" value={historicDraft.provider} onChange={(event) => setHistoricDraft((current) => ({ ...current, provider: event.target.value }))} placeholder="Practice or contractor" />
-            </label>
-            <label className="text-xs font-semibold">Source link
-              <input required type="url" className="mt-1 block w-full border p-2 text-sm" value={historicDraft.url} onChange={(event) => setHistoricDraft((current) => ({ ...current, url: event.target.value }))} placeholder="https://..." />
-            </label>
-            <button type="submit" disabled={!ownershipRecord.databaseId || historicBusy} className="bg-emerald-700 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50 sm:justify-self-start">{historicBusy ? "Linking..." : "Link source"}</button>
-          </form>
-          {!ownershipRecord.databaseId ? <p className="mt-2 text-xs text-amber-800">Save this home to your secure account before linking sources.</p> : null}
-          {historicStatus ? <p className="mt-2 text-xs" role="status">{historicStatus}</p> : null}
-          {historicLinks.length ? <ul className="mt-4 divide-y border-t text-sm">{historicLinks.map((link, index) => <li key={`${link.documentationUrl}-${index}`} className="flex flex-wrap items-center justify-between gap-2 py-2"><span>{link.stage === "build" ? "Build" : "Design"}: {link.name}</span><a href={link.documentationUrl} target="_blank" rel="noopener noreferrer" className="text-blue-700 underline">View source</a></li>)}</ul> : null}
-        </section> : null}
       </div>
       </div>
 
       <div style={{ display: setupTab === "measurements" ? undefined : "none" }}>
       <div className="min-w-0">
-        <h2 className="text-lg font-bold mb-3">Measurements</h2>
-        {ownershipRecord ? <div className="mx-auto mt-4 max-w-4xl bg-white rounded border p-4 space-y-3">
+        <div className="mx-auto mt-4 max-w-4xl bg-white rounded border p-4 space-y-3">
           <h3 className="text-base font-semibold">Matterport Data</h3>
 
           <div className="flex flex-wrap gap-2">
@@ -8812,27 +8598,12 @@ export const NewBuildingSetupPanel = () => {
             <span className="min-w-0"><strong className="block text-base text-gray-900">matterport</strong><span>Scan your home with the Matterport app</span></span>
             <span className="ml-auto shrink-0 text-lg" aria-hidden="true">&#8599;</span>
           </a>
-        </div> : null}
+        </div>
 
-      {ownershipRecord ? <>
       {setupMode === "api" && apiDetails ? (
         <div className="mx-auto mt-4 w-full max-w-4xl bg-gray-100 p-4 rounded shadow">
-          <div className="grid gap-5 sm:grid-cols-2">
-            <div className="bg-white rounded border p-3">
-              <h3 className="font-semibold mb-2">Building Input</h3>
-              <p className="text-sm text-gray-600">
-                SDK/API parsing is ready for integration. Once connected, this
-                section will be populated from the Matterport account/model
-                response.
-              </p>
-            </div>
-
-            <div className="bg-white rounded border p-3">
-              <h3 className="font-semibold mb-2">Model Preview</h3>
-              <div className="h-[220px] border rounded flex items-center justify-center text-sm text-gray-500 text-center p-4">
-                Waiting for API-backed model URL.
-              </div>
-            </div>
+          <div className="border bg-white p-3 text-sm text-gray-600">
+            SDK/API parsing is ready for integration. Once connected, the building banner will be populated from the Matterport account/model response.
           </div>
         </div>
       ) : null}
@@ -8891,52 +8662,15 @@ export const NewBuildingSetupPanel = () => {
                 </div>
               </div>
 
-              {hasManualBuildingInput ? (
-                <div className="bg-white rounded border p-3 text-sm">
-                  <h3 className="font-semibold mb-2">Current Building Input</h3>
-                  <p>
-                    <strong>Address:</strong> {buildingAddress || "Pending"}
-                  </p>
-                  <p>
-                    <strong>Coordinates:</strong>{" "}
-                    {buildingLatitude || "--"}, {buildingLongitude || "--"}
-                  </p>
-                  <p>
-                    <strong>Internal Area:</strong>{" "}
-                    {manualData.internalArea
-                      ? `${manualData.internalArea} m2`
-                      : "Pending"}
-                  </p>
-                </div>
-              ) : null}
-            </div>
-
-            <div className="space-y-2 bg-white rounded border p-3">
-              <h3 className="font-semibold">Model Preview</h3>
-              {embedUrl ? (
-                <iframe
-                  title="New Matterport model"
-                  src={embedUrl}
-                  className="w-full h-[190px] min-[390px]:h-[220px] sm:h-[250px] border rounded bg-white"
-                  allow="autoplay; fullscreen; xr-spatial-tracking; accelerometer; gyroscope; vr"
-                  allowFullScreen
-                />
-              ) : (
-                <div className="w-full h-[190px] min-[390px]:h-[220px] sm:h-[250px] border rounded bg-white flex items-center justify-center text-gray-500 text-sm p-4 text-center">
-                  Enter a model URL or model number to preview it here.
-                </div>
-              )}
             </div>
           </div>
         </div>
       ) : null}
-      </> : <p className="bg-white p-4 text-sm text-gray-600">Create the ownership record before adding measurements.</p>}
       </div>
       </div>
 
       <div style={{ display: setupTab === "performance" ? undefined : "none" }}>
       <div className="min-w-0">
-        <h2 className="text-lg font-bold mb-3">Performance</h2>
         <div className="grid gap-4 md:grid-cols-2 items-start">
           <div className="bg-white rounded border p-4 space-y-4">
             <div>
@@ -9276,10 +9010,8 @@ export const NewBuildingSetupPanel = () => {
 
       <div style={{ display: setupTab === "carbon" ? undefined : "none" }}>
       <div className="min-w-0">
-        <h2 className="text-lg font-bold mb-3">Carbon Context</h2>
         <div className="mt-4 bg-white rounded border p-4 space-y-4">
           <div>
-            <h3 className="font-semibold mb-2">Carbon Context</h3>
             <p className="text-sm text-gray-600">
               Record the tariff, fuel and building systems context used to calculate
               operational carbon and assess whether future savings are credit-grade.
@@ -9401,6 +9133,7 @@ export const NewBuildingSetupPanel = () => {
 
       </div>
       </div>
+      {setupTab !== "ownership" ? <div className="mt-4 flex items-center justify-end gap-3 border-t border-gray-200 pt-4"><span role="status" className="text-xs text-gray-600">{sectionSaveStatus === `${setupTab} saved on this device` ? "Saved on this device" : ""}</span><button type="button" onClick={saveSetupSection} className="bg-emerald-700 px-4 py-2 text-sm font-bold text-white">Save {setupTab === "carbon" ? "carbon context" : setupTab}</button></div> : null}
       </div>
       </div>
       </section>
@@ -10668,7 +10401,6 @@ const BuildingDashboard = () => {
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              {accessRole === "homeowner" ? <button type="button" onClick={() => navigate("/dashboard/new?role=homeowner&focus=historic-evidence")} className="border border-emerald-700 bg-white px-3 py-2 text-xs font-semibold text-emerald-900 hover:bg-emerald-100">Historical design / build evidence</button> : null}
               <button type="button" onClick={logOut} className="border border-emerald-700 bg-white px-3 py-2 text-xs font-semibold text-emerald-900 hover:bg-emerald-100">Log out</button>
             </div>
           </div>
@@ -10696,7 +10428,7 @@ const BuildingDashboard = () => {
                 style={{ width: `${100 / BUILDINGS.length}%` }}
               >
                 {building.setupOnly ? (
-                  <NewBuildingSetupPanel />
+                  <NewBuildingSetupPanel key={new URLSearchParams(location.search).get("record") === "existing" ? "existing" : "fresh"} freshStart={new URLSearchParams(location.search).get("record") !== "existing"} />
                 ) : building.portfolioOnly ? (
                   <PortfolioDashboardPanel
                     bridgewoodTokens={bridgewoodTokens}

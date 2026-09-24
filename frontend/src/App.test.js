@@ -41,7 +41,8 @@ test.each(["architect", "builder"])("%s portfolio profile can be edited and save
   expect(screen.queryByRole("navigation", { name: "Prototype pages" })).not.toBeInTheDocument();
   expect(screen.getByText("WBP Prototype").closest(".wbp-professional-sticky")).toContainElement(screen.getByText(role === "architect" ? "Design intent and specification" : "Delivery, quality and commissioning"));
   expect(screen.getByText(role === "architect" ? "Design intent and specification" : "Delivery, quality and commissioning").closest(".wbp-professional-stage-banner")).toHaveClass(role === "architect" ? "is-design" : "is-build");
-  expect(screen.getByText(role === "architect" ? "Design portfolio" : "Build portfolio").parentElement).toContainElement(screen.getByRole("button", { name: "Edit profile" }));
+  expect(screen.queryByText(role === "architect" ? "Design portfolio" : "Build portfolio")).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Edit profile" }).closest(".wbp-professional-hero")).toBeInTheDocument();
   expect(screen.getByText("01234 567890")).toBeInTheDocument();
   expect(screen.getByText("1 High Street, Woodbridge, IP12 1AA")).toBeInTheDocument();
   expect(screen.getByText("Suffolk")).toBeInTheDocument();

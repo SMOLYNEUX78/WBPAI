@@ -779,7 +779,6 @@ const ProfessionalWorkspace = () => {
 
       <section className="wbp-professional-hero">
         <div className="wbp-professional-hero-topline">
-          <p>{isBuilder ? "Build portfolio" : "Design portfolio"}</p>
           <button type="button" onClick={startProfileEdit} className="wbp-profile-edit-button">Edit profile</button>
         </div>
         <div className="wbp-organisation-logo" aria-hidden="true">

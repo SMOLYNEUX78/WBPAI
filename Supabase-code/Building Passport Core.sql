@@ -32,6 +32,7 @@ create table if not exists public."WBPBuildingRecords" (
   lifecycle_stage text not null default 'design'
     check (lifecycle_stage in ('design', 'procurement', 'build', 'commission', 'occupy', 'transfer', 'archived')),
   legal_owner_name text not null,
+  other_owner_name text,
   legal_owner_organisation_id uuid references public."WBPOrganisations"(id),
   custodian_user_id uuid not null references auth.users(id),
   custodian_organisation_id uuid references public."WBPOrganisations"(id),
