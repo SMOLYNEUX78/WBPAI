@@ -8,6 +8,25 @@ import matterportMark from "../../assets/matterport-mark.png";
 import PrototypeTabs from "../../PrototypeTabs";
 import { getReadinessGates } from "./readinessGates";
 import { mergeMonthlyHlaRows } from "./monthlyHla";
+import "./occupyScreen.css";
+
+export const DetailSurface = ({ children, title, onClose, modal }) => {
+  if (!modal || typeof document === "undefined") return children;
+  return createPortal(
+    <div className="wbp-detail-backdrop" onMouseDown={(event) => {
+      if (event.target === event.currentTarget) onClose();
+    }}>
+      <section className="wbp-detail-dialog" role="dialog" aria-modal="true" aria-label={title}>
+        <header className="wbp-detail-header">
+          <h2>{title}</h2>
+          <button type="button" onClick={onClose} aria-label={`Close ${title}`}>Close</button>
+        </header>
+        <div className="wbp-detail-body">{children}</div>
+      </section>
+    </div>,
+    document.body
+  );
+};
 
 const DEFAULT_MATTERPORT_URL = "https://my.matterport.com/show/?m=zHm8SwWeHiN";
 const BRIDGEWOOD_UPRN = "100091142492";
@@ -350,15 +369,33 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
   }, [dataSourceBuildingId, homePassportDatabaseId, isActive]);
   const activeSeasonInfo = useMemo(() => getMeteorologicalSeason(), []);
   const [deepDivePanel, setDeepDivePanel] = useState(null);
-  const [standardDeepDiveOpen, setStandardDeepDiveOpen] = useState(true);
+  const [occupyDetail, setOccupyDetail] = useState(null);
   const [activeMrvEvidenceField, setActiveMrvEvidenceField] = useState(null);
   const deepDiveOpen = Boolean(deepDivePanel);
 
   useEffect(() => {
     if (!isCarbonCreditTab) {
-      setStandardDeepDiveOpen(true);
+      setOccupyDetail(null);
     }
   }, [building.id, isCarbonCreditTab]);
+
+  useEffect(() => {
+    if (!occupyDetail || !isActive) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") setOccupyDetail(null);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [occupyDetail, isActive]);
+
+  useEffect(() => {
+    if (!isActive) setOccupyDetail(null);
+  }, [isActive]);
   const matterportInput = useMemo(() => {
     return (
       localStorage.getItem(`${dataSourceBuildingId}:matterportModelInput`) ||
@@ -5555,7 +5592,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
     : nightCooldownStatus;
   const shouldShowDeepDive = isCarbonCreditTab
     ? deepDiveOpen
-    : standardDeepDiveOpen;
+    : Boolean(occupyDetail);
   const toggleDeepDivePanel = (panelKey) => {
     setDeepDivePanel((currentPanel) =>
       currentPanel === panelKey ? null : panelKey
@@ -5660,31 +5697,20 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
             Deep Dive
           </button>
         </div>
-      ) : showStandardDeepDiveToggle ? (
-        <div className="mt-1 flex justify-start border-t border-gray-100 pt-1.5 sm:mt-2">
-          <button
-            type="button"
-            onClick={() => setStandardDeepDiveOpen((isOpen) => !isOpen)}
-            className="w-full max-w-full rounded border border-gray-300 bg-white px-2 py-1 text-center text-[10px] font-semibold text-gray-700 shadow-sm transition hover:border-gray-500 hover:text-black sm:w-28 sm:text-xs"
-            aria-expanded={standardDeepDiveOpen}
-          >
-            Deep Dive
-          </button>
-        </div>
       ) : null}
     </div>
   );
   return (
     <div
       className={`bg-white p-4 flex flex-col space-y-6 ${
-        isCarbonCreditTab ? "min-h-0" : "min-h-screen"
+        isCarbonCreditTab ? "min-h-0" : "wbp-occupy-panel min-h-screen"
       }`}
     >
       <div className={dataSourceBuildingId === "home" ? "-mx-4 -mt-4 flex flex-col bg-emerald-100 pb-3" : "bg-gray-100 p-4 rounded shadow"}>
         {dataSourceBuildingId !== "home" ? <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-lg font-bold">Building Input</h2>
         </div> : null}
-        {building.id === "home" && homePassportId ? (
+        {building.id === "home" && homePassportId && isCarbonCreditTab ? (
           <div className={dataSourceBuildingId === "home" ? "order-3 mx-3 mt-3 border-t border-emerald-200 pt-3 text-xs sm:mx-8 lg:mx-12" : "mb-3 border border-gray-200 bg-white p-3"}>
             <button type="button" onClick={() => setHomeSaleInfoOpen((open) => !open)} aria-expanded={homeSaleInfoOpen}
               className="flex w-full flex-wrap items-center justify-between gap-2 text-left">
@@ -5768,10 +5794,10 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
         ) : null}
       </div>
 
-      <div className="bg-gray-100 p-3 sm:p-4 rounded shadow">
+      <div className="wbp-performance-stage bg-gray-100 p-3 sm:p-4 rounded shadow">
         <h2 className="mb-2 text-lg font-bold">Performance</h2>
 
-        <div className="space-y-2.5 sm:space-y-4">
+        <div className="wbp-performance-content space-y-2.5 sm:space-y-4">
           {isCarbonCreditTab ? (
             <div className="grid grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] sm:gap-3">
               {renderPerformanceCard({
@@ -5804,7 +5830,16 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
             })
           )}
 
-          {!shouldShowDeepDive ? null : (
+          {!isCarbonCreditTab ? (
+            <nav className="wbp-occupy-actions" aria-label="Home detail">
+              <button type="button" onClick={() => setOccupyDetail("performance")}>Performance</button>
+              <button type="button" onClick={() => setOccupyDetail("trends")}>Trends</button>
+              {building.id === "home" ? <button type="button" onClick={() => setActiveMrvEvidenceField("overview")}>Evidence</button> : null}
+            </nav>
+          ) : null}
+
+          {!shouldShowDeepDive || (!isCarbonCreditTab && occupyDetail !== "performance") ? null : (
+          <DetailSurface modal={!isCarbonCreditTab} title="Performance deep dive" onClose={() => setOccupyDetail(null)}>
           <div className="bg-white rounded border p-2.5 sm:p-4 min-w-0 overflow-hidden">
             {isCarbonCreditTab ? (
               <div className="mb-3 border-b border-gray-100 pb-2 text-xs text-gray-600">
@@ -6312,10 +6347,12 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
               </div>
             </div>
           </div>
+          </DetailSurface>
           )}
         </div>
 
-        {!shouldShowDeepDive ? null : (
+        {!shouldShowDeepDive || (!isCarbonCreditTab && occupyDetail !== "trends") ? null : (
+        <DetailSurface modal={!isCarbonCreditTab} title="Seasonal performance trends" onClose={() => setOccupyDetail(null)}>
         <div className="mt-4 bg-white rounded border p-3 sm:p-4 space-y-3 overflow-hidden">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
@@ -6736,6 +6773,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
             </div>
           )}
         </div>
+        </DetailSurface>
         )}
       </div>
 
@@ -10335,7 +10373,7 @@ const BuildingDashboard = () => {
 
   return (
     <div
-      className="min-h-screen bg-white"
+      className={`min-h-screen bg-white ${activeBuilding.id === "home" ? "wbp-dashboard--occupy" : ""}`}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}

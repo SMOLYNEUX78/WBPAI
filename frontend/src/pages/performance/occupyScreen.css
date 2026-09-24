@@ -1,0 +1,70 @@
+.wbp-detail-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgb(15 23 42 / 55%);
+}
+
+.wbp-detail-dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(100%, 1050px);
+  max-height: calc(100dvh - 32px);
+  overflow: hidden;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 20px 60px rgb(0 0 0 / 20%);
+}
+
+.wbp-detail-header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 18px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.wbp-detail-header h2 { font-size: 16px; font-weight: 700; }
+.wbp-detail-header button { padding: 6px 12px; border: 1px solid #d1d5db; background: #fff; font-size: 13px; }
+.wbp-detail-body { min-height: 0; overflow: auto; padding: 16px; }
+
+.wbp-occupy-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.wbp-occupy-actions button {
+  min-height: 42px;
+  border: 1px solid #86a89a;
+  border-radius: 4px;
+  background: #fff;
+  color: #164e3b;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.wbp-occupy-actions button:hover,
+.wbp-occupy-actions button:focus-visible { background: #e6f5ec; }
+
+@media (min-width: 600px) and (max-width: 1100px) and (orientation: portrait) {
+  .wbp-dashboard--occupy { display: flex; flex-direction: column; height: 100dvh; min-height: 0; overflow: hidden; }
+  .wbp-dashboard--occupy > .sticky { flex: none; }
+  .wbp-dashboard--occupy > .overflow-hidden { flex: 1; min-height: 0; }
+  .wbp-dashboard--occupy > .overflow-hidden > .flex { height: 100%; }
+  .wbp-dashboard--occupy .wbp-occupy-panel { height: 100%; min-height: 0; overflow: hidden; gap: 12px; }
+  .wbp-dashboard--occupy .wbp-occupy-panel > * + * { margin-top: 0; }
+  .wbp-dashboard--occupy .wbp-occupy-panel > :first-child { flex: none; padding-bottom: 8px; }
+  .wbp-dashboard--occupy .wbp-occupy-panel > :first-child > .grid { min-height: 170px; }
+  .wbp-dashboard--occupy .wbp-performance-stage { display: flex; flex: 1; min-height: 0; flex-direction: column; }
+  .wbp-dashboard--occupy .wbp-performance-content { display: flex; flex: 1; min-height: 0; flex-direction: column; }
+  .wbp-dashboard--occupy .wbp-performance-content > :first-child { flex: 1; min-height: 0; }
+  .wbp-dashboard--occupy .wbp-performance-stage .wbp-occupy-actions { flex: none; }
+}
