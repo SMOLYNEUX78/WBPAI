@@ -28,7 +28,7 @@ beforeEach(() => {
   supabase.rpc.mockResolvedValue({ data: [], error: null });
 });
 
-test.each(["architect", "builder"])("%s portfolio profile can be edited and saved", async (role) => {
+test.each(["architect", "builder"])("%s portfolio shows saved organisation details without an edit control", async (role) => {
   const session = { user: { id: "profile-test-user", email: "wbpai25@gmail.com" } };
   supabase.auth.getSession.mockResolvedValue({ data: { session } });
   supabase.auth.getUser.mockResolvedValue({ data: { user: session.user } });
@@ -42,16 +42,11 @@ test.each(["architect", "builder"])("%s portfolio profile can be edited and save
   expect(screen.getByText("WBP Prototype").closest(".wbp-professional-sticky")).toContainElement(screen.getByText(role === "architect" ? "Design intent and specification" : "Delivery, quality and commissioning"));
   expect(screen.getByText(role === "architect" ? "Design intent and specification" : "Delivery, quality and commissioning").closest(".wbp-professional-stage-banner")).toHaveClass(role === "architect" ? "is-design" : "is-build");
   expect(screen.queryByText(role === "architect" ? "Design portfolio" : "Build portfolio")).not.toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Edit profile" }).closest(".wbp-professional-hero")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Edit profile" })).not.toBeInTheDocument();
   expect(screen.getByText("01234 567890")).toBeInTheDocument();
   expect(screen.getByText("1 High Street, Woodbridge, IP12 1AA")).toBeInTheDocument();
   expect(screen.getByText("Suffolk")).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Edit profile" }));
-  fireEvent.change(screen.getByRole("textbox", { name: "Organisation name" }), { target: { value: "Updated organisation" } });
-  fireEvent.click(screen.getByRole("button", { name: "Save profile" }));
-
-  expect(screen.getByRole("heading", { name: "Updated organisation" })).toBeInTheDocument();
-  expect(JSON.parse(window.localStorage.getItem(`wbp-${role}-profile-${session.user.id}`)).organisationName).toBe("Updated organisation");
+  expect(screen.getByRole("heading", { name: "Original organisation" })).toBeInTheDocument();
 });
 
 test("architect profile loads from the account without browser cache", async () => {
@@ -69,23 +64,18 @@ test("architect profile loads from the account without browser cache", async () 
   expect(screen.getByText("01234 000000")).toBeInTheDocument();
 });
 
-test("portfolio image upload appears in the banner after saving", async () => {
+test("saved portfolio image appears in the banner", async () => {
   const session = { user: { id: "logo-test-user", email: "wbpai25@gmail.com" } };
   supabase.auth.getSession.mockResolvedValue({ data: { session } });
   supabase.auth.getUser.mockResolvedValue({ data: { user: session.user } });
   supabase.auth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: jest.fn() } } });
-  window.localStorage.setItem(`wbp-architect-profile-${session.user.id}`, JSON.stringify({ organisationName: "Example Studio", organisationType: "Architectural practice", registrationNumber: "12345" }));
+  window.localStorage.setItem(`wbp-architect-profile-${session.user.id}`, JSON.stringify({ organisationName: "Example Studio", organisationType: "Architectural practice", registrationNumber: "12345", logoDataUrl: "data:image/png;base64,iVBORw0KGgo=" }));
   window.history.pushState({}, "", "/workspace/architect");
 
   const { container } = render(<App />);
-  fireEvent.click(await screen.findByRole("button", { name: "Edit profile" }));
-  const file = new File([new Uint8Array([137, 80, 78, 71])], "logo.png", { type: "image/png" });
-  fireEvent.change(screen.getByLabelText(/Upload image/), { target: { files: [file] } });
-  expect(await screen.findByAltText("Profile preview")).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Save profile" }));
-
+  expect(await screen.findByRole("heading", { name: "Example Studio" })).toBeInTheDocument();
   expect(container.querySelector(".wbp-organisation-logo img")).toBeInTheDocument();
-  expect(JSON.parse(window.localStorage.getItem(`wbp-architect-profile-${session.user.id}`)).logoDataUrl).toMatch(/^data:image\/png;base64,/);
+  expect(screen.queryByRole("button", { name: "Edit profile" })).not.toBeInTheDocument();
 });
 
 test("Design new project opens a design-stage intake rather than the homeowner form", async () => {

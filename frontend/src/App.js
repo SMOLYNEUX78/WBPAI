@@ -640,10 +640,7 @@ const ProfessionalWorkspace = () => {
   const navigate = useNavigate();
   const isBuilder = role === "builder";
   const [profile, setProfile] = useState(location.state?.profile?.organisationName ? location.state.profile : {});
-  const [profileUserId, setProfileUserId] = useState("");
   const [profileEmail, setProfileEmail] = useState("");
-  const [editingProfile, setEditingProfile] = useState(false);
-  const [profileDraft, setProfileDraft] = useState({});
   const [profileStatus, setProfileStatus] = useState("");
   const [designProjects, setDesignProjects] = useState([]);
   const [buildInvitations, setBuildInvitations] = useState([]);
@@ -652,7 +649,6 @@ const ProfessionalWorkspace = () => {
     let active = true;
     supabase.auth.getUser().then(async ({ data }) => {
       if (!active || !data.user) return;
-      setProfileUserId(data.user.id);
       setProfileEmail(data.user.email || "");
       setIsTestAccount(data.user.email?.toLowerCase() === TEST_PROFESSIONAL_EMAIL);
       let cached = {};
@@ -710,43 +706,6 @@ const ProfessionalWorkspace = () => {
     ["Operating area", profile.serviceArea],
     ["Stages", Array.isArray(profile.requestedStages) ? profile.requestedStages.map((stage) => ({ architect: "Design", builder: "Build", homeowner: "Occupy" })[stage] || stage).join(" · ") : ""],
   ].filter(([, value]) => value);
-  const startProfileEdit = () => {
-    setProfileDraft({ ...profile });
-    setProfileStatus("");
-    setEditingProfile(true);
-  };
-  const saveProfile = async (event) => {
-    event.preventDefault();
-    if (!profileUserId) {
-      setProfileStatus("Sign in again before saving your profile.");
-      return;
-    }
-    const updated = Object.fromEntries(Object.entries(profileDraft).map(([key, value]) => [key, typeof value === "string" ? value.trim() : value]));
-    try {
-      window.localStorage.setItem(`wbp-${role}-profile-${profileUserId}`, JSON.stringify(updated));
-    } catch {
-      setProfileStatus("Could not save this profile in the browser. Try a smaller image.");
-      return;
-    }
-    setProfile(updated);
-    setEditingProfile(false);
-    const { error } = await supabase.from("WBPWorkspaceProfiles").upsert({
-      user_id: profileUserId, workspace_role: role, profile: updated,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: "user_id,workspace_role" });
-    setProfileStatus(error
-      ? "Saved in this browser, but account sync failed. Run Workspace Profiles.sql in Supabase."
-      : "Profile saved to your account. Organisation details remain unverified.");
-  };
-  const updateProfileImage = async (file) => {
-    try {
-      const logoDataUrl = await readProfileImage(file);
-      if (logoDataUrl) setProfileDraft((current) => ({ ...current, logoDataUrl, logoName: file.name }));
-      setProfileStatus("");
-    } catch (error) {
-      setProfileStatus(error.message);
-    }
-  };
   const projects = isBuilder
     ? buildInvitations.map((item) => ({ id: item.id.slice(0, 8), name: item.project_title, stage: `Revision ${item.revision}`, status: item.status, route: `/workspace/builder/handover/${item.id}` }))
     : designProjects.map((item) => ({ id: item.id, name: item.title, stage: item.design_stage, status: "Design record", route: `/workspace/architect/project/${item.id}` }));
@@ -778,9 +737,6 @@ const ProfessionalWorkspace = () => {
       </div>
 
       <section className="wbp-professional-hero">
-        <div className="wbp-professional-hero-topline">
-          <button type="button" onClick={startProfileEdit} className="wbp-profile-edit-button">Edit profile</button>
-        </div>
         <div className="wbp-organisation-logo" aria-hidden="true">
           {profile.logoDataUrl ? <img src={profile.logoDataUrl} alt="" /> : organisationName.slice(0, 2).toUpperCase()}
         </div>
@@ -794,28 +750,6 @@ const ProfessionalWorkspace = () => {
         <dl className="wbp-organisation-details">{profileDetails.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{label === "Website" && /^https:\/\//i.test(value) ? <a href={value} target="_blank" rel="noopener noreferrer">{value}</a> : value}</dd></div>)}</dl>
       </section>
 
-      {editingProfile ? <form className="wbp-professional-profile-editor" onSubmit={saveProfile}>
-        <div className="wbp-profile-editor-heading"><h2>Edit organisation profile</h2><p>Changes sync to your account when available. They do not verify the organisation.</p></div>
-        <div className="wbp-profile-editor-grid">
-          <div className="wbp-profile-image-editor"><span>Profile image / company logo</span><div>{profileDraft.logoDataUrl ? <img src={profileDraft.logoDataUrl} alt="Profile preview" /> : <span className="wbp-profile-image-placeholder">{organisationName.slice(0, 2).toUpperCase()}</span>}<label className="wbp-access-field"><span>Upload image (PNG, JPG or WebP, under 750 KB)</span><input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => { updateProfileImage(event.target.files?.[0]); event.target.value = ""; }} /></label>{profileDraft.logoDataUrl ? <button type="button" onClick={() => setProfileDraft((current) => ({ ...current, logoDataUrl: "", logoName: "" }))}>Remove image</button> : null}</div></div>
-          {[
-            ["organisationName", "Organisation name", true],
-            ["organisationType", "Organisation type", true],
-            ["registrationNumber", "Companies House / statutory registration", true],
-            ["professionalRegistration", isBuilder ? "CIOB / FMB / professional registration" : "ARB / RIBA / professional registration"],
-            ["vatNumber", "VAT number"],
-            ["contactName", "Primary contact name"],
-            ["jobTitle", "Primary contact role"],
-            ["phone", "Telephone"],
-            ["website", "Website"],
-            ["address", "Head office address"],
-            ["city", "Town / city"],
-            ["postcode", "Postcode"],
-            ["serviceArea", "Operating area"],
-          ].map(([field, label, required]) => <label key={field} className="wbp-access-field"><span>{label}</span><input type={field === "website" ? "url" : field === "phone" ? "tel" : "text"} required={Boolean(required)} value={profileDraft[field] || ""} onChange={(event) => setProfileDraft((current) => ({ ...current, [field]: event.target.value }))} /></label>)}
-        </div>
-        <div className="wbp-profile-editor-actions"><button type="button" onClick={() => setEditingProfile(false)}>Cancel</button><button type="submit" className="is-primary">Save profile</button></div>
-      </form> : null}
       {profileStatus ? <p className="wbp-profile-save-status" role="status">{profileStatus}</p> : null}
 
       <section className="wbp-workspace-actions">

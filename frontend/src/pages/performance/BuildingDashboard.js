@@ -10249,7 +10249,7 @@ const BuildingDashboard = () => {
   const roleDetails = {
     architect: { label: "Design", phase: "Design", focus: "Design intent and specification" },
     builder: { label: "Build", phase: "Build", focus: "Delivery, quality and commissioning" },
-    homeowner: { label: "Occupant", phase: "Occupy", focus: "Handover and measured performance" },
+    homeowner: { label: "Occupy", phase: "Occupy", focus: "Handover and measured performance" },
   }[accessRole];
   const routeSection = location.pathname.split("/").filter(Boolean)[1] || "new";
   const routeIndex = BUILDINGS.findIndex((building) => building.id === routeSection);
