@@ -4469,9 +4469,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
   const historicHddComfortQualified =
     building.heatingSystem !== "none" &&
     Number.isFinite(hddComfortCoverage) &&
-    hddComfortCoverage >= 0.7 &&
-    Number.isFinite(heatLossSummary.averageInternalTemp) &&
-    heatLossSummary.averageInternalTemp >= 18;
+    hddComfortCoverage >= 0.7;
   const hddComfortQualified =
     historicHddComfortQualified ||
     (!hasMatureHddComfortSample && liveComfortMaintained);
@@ -4487,6 +4485,9 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
         )} total HDD)`
       : !hasMatureHddComfortSample && liveComfortMaintained
       ? "Early HDD sample / live comfort maintained"
+      : Number.isFinite(hddComfortCoverage) && !hddComfortQualified &&
+        heatLossSummary.hddSource === "monthly-snapshots"
+      ? "Comfort not demonstrated by available days"
       : Number.isFinite(hddComfortCoverage) && !hddComfortQualified
       ? "Comfort not maintained"
       : "";
