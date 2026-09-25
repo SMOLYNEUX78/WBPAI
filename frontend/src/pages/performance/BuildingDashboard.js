@@ -5306,7 +5306,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
     {
       key: "health",
       label: "Health",
-      metricKeys: ["humidity", "pm25", "vocs"],
+      metricKeys: ["humidity", "upstairsHumidity", "downstairsHumidity", "pm25", "vocs"],
     },
   ];
   const activeTrendMetricKeys = activeTrendMetrics.map((metric) => metric.key);
@@ -5337,7 +5337,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
     {
       key: "all",
       label: "All",
-      metricKeys: ["humidity", "pm25", "vocs"],
+      metricKeys: ["humidity", "upstairsHumidity", "downstairsHumidity", "pm25", "vocs"],
     },
     {
       key: "upstairs",
@@ -5407,7 +5407,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
     const filteredKeys = metricKeys.filter((key) =>
       activeTrendMetricKeys.includes(key)
     );
-    const healthKeys = ["humidity", "pm25", "vocs"];
+    const healthKeys = ["humidity", "upstairsHumidity", "downstairsHumidity", "pm25", "vocs"];
     const isHealthGroup =
       filteredKeys.length === healthKeys.filter((key) =>
         activeTrendMetricKeys.includes(key)
