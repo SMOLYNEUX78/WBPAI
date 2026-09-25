@@ -5766,6 +5766,14 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
       </button>
     );
   };
+  const visibleDownstairsMetrics = visibleTrendMetrics.filter((metric) =>
+    metric.key.startsWith("downstairs")
+  );
+  const visibleUpstairsMetrics = visibleTrendMetrics.filter((metric) =>
+    metric.key.startsWith("upstairs")
+  );
+  const showFloorMetricColumns = visibleDownstairsMetrics.length > 0 &&
+    visibleUpstairsMetrics.length > 0;
   const hoveredTrendMetric = hoveredTrendPoint
     ? visibleTrendMetrics.find((metric) =>
         Number.isFinite(hoveredTrendPoint[metric.key])
@@ -7095,18 +7103,25 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
                 </svg>
               </div>
 
-              {dataSourceBuildingId === "home" && healthTrendSelected && activeHealthTrendArea.key === "all" ? (
+              {showFloorMetricColumns ? (
                 <div className="grid grid-cols-2 gap-3 text-xs">
                   <div className="flex min-w-0 flex-col gap-2">
-                    <h4 className="font-semibold">Downstairs</h4>
-                    {visibleTrendMetrics.filter((metric) => metric.key.startsWith("downstairs"))
-                      .map(renderTrendMetricButton)}
+                    <h4 className="border-b border-gray-300 pb-1 font-semibold">Downstairs</h4>
+                    {visibleDownstairsMetrics.map(renderTrendMetricButton)}
                   </div>
-                  <div className="flex min-w-0 flex-col gap-2">
-                    <h4 className="font-semibold">Upstairs</h4>
-                    {visibleTrendMetrics.filter((metric) => metric.key.startsWith("upstairs"))
-                      .map(renderTrendMetricButton)}
+                  <div className="flex min-w-0 flex-col gap-2 border-l border-gray-300 pl-3">
+                    <h4 className="border-b border-gray-300 pb-1 font-semibold">Upstairs</h4>
+                    {visibleUpstairsMetrics.map(renderTrendMetricButton)}
                   </div>
+                  {visibleTrendMetrics.filter((metric) =>
+                    !metric.key.startsWith("downstairs") && !metric.key.startsWith("upstairs")
+                  ).length > 0 ? (
+                    <div className="col-span-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                      {visibleTrendMetrics.filter((metric) =>
+                        !metric.key.startsWith("downstairs") && !metric.key.startsWith("upstairs")
+                      ).map(renderTrendMetricButton)}
+                    </div>
+                  ) : null}
                 </div>
               ) : (
                 <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 text-xs">
