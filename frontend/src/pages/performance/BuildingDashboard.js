@@ -5794,16 +5794,12 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
         ) : null}
       </div>
 
-      <div className="wbp-performance-stage bg-gray-100 p-3 sm:p-4 rounded shadow">
-        <h2 className="mb-2 text-lg font-bold">Performance</h2>
+      <div className={!isCarbonCreditTab && building.id === "home" ? "wbp-performance-stage wbp-performance-stage--linear -mx-4" : "wbp-performance-stage bg-gray-100 p-3 sm:p-4 rounded shadow"}>
+        {isCarbonCreditTab || building.id !== "home" ? <h2 className="mb-2 text-lg font-bold">Performance</h2> : null}
 
         <div className="wbp-performance-content space-y-2.5 sm:space-y-4">
           {!isCarbonCreditTab && building.id === "home" ? (
             <div className="wbp-linear-performance">
-              <div className="wbp-linear-performance-scores">
-                <span><strong>Health</strong> {formatScore(performanceBreakdown.health)}</span>
-                <span><strong>Energy</strong> {formatScore(performanceBreakdown.energy)}</span>
-              </div>
               <div
                 className="wbp-linear-performance-track"
                 role="img"
@@ -5816,13 +5812,20 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
                 ) : <span className="wbp-linear-performance-pending">Pending</span>}
               </div>
               <div className="wbp-linear-performance-scale" aria-hidden="true"><span>Low</span><span>Moderate</span><span>High</span></div>
-              <button type="button" className="wbp-linear-performance-dive" onClick={() => setOccupyDetail("performance")}>Deep Dive</button>
-              <div className="wbp-linear-performance-audit">
-                <div className="flex justify-between text-xs font-semibold text-gray-700"><span>Audit evidence</span><span>{evidencePackScore}%</span></div>
+              <div className="wbp-linear-performance-scores">
+                <span><strong>Health</strong> {formatScore(performanceBreakdown.health)}</span>
+                <span><strong>Energy</strong> {formatScore(performanceBreakdown.energy)}</span>
+              </div>
+              <div className="wbp-linear-performance-actions">
+                <button type="button" className="wbp-linear-performance-dive" onClick={() => setOccupyDetail("performance")}>Deep Dive</button>
+                <button type="button" className="wbp-linear-performance-dive" onClick={() => setOccupyDetail("trends")}>Trends</button>
+              </div>
+              <button type="button" className="wbp-linear-performance-audit" onClick={() => setActiveMrvEvidenceField("overview")} aria-label={`Open audit evidence pack, ${evidencePackScore}% ready`}>
+                <span className="flex justify-between text-xs font-semibold text-gray-700"><span>Audit evidence pack</span><span>{evidencePackScore}%</span></span>
                 <div role="progressbar" aria-label="Audit evidence readiness" aria-valuenow={evidencePackScore} aria-valuemin={0} aria-valuemax={100} className="mt-1 h-2 overflow-hidden bg-gray-200">
                   <div className={`h-full transition-[width] duration-300 ${evidencePackScore >= 80 ? "bg-emerald-500" : evidencePackScore >= 50 ? "bg-amber-500" : "bg-red-500"}`} style={{ width: `${evidencePackScore}%` }} />
                 </div>
-              </div>
+              </button>
             </div>
           ) : isCarbonCreditTab ? (
             <div className="grid grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] sm:gap-3">
@@ -5856,11 +5859,10 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
             })
           )}
 
-          {!isCarbonCreditTab ? (
+          {!isCarbonCreditTab && building.id !== "home" ? (
             <nav className="wbp-occupy-actions" aria-label="Home detail">
               <button type="button" onClick={() => setOccupyDetail("performance")}>Performance</button>
               <button type="button" onClick={() => setOccupyDetail("trends")}>Trends</button>
-              {building.id === "home" ? <button type="button" onClick={() => setActiveMrvEvidenceField("overview")}>Evidence</button> : null}
             </nav>
           ) : null}
 

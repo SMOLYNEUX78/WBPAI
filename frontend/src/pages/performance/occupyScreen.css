@@ -54,6 +54,8 @@
 .wbp-occupy-actions button:hover,
 .wbp-occupy-actions button:focus-visible { background: #e6f5ec; }
 
+.wbp-performance-stage--linear { padding: 0 0 12px; }
+
 .wbp-linear-performance {
   display: flex;
   min-width: 0;
@@ -65,6 +67,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 8px 24px;
+  padding: 0 16px;
   font-size: 13px;
 }
 
@@ -73,9 +76,7 @@
   display: flex;
   align-items: center;
   height: clamp(92px, 12vh, 130px);
-  margin: 18px 12px 0;
-  border: 1px solid #d1d5db;
-  border-radius: 4px;
+  margin: 18px 0 0;
   background: linear-gradient(90deg, #ef6b70 0%, #f49a62 24%, #f5cc5b 48%, #a7cf75 72%, #38c978 100%);
 }
 
@@ -114,10 +115,16 @@
 .wbp-linear-performance-scale {
   display: flex;
   justify-content: space-between;
-  margin: 0 12px;
+  margin: 0 16px;
   color: #475569;
   font-size: 11px;
   font-weight: 600;
+}
+
+.wbp-linear-performance-actions {
+  display: flex;
+  gap: 8px;
+  padding: 0 16px;
 }
 
 .wbp-linear-performance-dive {
@@ -135,7 +142,16 @@
 .wbp-linear-performance-dive:hover,
 .wbp-linear-performance-dive:focus-visible { border-color: #475569; }
 
-.wbp-linear-performance-audit { margin-top: 4px; }
+.wbp-linear-performance-audit {
+  display: block;
+  width: calc(100% - 32px);
+  margin: 4px 16px 0;
+  padding: 8px 0;
+  text-align: left;
+}
+
+.wbp-linear-performance-audit:hover,
+.wbp-linear-performance-audit:focus-visible { background: #e6f5ec; outline-offset: 3px; }
 
 @media (min-width: 600px) and (max-width: 1100px) and (orientation: portrait) {
   .wbp-dashboard--occupy { display: flex; flex-direction: column; height: 100dvh; min-height: 0; overflow: hidden; }
