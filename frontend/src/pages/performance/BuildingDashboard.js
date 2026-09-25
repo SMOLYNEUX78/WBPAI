@@ -65,6 +65,108 @@ const ProfileSummaryColumns = ({ record, property, setup = {} }) => {
     </div>)}
   </div>;
 };
+const OccupyHistoryTabs = ({ record, property, setup }) => {
+  const [stage, setStage] = useState("audit");
+  const [reference, setReference] = useState("");
+  const [searchStatus, setSearchStatus] = useState("");
+  const [uploadStatus, setUploadStatus] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [documents, setDocuments] = useState([]);
+  const recordId = record?.databaseId;
+
+  useEffect(() => {
+    if (stage === "audit" || !recordId) return;
+    let active = true;
+    supabase.from("WBPEvidenceVersions")
+      .select("id,evidence_type,original_file_name,created_at")
+      .eq("building_record_id", recordId).eq("lifecycle_stage", stage)
+      .order("created_at", { ascending: false }).limit(20)
+      .then(({ data, error }) => {
+        if (!active) return;
+        setDocuments(error ? [] : data || []);
+        if (error) setUploadStatus(`Could not load documents: ${error.message}`);
+      });
+    return () => { active = false; };
+  }, [stage, recordId]);
+
+  const searchRecord = async (event) => {
+    event.preventDefault();
+    const number = reference.trim().toUpperCase();
+    if (!number) return;
+    setSearchStatus("Searching...");
+    const { data, error } = await supabase.from("WBPBuildingRecords")
+      .select("record_reference,lifecycle_stage").eq("record_reference", number).maybeSingle();
+    setSearchStatus(error ? `Search failed: ${error.message}` : data
+      ? `${data.record_reference} found in your accessible records (${data.lifecycle_stage}).`
+      : "No accessible record found. Ask the original team to share or hand over its WBP record.");
+  };
+
+  const uploadDocument = async (file) => {
+    if (!file) return;
+    if (!recordId) { setUploadStatus("Save this home to your secure account first."); return; }
+    if (!["application/pdf", "image/jpeg", "image/png"].includes(file.type) || file.size > 10 * 1024 * 1024) {
+      setUploadStatus("Use a PDF, JPG or PNG file no larger than 10 MB."); return;
+    }
+    setBusy(true);
+    setUploadStatus("");
+    let path = "";
+    try {
+      const { data: auth, error: authError } = await supabase.auth.getUser();
+      if (authError || !auth.user) throw new Error("Sign in again before uploading.");
+      if (!window.crypto?.subtle) throw new Error("Secure file hashing is unavailable in this browser.");
+      const hashBytes = await window.crypto.subtle.digest("SHA-256", await file.arrayBuffer());
+      const evidenceHash = Array.from(new Uint8Array(hashBytes)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+      const evidenceType = `historical-${stage}-document`;
+      const { data: previous, error: versionError } = await supabase.from("WBPEvidenceVersions")
+        .select("version_number").eq("building_record_id", recordId).eq("evidence_type", evidenceType)
+        .order("version_number", { ascending: false }).limit(1);
+      if (versionError) throw versionError;
+      path = `${auth.user.id}/${recordId}/${window.crypto.randomUUID()}`;
+      const { error: uploadError } = await supabase.storage.from("wbp-private-evidence")
+        .upload(path, file, { contentType: file.type, upsert: false });
+      if (uploadError) throw uploadError;
+      const { data, error: metadataError } = await supabase.from("WBPEvidenceVersions").insert({
+        building_record_id: recordId, evidence_type: evidenceType, lifecycle_stage: stage,
+        version_number: (previous?.[0]?.version_number || 0) + 1, storage_reference: path,
+        evidence_hash: evidenceHash, original_file_name: file.name, mime_type: file.type,
+        byte_size: file.size, classification: "verifier-access", assurance_status: "self-declared",
+        submitted_by: auth.user.id,
+      }).select("id,evidence_type,original_file_name,created_at").single();
+      if (metadataError) throw metadataError;
+      setDocuments((current) => [data, ...current]);
+      setUploadStatus(`${file.name} stored privately. Origin and contents are not yet verified.`);
+    } catch (error) {
+      if (path) await supabase.storage.from("wbp-private-evidence").remove([path]);
+      setUploadStatus(`Upload failed: ${error.message}`);
+    } finally { setBusy(false); }
+  };
+
+  return <div className="order-2 mx-3 mt-2 border-t border-emerald-200 sm:mx-8 lg:mx-12">
+    <div className="flex border-b border-emerald-200" role="tablist" aria-label="Building history">
+      {["design", "build", "audit"].map((item) => <button key={item} type="button" role="tab"
+        aria-selected={stage === item} onClick={() => { setStage(item); setSearchStatus(""); setUploadStatus(""); }}
+        className={`min-w-0 flex-1 px-2 py-2 text-xs font-semibold capitalize transition-colors ${stage === item ? "border-b-2 border-emerald-800 text-emerald-950" : "text-emerald-800 hover:bg-emerald-50"}`}>{item}</button>)}
+    </div>
+    <div role="tabpanel" className="pb-2">
+      {stage === "audit" ? <ProfileSummaryColumns record={record} property={property} setup={setup} /> :
+        <div className="grid gap-2 py-2 text-xs sm:grid-cols-2">
+          <form onSubmit={searchRecord} className="min-w-0">
+            <label className="block font-semibold text-emerald-950" htmlFor={`wbp-${stage}-lookup`}>Find an existing {stage} record</label>
+            <div className="mt-1 flex min-w-0 gap-1"><input id={`wbp-${stage}-lookup`} value={reference} onChange={(event) => setReference(event.target.value)} placeholder="WBP number" className="min-w-0 flex-1 border border-emerald-300 bg-white px-2 py-1.5" /><button type="submit" className="border border-emerald-700 px-2 font-semibold text-emerald-950">Search</button></div>
+            {searchStatus ? <p role="status" className="mt-1 text-gray-700">{searchStatus}</p> : null}
+          </form>
+          <div className="min-w-0">
+            <label className="block font-semibold text-emerald-950" htmlFor={`wbp-${stage}-file`}>Upload historical {stage} documents</label>
+            <input id={`wbp-${stage}-file`} type="file" accept=".pdf,.jpg,.jpeg,.png" disabled={busy || !recordId}
+              onChange={(event) => { uploadDocument(event.target.files?.[0]); event.target.value = ""; }} className="mt-1 block w-full min-w-0 text-xs" />
+            {!recordId ? <p className="mt-1 text-gray-700">Save this home before uploading.</p> : null}
+            {uploadStatus ? <p role="status" className="mt-1 text-gray-700">{uploadStatus}</p> : null}
+            {documents.length ? <ul className="mt-1 space-y-0.5 text-gray-700">{documents.map((item) => <li key={item.id} className="break-all">{item.original_file_name} <span className="text-gray-500">(unverified)</span></li>)}</ul> : null}
+          </div>
+        </div>}
+    </div>
+  </div>;
+};
 const HDD_BASE_TEMP_C = 15.5;
 const FALLBACK_CARBON_PRICE_GBP_PER_TONNE = 65;
 const CARBON_SAVINGS_CALCULATION_VERSION = "enerphit-certified-v3";
@@ -6074,7 +6176,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
           </div>
         </div>
         {dataSourceBuildingId === "home" ? (
-          <div className="order-2"><ProfileSummaryColumns record={homePassport} property={homePassport?.propertyDiscovery} setup={homeSetup} /></div>
+          <OccupyHistoryTabs record={homePassport} property={homePassport?.propertyDiscovery} setup={homeSetup} />
         ) : null}
       </div>
 
@@ -8596,7 +8698,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false }) => {
             <p className="break-words text-xs text-gray-700">Internal area: {manualData.internalArea ? `${manualData.internalArea} m2` : isBridgewoodProfile ? `${HOME_BUILDING.estimatedInternalArea} m2 (model estimate)` : "Pending"}</p>
           </div>
         </div>
-        <ProfileSummaryColumns record={ownershipRecord} property={ownershipProperty} setup={{ energyConsent, historicalDataFileName, healthSensors, sensorEvidenceFileName, carbonSelections }} />
+        <OccupyHistoryTabs record={ownershipRecord} property={ownershipProperty} setup={{ energyConsent, historicalDataFileName, healthSensors, sensorEvidenceFileName, carbonSelections }} />
         {ownershipRecord ? <>
           {passportSaveStatus !== "saved" ? <div className="mx-3 mt-4 flex justify-end sm:mx-8 lg:mx-12"><button type="button" disabled={passportSaveStatus === "saving"} onClick={secureExistingPassport} className="bg-emerald-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">{passportSaveStatus === "saving" ? "Saving..." : "Save to secure account"}</button></div> : null}
           {passportSaveError ? <p className="mx-3 mt-3 border border-red-200 bg-red-50 p-2 text-xs text-red-800 sm:mx-8 lg:mx-12">{passportSaveError}</p> : null}
