@@ -91,6 +91,7 @@ const TREND_ENERGY_KEYS = [
   "electricity", "electricityRegulated", "electricityUnregulated",
   "gas", "gasRegulated", "gasUnregulated",
 ];
+const TREND_TEMPERATURE_KEYS = ["internalTemp", "externalTemp", "warmthBuffer"];
 
 const preserveTrendEnergy = (incoming, previous) => {
   if (!Array.isArray(incoming)) return previous;
@@ -98,12 +99,16 @@ const preserveTrendEnergy = (incoming, previous) => {
     const earlier = previous?.[index];
     if (earlier?.slot !== point?.slot) return point;
     const preserved = {};
-    TREND_ENERGY_KEYS.forEach((key) => {
+    [...TREND_ENERGY_KEYS, ...TREND_TEMPERATURE_KEYS].forEach((key) => {
       if (!Number.isFinite(point[key]) && Number.isFinite(earlier[key])) {
         preserved[key] = earlier[key];
       }
     });
-    return { ...point, ...preserved };
+    const merged = { ...point, ...preserved };
+    if (Number.isFinite(merged.internalTemp) && Number.isFinite(merged.externalTemp)) {
+      merged.warmthBuffer = merged.internalTemp - merged.externalTemp;
+    }
+    return merged;
   });
 };
 
@@ -4128,6 +4133,60 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
     loadEnergy();
     return () => { cancelled = true; };
     // Refresh the missing energy series when the selected Trends tab opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [occupyDetail, selectedTrendSeason, isActive, dataSourceBuildingId]);
+
+  useEffect(() => {
+    if (!isActive || occupyDetail !== "trends" || selectedTrendSeason !== "Summer") return;
+    const summer = Object.values(readCachedSeasonalTrendArchive().seasons)
+      .find((record) => record.name === "Summer");
+    if (!summer?.startDate || !summer?.endDate || !Array.isArray(summer.data)) return;
+    if (summer.data.some((point) => Number.isFinite(point.externalTemp))) return;
+
+    let cancelled = false;
+    const loadSummerWeather = async () => {
+      try {
+        const { data, error } = await applyBuildingScope(
+          supabase.from("Readings")
+            .select("timestamp, temperature_outside")
+            .eq("reading_type", "weather:openweather")
+            .not("temperature_outside", "is", null)
+            .gte("timestamp", `${summer.startDate}T00:00:00.000Z`)
+            .lte("timestamp", `${summer.endDate}T23:59:59.999Z`)
+            .order("timestamp", { ascending: true })
+            .limit(5000)
+        );
+        if (error) throw error;
+        if (cancelled || !data?.length) return;
+
+        const buckets = Array.from({ length: 168 }, () => []);
+        data.forEach((row) => {
+          const date = new Date(row.timestamp);
+          const value = Number(row.temperature_outside);
+          if (Number.isNaN(date.getTime()) || !Number.isFinite(value)) return;
+          buckets[((date.getUTCDay() + 6) % 7) * 24 + date.getUTCHours()].push(value);
+        });
+        const current = readCachedSeasonalTrendArchive().seasons[summer.key]?.data || summer.data;
+        const nextData = current.map((point, slot) => {
+          if (!buckets[slot]?.length) return point;
+          const externalTemp = average(buckets[slot]);
+          return {
+            ...point,
+            externalTemp,
+            warmthBuffer: Number.isFinite(point.internalTemp)
+              ? point.internalTemp - externalTemp : null,
+          };
+        });
+        if (nextData.some((point) => Number.isFinite(point.externalTemp))) {
+          applyWeeklyTrendData(nextData, summer);
+        }
+      } catch (error) {
+        console.warn("Summer weather trend unavailable:", error.message);
+      }
+    };
+    loadSummerWeather();
+    return () => { cancelled = true; };
+    // Fetch only once for an older Summer archive without outdoor temperature.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [occupyDetail, selectedTrendSeason, isActive, dataSourceBuildingId]);
 
