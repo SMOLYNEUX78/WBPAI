@@ -91,7 +91,7 @@ const TREND_ENERGY_KEYS = [
   "electricity", "electricityRegulated", "electricityUnregulated",
   "gas", "gasRegulated", "gasUnregulated",
 ];
-const TREND_TEMPERATURE_KEYS = ["internalTemp", "externalTemp", "warmthBuffer"];
+const TREND_TEMPERATURE_KEYS = ["internalTemp", "externalTemp", "externalTempPeak", "warmthBuffer"];
 
 const preserveTrendEnergy = (incoming, previous) => {
   if (!Array.isArray(incoming)) return previous;
@@ -4141,23 +4141,28 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
     const summer = Object.values(readCachedSeasonalTrendArchive().seasons)
       .find((record) => record.name === "Summer");
     if (!summer?.startDate || !summer?.endDate || !Array.isArray(summer.data)) return;
-    if (summer.data.some((point) => Number.isFinite(point.externalTemp))) return;
+    if (summer.data.some((point) => Number.isFinite(point.externalTempPeak))) return;
 
     let cancelled = false;
     const loadSummerWeather = async () => {
       try {
-        const { data, error } = await applyBuildingScope(
-          supabase.from("Readings")
-            .select("timestamp, temperature_outside")
-            .eq("reading_type", "weather:openweather")
-            .not("temperature_outside", "is", null)
-            .gte("timestamp", `${summer.startDate}T00:00:00.000Z`)
-            .lte("timestamp", `${summer.endDate}T23:59:59.999Z`)
-            .order("timestamp", { ascending: true })
-            .limit(5000)
-        );
-        if (error) throw error;
-        if (cancelled || !data?.length) return;
+        const data = [];
+        for (let page = 0; page < 5; page += 1) {
+          const { data: batch, error } = await applyBuildingScope(
+            supabase.from("Readings")
+              .select("timestamp, temperature_outside")
+              .eq("reading_type", "weather:openmeteo-archive")
+              .not("temperature_outside", "is", null)
+              .gte("timestamp", `${summer.startDate}T00:00:00.000Z`)
+              .lte("timestamp", `${summer.endDate}T23:59:59.999Z`)
+              .order("timestamp", { ascending: true })
+              .range(page * 1000, (page + 1) * 1000 - 1)
+          );
+          if (error) throw error;
+          data.push(...(batch || []));
+          if (!batch || batch.length < 1000) break;
+        }
+        if (cancelled || !data.length) return;
 
         const buckets = Array.from({ length: 168 }, () => []);
         data.forEach((row) => {
@@ -4173,11 +4178,12 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
           return {
             ...point,
             externalTemp,
+            externalTempPeak: Math.max(...buckets[slot]),
             warmthBuffer: Number.isFinite(point.internalTemp)
               ? point.internalTemp - externalTemp : null,
           };
         });
-        if (nextData.some((point) => Number.isFinite(point.externalTemp))) {
+        if (nextData.some((point) => Number.isFinite(point.externalTempPeak))) {
           applyWeeklyTrendData(nextData, summer);
         }
       } catch (error) {
@@ -6686,6 +6692,13 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
               ) : null}
 
               <div className="w-full overflow-x-auto">
+                {visibleTrendMetrics.some((metric) => metric.key === "externalTemp") &&
+                selectedSeasonTrendData.some((point) => Number.isFinite(point.externalTempPeak)) ? (
+                  <p className="text-xs text-gray-600 mb-1">
+                    Indigo line: hourly average. Indigo dots: hottest recorded outdoor reading for that weekday and hour
+                    (peak {Math.max(...selectedSeasonTrendData.map((point) => point.externalTempPeak).filter(Number.isFinite)).toFixed(1)} deg C).
+                  </p>
+                ) : null}
                 <svg
                   viewBox={`0 0 ${chartWidth} ${chartHeight}`}
                   className="w-full h-auto"
@@ -6861,6 +6874,24 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
                       strokeLinejoin="round"
                     />
                   ))}
+                  {visibleTrendMetrics.some((metric) => metric.key === "externalTemp")
+                    ? selectedSeasonTrendData.map((point) => {
+                        if (!Number.isFinite(point.externalTempPeak)) return null;
+                        const x = chartPadding.left +
+                          (point.slot / (selectedSeasonTrendData.length - 1)) * plotWidth;
+                        const y = trendY(
+                          metricRanges.externalTemp,
+                          trendHealthScore(
+                            trendMetrics.find((metric) => metric.key === "externalTemp"),
+                            point.externalTempPeak
+                          )
+                        );
+                        return Number.isFinite(y) ? (
+                          <circle key={`outdoor-peak-${point.slot}`} cx={x} cy={y}
+                            r="2" fill="#4338ca" opacity="0.75" />
+                        ) : null;
+                      })
+                    : null}
                   {hoveredTrendPoint && Number.isFinite(hoveredTrendX) ? (
                     <g pointerEvents="none">
                       <line
