@@ -23,6 +23,7 @@
 
 .wbp-detail-header {
   display: flex;
+  flex-wrap: wrap;
   flex: none;
   align-items: center;
   justify-content: space-between;
@@ -32,6 +33,7 @@
 }
 
 .wbp-detail-header h2 { font-size: 16px; font-weight: 700; }
+.wbp-detail-header-scores { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-left: auto; font-size: 12px; }
 .wbp-detail-header button { padding: 6px 12px; border: 1px solid #d1d5db; background: #fff; font-size: 13px; }
 .wbp-detail-body { min-height: 0; overflow: auto; padding: 16px; }
 
@@ -55,6 +57,7 @@
 .wbp-occupy-actions button:focus-visible { background: #e6f5ec; }
 
 .wbp-performance-stage--linear { padding: 0 0 12px; }
+.wbp-occupy-panel--linear > :first-child { padding-bottom: 0; }
 
 .wbp-linear-performance {
   display: flex;
@@ -161,9 +164,11 @@
   .wbp-dashboard--occupy .wbp-occupy-panel { height: 100%; min-height: 0; overflow: hidden; gap: 12px; }
   .wbp-dashboard--occupy .wbp-occupy-panel > * + * { margin-top: 0; }
   .wbp-dashboard--occupy .wbp-occupy-panel > :first-child { flex: none; padding-bottom: 8px; }
+  .wbp-dashboard--occupy .wbp-occupy-panel--linear > :first-child { padding-bottom: 0; }
   .wbp-dashboard--occupy .wbp-occupy-panel > :first-child > .grid { min-height: 250px; }
   .wbp-dashboard--occupy .wbp-performance-stage { display: flex; flex: 1; min-height: 0; flex-direction: column; }
   .wbp-dashboard--occupy .wbp-performance-content { display: flex; flex: 1; min-height: 0; flex-direction: column; justify-content: center; gap: 12px; }
+  .wbp-dashboard--occupy .wbp-occupy-panel--linear .wbp-performance-content { flex: none; justify-content: flex-start; }
   .wbp-dashboard--occupy .wbp-performance-content > * + * { margin-top: 0; }
   .wbp-dashboard--occupy .wbp-performance-content > :first-child { flex: none; }
   .wbp-dashboard--occupy .wbp-performance-stage .wbp-occupy-actions { flex: none; }

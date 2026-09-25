@@ -10,7 +10,7 @@ import { getReadinessGates } from "./readinessGates";
 import { mergeMonthlyHlaRows } from "./monthlyHla";
 import "./occupyScreen.css";
 
-export const DetailSurface = ({ children, title, onClose, modal }) => {
+export const DetailSurface = ({ children, title, onClose, modal, headerExtra }) => {
   if (!modal || typeof document === "undefined") return children;
   return createPortal(
     <div className="wbp-detail-backdrop" onMouseDown={(event) => {
@@ -19,6 +19,7 @@ export const DetailSurface = ({ children, title, onClose, modal }) => {
       <section className="wbp-detail-dialog" role="dialog" aria-modal="true" aria-label={title}>
         <header className="wbp-detail-header">
           <h2>{title}</h2>
+          {headerExtra}
           <button type="button" onClick={onClose} aria-label={`Close ${title}`}>Close</button>
         </header>
         <div className="wbp-detail-body">{children}</div>
@@ -5702,7 +5703,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
   );
   return (
     <div
-      className={`bg-white p-4 flex flex-col space-y-6 ${
+      className={`bg-white p-4 flex flex-col ${!isCarbonCreditTab && building.id === "home" ? "wbp-occupy-panel--linear space-y-0" : "space-y-6"} ${
         isCarbonCreditTab ? "min-h-0" : "wbp-occupy-panel min-h-screen"
       }`}
     >
@@ -5812,10 +5813,6 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
                 ) : <span className="wbp-linear-performance-pending">Pending</span>}
               </div>
               <div className="wbp-linear-performance-scale" aria-hidden="true"><span>Low</span><span>Moderate</span><span>High</span></div>
-              <div className="wbp-linear-performance-scores">
-                <span><strong>Health</strong> {formatScore(performanceBreakdown.health)}</span>
-                <span><strong>Energy</strong> {formatScore(performanceBreakdown.energy)}</span>
-              </div>
               <div className="wbp-linear-performance-actions">
                 <button type="button" className="wbp-linear-performance-dive" onClick={() => setOccupyDetail("performance")}>Deep Dive</button>
                 <button type="button" className="wbp-linear-performance-dive" onClick={() => setOccupyDetail("trends")}>Trends</button>
@@ -5867,7 +5864,12 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
           ) : null}
 
           {!shouldShowDeepDive || (!isCarbonCreditTab && occupyDetail !== "performance") ? null : (
-          <DetailSurface modal={!isCarbonCreditTab} title="Performance deep dive" onClose={() => setOccupyDetail(null)}>
+          <DetailSurface modal={!isCarbonCreditTab} title="Performance deep dive" onClose={() => setOccupyDetail(null)} headerExtra={!isCarbonCreditTab && building.id === "home" ? (
+            <div className="wbp-detail-header-scores">
+              <span><strong>Health</strong> {formatScore(performanceBreakdown.health)}</span>
+              <span><strong>Energy</strong> {formatScore(performanceBreakdown.energy)}</span>
+            </div>
+          ) : null}>
           <div className="bg-white rounded border p-2.5 sm:p-4 min-w-0 overflow-hidden">
             {isCarbonCreditTab ? (
               <div className="mb-3 border-b border-gray-100 pb-2 text-xs text-gray-600">
@@ -6291,7 +6293,10 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
                       assumed
                     </p>
                   )}
-                  <p className="pt-2 mt-2 border-t border-gray-200">
+                  <details className="pt-2 mt-2 border-t border-gray-200 text-xs text-gray-600">
+                    <summary className="cursor-pointer font-semibold text-gray-700">HDD / HTC calculation details</summary>
+                    <div className="mt-2 space-y-2">
+                  <p>
                     <strong>HDD / HTC Days:</strong>{" "}
                     {(displayedHeatLossSummary.hddDays || 0) > 0 ||
                     (displayedHeatLossSummary.htcSamples || 0) > 0
@@ -6317,6 +6322,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
                       ? ` / ${displayedHeatLossSummary.nightCooldownNights} cooldown night(s)`
                       : ""}
                   </p>
+                  <p>Cooldown nights are qualifying overnight cooling windows, not all monitored nights. Each needs at least six readings over three hours and a clear indoor-outdoor temperature drop.</p>
                   <p
                     className="pt-2 mt-2 border-t border-gray-200 text-[11px] sm:text-xs leading-snug text-gray-600 break-words"
                     style={{ fontSize: "clamp(11px, 2.8vw, 12px)" }}
@@ -6350,6 +6356,8 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
                         : "Pending matching energy and temperature data"}
                     </p>
                   ) : null}
+                    </div>
+                  </details>
                   {isNewPerformanceDeepDive ? (
                     <p className="text-xs text-gray-600">
                       HLA comfort check: {projectedPerformanceDeepDive.comfortNote}
