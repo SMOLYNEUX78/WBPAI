@@ -54,6 +54,89 @@
 .wbp-occupy-actions button:hover,
 .wbp-occupy-actions button:focus-visible { background: #e6f5ec; }
 
+.wbp-linear-performance {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.wbp-linear-performance-scores {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  font-size: 13px;
+}
+
+.wbp-linear-performance-track {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: clamp(92px, 12vh, 130px);
+  margin: 18px 12px 0;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #ef6b70 0%, #f49a62 24%, #f5cc5b 48%, #a7cf75 72%, #38c978 100%);
+}
+
+.wbp-linear-performance-marker {
+  position: absolute;
+  top: -17px;
+  bottom: -8px;
+  width: 3px;
+  transform: translateX(-50%);
+  background: #17212b;
+  transition: left 400ms ease;
+}
+
+.wbp-linear-performance-marker span {
+  position: absolute;
+  top: -19px;
+  left: 50%;
+  min-width: 40px;
+  padding: 2px 6px;
+  transform: translateX(-50%);
+  border-radius: 3px;
+  background: #17212b;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.wbp-linear-performance-pending {
+  width: 100%;
+  color: #17212b;
+  font-weight: 700;
+  text-align: center;
+}
+
+.wbp-linear-performance-scale {
+  display: flex;
+  justify-content: space-between;
+  margin: 0 12px;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.wbp-linear-performance-dive {
+  align-self: flex-start;
+  min-width: 112px;
+  padding: 7px 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  background: #fff;
+  color: #17212b;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.wbp-linear-performance-dive:hover,
+.wbp-linear-performance-dive:focus-visible { border-color: #475569; }
+
+.wbp-linear-performance-audit { margin-top: 4px; }
+
 @media (min-width: 600px) and (max-width: 1100px) and (orientation: portrait) {
   .wbp-dashboard--occupy { display: flex; flex-direction: column; height: 100dvh; min-height: 0; overflow: hidden; }
   .wbp-dashboard--occupy > .sticky { flex: none; }

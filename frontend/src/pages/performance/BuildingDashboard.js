@@ -5798,7 +5798,33 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
         <h2 className="mb-2 text-lg font-bold">Performance</h2>
 
         <div className="wbp-performance-content space-y-2.5 sm:space-y-4">
-          {isCarbonCreditTab ? (
+          {!isCarbonCreditTab && building.id === "home" ? (
+            <div className="wbp-linear-performance">
+              <div className="wbp-linear-performance-scores">
+                <span><strong>Health</strong> {formatScore(performanceBreakdown.health)}</span>
+                <span><strong>Energy</strong> {formatScore(performanceBreakdown.energy)}</span>
+              </div>
+              <div
+                className="wbp-linear-performance-track"
+                role="img"
+                aria-label={Number.isFinite(performanceValue) ? `Building performance ${Math.round(performanceValue)} out of 100` : "Building performance pending"}
+              >
+                {Number.isFinite(performanceValue) ? (
+                  <div className="wbp-linear-performance-marker" style={{ left: `${Math.max(0, Math.min(100, performanceValue))}%` }}>
+                    <span>{Math.round(performanceValue)}</span>
+                  </div>
+                ) : <span className="wbp-linear-performance-pending">Pending</span>}
+              </div>
+              <div className="wbp-linear-performance-scale" aria-hidden="true"><span>Low</span><span>Moderate</span><span>High</span></div>
+              <button type="button" className="wbp-linear-performance-dive" onClick={() => setOccupyDetail("performance")}>Deep Dive</button>
+              <div className="wbp-linear-performance-audit">
+                <div className="flex justify-between text-xs font-semibold text-gray-700"><span>Audit evidence</span><span>{evidencePackScore}%</span></div>
+                <div role="progressbar" aria-label="Audit evidence readiness" aria-valuenow={evidencePackScore} aria-valuemin={0} aria-valuemax={100} className="mt-1 h-2 overflow-hidden bg-gray-200">
+                  <div className={`h-full transition-[width] duration-300 ${evidencePackScore >= 80 ? "bg-emerald-500" : evidencePackScore >= 50 ? "bg-amber-500" : "bg-red-500"}`} style={{ width: `${evidencePackScore}%` }} />
+                </div>
+              </div>
+            </div>
+          ) : isCarbonCreditTab ? (
             <div className="grid grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] sm:gap-3">
               {renderPerformanceCard({
                 title: "Before",
