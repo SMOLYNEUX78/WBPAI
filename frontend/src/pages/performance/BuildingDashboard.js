@@ -5397,8 +5397,8 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
     healthTrendAreaOptions.find((option) => option.key === selectedHealthTrendArea) ||
     healthTrendAreaOptions[0];
   const areaFilteredTrendMetrics =
-    healthTrendSelected && activeHealthTrendArea
-      ? activeTrendMetrics.filter((metric) =>
+    healthTrendSelected && activeHealthTrendArea?.key !== "all"
+      ? selectedActiveTrendMetrics.filter((metric) =>
           activeHealthTrendArea.metricKeys.includes(metric.key)
         )
       : selectedActiveTrendMetrics;
@@ -5736,6 +5736,35 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
     return Number.isFinite(meanValue) && Number.isFinite(metric.summaryMultiplier)
       ? meanValue * metric.summaryMultiplier
       : meanValue;
+  };
+  const renderTrendMetricButton = (metric) => {
+    const averageValue = averageMetricValue(selectedSeasonTrendData, metric);
+    const metricSelected = selectedTrendMetricKeys.length === 0 ||
+      selectedTrendMetricKeys.includes(metric.key);
+    return (
+      <button
+        type="button"
+        key={metric.key}
+        onClick={() => toggleTrendMetric(metric.key)}
+        className={`flex min-w-0 items-center justify-between gap-2 rounded border px-2 py-1 text-left transition ${
+          metricSelected
+            ? "border-gray-300 bg-white shadow-sm"
+            : "border-gray-200 bg-gray-50 text-gray-400 opacity-70"
+        }`}
+      >
+        <span className="flex min-w-0 items-center gap-1">
+          <span className="inline-block h-2.5 w-2.5 flex-none rounded-full"
+            style={{ backgroundColor: metricSelected ? metric.color : "#d1d5db" }} />
+          <span className="break-words">{metric.key === "warmthBuffer" && selectedTrendSeason === "Summer"
+            ? "Indoor–outdoor" : metric.label}</span>
+        </span>
+        <span className="flex-none font-semibold">
+          {Number.isFinite(averageValue)
+            ? `${formatMeasurement(averageValue)} ${metric.summaryUnit || metric.unit}`
+            : "No Data"}
+        </span>
+      </button>
+    );
   };
   const hoveredTrendMetric = hoveredTrendPoint
     ? visibleTrendMetrics.find((metric) =>
@@ -7066,49 +7095,25 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
                 </svg>
               </div>
 
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 text-xs">
-                {activeTrendMetrics.map((metric) => {
-                  const averageValue = averageMetricValue(
-                    selectedSeasonTrendData,
-                    metric
-                  );
-                  const metricSelected =
-                    selectedTrendMetricKeys.length === 0 ||
-                    selectedTrendMetricKeys.includes(metric.key);
-                  return (
-                    <button
-                      type="button"
-                      key={metric.key}
-                      onClick={() => toggleTrendMetric(metric.key)}
-                      className={`flex items-center justify-between gap-2 rounded border px-2 py-1 text-left transition ${
-                        metricSelected
-                          ? "border-gray-300 bg-white shadow-sm"
-                          : "border-gray-200 bg-gray-50 text-gray-400 opacity-70"
-                      }`}
-                    >
-                      <span className="flex items-center gap-1">
-                        <span
-                          className="inline-block h-2.5 w-2.5 rounded-full"
-                          style={{
-                            backgroundColor: metricSelected
-                              ? metric.color
-                              : "#d1d5db",
-                          }}
-                        />
-                        {metric.key === "warmthBuffer" && selectedTrendSeason === "Summer"
-                          ? "Indoor–outdoor" : metric.label}
-                      </span>
-                      <span className="font-semibold">
-                        {Number.isFinite(averageValue)
-                          ? `${formatMeasurement(averageValue)} ${
-                              metric.summaryUnit || metric.unit
-                            }`
-                          : "No Data"}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
+              {dataSourceBuildingId === "home" && healthTrendSelected && activeHealthTrendArea.key === "all" ? (
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div className="flex min-w-0 flex-col gap-2">
+                    <h4 className="font-semibold">Downstairs</h4>
+                    {visibleTrendMetrics.filter((metric) => metric.key.startsWith("downstairs"))
+                      .map(renderTrendMetricButton)}
+                  </div>
+                  <div className="flex min-w-0 flex-col gap-2">
+                    <h4 className="font-semibold">Upstairs</h4>
+                    {visibleTrendMetrics.filter((metric) => metric.key.startsWith("upstairs"))
+                      .map(renderTrendMetricButton)}
+                  </div>
+                </div>
+              ) : (
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 text-xs">
+                  {(healthTrendSelected ? visibleTrendMetrics : activeTrendMetrics)
+                    .map(renderTrendMetricButton)}
+                </div>
+              )}
               <p className="text-xs text-gray-600">
                 Lines are plotted on a shared deviation scale: 0 is good/fine,
                 positive values are drifting high, and negative values are
