@@ -5490,7 +5490,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
     const deviation = Math.round(score - 50);
     return deviation > 0 ? `+${deviation}` : `${deviation}`;
   };
-  const trendHealthScore = (metric, value) => {
+  const trendHealthScore = (metric, value, pointData) => {
     if (!Number.isFinite(value)) {
       return null;
     }
@@ -5533,6 +5533,12 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
     }
 
     if (metric.key === "warmthBuffer") {
+      if (selectedTrendSeason === "Summer" && pointData?.externalTemp >= 24) {
+        if (pointData.internalTemp >= 28) return 85;
+        if (pointData.internalTemp >= 26) return 72;
+        if (value >= 0) return 72;
+        return Math.max(35, 55 - Math.abs(value) * 3);
+      }
       if (value >= 5 && value <= 12) {
         return linearScore(value, [
           { min: 5, max: 12, startScore: 40, endScore: 65 },
@@ -5631,7 +5637,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
   };
   const trendPoint = (data, ranges, pointData, metric, index) => {
     const rawValue = pointData[metric.key];
-    const value = trendHealthScore(metric, rawValue);
+    const value = trendHealthScore(metric, rawValue, pointData);
     const range = ranges[metric.key];
 
     if (!Number.isFinite(value) || !range) {
@@ -5685,7 +5691,8 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
           metricRanges[hoveredTrendMetric.key],
           trendHealthScore(
             hoveredTrendMetric,
-            hoveredTrendPoint[hoveredTrendMetric.key]
+            hoveredTrendPoint[hoveredTrendMetric.key],
+            hoveredTrendPoint
           )
         )
       : null;
@@ -6692,6 +6699,11 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
               ) : null}
 
               <div className="w-full overflow-x-auto">
+                {selectedTrendSeason === "Summer" && visibleTrendMetrics.some((metric) => metric.key === "warmthBuffer") ? (
+                  <p className="text-xs text-gray-600 mb-1">
+                    Indoor–outdoor difference: below zero on a hot day means the home stayed cooler than outside.
+                  </p>
+                ) : null}
                 {visibleTrendMetrics.some((metric) => metric.key === "externalTemp") &&
                 selectedSeasonTrendData.some((point) => Number.isFinite(point.externalTempPeak)) ? (
                   <p className="text-xs text-gray-600 mb-1">
@@ -6927,7 +6939,8 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
                               ? formatDeviationScore(
                                   trendHealthScore(
                                     hoveredTrendMetric,
-                                    hoveredTrendPoint[hoveredTrendMetric.key]
+                                    hoveredTrendPoint[hoveredTrendMetric.key],
+                                    hoveredTrendPoint
                                   )
                                 )
                               : ""}
@@ -6975,7 +6988,8 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
                               fill={metric.color}
                             />
                             <text x={x + 12} y={y} fontSize="10" fill="#374151">
-                              {metric.label}:{" "}
+                              {metric.key === "warmthBuffer" && selectedTrendSeason === "Summer"
+                                ? "Indoor–outdoor" : metric.label}:{" "}
                               {Number.isFinite(value)
                                 ? `${formatMeasurement(value)} ${metric.unit}`
                                 : "No Data"}
@@ -7024,7 +7038,8 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
                               : "#d1d5db",
                           }}
                         />
-                        {metric.label}
+                        {metric.key === "warmthBuffer" && selectedTrendSeason === "Summer"
+                          ? "Indoor–outdoor" : metric.label}
                       </span>
                       <span className="font-semibold">
                         {Number.isFinite(averageValue)
