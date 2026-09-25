@@ -92,6 +92,10 @@ const TREND_ENERGY_KEYS = [
   "gas", "gasRegulated", "gasUnregulated",
 ];
 const TREND_TEMPERATURE_KEYS = ["internalTemp", "externalTemp", "externalTempPeak", "warmthBuffer"];
+const HEALTH_TREND_KEYS = [
+  "upstairsHumidity", "downstairsHumidity", "upstairsPm25", "downstairsPm25",
+  "upstairsVocs", "downstairsVocs", "upstairsPm10", "upstairsHcho", "upstairsNo2",
+];
 
 const preserveTrendEnergy = (incoming, previous) => {
   if (!Array.isArray(incoming)) return previous;
@@ -3711,6 +3715,13 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
           humidity: [],
           upstairsHumidity: [],
           downstairsHumidity: [],
+          upstairsPm25: [],
+          downstairsPm25: [],
+          upstairsVocs: [],
+          downstairsVocs: [],
+          upstairsPm10: [],
+          upstairsHcho: [],
+          upstairsNo2: [],
           pm25: [],
           vocs: [],
         };
@@ -3795,12 +3806,19 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
         pushMetric("humidity", row.humidity);
         if (row.reading_type === "dyson:upstairs") {
           pushMetric("upstairsHumidity", row.humidity);
+          pushMetric("upstairsPm25", row.pm25);
+          pushMetric("upstairsVocs", row.vocs);
+          pushMetric("upstairsPm10", row.pm10);
+          pushMetric("upstairsHcho", row.hcho);
+          pushMetric("upstairsNo2", dysonAppDisplayValue(row.reading_type, "no2", row.no2));
         }
         if (
           row.reading_type === "dyson:downstairs" ||
           row.reading_type === "dyson:living_room"
         ) {
           pushMetric("downstairsHumidity", row.humidity);
+          pushMetric("downstairsPm25", row.pm25);
+          pushMetric("downstairsVocs", row.vocs);
         }
         pushMetric("pm25", row.pm25);
         pushMetric("vocs", row.vocs);
@@ -3859,6 +3877,13 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
         downstairsHumidity: bucket.downstairsHumidity.length
           ? average(bucket.downstairsHumidity)
           : null,
+        upstairsPm25: bucket.upstairsPm25.length ? average(bucket.upstairsPm25) : null,
+        downstairsPm25: bucket.downstairsPm25.length ? average(bucket.downstairsPm25) : null,
+        upstairsVocs: bucket.upstairsVocs.length ? average(bucket.upstairsVocs) : null,
+        downstairsVocs: bucket.downstairsVocs.length ? average(bucket.downstairsVocs) : null,
+        upstairsPm10: bucket.upstairsPm10.length ? average(bucket.upstairsPm10) : null,
+        upstairsHcho: bucket.upstairsHcho.length ? average(bucket.upstairsHcho) : null,
+        upstairsNo2: bucket.upstairsNo2.length ? average(bucket.upstairsNo2) : null,
         pm25: bucket.pm25.length ? average(bucket.pm25) : null,
         vocs: bucket.vocs.length ? average(bucket.vocs) : null,
       }));
@@ -3918,6 +3943,13 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
         "humidity",
         "upstairsHumidity",
         "downstairsHumidity",
+        "upstairsPm25",
+        "downstairsPm25",
+        "upstairsVocs",
+        "downstairsVocs",
+        "upstairsPm10",
+        "upstairsHcho",
+        "upstairsNo2",
         "pm25",
         "vocs",
       ];
@@ -5234,6 +5266,13 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
         { min: 20, max: 30, color: "#fee2e2", label: "Low RH risk" },
       ],
     },
+    { key: "upstairsPm25", label: "Upstairs PM2.5", unit: "ug/m3", color: "#b45309" },
+    { key: "downstairsPm25", label: "Downstairs PM2.5", unit: "ug/m3", color: "#e11d48" },
+    { key: "upstairsVocs", label: "Upstairs VOCs", unit: "ppb", color: "#0d9488" },
+    { key: "downstairsVocs", label: "Downstairs VOCs", unit: "ppb", color: "#be123c" },
+    { key: "upstairsPm10", label: "Upstairs PM10", unit: "ug/m3", color: "#ea580c" },
+    { key: "upstairsHcho", label: "Upstairs HCHO", unit: "ppb", color: "#0891b2" },
+    { key: "upstairsNo2", label: "Upstairs NO2", unit: "ppb", color: "#475569" },
     {
       key: "pm25",
       label: "PM2.5",
@@ -5306,7 +5345,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
     {
       key: "health",
       label: "Health",
-      metricKeys: ["upstairsHumidity", "downstairsHumidity", "pm25", "vocs"],
+      metricKeys: HEALTH_TREND_KEYS,
     },
   ];
   const activeTrendMetricKeys = activeTrendMetrics.map((metric) => metric.key);
@@ -5337,25 +5376,20 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
     {
       key: "all",
       label: "All",
-      metricKeys: ["upstairsHumidity", "downstairsHumidity", "pm25", "vocs"],
+      metricKeys: HEALTH_TREND_KEYS,
     },
     {
       key: "upstairs",
       label: "Upstairs",
-      metricKeys: ["upstairsHumidity"],
+      metricKeys: HEALTH_TREND_KEYS.filter((key) => key.startsWith("upstairs")),
     },
     {
       key: "downstairs",
       label: "Downstairs",
-      metricKeys: ["downstairsHumidity"],
+      metricKeys: HEALTH_TREND_KEYS.filter((key) => key.startsWith("downstairs")),
     },
   ];
-  const healthTrendKeys = [
-    "upstairsHumidity",
-    "downstairsHumidity",
-    "pm25",
-    "vocs",
-  ];
+  const healthTrendKeys = HEALTH_TREND_KEYS;
   const healthTrendSelected =
     selectedTrendMetricGroupKey === "health" ||
     selectedTrendMetricKeys.some((key) => healthTrendKeys.includes(key));
@@ -5406,7 +5440,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
     const filteredKeys = metricKeys.filter((key) =>
       activeTrendMetricKeys.includes(key)
     );
-    const healthKeys = ["upstairsHumidity", "downstairsHumidity", "pm25", "vocs"];
+    const healthKeys = HEALTH_TREND_KEYS;
     const isHealthGroup =
       filteredKeys.length === healthKeys.filter((key) =>
         activeTrendMetricKeys.includes(key)
@@ -5576,7 +5610,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
       ]);
     }
 
-    if (metric.key === "pm25") {
+    if (["pm25", "upstairsPm25", "downstairsPm25"].includes(metric.key)) {
       if (value <= 12) return 50;
       return linearScore(value, [
         { min: 12, max: 35, startScore: 70, endScore: 85 },
@@ -5584,11 +5618,35 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
       ]);
     }
 
-    if (metric.key === "vocs") {
+    if (["vocs", "upstairsVocs", "downstairsVocs"].includes(metric.key)) {
       if (value <= 200) return 50;
       return linearScore(value, [
         { min: 200, max: 500, startScore: 70, endScore: 85 },
         { min: 500, max: 1000, startScore: 85, endScore: 100 },
+      ]);
+    }
+
+    if (metric.key === "upstairsPm10") {
+      if (value <= 15) return 50;
+      return linearScore(value, [
+        { min: 15, max: 45, startScore: 70, endScore: 85 },
+        { min: 45, max: 100, startScore: 85, endScore: 100 },
+      ]);
+    }
+
+    if (metric.key === "upstairsHcho") {
+      if (value <= 9) return 50;
+      return linearScore(value, [
+        { min: 9, max: 80, startScore: 70, endScore: 85 },
+        { min: 80, max: 200, startScore: 85, endScore: 100 },
+      ]);
+    }
+
+    if (metric.key === "upstairsNo2") {
+      if (value <= 20) return 50;
+      return linearScore(value, [
+        { min: 20, max: 100, startScore: 70, endScore: 85 },
+        { min: 100, max: 200, startScore: 85, endScore: 100 },
       ]);
     }
 
