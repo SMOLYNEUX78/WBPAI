@@ -87,6 +87,25 @@ const MIN_SEASONAL_BASELINE_DAYS = 90;
 const MIN_FULL_YEAR_BASELINE_DAYS = 365;
 const MIN_FULL_YEAR_METERED_DAYS = 300;
 const SEASON_NAMES = ["Summer", "Autumn", "Winter", "Spring"];
+const TREND_ENERGY_KEYS = [
+  "electricity", "electricityRegulated", "electricityUnregulated",
+  "gas", "gasRegulated", "gasUnregulated",
+];
+
+const preserveTrendEnergy = (incoming, previous) => {
+  if (!Array.isArray(incoming)) return previous;
+  return incoming.map((point, index) => {
+    const earlier = previous?.[index];
+    if (earlier?.slot !== point?.slot) return point;
+    const preserved = {};
+    TREND_ENERGY_KEYS.forEach((key) => {
+      if (!Number.isFinite(point[key]) && Number.isFinite(earlier[key])) {
+        preserved[key] = earlier[key];
+      }
+    });
+    return { ...point, ...preserved };
+  });
+};
 
 const PROPERTY_DISCOVERY_CACHE_KEY = "wbp-property-discovery-draft:v1";
 const CARBON_EVIDENCE_TYPES = [
@@ -1511,10 +1530,12 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
     nextWeeklyTrendData,
     seasonInfo = getMeteorologicalSeason()
   ) => {
-    setWeeklyTrendData(nextWeeklyTrendData);
+    const previousData = readCachedSeasonalTrendArchive().seasons[seasonInfo.key]?.data;
+    const mergedTrendData = preserveTrendEnergy(nextWeeklyTrendData, previousData);
+    setWeeklyTrendData(mergedTrendData);
     localStorage.setItem(
       `${dataSourceBuildingId}:weeklyTrendData`,
-      JSON.stringify(nextWeeklyTrendData)
+      JSON.stringify(mergedTrendData)
     );
     setSeasonalTrendArchive((currentArchive) => {
       const capturedAt = new Date().toISOString();
@@ -1528,7 +1549,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
               new Date(`${seasonInfo.endDate}T23:59:59.999Z`) < new Date()
                 ? "complete"
                 : "active",
-            data: nextWeeklyTrendData,
+            data: mergedTrendData,
           },
         },
       };
@@ -1665,19 +1686,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
         seasons: Object.fromEntries(
           Object.entries({ ...cachedSeasons, ...snapshotWeeklyTrend.seasons }).map(([key, record]) => {
             const cachedData = cachedSeasons[key]?.data;
-            const data = Array.isArray(record?.data)
-              ? record.data.map((point, index) => {
-                  const cachedPoint = cachedData?.[index];
-                  if (cachedPoint?.slot !== point?.slot) return point;
-                  const preservedEnergy = {};
-                  ["electricity", "electricityRegulated", "electricityUnregulated", "gas", "gasRegulated", "gasUnregulated"].forEach((metric) => {
-                    if (!Number.isFinite(point[metric]) && Number.isFinite(cachedPoint[metric])) {
-                      preservedEnergy[metric] = cachedPoint[metric];
-                    }
-                  });
-                  return { ...point, ...preservedEnergy };
-                })
-              : cachedData;
+            const data = preserveTrendEnergy(record?.data, cachedData);
             return [key, { ...record, data }];
           })
         ),
@@ -4061,6 +4070,67 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
     }
   };
 
+  useEffect(() => {
+    if (!isActive || occupyDetail !== "trends" || dataSourceBuildingId !== "home") return;
+    const archive = readCachedSeasonalTrendArchive();
+    const season = Object.values(archive.seasons).find((record) => record.name === selectedTrendSeason)
+      || (selectedTrendSeason === activeSeasonInfo.name ? activeSeasonInfo : null);
+    if (!season?.startDate || !season?.endDate) return;
+    if (season.data?.some((point) => Number.isFinite(point.electricity) || Number.isFinite(point.gas))) return;
+
+    let cancelled = false;
+    const loadEnergy = async () => {
+      try {
+        const rows = [];
+        const end = new Date(Math.min(Date.now(), new Date(`${season.endDate}T23:59:59.999Z`).getTime()));
+        for (let page = 0; page < 12; page += 1) {
+          const { data, error } = await supabase.from("EnergyReadings")
+            .select("timestamp, fuel_type, usage_kwh")
+            .eq("building_id", dataSourceBuildingId)
+            .eq("reading_type", "interval_30m")
+            .not("usage_kwh", "is", null)
+            .gte("timestamp", `${season.startDate}T00:00:00.000Z`)
+            .lte("timestamp", end.toISOString())
+            .order("timestamp", { ascending: true })
+            .order("id", { ascending: true })
+            .range(page * 1000, (page + 1) * 1000 - 1);
+          if (error) throw error;
+          rows.push(...(data || []));
+          if (!data || data.length < 1000) break;
+        }
+        if (cancelled || !rows.length) return;
+        const buckets = Array.from({ length: 168 }, () => ({ electricity: [], gas: [] }));
+        rows.forEach((row) => {
+          const date = new Date(row.timestamp);
+          const usage = Number(row.usage_kwh);
+          if (Number.isNaN(date.getTime()) || !Number.isFinite(usage)) return;
+          const slot = ((date.getUTCDay() + 6) % 7) * 24 + date.getUTCHours();
+          if (buckets[slot][row.fuel_type]) buckets[slot][row.fuel_type].push(usage);
+        });
+        const existing = readCachedSeasonalTrendArchive().seasons[season.key]?.data || [];
+        const weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+        const nextData = buckets.map((bucket, slot) => {
+          const dayIndex = Math.floor(slot / 24);
+          const hour = slot % 24;
+          return {
+            ...(existing[slot] || {}), slot, dayIndex, hour,
+            label: `${weekdays[dayIndex]} ${String(hour).padStart(2, "0")}:00`,
+            dayLabel: weekdays[dayIndex], hourLabel: `${String(hour).padStart(2, "0")}:00`,
+            electricity: bucket.electricity.length ? average(bucket.electricity) * 2 : null,
+            gas: bucket.gas.length ? average(bucket.gas) * 2 : null,
+          };
+        });
+        applyWeeklyTrendData(nextData, season);
+      } catch (error) {
+        console.warn("Seasonal energy trend unavailable:", error.message);
+      }
+    };
+    loadEnergy();
+    return () => { cancelled = true; };
+    // Refresh the missing energy series when the selected Trends tab opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [occupyDetail, selectedTrendSeason, isActive, dataSourceBuildingId]);
+
   const fetchCarbonMarketPrice = async () => {
     if (!isCarbonCreditTab) {
       return;
@@ -5660,6 +5730,18 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
   const shouldShowDeepDive = isCarbonCreditTab
     ? deepDiveOpen
     : Boolean(occupyDetail);
+  const occupyPerformanceTabs = !isCarbonCreditTab && building.id === "home" ? (
+    <div className="wbp-detail-header-controls">
+      <div className="wbp-detail-header-scores">
+        <span><strong>Health</strong> {formatScore(performanceBreakdown.health)}</span>
+        <span><strong>Energy</strong> {formatScore(performanceBreakdown.energy)}</span>
+      </div>
+      <div className="wbp-detail-tabs" role="tablist" aria-label="Performance views">
+        <button type="button" role="tab" aria-selected={occupyDetail === "performance"} onClick={() => setOccupyDetail("performance")}>Deep Dive</button>
+        <button type="button" role="tab" aria-selected={occupyDetail === "trends"} onClick={() => setOccupyDetail("trends")}>Trends</button>
+      </div>
+    </div>
+  ) : null;
   const toggleDeepDivePanel = (panelKey) => {
     setDeepDivePanel((currentPanel) =>
       currentPanel === panelKey ? null : panelKey
@@ -5880,9 +5962,6 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
                 ) : <span className="wbp-linear-performance-pending">Pending</span>}
               </button>
               <div className="wbp-linear-performance-scale" aria-hidden="true"><span>Low</span><span>Moderate</span><span>High</span></div>
-              <div className="wbp-linear-performance-actions">
-                <button type="button" className="wbp-linear-performance-dive" onClick={() => setOccupyDetail("trends")}>Trends</button>
-              </div>
               <div className="wbp-linear-performance-baseline">
                 <div className="flex flex-wrap items-center justify-between gap-1 text-xs font-semibold text-gray-700">
                   <span>Baseline confidence: {baselineConfidence.label}</span>
@@ -5940,12 +6019,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
           ) : null}
 
           {!shouldShowDeepDive || (!isCarbonCreditTab && occupyDetail !== "performance") ? null : (
-          <DetailSurface modal={!isCarbonCreditTab} title="Performance deep dive" onClose={() => setOccupyDetail(null)} headerExtra={!isCarbonCreditTab && building.id === "home" ? (
-            <div className="wbp-detail-header-scores">
-              <span><strong>Health</strong> {formatScore(performanceBreakdown.health)}</span>
-              <span><strong>Energy</strong> {formatScore(performanceBreakdown.energy)}</span>
-            </div>
-          ) : null}>
+          <DetailSurface modal={!isCarbonCreditTab} title={occupyPerformanceTabs ? "Performance" : "Performance deep dive"} onClose={() => setOccupyDetail(null)} headerExtra={occupyPerformanceTabs}>
           <div className="bg-white rounded border p-2.5 sm:p-4 min-w-0 overflow-hidden">
             {isCarbonCreditTab ? (
               <div className="mb-3 border-b border-gray-100 pb-2 text-xs text-gray-600">
@@ -6464,7 +6538,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
         </div>
 
         {!shouldShowDeepDive || (!isCarbonCreditTab && occupyDetail !== "trends") ? null : (
-        <DetailSurface modal={!isCarbonCreditTab} title="Seasonal performance trends" onClose={() => setOccupyDetail(null)}>
+        <DetailSurface modal={!isCarbonCreditTab} title={occupyPerformanceTabs ? "Performance" : "Seasonal performance trends"} onClose={() => setOccupyDetail(null)} headerExtra={occupyPerformanceTabs}>
         <div className="mt-4 bg-white rounded border p-3 sm:p-4 space-y-3 overflow-hidden">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
