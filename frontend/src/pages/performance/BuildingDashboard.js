@@ -5867,28 +5867,38 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
         <div className="wbp-performance-content space-y-2.5 sm:space-y-4">
           {!isCarbonCreditTab && building.id === "home" ? (
             <div className="wbp-linear-performance">
-              <div
+              <button
+                type="button"
                 className="wbp-linear-performance-track"
-                role="img"
-                aria-label={Number.isFinite(performanceValue) ? `Building performance ${Math.round(performanceValue)} out of 100` : "Building performance pending"}
+                onClick={() => setOccupyDetail("performance")}
+                aria-label={Number.isFinite(performanceValue) ? `Building performance ${Math.round(performanceValue)} out of 100. Open deep dive` : "Building performance pending. Open deep dive"}
               >
                 {Number.isFinite(performanceValue) ? (
                   <div className="wbp-linear-performance-marker" style={{ left: `${Math.max(0, Math.min(100, performanceValue))}%` }}>
                     <span>{Math.round(performanceValue)}</span>
                   </div>
                 ) : <span className="wbp-linear-performance-pending">Pending</span>}
-              </div>
+              </button>
               <div className="wbp-linear-performance-scale" aria-hidden="true"><span>Low</span><span>Moderate</span><span>High</span></div>
               <div className="wbp-linear-performance-actions">
-                <button type="button" className="wbp-linear-performance-dive" onClick={() => setOccupyDetail("performance")}>Deep Dive</button>
                 <button type="button" className="wbp-linear-performance-dive" onClick={() => setOccupyDetail("trends")}>Trends</button>
               </div>
-              <button type="button" className="wbp-linear-performance-audit" onClick={() => setActiveMrvEvidenceField("overview")} aria-label={`Open audit evidence pack, ${evidencePackScore}% ready`}>
-                <span className="flex justify-between text-xs font-semibold text-gray-700"><span>Audit evidence pack</span><span>{evidencePackScore}%</span></span>
-                <div role="progressbar" aria-label="Audit evidence readiness" aria-valuenow={evidencePackScore} aria-valuemin={0} aria-valuemax={100} className="mt-1 h-2 overflow-hidden bg-gray-200">
-                  <div className={`h-full transition-[width] duration-300 ${evidencePackScore >= 80 ? "bg-emerald-500" : evidencePackScore >= 50 ? "bg-amber-500" : "bg-red-500"}`} style={{ width: `${evidencePackScore}%` }} />
+              <div className="wbp-linear-performance-baseline">
+                <div className="flex flex-wrap items-center justify-between gap-1 text-xs font-semibold text-gray-700">
+                  <span>Baseline confidence: {baselineConfidence.label}</span>
+                  <span>{baselineConfidence.score}%</span>
                 </div>
-              </button>
+                <div role="progressbar" aria-label="Baseline confidence" aria-valuenow={baselineConfidence.score} aria-valuemin={0} aria-valuemax={100} className="mt-1 h-2 overflow-hidden bg-gray-200">
+                  <div className={`h-full transition-[width] duration-300 ${baselineConfidence.score >= 75 ? "bg-emerald-500" : baselineConfidence.score >= 30 ? "bg-amber-500" : "bg-gray-400"}`} style={{ width: `${baselineConfidence.score}%` }} />
+                </div>
+                <details className="mt-2 text-xs text-gray-600">
+                  <summary className="cursor-pointer font-semibold">Baseline milestones</summary>
+                  <p className="mt-2">{baselineConfidence.detail}</p>
+                  <ul className="mt-2 space-y-1 pl-4">
+                    {baselineConfidenceSteps.map((step) => <li key={step.label} className="list-disc">{step.complete ? "Complete" : "Needed"}: {step.label} - {step.detail}</li>)}
+                  </ul>
+                </details>
+              </div>
             </div>
           ) : isCarbonCreditTab ? (
             <div className="grid grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] sm:gap-3">
