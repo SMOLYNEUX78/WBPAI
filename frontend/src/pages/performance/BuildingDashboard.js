@@ -1660,8 +1660,29 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
       snapshotWeeklyTrend?.seasons &&
       typeof snapshotWeeklyTrend.seasons === "object"
     ) {
-      const nextArchive = { seasons: snapshotWeeklyTrend.seasons };
-      const activeSeasonRecord = snapshotWeeklyTrend.seasons[activeSeasonInfo.key];
+      const cachedSeasons = readCachedSeasonalTrendArchive().seasons;
+      const nextArchive = {
+        seasons: Object.fromEntries(
+          Object.entries({ ...cachedSeasons, ...snapshotWeeklyTrend.seasons }).map(([key, record]) => {
+            const cachedData = cachedSeasons[key]?.data;
+            const data = Array.isArray(record?.data)
+              ? record.data.map((point, index) => {
+                  const cachedPoint = cachedData?.[index];
+                  if (cachedPoint?.slot !== point?.slot) return point;
+                  const preservedEnergy = {};
+                  ["electricity", "electricityRegulated", "electricityUnregulated", "gas", "gasRegulated", "gasUnregulated"].forEach((metric) => {
+                    if (!Number.isFinite(point[metric]) && Number.isFinite(cachedPoint[metric])) {
+                      preservedEnergy[metric] = cachedPoint[metric];
+                    }
+                  });
+                  return { ...point, ...preservedEnergy };
+                })
+              : cachedData;
+            return [key, { ...record, data }];
+          })
+        ),
+      };
+      const activeSeasonRecord = nextArchive.seasons[activeSeasonInfo.key];
 
       setSeasonalTrendArchive(nextArchive);
       localStorage.setItem(
@@ -1670,7 +1691,11 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
       );
 
       if (Array.isArray(activeSeasonRecord?.data)) {
-        applyWeeklyTrendData(activeSeasonRecord.data, activeSeasonRecord);
+        setWeeklyTrendData(activeSeasonRecord.data);
+        localStorage.setItem(
+          `${dataSourceBuildingId}:weeklyTrendData`,
+          JSON.stringify(activeSeasonRecord.data)
+        );
       }
     } else if (Array.isArray(snapshotWeeklyTrend?.data)) {
       const snapshotHasFloorHumidity = snapshotWeeklyTrend.data.some(
@@ -3528,7 +3553,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
 
       const fetchEnergyIntervalRows = async () => {
         const rows = [];
-        for (let page = 0; page < 5; page += 1) {
+        for (let page = 0; page < 12; page += 1) {
           const { data, error } = await supabase
             .from("EnergyReadings")
             .select("timestamp, fuel_type, usage_kwh")
@@ -3602,10 +3627,51 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
         return data || [];
       };
 
-      const [energyIntervalRows, iaqTrendRows, outdoorTrendRows] = await Promise.all([
-        fetchEnergyIntervalRows(),
-        fetchIaqTrendRows(),
-        fetchOutdoorTrendRows(),
+      const iaqRowsPromise = fetchIaqTrendRows().catch((error) => {
+        console.warn("IAQ trend unavailable:", error.message);
+        return [];
+      });
+      const outdoorRowsPromise = fetchOutdoorTrendRows().catch((error) => {
+        console.warn("Outdoor trend unavailable:", error.message);
+        return [];
+      });
+      const energyIntervalRows = await fetchEnergyIntervalRows();
+
+      const cachedTrend = readCachedSeasonalTrendArchive().seasons[activeSeasonInfo.key]?.data;
+      if (energyIntervalRows.length && !cachedTrend?.some((point) =>
+        Number.isFinite(point.electricity) || Number.isFinite(point.gas)
+      )) {
+        const weekdayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+        const energyBuckets = Array.from({ length: 168 }, () => ({ electricity: [], gas: [] }));
+        energyIntervalRows.forEach((row) => {
+          const date = new Date(row.timestamp);
+          const usage = Number(row.usage_kwh);
+          if (Number.isNaN(date.getTime()) || !Number.isFinite(usage)) return;
+          const slot = ((date.getUTCDay() + 6) % 7) * 24 + date.getUTCHours();
+          if (energyBuckets[slot][row.fuel_type]) energyBuckets[slot][row.fuel_type].push(usage);
+        });
+        const energyFirstTrend = energyBuckets.map((bucket, slot) => {
+          const dayIndex = Math.floor(slot / 24);
+          const hour = slot % 24;
+          const previous = cachedTrend?.[slot] || {};
+          return {
+            ...previous,
+            slot,
+            dayIndex,
+            hour,
+            label: `${weekdayLabels[dayIndex]} ${String(hour).padStart(2, "0")}:00`,
+            dayLabel: weekdayLabels[dayIndex],
+            hourLabel: `${String(hour).padStart(2, "0")}:00`,
+            electricity: bucket.electricity.length ? average(bucket.electricity) * 2 : null,
+            gas: bucket.gas.length ? average(bucket.gas) * 2 : null,
+          };
+        });
+        applyWeeklyTrendData(energyFirstTrend, activeSeasonInfo);
+      }
+
+      const [iaqTrendRows, outdoorTrendRows] = await Promise.all([
+        iaqRowsPromise,
+        outdoorRowsPromise,
       ]);
 
       const weekdayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
