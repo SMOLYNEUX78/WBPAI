@@ -3722,8 +3722,6 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
           upstairsPm10: [],
           upstairsHcho: [],
           upstairsNo2: [],
-          pm25: [],
-          vocs: [],
         };
       });
 
@@ -3820,8 +3818,6 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
           pushMetric("downstairsPm25", row.pm25);
           pushMetric("downstairsVocs", row.vocs);
         }
-        pushMetric("pm25", row.pm25);
-        pushMetric("vocs", row.vocs);
       });
 
       outdoorTrendRows.forEach((row) => {
@@ -3884,8 +3880,6 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
         upstairsPm10: bucket.upstairsPm10.length ? average(bucket.upstairsPm10) : null,
         upstairsHcho: bucket.upstairsHcho.length ? average(bucket.upstairsHcho) : null,
         upstairsNo2: bucket.upstairsNo2.length ? average(bucket.upstairsNo2) : null,
-        pm25: bucket.pm25.length ? average(bucket.pm25) : null,
-        vocs: bucket.vocs.length ? average(bucket.vocs) : null,
       }));
 
       const fillSparseTrendMetric = (rows, key) => {
@@ -3950,8 +3944,6 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
         "upstairsPm10",
         "upstairsHcho",
         "upstairsNo2",
-        "pm25",
-        "vocs",
       ];
       const displayWeeklyTrend = trendValueKeys.reduce(
         (rows, key) => fillSparseTrendMetric(rows, key),
@@ -5273,32 +5265,6 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
     { key: "upstairsPm10", label: "Upstairs PM10", unit: "ug/m3", color: "#ea580c" },
     { key: "upstairsHcho", label: "Upstairs HCHO", unit: "ppb", color: "#0891b2" },
     { key: "upstairsNo2", label: "Upstairs NO2", unit: "ppb", color: "#475569" },
-    {
-      key: "pm25",
-      label: "PM2.5",
-      unit: "ug/m3",
-      color: "#ea580c",
-      displayRange: { min: 0, max: 75 },
-      healthyLimits: [{ value: 12, label: "PM2.5 norm" }],
-      healthBands: [
-        { min: 35, max: 75, color: "#fee2e2", label: "Unhealthy" },
-        { min: 12, max: 35, color: "#fef3c7", label: "Elevated" },
-        { min: 0, max: 12, color: "#dcfce7", label: "Healthy" },
-      ],
-    },
-    {
-      key: "vocs",
-      label: "VOCs",
-      unit: "ppb",
-      color: "#be123c",
-      displayRange: { min: 0, max: 1000 },
-      healthyLimits: [{ value: 200, label: "VOC norm" }],
-      healthBands: [
-        { min: 500, max: 1000, color: "#fee2e2", label: "Unhealthy" },
-        { min: 200, max: 500, color: "#fef3c7", label: "Elevated" },
-        { min: 0, max: 200, color: "#dcfce7", label: "Healthy" },
-      ],
-    },
   ];
   const seasonalTrendRecords = Object.values(
     seasonalTrendArchive?.seasons || {}
@@ -5772,7 +5738,10 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
   const visibleUpstairsMetrics = visibleTrendMetrics.filter((metric) =>
     metric.key.startsWith("upstairs")
   );
-  const showFloorMetricColumns = visibleDownstairsMetrics.length > 0 &&
+  const visibleOtherMetrics = visibleTrendMetrics.filter((metric) =>
+    !metric.key.startsWith("downstairs") && !metric.key.startsWith("upstairs")
+  );
+  const showFloorMetricColumns = visibleDownstairsMetrics.length > 0 ||
     visibleUpstairsMetrics.length > 0;
   const hoveredTrendMetric = hoveredTrendPoint
     ? visibleTrendMetrics.find((metric) =>
@@ -7104,24 +7073,20 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
               </div>
 
               {showFloorMetricColumns ? (
-                <div className="grid grid-cols-2 gap-3 text-xs">
-                  <div className="flex min-w-0 flex-col gap-2">
-                    <h4 className="border-b border-gray-300 pb-1 font-semibold">Downstairs</h4>
-                    {visibleDownstairsMetrics.map(renderTrendMetricButton)}
-                  </div>
-                  <div className="flex min-w-0 flex-col gap-2 border-l border-gray-300 pl-3">
-                    <h4 className="border-b border-gray-300 pb-1 font-semibold">Upstairs</h4>
-                    {visibleUpstairsMetrics.map(renderTrendMetricButton)}
-                  </div>
-                  {visibleTrendMetrics.filter((metric) =>
-                    !metric.key.startsWith("downstairs") && !metric.key.startsWith("upstairs")
-                  ).length > 0 ? (
-                    <div className="col-span-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                      {visibleTrendMetrics.filter((metric) =>
-                        !metric.key.startsWith("downstairs") && !metric.key.startsWith("upstairs")
-                      ).map(renderTrendMetricButton)}
+                <div className="space-y-3 text-xs">
+                  {visibleOtherMetrics.length > 0 ? (
+                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                      {visibleOtherMetrics.map(renderTrendMetricButton)}
                     </div>
                   ) : null}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="flex min-w-0 flex-col gap-2">
+                      {visibleDownstairsMetrics.map(renderTrendMetricButton)}
+                    </div>
+                    <div className="flex min-w-0 flex-col gap-2">
+                      {visibleUpstairsMetrics.map(renderTrendMetricButton)}
+                    </div>
+                  </div>
                 </div>
               ) : (
                 <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 text-xs">
