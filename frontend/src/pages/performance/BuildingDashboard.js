@@ -5732,13 +5732,13 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
     : Boolean(occupyDetail);
   const occupyPerformanceTabs = !isCarbonCreditTab && building.id === "home" ? (
     <div className="wbp-detail-header-controls">
-      <div className="wbp-detail-header-scores">
-        <span><strong>Health</strong> {formatScore(performanceBreakdown.health)}</span>
-        <span><strong>Energy</strong> {formatScore(performanceBreakdown.energy)}</span>
-      </div>
       <div className="wbp-detail-tabs" role="tablist" aria-label="Performance views">
         <button type="button" role="tab" aria-selected={occupyDetail === "performance"} onClick={() => setOccupyDetail("performance")}>Deep Dive</button>
         <button type="button" role="tab" aria-selected={occupyDetail === "trends"} onClick={() => setOccupyDetail("trends")}>Trends</button>
+      </div>
+      <div className="wbp-detail-header-scores">
+        <span><strong>Health</strong> {formatScore(performanceBreakdown.health)}</span>
+        <span><strong>Energy</strong> {formatScore(performanceBreakdown.energy)}</span>
       </div>
     </div>
   ) : null;

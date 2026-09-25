@@ -35,7 +35,7 @@
 .wbp-detail-header h2 { font-size: 16px; font-weight: 700; }
 .wbp-detail-header-scores { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-left: auto; font-size: 12px; }
 .wbp-detail-header button { padding: 6px 12px; border: 1px solid #d1d5db; background: #fff; font-size: 13px; }
-.wbp-detail-header-controls { display: flex; flex: 1; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px 16px; }
+.wbp-detail-header-controls { display: flex; flex: 1; flex-wrap: wrap; align-items: center; justify-content: flex-start; gap: 8px 16px; }
 .wbp-detail-tabs { display: flex; gap: 0; border-bottom: 1px solid #d1d5db; }
 .wbp-detail-header .wbp-detail-tabs button { border: 0; border-bottom: 2px solid transparent; color: #475569; font-weight: 600; }
 .wbp-detail-header .wbp-detail-tabs button[aria-selected="true"] { border-bottom-color: #047857; color: #065f46; }
