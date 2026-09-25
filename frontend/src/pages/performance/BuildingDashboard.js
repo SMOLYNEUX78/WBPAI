@@ -5081,7 +5081,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
       key: "internalTemp",
       label: "Internal",
       unit: "deg C",
-      color: "#059669",
+      color: "#c2410c",
       displayRange: { min: 10, max: 30 },
       healthyLimits: [
         { value: 18, label: "18 min" },
@@ -5099,7 +5099,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
       key: "externalTemp",
       label: "External",
       unit: "deg C",
-      color: "#0891b2",
+      color: "#4338ca",
       displayRange: { min: -5, max: 35 },
     },
     {
