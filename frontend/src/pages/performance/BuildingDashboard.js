@@ -8500,13 +8500,13 @@ export const NewBuildingSetupPanel = ({ freshStart = false }) => {
           },
           {
             id: "planning",
-            label: "Planning and design history",
-            status: planningRecords.length ? "found" : planningChecked ? "checked" : "action",
+            label: "Nearby planning context",
+            status: "action",
             detail: planningRecords.length
-              ? `${planningRecords.length} public record${planningRecords.length === 1 ? "" : "s"} intersect the postcode location`
+              ? `${planningRecords.length} nearby public record${planningRecords.length === 1 ? "" : "s"} found; none is confirmed as this home's permission`
               : planningChecked
-              ? "Public datasets checked; no matching record returned"
-              : "Local planning portal search still required",
+              ? "No nearby record returned by the national dataset; check the council planning portal in Design"
+              : "Council planning portal check is still needed in Design",
             provenance: "MHCLG Planning Data",
           },
           {
@@ -9006,9 +9006,14 @@ export const NewBuildingSetupPanel = ({ freshStart = false }) => {
                       {propertyDiscovery.sources
                         .filter((source) => ["address", "planning"].includes(source.id))
                         .map((source) => (
-                          <div key={source.id} className={`border p-3 text-xs ${sourceStatusClasses[source.status] || sourceStatusClasses.unavailable}`}>
-                            <p className="font-bold">{source.label}</p>
-                            <p className="mt-1">{source.detail}</p>
+                          <div key={source.id} className={`border p-3 text-xs ${sourceStatusClasses[source.id === "planning" ? "action" : source.status] || sourceStatusClasses.unavailable}`}>
+                            <p className="font-bold">{source.id === "planning" ? "Nearby planning context" : source.label}</p>
+                            <p className="mt-1">{source.id === "planning"
+                              ? propertyDiscovery.planningRecords?.length
+                                ? `${propertyDiscovery.planningRecords.length} nearby public record(s) found. Confirm any permission for this home on the council portal.`
+                                : "No nearby record returned by the national dataset. This does not confirm whether the home has planning permission."
+                              : source.detail}</p>
+                            {source.id === "planning" ? <button type="button" onClick={() => setHistoryStage("design")} className="mt-2 font-semibold text-emerald-800 underline">Check in Design</button> : null}
                           </div>
                         ))}
                     </div>
