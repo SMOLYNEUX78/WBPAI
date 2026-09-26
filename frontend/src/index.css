@@ -296,7 +296,7 @@ code {
   gap: 12px;
   opacity: 0;
   transform: translateY(12px);
-  transition: opacity 400ms ease, transform 450ms ease;
+  transition: opacity 1100ms ease, transform 1100ms ease;
 }
 
 .stage-2 .wbp-profile-name,
