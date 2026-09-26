@@ -82,10 +82,17 @@ const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed = false
   const [planningCandidates, setPlanningCandidates] = useState([]);
   const [planningStatus, setPlanningStatus] = useState("");
   const [designCouncil, setDesignCouncil] = useState("");
+  const [ecosystemStatus, setEcosystemStatus] = useState("idle");
+  const [ecosystemMatches, setEcosystemMatches] = useState([]);
+  const [useCouncilRoute, setUseCouncilRoute] = useState(false);
+  const [selectedEcosystemRecord, setSelectedEcosystemRecord] = useState(false);
   const recordId = record?.databaseId;
   const contentStage = stage || displayStage;
   const isDesign = contentStage === "design";
-  const isEastSuffolk = /east suffolk/i.test(property?.localAuthority || designCouncil);
+  const resolvedCouncil = property?.confirmedAt ? property.localAuthority : designCouncil || property?.localAuthority;
+  const isEastSuffolk = /east suffolk/i.test(resolvedCouncil || "");
+  const councilRouteOpen = ecosystemStatus === "missing" || ecosystemStatus === "error" || useCouncilRoute;
+  const showHistoryInputs = !isDesign || !contentOnly || councilRouteOpen || selectedEcosystemRecord;
   const designAddress = property?.confirmedAt ? property.address : addressDraft?.address || property?.address || "";
   const designPostcode = property?.confirmedAt ? property.postcode : addressDraft?.postcode || property?.postcode || "";
   const shownHistory = draftHistory || history;
@@ -117,6 +124,44 @@ const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed = false
 
   useEffect(() => {
     if (!isDesign || !contentOnly) return;
+    const address = designAddress.trim();
+    const cleanPostcode = designPostcode.replace(/\s+/g, "").toUpperCase();
+    setUseCouncilRoute(false);
+    setSelectedEcosystemRecord(false);
+    setEcosystemMatches([]);
+    if (!address || cleanPostcode.length < 5) { setEcosystemStatus("idle"); return; }
+    setEcosystemStatus("checking");
+    let active = true;
+    const timer = setTimeout(async () => {
+      const addressPattern = `%${address.replace(/\s+/g, "%")}%`;
+      const [projects, records] = await Promise.all([
+        supabase.from("WBPDesignProjects").select("id,title,site_address,planning_reference,design_team")
+          .ilike("site_address", addressPattern).limit(10),
+        supabase.from("WBPBuildingRecords").select("id,record_reference,lifecycle_stage,address")
+          .filter("address->>postcode", "ilike", `${cleanPostcode.slice(0, -3)}%${cleanPostcode.slice(-3)}`).limit(30),
+      ]);
+      if (!active) return;
+      const projectMatches = (projects.data || []).map((item) => ({
+        id: item.id, label: item.title || item.site_address, reference: item.planning_reference || "",
+        designTeam: item.design_team || "",
+        detail: "Design project in your account",
+      }));
+      const recordMatches = (records.data || []).filter((item) =>
+        ["design", "procurement", "build", "commission"].includes(item.lifecycle_stage) &&
+        (item.address?.postcode || "").replace(/\s+/g, "").toUpperCase() === cleanPostcode &&
+        (item.address?.address || "").trim().toLowerCase() === address.toLowerCase()
+      ).map((item) => ({ id: item.id, label: item.record_reference,
+        reference: item.record_reference, detail: "WBP building record in your account" }));
+      const matches = [...projectMatches, ...recordMatches];
+      setEcosystemMatches(matches);
+      setEcosystemStatus(matches.length ? "found" : projects.error && records.error ? "error" : "missing");
+    }, 650);
+    return () => { active = false; clearTimeout(timer); };
+  }, [isDesign, contentOnly, designAddress, designPostcode]);
+
+  useEffect(() => {
+    if (!isDesign || !contentOnly) return;
+    if (!councilRouteOpen) return;
     if (property?.planningRecords?.length && property.address === designAddress && property.postcode === designPostcode) {
       setPlanningCandidates(property.planningRecords);
       setDesignCouncil(property.localAuthority || "");
@@ -161,7 +206,7 @@ const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed = false
       }
     }, 800);
     return () => { active = false; clearTimeout(timer); };
-  }, [isDesign, contentOnly, designAddress, designPostcode, property, onPlanningLookup]);
+  }, [isDesign, contentOnly, councilRouteOpen, designAddress, designPostcode, property, onPlanningLookup]);
 
   useEffect(() => {
     if (contentOnly === false && activeStage === undefined && !stage) return;
@@ -271,21 +316,18 @@ const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed = false
       {contentStage === "audit" ? <ProfileSummaryColumns record={record} property={property} setup={setup} /> :
         <div className={isDesign ? "grid gap-3 py-2 text-xs" : "grid gap-2 py-2 text-xs sm:grid-cols-2"}>
           {isDesign && contentOnly ? <div className="min-w-0">
-            <h3 className="font-bold text-gray-900">Find design history by address</h3>
+            <h3 className="font-bold text-gray-900">Find an existing design record</h3>
             <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,2fr)_minmax(130px,1fr)]">
               <label className="font-semibold text-gray-800">Address<input value={designAddress} readOnly={Boolean(property?.confirmedAt)} onChange={(event) => onAddressDraftChange?.("address", event.target.value)} placeholder="House number and street" className="mt-1 block w-full border border-gray-300 bg-white px-2 py-1.5 font-normal" /></label>
               <label className="font-semibold text-gray-800">Postcode<input value={designPostcode} readOnly={Boolean(property?.confirmedAt)} onChange={(event) => onAddressDraftChange?.("postcode", event.target.value)} placeholder="Postcode" className="mt-1 block w-full border border-gray-300 bg-white px-2 py-1.5 font-normal uppercase" /></label>
             </div>
-            {designCouncil || property?.localAuthority ? <p className="mt-2 text-gray-700">Council: {property?.localAuthority || designCouncil}</p> : null}
-            {planningStatus ? <p role="status" className="mt-1 text-gray-700">{planningStatus}</p> : null}
-            {planningCandidates.length ? <div className="mt-2 max-h-36 overflow-y-auto border border-gray-300 bg-white p-2">
-              {planningCandidates.slice(0, 10).map((candidate, index) => <div key={`${candidate.reference}-${index}`} className="flex items-center justify-between gap-2 border-b border-gray-100 py-1 last:border-0">
-                <span className="min-w-0 break-words">{candidate.name} {candidate.reference ? `(${candidate.reference})` : ""} <span className="text-gray-500">{candidate.dataset ? `· ${candidate.dataset.replaceAll("-", " ")}` : ""}</span></span>
-                {candidate.dataset === "planning-application" ? <button type="button" onClick={() => changeHistory((current) => ({ ...current, design: { ...current.design,
-                  planningReference: candidate.reference || current.design?.planningReference || "",
-                  planningPortalUrl: candidate.documentationUrl || current.design?.planningPortalUrl || "",
-                } }))} className="shrink-0 border border-emerald-700 px-2 py-1 font-semibold text-emerald-900">Use reference</button> : null}
-              </div>)}</div> : null}
+            <p role="status" className="mt-2 text-gray-700">{ecosystemStatus === "checking" ? "Searching accessible WBP design records..." : ecosystemStatus === "found" ? `${ecosystemMatches.length} accessible design record(s) found.` : ecosystemStatus === "missing" ? "No accessible WBP design record found for this address. Continue with council records below." : ecosystemStatus === "error" ? "WBP search unavailable. Continue with council records below." : "Enter the address and postcode to search WBP."}</p>
+            {ecosystemMatches.length ? <div className="mt-2 space-y-1">{ecosystemMatches.map((item) => <div key={`${item.detail}-${item.id}`} className="flex flex-wrap items-center justify-between gap-2 border border-gray-300 bg-white px-2 py-1.5">
+              <span><strong>{item.label}</strong> <span className="text-gray-600">{item.detail}</span></span>
+              <button type="button" onClick={() => { setSelectedEcosystemRecord(true); if (item.detail.startsWith("Design project")) changeHistory((current) => ({ ...current, design: { ...current.design, planningReference: item.reference || current.design?.planningReference || "", leadDesigner: item.designTeam || current.design?.leadDesigner || "" } })); }} className="font-semibold text-emerald-800 underline">Use record details</button>
+            </div>)}</div> : null}
+            {ecosystemStatus === "found" && !useCouncilRoute ? <button type="button" onClick={() => setUseCouncilRoute(true)} className="mt-2 font-semibold text-emerald-800 underline">Use council records instead</button> : null}
+            {councilRouteOpen && resolvedCouncil ? <p className="mt-2 text-gray-700">Local authority: <strong>{resolvedCouncil}</strong></p> : null}
           </div> : <form onSubmit={searchRecord} className="min-w-0">
             <label className="block font-semibold text-emerald-950" htmlFor={`wbp-${stage}-lookup`}>Find an existing {stage} record</label>
             <div className="mt-1 flex gap-3"><label><input type="radio" name="history-lookup" checked={lookupMode === "wbp"} onChange={() => setLookupMode("wbp")} /> WBP number</label><label><input type="radio" name="history-lookup" checked={lookupMode === "address"} onChange={() => setLookupMode("address")} /> Address</label></div>
@@ -295,26 +337,36 @@ const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed = false
               <button type="submit" className="border border-emerald-700 px-2 font-semibold text-emerald-950">Search</button></div>
             {searchStatus ? <p role="status" className="mt-1 text-gray-700">{searchStatus}</p> : null}
           </form>}
-          {isDesign ? <div className="border-t border-gray-300 pt-3 text-gray-700">
-            <h3 className="font-bold text-gray-900">Or use planning records</h3>
-            <p className="mt-1">Look up the application, then enter its details below. Older plans may need to be requested from {property?.localAuthority || "the local council"}.</p>
+          {isDesign && councilRouteOpen ? <div className="border-t border-gray-300 pt-3 text-gray-700">
+            <h3 className="font-bold text-gray-900">Council planning and land charges</h3>
+            <p className="mt-1">{resolvedCouncil || "Your local authority"} may hold the application, drawings and older archived records. Check the portal before adding unverified details below.</p>
             <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
-              <a href={isEastSuffolk ? "https://publicaccess.eastsuffolk.gov.uk/online-applications/" : "https://www.gov.uk/find-local-council"} target="_blank" rel="noreferrer" className="font-semibold text-emerald-800 underline">{isEastSuffolk ? "Search East Suffolk planning" : "Find your council's planning register"}</a>
-              <a href={isEastSuffolk ? "mailto:planning@eastsuffolk.gov.uk?subject=Historical%20planning%20records%20request" : "https://www.gov.uk/find-local-council"} target={isEastSuffolk ? undefined : "_blank"} rel={isEastSuffolk ? undefined : "noreferrer"} className="font-semibold text-emerald-800 underline">{isEastSuffolk ? "Request archived plans from East Suffolk" : "Contact your council for archived plans"}</a>
+              <a href={isEastSuffolk ? "https://publicaccess.eastsuffolk.gov.uk/online-applications/" : "https://www.gov.uk/find-local-council"} target="_blank" rel="noreferrer" className="font-semibold text-emerald-800 underline">{isEastSuffolk ? "East Suffolk planning portal" : "Find this council's planning portal"}</a>
+              {isEastSuffolk ? <><a href="mailto:land.charges@eastsuffolk.gov.uk?subject=Property%20record%20enquiry" className="font-semibold text-emerald-800 underline">land.charges@eastsuffolk.gov.uk</a><a href="tel:+441394444301" className="font-semibold text-emerald-800 underline">01394 444301</a></> : <a href="https://www.gov.uk/find-local-council" target="_blank" rel="noreferrer" className="font-semibold text-emerald-800 underline">Find Local Land Charges contact</a>}
             </div>
+            {!isEastSuffolk ? <p className="mt-1 text-gray-600">We have not verified a direct planning or Land Charges contact for this council yet.</p> : null}
+            {planningStatus ? <p role="status" className="mt-1 text-gray-700">{planningStatus}</p> : null}
+            {planningCandidates.length ? <div className="mt-2 max-h-36 overflow-y-auto border border-gray-300 bg-white p-2">
+              {planningCandidates.slice(0, 10).map((candidate, index) => <div key={`${candidate.reference}-${index}`} className="flex items-center justify-between gap-2 border-b border-gray-100 py-1 last:border-0">
+                <span className="min-w-0 break-words">{candidate.name} {candidate.reference ? `(${candidate.reference})` : ""} <span className="text-gray-500">{candidate.dataset ? `· ${candidate.dataset.replaceAll("-", " ")}` : ""}</span></span>
+                {candidate.dataset === "planning-application" ? <button type="button" onClick={() => changeHistory((current) => ({ ...current, design: { ...current.design,
+                  planningReference: candidate.reference || current.design?.planningReference || "",
+                  planningPortalUrl: candidate.documentationUrl || current.design?.planningPortalUrl || "",
+                } }))} className="shrink-0 border border-emerald-700 px-2 py-1 font-semibold text-emerald-900">Use reference</button> : null}
+              </div>)}</div> : null}
           </div> : null}
-          <form onSubmit={saveHistory} className={`grid gap-2 border-t border-emerald-200 pt-2 sm:grid-cols-3 ${isDesign ? "" : "sm:col-span-2"}`}>
+          {showHistoryInputs ? <form onSubmit={saveHistory} className={`grid gap-2 border-t border-emerald-200 pt-2 sm:grid-cols-3 ${isDesign ? "" : "sm:col-span-2"}`}>
             {fields.map(([key, label]) => <label key={key} className="min-w-0 font-semibold text-emerald-950">{label}<input value={shownHistory[stage]?.[key] || ""} onChange={(event) => changeHistory((current) => ({ ...current, [stage]: { ...current[stage], [key]: event.target.value } }))} className="mt-1 block w-full min-w-0 border border-emerald-300 bg-white px-2 py-1.5 font-normal text-gray-900" /></label>)}
             <div className="flex items-end gap-2"><button type="submit" disabled={!recordId} className="bg-emerald-700 px-3 py-1.5 font-semibold text-white disabled:opacity-50">Save {stage}</button>{saveStatus ? <span role="status" className="text-gray-700">{saveStatus}</span> : null}</div>
-          </form>
-          <div className="min-w-0">
+          </form> : null}
+          {showHistoryInputs ? <div className="min-w-0">
             <label className="block font-semibold text-emerald-950" htmlFor={`wbp-${stage}-file`}>Upload historical {stage} documents</label>
             <input id={`wbp-${stage}-file`} type="file" accept=".pdf,.jpg,.jpeg,.png" disabled={busy || !recordId}
               onChange={(event) => { uploadDocument(event.target.files?.[0]); event.target.value = ""; }} className="mt-1 block w-full min-w-0 text-xs" />
             {!recordId ? <p className="mt-1 text-gray-700">Save this home before uploading.</p> : null}
             {uploadStatus ? <p role="status" className="mt-1 text-gray-700">{uploadStatus}</p> : null}
             {documents.length ? <ul className="mt-1 space-y-0.5 text-gray-700">{documents.map((item) => <li key={item.id} className="break-all">{item.original_file_name} <span className="text-gray-500">(unverified)</span></li>)}</ul> : null}
-          </div>
+          </div> : null}
         </div>}
     </div>
     </div>
