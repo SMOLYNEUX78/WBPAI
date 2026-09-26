@@ -67,12 +67,36 @@ const ProfileSummaryColumns = ({ record, property, setup = {} }) => {
 };
 const OccupyHistoryTabs = ({ record, property, setup }) => {
   const [stage, setStage] = useState("audit");
+  const [lookupMode, setLookupMode] = useState("wbp");
   const [reference, setReference] = useState("");
+  const [houseNumber, setHouseNumber] = useState("");
+  const [postcode, setPostcode] = useState("");
+  const [history, setHistory] = useState({ design: {}, build: {} });
+  const [saveStatus, setSaveStatus] = useState("");
   const [searchStatus, setSearchStatus] = useState("");
   const [uploadStatus, setUploadStatus] = useState("");
   const [busy, setBusy] = useState(false);
   const [documents, setDocuments] = useState([]);
   const recordId = record?.databaseId;
+  const fields = stage === "design" ? [
+    ["architectPractice", "Architect / practice"], ["leadDesigner", "Lead designer"],
+    ["planningReference", "Planning application reference"], ["planningDecisionDate", "Planning decision date"],
+    ["originalUse", "Original building use"], ["planningPortalUrl", "Planning portal record URL"],
+  ] : [
+    ["mainContractor", "Main contractor / builder"], ["developer", "Developer / client"],
+    ["constructionStart", "Construction start"], ["completionDate", "Completion year / date"],
+    ["buildingControlReference", "Building control / completion reference"], ["evidenceSourceUrl", "Building record URL"],
+  ];
+
+  useEffect(() => {
+    if (!recordId) { setHistory({ design: {}, build: {} }); return; }
+    let active = true;
+    supabase.from("WBPBuildingSetupDeclarations").select("setup_data")
+      .eq("building_record_id", recordId).maybeSingle().then(({ data, error }) => {
+        if (active && !error) setHistory(data?.setup_data?.historicalStages || { design: {}, build: {} });
+      });
+    return () => { active = false; };
+  }, [recordId]);
 
   useEffect(() => {
     if (stage === "audit" || !recordId) return;
@@ -92,13 +116,42 @@ const OccupyHistoryTabs = ({ record, property, setup }) => {
   const searchRecord = async (event) => {
     event.preventDefault();
     const number = reference.trim().toUpperCase();
-    if (!number) return;
+    const normalizedPostcode = postcode.trim().replace(/\s+/g, "").toUpperCase();
+    if (lookupMode === "wbp" ? !number : !houseNumber.trim() || !normalizedPostcode) return;
     setSearchStatus("Searching...");
-    const { data, error } = await supabase.from("WBPBuildingRecords")
-      .select("record_reference,lifecycle_stage").eq("record_reference", number).maybeSingle();
-    setSearchStatus(error ? `Search failed: ${error.message}` : data
-      ? `${data.record_reference} found in your accessible records (${data.lifecycle_stage}).`
+    const query = supabase.from("WBPBuildingRecords")
+      .select("record_reference,lifecycle_stage,address");
+    const { data, error } = lookupMode === "wbp"
+      ? await query.eq("record_reference", number).limit(1)
+      : await query.filter("address->>postcode", "ilike", `${normalizedPostcode.slice(0, -3)}%${normalizedPostcode.slice(-3)}`).limit(100);
+    const matches = lookupMode === "wbp" ? data : (data || []).filter((row) => {
+      const address = row.address?.address || "";
+      const savedPostcode = (row.address?.postcode || "").replace(/\s+/g, "").toUpperCase();
+      return savedPostcode === normalizedPostcode &&
+        address.toLowerCase().trim().startsWith(`${houseNumber.trim().toLowerCase()} `);
+    });
+    setSearchStatus(error ? `Search failed: ${error.message}` : matches?.length
+      ? `${matches.map((item) => item.record_reference).join(", ")} found in your accessible records.`
       : "No accessible record found. Ask the original team to share or hand over its WBP record.");
+  };
+
+  const saveHistory = async (event) => {
+    event.preventDefault();
+    if (!recordId) { setSaveStatus("Save this home to your secure account first."); return; }
+    setSaveStatus("Saving...");
+    const { data: auth, error: authError } = await supabase.auth.getUser();
+    if (authError || !auth.user) { setSaveStatus("Sign in again before saving."); return; }
+    const { data: existing, error: readError } = await supabase.from("WBPBuildingSetupDeclarations")
+      .select("setup_data").eq("building_record_id", recordId).maybeSingle();
+    if (readError) { setSaveStatus(`Save failed: ${readError.message}`); return; }
+    const setupData = { ...(existing?.setup_data || {}), historicalStages: {
+      ...(existing?.setup_data?.historicalStages || {}), [stage]: history[stage],
+    } };
+    const { error } = await supabase.from("WBPBuildingSetupDeclarations").upsert({
+      building_record_id: recordId, setup_data: setupData, updated_by: auth.user.id,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "building_record_id" });
+    setSaveStatus(error ? `Save failed: ${error.message}` : "Saved to your secure account as unverified historical information.");
   };
 
   const uploadDocument = async (file) => {
@@ -144,7 +197,7 @@ const OccupyHistoryTabs = ({ record, property, setup }) => {
   return <div className="order-2 mx-3 mt-2 border-t border-emerald-200 sm:mx-8 lg:mx-12">
     <div className="flex border-b border-emerald-200" role="tablist" aria-label="Building history">
       {["design", "build", "audit"].map((item) => <button key={item} type="button" role="tab"
-        aria-selected={stage === item} onClick={() => { setStage(item); setSearchStatus(""); setUploadStatus(""); }}
+        aria-selected={stage === item} onClick={() => { setStage(item); setSearchStatus(""); setUploadStatus(""); setSaveStatus(""); }}
         className={`min-w-0 flex-1 px-2 py-2 text-xs font-semibold capitalize transition-colors ${stage === item ? "border-b-2 border-emerald-800 text-emerald-950" : "text-emerald-800 hover:bg-emerald-50"}`}>{item}</button>)}
     </div>
     <div role="tabpanel" className="pb-2">
@@ -152,7 +205,11 @@ const OccupyHistoryTabs = ({ record, property, setup }) => {
         <div className="grid gap-2 py-2 text-xs sm:grid-cols-2">
           <form onSubmit={searchRecord} className="min-w-0">
             <label className="block font-semibold text-emerald-950" htmlFor={`wbp-${stage}-lookup`}>Find an existing {stage} record</label>
-            <div className="mt-1 flex min-w-0 gap-1"><input id={`wbp-${stage}-lookup`} value={reference} onChange={(event) => setReference(event.target.value)} placeholder="WBP number" className="min-w-0 flex-1 border border-emerald-300 bg-white px-2 py-1.5" /><button type="submit" className="border border-emerald-700 px-2 font-semibold text-emerald-950">Search</button></div>
+            <div className="mt-1 flex gap-3"><label><input type="radio" name="history-lookup" checked={lookupMode === "wbp"} onChange={() => setLookupMode("wbp")} /> WBP number</label><label><input type="radio" name="history-lookup" checked={lookupMode === "address"} onChange={() => setLookupMode("address")} /> Address</label></div>
+            <div className="mt-1 flex min-w-0 gap-1">{lookupMode === "wbp"
+              ? <input id={`wbp-${stage}-lookup`} value={reference} onChange={(event) => setReference(event.target.value)} placeholder="WBP number" className="min-w-0 flex-1 border border-emerald-300 bg-white px-2 py-1.5" />
+              : <><input aria-label="House number" value={houseNumber} onChange={(event) => setHouseNumber(event.target.value)} placeholder="No." className="w-14 min-w-0 border border-emerald-300 bg-white px-2 py-1.5" /><input aria-label="Postcode" value={postcode} onChange={(event) => setPostcode(event.target.value)} placeholder="Postcode" className="min-w-0 flex-1 border border-emerald-300 bg-white px-2 py-1.5" /></>}
+              <button type="submit" className="border border-emerald-700 px-2 font-semibold text-emerald-950">Search</button></div>
             {searchStatus ? <p role="status" className="mt-1 text-gray-700">{searchStatus}</p> : null}
           </form>
           <div className="min-w-0">
@@ -163,6 +220,10 @@ const OccupyHistoryTabs = ({ record, property, setup }) => {
             {uploadStatus ? <p role="status" className="mt-1 text-gray-700">{uploadStatus}</p> : null}
             {documents.length ? <ul className="mt-1 space-y-0.5 text-gray-700">{documents.map((item) => <li key={item.id} className="break-all">{item.original_file_name} <span className="text-gray-500">(unverified)</span></li>)}</ul> : null}
           </div>
+          <form onSubmit={saveHistory} className="grid gap-2 border-t border-emerald-200 pt-2 sm:col-span-2 sm:grid-cols-3">
+            {fields.map(([key, label]) => <label key={key} className="min-w-0 font-semibold text-emerald-950">{label}<input value={history[stage]?.[key] || ""} onChange={(event) => setHistory((current) => ({ ...current, [stage]: { ...current[stage], [key]: event.target.value } }))} className="mt-1 block w-full min-w-0 border border-emerald-300 bg-white px-2 py-1.5 font-normal text-gray-900" /></label>)}
+            <div className="flex items-end gap-2"><button type="submit" disabled={!recordId} className="bg-emerald-700 px-3 py-1.5 font-semibold text-white disabled:opacity-50">Save {stage}</button>{saveStatus ? <span role="status" className="text-gray-700">{saveStatus}</span> : null}</div>
+          </form>
         </div>}
     </div>
   </div>;
@@ -8110,9 +8171,12 @@ export const NewBuildingSetupPanel = ({ freshStart = false }) => {
     if (ownershipRecord?.databaseId) {
       const { data: auth } = await supabase.auth.getUser();
       if (auth?.user) {
+        const { data: existing, error: readError } = await supabase.from("WBPBuildingSetupDeclarations")
+          .select("setup_data").eq("building_record_id", ownershipRecord.databaseId).maybeSingle();
+        if (readError) { setSectionSaveStatus(`Save failed: ${readError.message}`); return; }
         const { error } = await supabase.from("WBPBuildingSetupDeclarations").upsert({
           building_record_id: ownershipRecord.databaseId,
-          setup_data: setup,
+          setup_data: { ...(existing?.setup_data || {}), ...setup },
           updated_by: auth.user.id,
           updated_at: new Date().toISOString(),
         }, { onConflict: "building_record_id" });
