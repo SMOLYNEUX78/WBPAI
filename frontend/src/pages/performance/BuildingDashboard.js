@@ -65,8 +65,9 @@ const ProfileSummaryColumns = ({ record, property, setup = {} }) => {
     </div>)}
   </div>;
 };
-const OccupyHistoryTabs = ({ record, property, setup }) => {
-  const [stage, setStage] = useState("audit");
+const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed = false }) => {
+  const [stage, setStage] = useState(initiallyCollapsed ? null : "audit");
+  const [displayStage, setDisplayStage] = useState("audit");
   const [lookupMode, setLookupMode] = useState("wbp");
   const [reference, setReference] = useState("");
   const [houseNumber, setHouseNumber] = useState("");
@@ -78,7 +79,8 @@ const OccupyHistoryTabs = ({ record, property, setup }) => {
   const [busy, setBusy] = useState(false);
   const [documents, setDocuments] = useState([]);
   const recordId = record?.databaseId;
-  const fields = stage === "design" ? [
+  const contentStage = stage || displayStage;
+  const fields = contentStage === "design" ? [
     ["architectPractice", "Architect / practice"], ["leadDesigner", "Lead designer"],
     ["planningReference", "Planning application reference"], ["planningDecisionDate", "Planning decision date"],
     ["originalUse", "Original building use"], ["planningPortalUrl", "Planning portal record URL"],
@@ -87,6 +89,11 @@ const OccupyHistoryTabs = ({ record, property, setup }) => {
     ["constructionStart", "Construction start"], ["completionDate", "Completion year / date"],
     ["buildingControlReference", "Building control / completion reference"], ["evidenceSourceUrl", "Building record URL"],
   ];
+
+  useEffect(() => {
+    setStage(initiallyCollapsed ? null : "audit");
+    setDisplayStage("audit");
+  }, [initiallyCollapsed]);
 
   useEffect(() => {
     if (!recordId) { setHistory({ design: {}, build: {} }); return; }
@@ -99,7 +106,7 @@ const OccupyHistoryTabs = ({ record, property, setup }) => {
   }, [recordId]);
 
   useEffect(() => {
-    if (stage === "audit" || !recordId) return;
+    if (!stage || stage === "audit" || !recordId) return;
     let active = true;
     supabase.from("WBPEvidenceVersions")
       .select("id,evidence_type,original_file_name,created_at")
@@ -197,11 +204,12 @@ const OccupyHistoryTabs = ({ record, property, setup }) => {
   return <div className="order-2 mx-3 mt-2 border-t border-emerald-200 sm:mx-8 lg:mx-12">
     <div className="flex border-b border-emerald-200" role="tablist" aria-label="Building history">
       {["design", "build", "audit"].map((item) => <button key={item} type="button" role="tab"
-        aria-selected={stage === item} onClick={() => { setStage(item); setSearchStatus(""); setUploadStatus(""); setSaveStatus(""); }}
+        aria-selected={stage === item} aria-expanded={stage === item} onClick={() => { setDisplayStage(item); setStage((current) => current === item ? null : item); setSearchStatus(""); setUploadStatus(""); setSaveStatus(""); }}
         className={`min-w-0 flex-1 px-2 py-2 text-xs font-semibold capitalize transition-colors ${stage === item ? "border-b-2 border-emerald-800 text-emerald-950" : "text-emerald-800 hover:bg-emerald-50"}`}>{item}</button>)}
     </div>
-    <div role="tabpanel" className="pb-2">
-      {stage === "audit" ? <ProfileSummaryColumns record={record} property={property} setup={setup} /> :
+    <div className={`wbp-history-panel ${stage ? "wbp-history-panel--open" : ""}`} aria-hidden={!stage}>
+    <div role="tabpanel" className="min-h-0 overflow-hidden pb-2">
+      {contentStage === "audit" ? <ProfileSummaryColumns record={record} property={property} setup={setup} /> :
         <div className="grid gap-2 py-2 text-xs sm:grid-cols-2">
           <form onSubmit={searchRecord} className="min-w-0">
             <label className="block font-semibold text-emerald-950" htmlFor={`wbp-${stage}-lookup`}>Find an existing {stage} record</label>
@@ -225,6 +233,7 @@ const OccupyHistoryTabs = ({ record, property, setup }) => {
             <div className="flex items-end gap-2"><button type="submit" disabled={!recordId} className="bg-emerald-700 px-3 py-1.5 font-semibold text-white disabled:opacity-50">Save {stage}</button>{saveStatus ? <span role="status" className="text-gray-700">{saveStatus}</span> : null}</div>
           </form>
         </div>}
+    </div>
     </div>
   </div>;
 };
@@ -6237,7 +6246,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
           </div>
         </div>
         {dataSourceBuildingId === "home" ? (
-          <OccupyHistoryTabs record={homePassport} property={homePassport?.propertyDiscovery} setup={homeSetup} />
+          <OccupyHistoryTabs record={homePassport} property={homePassport?.propertyDiscovery} setup={homeSetup} initiallyCollapsed={!isCarbonCreditTab && building.id === "home"} />
         ) : null}
       </div>
 
