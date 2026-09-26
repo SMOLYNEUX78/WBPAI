@@ -65,7 +65,7 @@ const ProfileSummaryColumns = ({ record, property, setup = {} }) => {
     </div>)}
   </div>;
 };
-const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed = false, activeStage, contentOnly = false }) => {
+const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed = false, activeStage, contentOnly = false, addressDraft, onAddressDraftChange, draftHistory, onDraftHistoryChange, onPlanningLookup }) => {
   const [localStage, setLocalStage] = useState(initiallyCollapsed ? null : "audit");
   const stage = activeStage || localStage;
   const [displayStage, setDisplayStage] = useState("audit");
@@ -79,10 +79,17 @@ const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed = false
   const [uploadStatus, setUploadStatus] = useState("");
   const [busy, setBusy] = useState(false);
   const [documents, setDocuments] = useState([]);
+  const [planningCandidates, setPlanningCandidates] = useState([]);
+  const [planningStatus, setPlanningStatus] = useState("");
+  const [designCouncil, setDesignCouncil] = useState("");
   const recordId = record?.databaseId;
   const contentStage = stage || displayStage;
   const isDesign = contentStage === "design";
-  const isEastSuffolk = /east suffolk/i.test(property?.localAuthority || "");
+  const isEastSuffolk = /east suffolk/i.test(property?.localAuthority || designCouncil);
+  const designAddress = property?.confirmedAt ? property.address : addressDraft?.address || property?.address || "";
+  const designPostcode = property?.confirmedAt ? property.postcode : addressDraft?.postcode || property?.postcode || "";
+  const shownHistory = draftHistory || history;
+  const changeHistory = onDraftHistoryChange || setHistory;
   const fields = contentStage === "design" ? [
     ["architectPractice", "Architect / practice"], ["leadDesigner", "Lead designer"],
     ["planningReference", "Planning application reference"], ["planningDecisionDate", "Planning decision date"],
@@ -99,14 +106,62 @@ const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed = false
   }, [initiallyCollapsed]);
 
   useEffect(() => {
-    if (!recordId) { setHistory({ design: {}, build: {} }); return; }
+    if (!recordId) { if (!onDraftHistoryChange) setHistory({ design: {}, build: {} }); return; }
     let active = true;
     supabase.from("WBPBuildingSetupDeclarations").select("setup_data")
       .eq("building_record_id", recordId).maybeSingle().then(({ data, error }) => {
-        if (active && !error) setHistory(data?.setup_data?.historicalStages || { design: {}, build: {} });
+        if (active && !error && data?.setup_data?.historicalStages) changeHistory(data.setup_data.historicalStages);
       });
     return () => { active = false; };
-  }, [recordId]);
+  }, [recordId, onDraftHistoryChange, changeHistory]);
+
+  useEffect(() => {
+    if (!isDesign || !contentOnly) return;
+    if (property?.planningRecords?.length && property.address === designAddress && property.postcode === designPostcode) {
+      setPlanningCandidates(property.planningRecords);
+      setDesignCouncil(property.localAuthority || "");
+      setPlanningStatus("Nearby public planning records found during the Ownership address check. Check the council portal to confirm any match.");
+      return;
+    }
+    const cleanPostcode = designPostcode.replace(/\s+/g, "").toUpperCase();
+    if (!designAddress.trim() || cleanPostcode.length < 5) { setPlanningCandidates([]); setPlanningStatus(""); return; }
+    let active = true;
+    const timer = setTimeout(async () => {
+      setPlanningStatus("Checking postcode and nearby public planning records...");
+      try {
+        const response = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(cleanPostcode)}`);
+        if (!response.ok) throw new Error("Postcode not found");
+        const result = (await response.json())?.result;
+        if (!result?.latitude || !result?.longitude) throw new Error("Location unavailable");
+        if (!active) return;
+        setDesignCouncil(result.admin_district || "");
+        const url = new URL("https://www.planning.data.gov.uk/entity.json");
+        url.searchParams.set("latitude", result.latitude);
+        url.searchParams.set("longitude", result.longitude);
+        url.searchParams.set("limit", "25");
+        PROPERTY_DISCOVERY_DATASETS.forEach((dataset) => url.searchParams.append("dataset", dataset));
+        const planningResponse = await fetch(url.toString());
+        if (!planningResponse.ok) throw new Error("Planning data unavailable");
+        const entities = (await planningResponse.json())?.entities || [];
+        if (!active) return;
+        const candidates = entities.map((entity) => ({
+          dataset: entity.dataset || entity.typology || "",
+          name: entity.name || entity.reference || "Planning record",
+          reference: entity.reference || entity.entity || "",
+          documentationUrl: entity["documentation-url"] || entity.documentation_url || "",
+          startDate: entity["start-date"] || entity.start_date || "",
+        }));
+        setPlanningCandidates(candidates);
+        onPlanningLookup?.({ address: designAddress.trim(), postcode: cleanPostcode,
+          localAuthority: result.admin_district || "", latitude: result.latitude,
+          longitude: result.longitude, planningRecords: candidates });
+        setPlanningStatus(entities.length ? "Nearby public records only. Confirm the address and permission on the council portal." : "No nearby public record returned. Search the council portal or request archived plans.");
+      } catch {
+        if (active) { setPlanningCandidates([]); setPlanningStatus("Automatic planning lookup unavailable. Use the council portal below."); }
+      }
+    }, 800);
+    return () => { active = false; clearTimeout(timer); };
+  }, [isDesign, contentOnly, designAddress, designPostcode, property, onPlanningLookup]);
 
   useEffect(() => {
     if (contentOnly === false && activeStage === undefined && !stage) return;
@@ -156,7 +211,7 @@ const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed = false
       .select("setup_data").eq("building_record_id", recordId).maybeSingle();
     if (readError) { setSaveStatus(`Save failed: ${readError.message}`); return; }
     const setupData = { ...(existing?.setup_data || {}), historicalStages: {
-      ...(existing?.setup_data?.historicalStages || {}), [stage]: history[stage],
+      ...(existing?.setup_data?.historicalStages || {}), [stage]: shownHistory[stage],
     } };
     const { error } = await supabase.from("WBPBuildingSetupDeclarations").upsert({
       building_record_id: recordId, setup_data: setupData, updated_by: auth.user.id,
@@ -215,7 +270,23 @@ const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed = false
     <div role="tabpanel" className="min-h-0 overflow-hidden pb-2">
       {contentStage === "audit" ? <ProfileSummaryColumns record={record} property={property} setup={setup} /> :
         <div className={isDesign ? "grid gap-3 py-2 text-xs" : "grid gap-2 py-2 text-xs sm:grid-cols-2"}>
-          <form onSubmit={searchRecord} className="min-w-0">
+          {isDesign && contentOnly ? <div className="min-w-0">
+            <h3 className="font-bold text-gray-900">Find design history by address</h3>
+            <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,2fr)_minmax(130px,1fr)]">
+              <label className="font-semibold text-gray-800">Address<input value={designAddress} readOnly={Boolean(property?.confirmedAt)} onChange={(event) => onAddressDraftChange?.("address", event.target.value)} placeholder="House number and street" className="mt-1 block w-full border border-gray-300 bg-white px-2 py-1.5 font-normal" /></label>
+              <label className="font-semibold text-gray-800">Postcode<input value={designPostcode} readOnly={Boolean(property?.confirmedAt)} onChange={(event) => onAddressDraftChange?.("postcode", event.target.value)} placeholder="Postcode" className="mt-1 block w-full border border-gray-300 bg-white px-2 py-1.5 font-normal uppercase" /></label>
+            </div>
+            {designCouncil || property?.localAuthority ? <p className="mt-2 text-gray-700">Council: {property?.localAuthority || designCouncil}</p> : null}
+            {planningStatus ? <p role="status" className="mt-1 text-gray-700">{planningStatus}</p> : null}
+            {planningCandidates.length ? <div className="mt-2 max-h-36 overflow-y-auto border border-gray-300 bg-white p-2">
+              {planningCandidates.slice(0, 10).map((candidate, index) => <div key={`${candidate.reference}-${index}`} className="flex items-center justify-between gap-2 border-b border-gray-100 py-1 last:border-0">
+                <span className="min-w-0 break-words">{candidate.name} {candidate.reference ? `(${candidate.reference})` : ""} <span className="text-gray-500">{candidate.dataset ? `· ${candidate.dataset.replaceAll("-", " ")}` : ""}</span></span>
+                {candidate.dataset === "planning-application" ? <button type="button" onClick={() => changeHistory((current) => ({ ...current, design: { ...current.design,
+                  planningReference: candidate.reference || current.design?.planningReference || "",
+                  planningPortalUrl: candidate.documentationUrl || current.design?.planningPortalUrl || "",
+                } }))} className="shrink-0 border border-emerald-700 px-2 py-1 font-semibold text-emerald-900">Use reference</button> : null}
+              </div>)}</div> : null}
+          </div> : <form onSubmit={searchRecord} className="min-w-0">
             <label className="block font-semibold text-emerald-950" htmlFor={`wbp-${stage}-lookup`}>Find an existing {stage} record</label>
             <div className="mt-1 flex gap-3"><label><input type="radio" name="history-lookup" checked={lookupMode === "wbp"} onChange={() => setLookupMode("wbp")} /> WBP number</label><label><input type="radio" name="history-lookup" checked={lookupMode === "address"} onChange={() => setLookupMode("address")} /> Address</label></div>
             <div className="mt-1 flex min-w-0 gap-1">{lookupMode === "wbp"
@@ -223,7 +294,7 @@ const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed = false
               : <><input aria-label="House number" value={houseNumber} onChange={(event) => setHouseNumber(event.target.value)} placeholder="No." className="w-14 min-w-0 border border-emerald-300 bg-white px-2 py-1.5" /><input aria-label="Postcode" value={postcode} onChange={(event) => setPostcode(event.target.value)} placeholder="Postcode" className="min-w-0 flex-1 border border-emerald-300 bg-white px-2 py-1.5" /></>}
               <button type="submit" className="border border-emerald-700 px-2 font-semibold text-emerald-950">Search</button></div>
             {searchStatus ? <p role="status" className="mt-1 text-gray-700">{searchStatus}</p> : null}
-          </form>
+          </form>}
           {isDesign ? <div className="border-t border-gray-300 pt-3 text-gray-700">
             <h3 className="font-bold text-gray-900">Or use planning records</h3>
             <p className="mt-1">Look up the application, then enter its details below. Older plans may need to be requested from {property?.localAuthority || "the local council"}.</p>
@@ -233,7 +304,7 @@ const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed = false
             </div>
           </div> : null}
           <form onSubmit={saveHistory} className={`grid gap-2 border-t border-emerald-200 pt-2 sm:grid-cols-3 ${isDesign ? "" : "sm:col-span-2"}`}>
-            {fields.map(([key, label]) => <label key={key} className="min-w-0 font-semibold text-emerald-950">{label}<input value={history[stage]?.[key] || ""} onChange={(event) => setHistory((current) => ({ ...current, [stage]: { ...current[stage], [key]: event.target.value } }))} className="mt-1 block w-full min-w-0 border border-emerald-300 bg-white px-2 py-1.5 font-normal text-gray-900" /></label>)}
+            {fields.map(([key, label]) => <label key={key} className="min-w-0 font-semibold text-emerald-950">{label}<input value={shownHistory[stage]?.[key] || ""} onChange={(event) => changeHistory((current) => ({ ...current, [stage]: { ...current[stage], [key]: event.target.value } }))} className="mt-1 block w-full min-w-0 border border-emerald-300 bg-white px-2 py-1.5 font-normal text-gray-900" /></label>)}
             <div className="flex items-end gap-2"><button type="submit" disabled={!recordId} className="bg-emerald-700 px-3 py-1.5 font-semibold text-white disabled:opacity-50">Save {stage}</button>{saveStatus ? <span role="status" className="text-gray-700">{saveStatus}</span> : null}</div>
           </form>
           <div className="min-w-0">
@@ -7807,6 +7878,8 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
 export const NewBuildingSetupPanel = ({ freshStart = false }) => {
   const [setupTab, setSetupTab] = useState("ownership");
   const [historyStage, setHistoryStage] = useState("audit");
+  const [historyDraft, setHistoryDraft] = useState({ design: {}, build: {} });
+  const [designPlanningLookup, setDesignPlanningLookup] = useState(null);
   const setupPanelRef = useRef(null);
   const setupContentRef = useRef(null);
   const previousPanelHeightRef = useRef(null);
@@ -8346,12 +8419,14 @@ export const NewBuildingSetupPanel = ({ freshStart = false }) => {
     setDiscoveryError("");
 
     try {
-      let latitude = Number(propertySearch.latitude) || null;
-      let longitude = Number(propertySearch.longitude) || null;
-      let localAuthority = "";
-      let postcodeMatched = false;
+      const sharedLookup = designPlanningLookup?.address.toLowerCase() === propertySearch.address.trim().toLowerCase()
+        && designPlanningLookup?.postcode === postcode.replace(/\s+/g, "");
+      let latitude = Number(propertySearch.latitude) || (sharedLookup ? designPlanningLookup.latitude : null);
+      let longitude = Number(propertySearch.longitude) || (sharedLookup ? designPlanningLookup.longitude : null);
+      let localAuthority = sharedLookup ? designPlanningLookup.localAuthority : "";
+      let postcodeMatched = Boolean(sharedLookup);
 
-      try {
+      if (!sharedLookup) try {
         const postcodeResponse = await fetch(
           `https://api.postcodes.io/postcodes/${encodeURIComponent(postcode.replace(/\s/g, ""))}`
         );
@@ -8366,9 +8441,9 @@ export const NewBuildingSetupPanel = ({ freshStart = false }) => {
         // Manual coordinates still allow discovery when postcode lookup is unavailable.
       }
 
-      const planningRecords = [];
-      let planningChecked = false;
-      if (latitude && longitude) {
+      const planningRecords = sharedLookup ? designPlanningLookup.planningRecords : [];
+      let planningChecked = Boolean(sharedLookup);
+      if (latitude && longitude && !sharedLookup) {
         const planningUrl = new URL("https://www.planning.data.gov.uk/entity.json");
         planningUrl.searchParams.set("latitude", latitude);
         planningUrl.searchParams.set("longitude", longitude);
@@ -9672,7 +9747,9 @@ export const NewBuildingSetupPanel = ({ freshStart = false }) => {
       </> : <div ref={setupPanelRef} className="overflow-hidden"><div ref={setupContentRef}>
         <OccupyHistoryTabs key={historyStage} record={ownershipRecord} property={ownershipProperty}
           setup={{ energyConsent, historicalDataFileName, healthSensors, sensorEvidenceFileName, carbonSelections }}
-          activeStage={historyStage} contentOnly />
+          activeStage={historyStage} contentOnly addressDraft={propertySearch}
+          onAddressDraftChange={(field, value) => { setPropertySearch((current) => ({ ...current, [field]: value })); if (!propertyDiscovery?.confirmedAt) setPropertyDiscovery(null); }}
+          draftHistory={historyDraft} onDraftHistoryChange={setHistoryDraft} onPlanningLookup={setDesignPlanningLookup} />
       </div></div>}
       </section>
     </div>
