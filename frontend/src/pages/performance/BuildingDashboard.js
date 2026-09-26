@@ -65,8 +65,9 @@ const ProfileSummaryColumns = ({ record, property, setup = {} }) => {
     </div>)}
   </div>;
 };
-const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed = false }) => {
-  const [stage, setStage] = useState(initiallyCollapsed ? null : "audit");
+const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed = false, activeStage, contentOnly = false }) => {
+  const [localStage, setLocalStage] = useState(initiallyCollapsed ? null : "audit");
+  const stage = activeStage || localStage;
   const [displayStage, setDisplayStage] = useState("audit");
   const [lookupMode, setLookupMode] = useState("wbp");
   const [reference, setReference] = useState("");
@@ -91,7 +92,7 @@ const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed = false
   ];
 
   useEffect(() => {
-    setStage(initiallyCollapsed ? null : "audit");
+    setLocalStage(initiallyCollapsed ? null : "audit");
     setDisplayStage("audit");
   }, [initiallyCollapsed]);
 
@@ -106,7 +107,8 @@ const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed = false
   }, [recordId]);
 
   useEffect(() => {
-    if (!stage || stage === "audit" || !recordId) return;
+    if (contentOnly === false && activeStage === undefined && !stage) return;
+    if (stage === "audit" || !recordId) return;
     let active = true;
     supabase.from("WBPEvidenceVersions")
       .select("id,evidence_type,original_file_name,created_at")
@@ -118,7 +120,7 @@ const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed = false
         if (error) setUploadStatus(`Could not load documents: ${error.message}`);
       });
     return () => { active = false; };
-  }, [stage, recordId]);
+  }, [stage, recordId, contentOnly, activeStage]);
 
   const searchRecord = async (event) => {
     event.preventDefault();
@@ -201,12 +203,12 @@ const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed = false
     } finally { setBusy(false); }
   };
 
-  return <div className="order-2 mx-3 mt-2 border-t border-emerald-200 sm:mx-8 lg:mx-12">
-    <div className="flex border-b border-emerald-200" role="tablist" aria-label="Building history">
+  return <div className={contentOnly ? "min-w-0" : "order-2 mx-3 mt-2 border-t border-emerald-200 sm:mx-8 lg:mx-12"}>
+    {!contentOnly ? <div className="flex border-b border-emerald-200" role="tablist" aria-label="Building history">
       {["design", "build", "audit"].map((item) => <button key={item} type="button" role="tab"
-        aria-selected={stage === item} aria-expanded={stage === item} onClick={() => { setDisplayStage(item); setStage((current) => current === item ? null : item); setSearchStatus(""); setUploadStatus(""); setSaveStatus(""); }}
+        aria-selected={stage === item} aria-expanded={stage === item} onClick={() => { setDisplayStage(item); setLocalStage((current) => current === item ? null : item); setSearchStatus(""); setUploadStatus(""); setSaveStatus(""); }}
         className={`min-w-0 flex-1 px-2 py-2 text-xs font-semibold capitalize transition-colors ${stage === item ? "border-b-2 border-emerald-800 text-emerald-950" : "text-emerald-800 hover:bg-emerald-50"}`}>{item}</button>)}
-    </div>
+    </div> : null}
     <div className={`wbp-history-panel ${stage ? "wbp-history-panel--open" : ""}`} aria-hidden={!stage}>
     <div role="tabpanel" className="min-h-0 overflow-hidden pb-2">
       {contentStage === "audit" ? <ProfileSummaryColumns record={record} property={property} setup={setup} /> :
@@ -7794,6 +7796,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
 
 export const NewBuildingSetupPanel = ({ freshStart = false }) => {
   const [setupTab, setSetupTab] = useState("ownership");
+  const [historyStage, setHistoryStage] = useState("audit");
   const setupPanelRef = useRef(null);
   const setupContentRef = useRef(null);
   const previousPanelHeightRef = useRef(null);
@@ -8735,7 +8738,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false }) => {
       { duration: 320, easing: "ease-out" }
     );
     return () => animation.cancel();
-  }, [setupTab, ownershipRecord]);
+  }, [setupTab, historyStage, ownershipRecord]);
 
   useEffect(() => {
     const panel = setupPanelRef.current;
@@ -8771,13 +8774,18 @@ export const NewBuildingSetupPanel = ({ freshStart = false }) => {
             <p className="break-words text-xs text-gray-700">Internal area: {manualData.internalArea ? `${manualData.internalArea} m2` : isBridgewoodProfile ? `${HOME_BUILDING.estimatedInternalArea} m2 (model estimate)` : "Pending"}</p>
           </div>
         </div>
-        <OccupyHistoryTabs record={ownershipRecord} property={ownershipProperty} setup={{ energyConsent, historicalDataFileName, healthSensors, sensorEvidenceFileName, carbonSelections }} />
+        <div className="mx-3 mt-2 flex border-t border-emerald-200 sm:mx-8 lg:mx-12" role="tablist" aria-label="Building history">
+          {["design", "build", "audit"].map((item) => <button key={item} type="button" role="tab" aria-selected={historyStage === item}
+            onClick={() => setHistoryStage(item)}
+            className={`min-w-0 flex-1 px-2 py-2 text-xs font-semibold capitalize transition-colors ${historyStage === item ? "border-b-2 border-emerald-800 text-emerald-950" : "text-emerald-800 hover:bg-emerald-50"}`}>{item}</button>)}
+        </div>
         {ownershipRecord ? <>
           {passportSaveStatus !== "saved" ? <div className="mx-3 mt-4 flex justify-end sm:mx-8 lg:mx-12"><button type="button" disabled={passportSaveStatus === "saving"} onClick={secureExistingPassport} className="bg-emerald-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">{passportSaveStatus === "saving" ? "Saving..." : "Save to secure account"}</button></div> : null}
           {passportSaveError ? <p className="mx-3 mt-3 border border-red-200 bg-red-50 p-2 text-xs text-red-800 sm:mx-8 lg:mx-12">{passportSaveError}</p> : null}
         </> : null}
       </section>
       <section className="m-4 bg-gray-100 p-4 rounded shadow">
+      {historyStage === "audit" ? <>
       <header className="border-b border-gray-300">
       <nav className="relative -mb-px grid w-full min-w-0 grid-cols-4 gap-1 sm:flex sm:justify-center" role="tablist" aria-label="New building sections">
         {[["ownership", "Ownership"], ["measurements", "Measurements"], ["performance", "Performance"], ["carbon", "Carbon Context"]].map(([id, label]) => (
@@ -9651,6 +9659,11 @@ export const NewBuildingSetupPanel = ({ freshStart = false }) => {
       {setupTab !== "ownership" ? <div className="mt-4 flex items-center justify-end gap-3 border-t border-gray-200 pt-4"><span role="status" className="text-xs text-gray-600">{sectionSaveStatus === `${setupTab} saved on this device` ? "Saved on this device" : sectionSaveStatus === `${setupTab} saved to account` ? "Saved to account" : ""}</span><button type="button" onClick={saveSetupSection} className="bg-emerald-700 px-4 py-2 text-sm font-bold text-white">Save {setupTab === "carbon" ? "carbon context" : setupTab}</button></div> : null}
       </div>
       </div>
+      </> : <div ref={setupPanelRef} className="overflow-hidden"><div ref={setupContentRef}>
+        <OccupyHistoryTabs key={historyStage} record={ownershipRecord} property={ownershipProperty}
+          setup={{ energyConsent, historicalDataFileName, healthSensors, sensorEvidenceFileName, carbonSelections }}
+          activeStage={historyStage} contentOnly />
+      </div></div>}
       </section>
     </div>
   );
