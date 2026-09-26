@@ -81,6 +81,8 @@ const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed = false
   const [documents, setDocuments] = useState([]);
   const recordId = record?.databaseId;
   const contentStage = stage || displayStage;
+  const isDesign = contentStage === "design";
+  const isEastSuffolk = /east suffolk/i.test(property?.localAuthority || "");
   const fields = contentStage === "design" ? [
     ["architectPractice", "Architect / practice"], ["leadDesigner", "Lead designer"],
     ["planningReference", "Planning application reference"], ["planningDecisionDate", "Planning decision date"],
@@ -212,7 +214,7 @@ const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed = false
     <div className={`wbp-history-panel ${stage ? "wbp-history-panel--open" : ""}`} aria-hidden={!stage}>
     <div role="tabpanel" className="min-h-0 overflow-hidden pb-2">
       {contentStage === "audit" ? <ProfileSummaryColumns record={record} property={property} setup={setup} /> :
-        <div className="grid gap-2 py-2 text-xs sm:grid-cols-2">
+        <div className={isDesign ? "grid gap-3 py-2 text-xs" : "grid gap-2 py-2 text-xs sm:grid-cols-2"}>
           <form onSubmit={searchRecord} className="min-w-0">
             <label className="block font-semibold text-emerald-950" htmlFor={`wbp-${stage}-lookup`}>Find an existing {stage} record</label>
             <div className="mt-1 flex gap-3"><label><input type="radio" name="history-lookup" checked={lookupMode === "wbp"} onChange={() => setLookupMode("wbp")} /> WBP number</label><label><input type="radio" name="history-lookup" checked={lookupMode === "address"} onChange={() => setLookupMode("address")} /> Address</label></div>
@@ -222,6 +224,18 @@ const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed = false
               <button type="submit" className="border border-emerald-700 px-2 font-semibold text-emerald-950">Search</button></div>
             {searchStatus ? <p role="status" className="mt-1 text-gray-700">{searchStatus}</p> : null}
           </form>
+          {isDesign ? <div className="border-t border-gray-300 pt-3 text-gray-700">
+            <h3 className="font-bold text-gray-900">Or use planning records</h3>
+            <p className="mt-1">Look up the application, then enter its details below. Older plans may need to be requested from {property?.localAuthority || "the local council"}.</p>
+            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+              <a href={isEastSuffolk ? "https://publicaccess.eastsuffolk.gov.uk/online-applications/" : "https://www.gov.uk/find-local-council"} target="_blank" rel="noreferrer" className="font-semibold text-emerald-800 underline">{isEastSuffolk ? "Search East Suffolk planning" : "Find your council's planning register"}</a>
+              <a href={isEastSuffolk ? "mailto:planning@eastsuffolk.gov.uk?subject=Historical%20planning%20records%20request" : "https://www.gov.uk/find-local-council"} target={isEastSuffolk ? undefined : "_blank"} rel={isEastSuffolk ? undefined : "noreferrer"} className="font-semibold text-emerald-800 underline">{isEastSuffolk ? "Request archived plans from East Suffolk" : "Contact your council for archived plans"}</a>
+            </div>
+          </div> : null}
+          <form onSubmit={saveHistory} className={`grid gap-2 border-t border-emerald-200 pt-2 sm:grid-cols-3 ${isDesign ? "" : "sm:col-span-2"}`}>
+            {fields.map(([key, label]) => <label key={key} className="min-w-0 font-semibold text-emerald-950">{label}<input value={history[stage]?.[key] || ""} onChange={(event) => setHistory((current) => ({ ...current, [stage]: { ...current[stage], [key]: event.target.value } }))} className="mt-1 block w-full min-w-0 border border-emerald-300 bg-white px-2 py-1.5 font-normal text-gray-900" /></label>)}
+            <div className="flex items-end gap-2"><button type="submit" disabled={!recordId} className="bg-emerald-700 px-3 py-1.5 font-semibold text-white disabled:opacity-50">Save {stage}</button>{saveStatus ? <span role="status" className="text-gray-700">{saveStatus}</span> : null}</div>
+          </form>
           <div className="min-w-0">
             <label className="block font-semibold text-emerald-950" htmlFor={`wbp-${stage}-file`}>Upload historical {stage} documents</label>
             <input id={`wbp-${stage}-file`} type="file" accept=".pdf,.jpg,.jpeg,.png" disabled={busy || !recordId}
@@ -230,10 +244,6 @@ const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed = false
             {uploadStatus ? <p role="status" className="mt-1 text-gray-700">{uploadStatus}</p> : null}
             {documents.length ? <ul className="mt-1 space-y-0.5 text-gray-700">{documents.map((item) => <li key={item.id} className="break-all">{item.original_file_name} <span className="text-gray-500">(unverified)</span></li>)}</ul> : null}
           </div>
-          <form onSubmit={saveHistory} className="grid gap-2 border-t border-emerald-200 pt-2 sm:col-span-2 sm:grid-cols-3">
-            {fields.map(([key, label]) => <label key={key} className="min-w-0 font-semibold text-emerald-950">{label}<input value={history[stage]?.[key] || ""} onChange={(event) => setHistory((current) => ({ ...current, [stage]: { ...current[stage], [key]: event.target.value } }))} className="mt-1 block w-full min-w-0 border border-emerald-300 bg-white px-2 py-1.5 font-normal text-gray-900" /></label>)}
-            <div className="flex items-end gap-2"><button type="submit" disabled={!recordId} className="bg-emerald-700 px-3 py-1.5 font-semibold text-white disabled:opacity-50">Save {stage}</button>{saveStatus ? <span role="status" className="text-gray-700">{saveStatus}</span> : null}</div>
-          </form>
         </div>}
     </div>
     </div>
@@ -8761,7 +8771,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false }) => {
 
   return (
     <div className="bg-white">
-      <section className="border-b border-emerald-200 bg-emerald-100 pb-3">
+      <section className="border-b border-emerald-200 bg-emerald-100">
         <div className="grid min-h-[170px] min-w-0 grid-cols-2 items-stretch sm:min-h-[200px]">
           <div className="relative min-w-0">
             {embedUrl ? <iframe title="3D model preview" src={embedUrl} className="absolute inset-0 block h-full w-full border-0 bg-white" allow="autoplay; fullscreen; xr-spatial-tracking; accelerometer; gyroscope; vr" allowFullScreen />
@@ -8777,14 +8787,14 @@ export const NewBuildingSetupPanel = ({ freshStart = false }) => {
         <div className="mx-3 mt-2 flex border-t border-emerald-200 sm:mx-8 lg:mx-12" role="tablist" aria-label="Building history">
           {["design", "build", "audit"].map((item) => <button key={item} type="button" role="tab" aria-selected={historyStage === item}
             onClick={() => setHistoryStage(item)}
-            className={`min-w-0 flex-1 px-2 py-2 text-xs font-semibold capitalize transition-colors ${historyStage === item ? "border-b-2 border-emerald-800 text-emerald-950" : "text-emerald-800 hover:bg-emerald-50"}`}>{item}</button>)}
+            className={`min-w-0 flex-1 border-x border-t px-2 py-2 text-xs font-semibold capitalize transition-colors ${historyStage === item ? "border-gray-300 bg-gray-100 text-gray-950" : "border-transparent bg-emerald-100 text-emerald-800 hover:bg-emerald-50"}`}>{item}</button>)}
         </div>
         {ownershipRecord ? <>
           {passportSaveStatus !== "saved" ? <div className="mx-3 mt-4 flex justify-end sm:mx-8 lg:mx-12"><button type="button" disabled={passportSaveStatus === "saving"} onClick={secureExistingPassport} className="bg-emerald-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">{passportSaveStatus === "saving" ? "Saving..." : "Save to secure account"}</button></div> : null}
           {passportSaveError ? <p className="mx-3 mt-3 border border-red-200 bg-red-50 p-2 text-xs text-red-800 sm:mx-8 lg:mx-12">{passportSaveError}</p> : null}
         </> : null}
       </section>
-      <section className="m-4 bg-gray-100 p-4 rounded shadow">
+      <section className="mx-4 mb-4 bg-gray-100 p-4 shadow">
       {historyStage === "audit" ? <>
       <header className="border-b border-gray-300">
       <nav className="relative -mb-px grid w-full min-w-0 grid-cols-4 gap-1 sm:flex sm:justify-center" role="tablist" aria-label="New building sections">
