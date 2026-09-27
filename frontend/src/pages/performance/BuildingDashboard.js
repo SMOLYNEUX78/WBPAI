@@ -37,6 +37,31 @@ const readSavedHomePassport = () => {
   catch { return null; }
 };
 
+export const testPrivateEvidenceStorage = async (client, buildingRecordId, file) => {
+  if (!buildingRecordId) throw new Error("Save the home profile before testing private storage.");
+  if (!file || !["image/jpeg", "image/png"].includes(file.type) || file.size > 2 * 1024 * 1024) {
+    throw new Error("Choose a JPG or PNG test image no larger than 2 MB.");
+  }
+  const { data: auth, error: authError } = await client.auth.getUser();
+  if (authError || !auth?.user) throw new Error("Sign in again before testing private storage.");
+  const path = `${auth.user.id}/${buildingRecordId}/test-${window.crypto.randomUUID()}`;
+  const bucket = client.storage.from("wbp-private-evidence");
+  const { error: uploadError } = await bucket.upload(path, file, { contentType: file.type, upsert: false });
+  if (uploadError) throw new Error(`Private upload failed: ${uploadError.message}`);
+
+  let readError;
+  try {
+    const { data, error } = await bucket.download(path);
+    if (error || !data || data.size !== file.size) {
+      readError = new Error(`Private read failed: ${error?.message || "The downloaded image did not match the upload."}`);
+    }
+  } finally {
+    const { error: removeError } = await bucket.remove([path]);
+    if (removeError) throw new Error(`The test image could not be removed: ${removeError.message}`);
+  }
+  if (readError) throw readError;
+};
+
 export const findHomeProfileForOverwrite = async (client) => {
   const { data: auth, error: authError } = await client.auth.getUser();
   if (authError || !auth?.user) throw new Error("Sign in again before saving this home profile.");
@@ -8242,6 +8267,22 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   const [ownershipDocuments, setOwnershipDocuments] = useState({});
   const [ownershipUploadBusy, setOwnershipUploadBusy] = useState("");
   const [ownershipUploadStatus, setOwnershipUploadStatus] = useState("");
+  const testImageUploadRef = useRef(null);
+  const [storageTestBusy, setStorageTestBusy] = useState(false);
+  const [storageTestStatus, setStorageTestStatus] = useState("");
+  const checkPrivateUpload = async (file) => {
+    if (!file) return;
+    setStorageTestBusy(true);
+    setStorageTestStatus("");
+    try {
+      await testPrivateEvidenceStorage(supabase, ownershipRecord?.databaseId, file);
+      setStorageTestStatus("Test passed: the image was uploaded privately, read back, and removed. This does not verify the bucket's access rules for other accounts.");
+    } catch (error) {
+      setStorageTestStatus(error.message || "Private storage test failed.");
+    } finally {
+      setStorageTestBusy(false);
+    }
+  };
   useEffect(() => {
     if (!ownershipRecord?.databaseId) { setOwnershipClaim(null); return; }
     let active = true;
@@ -9474,6 +9515,13 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
 
             <div className="mt-4">
               <p className="mb-3 border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950">Documents are kept private. Uploading them submits evidence only; identity and HM Land Registry matching are not automated yet, and no ownership status is verified by an upload.</p>
+              <div className="mb-3 border border-gray-200 bg-gray-50 p-3 text-xs text-gray-700">
+                <strong>Test private upload</strong>
+                <p className="mt-1">Use a harmless JPG or PNG under 2 MB. WBP will upload it, read it back and remove it. It will not become identity or ownership evidence.</p>
+                <input ref={testImageUploadRef} type="file" accept=".jpg,.jpeg,.png,image/jpeg,image/png" aria-label="Test image file" className="sr-only" onChange={(event) => { checkPrivateUpload(event.target.files?.[0]); event.target.value = ""; }} />
+                <button type="button" disabled={!ownershipRecord.databaseId || storageTestBusy} onClick={() => testImageUploadRef.current?.click()} className="mt-2 border border-emerald-700 bg-white px-3 py-2 font-bold text-emerald-800 disabled:opacity-50">{storageTestBusy ? "Testing upload..." : "Test with an image"}</button>
+                {storageTestStatus ? <p role="status" className="mt-2">{storageTestStatus}</p> : null}
+              </div>
               {!ownershipClaim ? <p className="mb-3 text-xs text-gray-700">Request the ownership check below to enable secure uploads.</p> : null}
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="border border-gray-200 p-3 text-sm"><strong>Identity</strong><p className="mt-1 text-xs text-gray-600">Passport or photocard driving licence for later identity review.</p><p className="mt-2 text-xs font-semibold">{ownershipClaim?.identity_check_status?.replaceAll("-", " ") || "Not started"}</p><><label className="mt-3 block text-xs font-semibold">Document type<select className="mt-1 block w-full border p-2" value={identityDocumentType} onChange={(event) => setIdentityDocumentType(event.target.value)}><option value="identity-passport">Passport</option><option value="identity-driving-licence">Photocard driving licence</option></select></label><input ref={identityUploadRef} type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" aria-label="Identity document file" className="sr-only" onChange={(event) => { uploadOwnershipDocument(identityDocumentType, event.target.files?.[0]); event.target.value = ""; }} /><button type="button" disabled={Boolean(!ownershipClaim || ownershipUploadBusy || ownershipDocuments["identity-passport"] || ownershipDocuments["identity-driving-licence"])} onClick={() => identityUploadRef.current?.click()} className="mt-3 border border-emerald-700 bg-emerald-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">{ownershipUploadBusy === identityDocumentType ? "Uploading..." : "Upload photo ID"}</button><p className="mt-1 text-xs text-gray-500">PDF, JPG or PNG, up to 10 MB.</p>{(ownershipDocuments["identity-passport"] || ownershipDocuments["identity-driving-licence"]) ? <div className="mt-2 flex items-center justify-between gap-2 text-xs text-emerald-800"><span className="min-w-0 break-all">Submitted: {(ownershipDocuments["identity-passport"] || ownershipDocuments["identity-driving-licence"]).original_file_name} (unverified)</span><button type="button" disabled={Boolean(ownershipUploadBusy)} onClick={() => removeOwnershipDocument(ownershipDocuments["identity-passport"] || ownershipDocuments["identity-driving-licence"])} className="font-semibold text-red-700 underline disabled:opacity-50">Remove</button></div> : null}</></div>
