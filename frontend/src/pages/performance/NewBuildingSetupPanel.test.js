@@ -113,6 +113,29 @@ test("fresh New workspace does not hydrate the existing home or model", () => {
   expect(JSON.parse(window.localStorage.getItem("wbp-new-building-passport")).recordId).toBe("WBP-EXISTING");
 });
 
+test("profile-linked New workspace opens the saved home for editing", () => {
+  window.localStorage.setItem("wbp-new-building-passport", JSON.stringify({
+    recordId: "WBP-2026-P42TCE", databaseId: "record-1", ownerUserId: "owner-1",
+    legalOwnerName: "Stephen", ownershipType: "owner-occupier", tenure: "freehold",
+    uprn: "100091142492", propertyDiscovery: { address: "14 Bridgewood Road", postcode: "IP12 4HA", confirmedAt: "2026-09-24T00:00:00Z" },
+  }));
+  render(<MemoryRouter><NewBuildingSetupPanel freshStart syncHomeProfile isActive /></MemoryRouter>);
+
+  const banner = screen.getByRole("heading", { name: /14 Bridgewood Road/ }).closest(".bg-emerald-100");
+  expect(banner).toHaveTextContent("14 Bridgewood Road");
+  expect(screen.queryByRole("dialog", { name: "Let's set up your home" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Edit home details" }));
+  expect(screen.getByRole("heading", { name: "Edit home details" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Save home details" })).toBeInTheDocument();
+  fireEvent.change(screen.getByRole("textbox", { name: "Your name" }), { target: { value: "Updated Owner" } });
+  fireEvent.click(screen.getByLabelText(/I confirm that I own this home/));
+  fireEvent.click(screen.getByLabelText(/I agree to keep household information private/));
+  fireEvent.click(screen.getByRole("button", { name: "Save home details" }));
+  expect(JSON.parse(window.localStorage.getItem("wbp-new-building-passport"))).toMatchObject({
+    recordId: "WBP-2026-P42TCE", databaseId: "record-1", legalOwnerName: "Updated Owner",
+  });
+});
+
 test("setup dialog opens only while the New tab is active", () => {
   const { rerender } = render(<MemoryRouter><NewBuildingSetupPanel freshStart isActive={false} /></MemoryRouter>);
   expect(screen.queryByRole("dialog", { name: "Let's set up your home" })).not.toBeInTheDocument();

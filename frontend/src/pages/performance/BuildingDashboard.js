@@ -32,9 +32,10 @@ export const DetailSurface = ({ children, title, onClose, modal, headerExtra }) 
 const PortalWhen = ({ active, children }) => active ? createPortal(children, document.body) : children;
 
 const DEFAULT_MATTERPORT_URL = "https://my.matterport.com/show/?m=zHm8SwWeHiN";
-const BRIDGEWOOD_UPRN = "100091142492";
-const isBridgewoodPassport = (record) => record?.uprn === BRIDGEWOOD_UPRN
-  || /\b14\s+bridgewood\b/i.test(record?.propertyDiscovery?.address || record?.address?.address || "");
+const readSavedHomePassport = () => {
+  try { return JSON.parse(window.localStorage.getItem("wbp-new-building-passport") || "null"); }
+  catch { return null; }
+};
 
 const ProfileSummaryColumns = ({ record, property, setup = {} }) => {
   const carbon = setup.carbonSelections || {};
@@ -668,12 +669,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
   const isCarbonCreditTab = building.id === "cc";
   const [homePassport, setHomePassport] = useState(() => {
     if (dataSourceBuildingId !== "home") return null;
-    try {
-      const cached = JSON.parse(window.localStorage.getItem("wbp-new-building-passport") || "null");
-      return isBridgewoodPassport(cached) ? cached : null;
-    } catch {
-      return null;
-    }
+    return readSavedHomePassport();
   });
   const homePassportId = homePassport?.recordId || "";
   const [homeSetup, setHomeSetup] = useState({});
@@ -681,10 +677,8 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
   const [homeSaleInfoOpen, setHomeSaleInfoOpen] = useState(false);
   useEffect(() => {
     if (dataSourceBuildingId !== "home" || !isActive) return;
-    try {
-      const cached = JSON.parse(window.localStorage.getItem("wbp-new-building-passport") || "null");
-      if (isBridgewoodPassport(cached)) setHomePassport(cached);
-    } catch { /* The account lookup remains the source when browser data is invalid. */ }
+    const cached = readSavedHomePassport();
+    if (cached) setHomePassport(cached);
   }, [dataSourceBuildingId, isActive]);
   useEffect(() => {
     if (dataSourceBuildingId !== "home" || !isActive) return undefined;
@@ -695,7 +689,6 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
       const { data, error } = await supabase.from("WBPBuildingRecords")
         .select("*")
         .eq("custodian_user_id", auth.user.id)
-        .eq("uprn", BRIDGEWOOD_UPRN)
         .order("updated_at", { ascending: false }).limit(1).maybeSingle();
       if (active && !error && data?.record_reference) {
         const { data: snapshot } = await supabase.from("WBPPropertyDiscoverySnapshots")
@@ -774,10 +767,11 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
   }, [isActive]);
   const matterportInput = useMemo(() => {
     return (
+      (dataSourceBuildingId === "home" && homeSetup.modelInput) ||
       localStorage.getItem(`${dataSourceBuildingId}:matterportModelInput`) ||
       building.defaultMatterportUrl
     );
-  }, [dataSourceBuildingId, building.defaultMatterportUrl]);
+  }, [dataSourceBuildingId, building.defaultMatterportUrl, homeSetup.modelInput]);
   const manualMatterportData = useMemo(() => {
     const savedData = localStorage.getItem(`${dataSourceBuildingId}:matterportManualData`);
 
@@ -6568,8 +6562,8 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
             ) : null}
             {[
               ...(dataSourceBuildingId === "home" ? [] : [["Address", [homePassport?.propertyDiscovery?.address, homePassport?.propertyDiscovery?.postcode].filter(Boolean).join(", ") || matterportMetadata.address]]),
-              ["Coordinates", [homePassport?.propertyDiscovery?.latitude ?? matterportMetadata.latitude, homePassport?.propertyDiscovery?.longitude ?? matterportMetadata.longitude].filter((value) => value !== null && value !== undefined && value !== "").join(", ")],
-              ["Internal area", matterportMetadata.internalArea !== "--" ? `${matterportMetadata.internalArea} m2` : "Pending"],
+              ["Coordinates", [homeSetup.manualData?.latitude || homePassport?.propertyDiscovery?.latitude || matterportMetadata.latitude, homeSetup.manualData?.longitude || homePassport?.propertyDiscovery?.longitude || matterportMetadata.longitude].filter((value) => value !== null && value !== undefined && value !== "").join(", ")],
+              ["Internal area", homeSetup.manualData?.internalArea ? `${homeSetup.manualData.internalArea} m2` : matterportMetadata.internalArea !== "--" ? `${matterportMetadata.internalArea} m2` : "Pending"],
             ].map(([label, value]) => <div key={label} className={dataSourceBuildingId === "home" ? "min-w-0 py-0.5" : "min-w-0 border-b border-gray-100 py-1.5 last:border-0"}><dt className="text-gray-600">{label}</dt><dd className={`break-words font-semibold text-gray-900 ${dataSourceBuildingId === "home" && label === "Address" ? "text-base" : ""}`}>{value || "Pending"}</dd></div>)}
           </dl>
 
@@ -8168,10 +8162,12 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
   );
 };
 
-export const NewBuildingSetupPanel = ({ freshStart = false, isActive = false }) => {
+export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = false, isActive = false }) => {
+  const isolatedDraft = freshStart && !syncHomeProfile;
   const [setupTab, setSetupTab] = useState("ownership");
   const [historyStage, setHistoryStage] = useState("audit");
-  const [showSetupOverlay, setShowSetupOverlay] = useState(freshStart);
+  const [showSetupOverlay, setShowSetupOverlay] = useState(freshStart && (!syncHomeProfile || !readSavedHomePassport()));
+  const [editingOwnership, setEditingOwnership] = useState(false);
   const overlayVisible = showSetupOverlay && isActive;
   const [setupOverlayExiting, setSetupOverlayExiting] = useState(false);
   const [historyDraft, setHistoryDraft] = useState({ design: {}, build: {} });
@@ -8183,21 +8179,11 @@ export const NewBuildingSetupPanel = ({ freshStart = false, isActive = false }) 
   const location = useLocation();
   const recordMode = new URLSearchParams(location.search).get("record") || "new";
   const [ownershipRecord, setOwnershipRecord] = useState(() => {
-    if (freshStart) return null;
-    try {
-      return JSON.parse(window.localStorage.getItem("wbp-new-building-passport") || "null");
-    } catch {
-      return null;
-    }
+    return isolatedDraft ? null : readSavedHomePassport();
   });
   const [passportSaveStatus, setPassportSaveStatus] = useState(() => {
-    if (freshStart) return "idle";
-    try {
-      const savedRecord = JSON.parse(window.localStorage.getItem("wbp-new-building-passport") || "null");
-      return savedRecord?.databaseId ? "saved" : savedRecord ? "local-only" : "idle";
-    } catch {
-      return "idle";
-    }
+    const savedRecord = isolatedDraft ? null : readSavedHomePassport();
+    return savedRecord?.databaseId ? "saved" : savedRecord ? "local-only" : "idle";
   });
   const [passportSaveError, setPassportSaveError] = useState("");
   useEffect(() => () => window.clearTimeout(setupOverlayTimerRef.current), []);
@@ -8386,10 +8372,10 @@ export const NewBuildingSetupPanel = ({ freshStart = false, isActive = false }) 
     }
   };
   const [propertySearch, setPropertySearch] = useState(() => {
-    if (freshStart) return { address: "", postcode: "", uprn: "", latitude: "", longitude: "" };
+    if (isolatedDraft) return { address: "", postcode: "", uprn: "", latitude: "", longitude: "" };
     try {
       const cached = JSON.parse(window.localStorage.getItem(PROPERTY_DISCOVERY_CACHE_KEY) || "null");
-      return cached?.search || {
+      return cached?.search || (syncHomeProfile ? readSavedHomePassport()?.propertyDiscovery : null) || {
         address: "",
         postcode: "",
         uprn: "",
@@ -8401,9 +8387,9 @@ export const NewBuildingSetupPanel = ({ freshStart = false, isActive = false }) 
     }
   });
   const [propertyDiscovery, setPropertyDiscovery] = useState(() => {
-    if (freshStart) return null;
+    if (isolatedDraft) return null;
     try {
-      return JSON.parse(window.localStorage.getItem(PROPERTY_DISCOVERY_CACHE_KEY) || "null")?.snapshot || null;
+      return JSON.parse(window.localStorage.getItem(PROPERTY_DISCOVERY_CACHE_KEY) || "null")?.snapshot || (syncHomeProfile ? readSavedHomePassport()?.propertyDiscovery : null) || null;
     } catch {
       return null;
     }
@@ -8440,7 +8426,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, isActive = false }) 
     metrics: ["temperature", "humidity"],
   });
   useEffect(() => {
-    if (freshStart) return;
+    if (isolatedDraft) return;
     let active = true;
     const loadAccountPassport = async () => {
       const { data: auth, error: authError } = await supabase.auth.getUser();
@@ -8493,14 +8479,24 @@ export const NewBuildingSetupPanel = ({ freshStart = false, isActive = false }) 
       };
       window.localStorage.setItem("wbp-new-building-passport", JSON.stringify(accountRecord));
       setOwnershipRecord(accountRecord);
+      setOwnershipDraft((current) => ({ ...current,
+        legalOwnerName: accountRecord.legalOwnerName,
+        otherOwnerName: accountRecord.otherOwnerName,
+        ownershipType: accountRecord.ownershipType,
+        tenure: accountRecord.tenure,
+        privacyAccepted: accountRecord.privacyAccepted,
+        uprn: accountRecord.uprn,
+      }));
       setOwnershipDraft((current) => ({ ...current, titleNumber: "" }));
       setPropertyDiscovery(discovery);
+      setPropertySearch((current) => ({ ...current, address: discovery.address, postcode: discovery.postcode, uprn: discovery.uprn }));
+      if (syncHomeProfile) setShowSetupOverlay(false);
       setPassportSaveStatus("saved");
       setPassportSaveError("");
     };
     loadAccountPassport();
     return () => { active = false; };
-  }, [freshStart]);
+  }, [isolatedDraft, syncHomeProfile]);
   const healthMetricOptions = [
     ["temperature", "Temperature"],
     ["humidity", "Humidity"],
@@ -8518,7 +8514,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, isActive = false }) 
   const historyUnlocked = Boolean(ownershipProperty?.address && ownershipProperty?.postcode);
   const isBridgewoodProfile = /\b14\s+bridgewood\b/i.test(ownershipProperty?.address || "") || ownershipRecord?.uprn === "100091142492";
   const savedBannerModel = ownershipRecord ? window.localStorage.getItem(`${ownershipRecord.recordId}:matterportModelInput`) : "";
-  const bannerModelInput = (freshStart ? [modelInput] : [modelInput, savedBannerModel, isBridgewoodProfile && HOME_BUILDING.defaultMatterportUrl])
+  const bannerModelInput = (isolatedDraft ? [modelInput] : [modelInput, savedBannerModel, isBridgewoodProfile && HOME_BUILDING.defaultMatterportUrl])
     .find((value) => extractMatterportModelId(value)) || "";
   const embedUrl = useMemo(() => buildMatterportEmbedUrl(bannerModelInput), [bannerModelInput]);
   const buildingAddress = [ownershipProperty?.address, ownershipProperty?.postcode].filter(Boolean).join(", ");
@@ -8542,7 +8538,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, isActive = false }) 
   const setupRecordId = ownershipRecord?.recordId;
   useEffect(() => {
     try {
-      const saved = JSON.parse((setupRecordId && window.localStorage.getItem(`${setupRecordId}:setupSections`)) || (freshStart || !setupRecordId ? window.localStorage.getItem("wbp-new-building-setup-draft") : null) || "null");
+      const saved = JSON.parse((setupRecordId && window.localStorage.getItem(`${setupRecordId}:setupSections`)) || (isolatedDraft || !setupRecordId ? window.localStorage.getItem("wbp-new-building-setup-draft") : null) || "null");
       if (!saved) return;
       setManualData((current) => ({ ...current, ...saved.manualData }));
       setEnergyConsent(Boolean(saved.energyConsent));
@@ -8552,9 +8548,9 @@ export const NewBuildingSetupPanel = ({ freshStart = false, isActive = false }) 
       setHistoricalDataFileName(saved.historicalDataFileName || "");
       setSensorEvidenceFileName(saved.sensorEvidenceFileName || "");
     } catch { /* Invalid local draft is ignored. */ }
-  }, [freshStart, setupRecordId]);
+  }, [isolatedDraft, setupRecordId]);
   useEffect(() => {
-    if (!ownershipRecord?.databaseId || freshStart) return undefined;
+    if (!ownershipRecord?.databaseId || isolatedDraft) return undefined;
     let active = true;
     supabase.from("WBPBuildingSetupDeclarations").select("setup_data")
       .eq("building_record_id", ownershipRecord.databaseId).maybeSingle()
@@ -8571,7 +8567,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, isActive = false }) 
         window.localStorage.setItem(`${ownershipRecord.recordId}:setupSections`, JSON.stringify(saved));
       });
     return () => { active = false; };
-  }, [freshStart, ownershipRecord?.databaseId, ownershipRecord?.recordId]);
+  }, [isolatedDraft, ownershipRecord?.databaseId, ownershipRecord?.recordId]);
   const saveSetupSection = async () => {
     const setup = {
       manualData, modelInput, energyConsent, historicalDataFileName, healthSensors, sensorEvidenceFileName, carbonSelections,
@@ -9080,8 +9076,9 @@ export const NewBuildingSetupPanel = ({ freshStart = false, isActive = false }) 
 
   const createBuildingPassport = async (event) => {
     event.preventDefault();
-    const recordId = `WBP-${new Date().getFullYear()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
-    const createdAt = new Date().toISOString();
+    const existing = editingOwnership ? ownershipRecord : null;
+    const recordId = existing?.recordId || `WBP-${new Date().getFullYear()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+    const createdAt = existing?.createdAt || new Date().toISOString();
     const canonicalPayload = JSON.stringify({
       recordId,
       createdAt,
@@ -9100,11 +9097,12 @@ export const NewBuildingSetupPanel = ({ freshStart = false, isActive = false }) 
     }
 
     const nextRecord = {
+      ...(existing || {}),
       recordId,
       createdAt,
       lifecycleStage: "occupy",
       custodianStatus: "active",
-      genesisHash,
+      genesisHash: existing?.genesisHash || genesisHash,
       ...ownershipDraft,
       propertyDiscovery: propertyDiscovery ? { ...propertyDiscovery, uprn: ownershipDraft.uprn.trim() } : null,
       history: [
@@ -9126,6 +9124,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, isActive = false }) 
       window.localStorage.setItem("wbp-new-building-passport", JSON.stringify(securedRecord));
       setOwnershipRecord(securedRecord);
       setPassportSaveStatus("saved");
+      setEditingOwnership(false);
       // Keep the setup open for the private identity and title-evidence step.
     } catch (error) {
       setPassportSaveStatus("error");
@@ -9277,11 +9276,11 @@ export const NewBuildingSetupPanel = ({ freshStart = false, isActive = false }) 
       <div ref={setupContentRef}>
       <div style={{ display: setupTab === "ownership" ? undefined : "none" }}>
       <div className="min-w-0">
-        {!ownershipRecord ? (
+        {(!ownershipRecord || editingOwnership) ? (
           <form onSubmit={createBuildingPassport} className="mx-auto max-w-4xl border border-emerald-200 bg-white p-4 sm:p-5">
             <div className="border-b border-gray-200 pb-4">
-              <p className="text-xs font-bold uppercase text-emerald-700">New home profile</p>
-              <h3 className="mt-1 text-xl font-bold">Let’s set up your home</h3>
+              <p className="text-xs font-bold uppercase text-emerald-700">{editingOwnership ? "Home profile" : "New home profile"}</p>
+              <h3 className="mt-1 text-xl font-bold">{editingOwnership ? "Edit home details" : "Let’s set up your home"}</h3>
               <p className="mt-1 max-w-2xl text-sm text-gray-600">
                 Find your home, create its profile, then submit private documents for the ownership check.
               </p>
@@ -9414,7 +9413,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, isActive = false }) 
                 </div>
 
                 <button type="submit" disabled={!ownershipDraft.legalOwnerName.trim() || (ownershipDraft.ownershipType === "shared-ownership" && !ownershipDraft.otherOwnerName.trim()) || !ownershipDraft.authorityToCreate || !ownershipDraft.privacyAccepted} className="mt-5 w-full bg-emerald-700 px-4 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto">
-                  Create home profile
+                  {editingOwnership ? "Save home details" : "Create home profile"}
                 </button>
               </section>
             ) : null}
@@ -9423,6 +9422,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, isActive = false }) 
 
         {ownershipRecord ? (
           <section className="wbp-setup-step-enter mx-auto mt-4 max-w-4xl border border-amber-200 bg-white p-4">
+            {syncHomeProfile && !editingOwnership ? <div className="mb-4 flex justify-end"><button type="button" className="border border-emerald-700 px-3 py-2 text-xs font-bold text-emerald-800" onClick={() => { setOwnershipDraft((current) => ({ ...current, legalOwnerName: ownershipRecord.legalOwnerName || "", otherOwnerName: ownershipRecord.otherOwnerName || "", ownershipType: ownershipRecord.ownershipType || "owner-occupier", tenure: ownershipRecord.tenure || "freehold", uprn: ownershipRecord.uprn || "", privacyAccepted: Boolean(ownershipRecord.privacyAccepted), authorityToCreate: false })); setEditingOwnership(true); }}>Edit home details</button></div> : null}
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <p className="text-xs font-bold uppercase text-amber-700">Step 3 of 3 · Ownership check</p>
@@ -11376,7 +11376,7 @@ const BuildingDashboard = () => {
                 style={{ width: `${100 / BUILDINGS.length}%` }}
               >
                 {building.setupOnly ? (
-                  <NewBuildingSetupPanel key={new URLSearchParams(location.search).get("record") === "existing" ? "existing" : "fresh"} freshStart={new URLSearchParams(location.search).get("record") !== "existing"} isActive={isActiveSlide} />
+                  <NewBuildingSetupPanel key={new URLSearchParams(location.search).get("record") === "existing" ? "existing" : "fresh"} freshStart={new URLSearchParams(location.search).get("record") !== "existing"} syncHomeProfile isActive={isActiveSlide} />
                 ) : building.portfolioOnly ? (
                   <PortfolioDashboardPanel
                     bridgewoodTokens={bridgewoodTokens}
