@@ -26,6 +26,25 @@ test("profile overwrite resolves the signed-in user's existing WBP reference", a
   expect(eq).toHaveBeenCalledWith("custodian_user_id", "owner-1");
 });
 
+test("step two displays a secure-save failure instead of appearing unresponsive", async () => {
+  window.localStorage.setItem("wbp-property-discovery-draft:v1", JSON.stringify({
+    search: { address: "Test Road", postcode: "IP12 4HA", uprn: "123" },
+    snapshot: { address: "Test Road", postcode: "IP12 4HA", uprn: "123", sources: [], confirmedAt: "2026-09-24T00:00:00Z" },
+  }));
+  const getUser = jest.spyOn(supabase.auth, "getUser").mockResolvedValue({ data: { user: null }, error: null });
+  try {
+    render(<MemoryRouter><NewBuildingSetupPanel syncHomeProfile isActive /></MemoryRouter>);
+    fireEvent.change(screen.getByRole("textbox", { name: "Your name" }), { target: { value: "Test Owner" } });
+    fireEvent.click(screen.getByLabelText(/I confirm that I own this home/));
+    fireEvent.click(screen.getByLabelText(/I agree to keep household information private/));
+    fireEvent.click(screen.getByRole("button", { name: "Create home profile" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Your secure session has expired. Sign in again to save this profile.");
+    expect(screen.getByRole("button", { name: "Create home profile" })).toBeEnabled();
+  } finally {
+    getUser.mockRestore();
+  }
+});
+
 test("new building sections keep ownership first and separate the inputs", () => {
   render(<MemoryRouter><NewBuildingSetupPanel /></MemoryRouter>);
 

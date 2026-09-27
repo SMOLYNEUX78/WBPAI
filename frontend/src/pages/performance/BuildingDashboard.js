@@ -9143,6 +9143,8 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
 
   const createBuildingPassport = async (event) => {
     event.preventDefault();
+    setPassportSaveStatus("saving");
+    setPassportSaveError("");
     let existing = editingOwnership ? ownershipRecord : null;
     if (syncHomeProfile && isolatedDraft && !existing) {
       try {
@@ -9195,8 +9197,6 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       setOwnershipRecord(nextRecord);
       window.requestAnimationFrame(() => setupPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
     }
-    setPassportSaveStatus("saving");
-    setPassportSaveError("");
     try {
       const securedRecord = await persistPassportRecord(nextRecord);
       window.localStorage.setItem("wbp-new-building-passport", JSON.stringify(securedRecord));
@@ -9491,9 +9491,10 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                   </label>
                 </div>
 
-                <button type="submit" disabled={!ownershipDraft.legalOwnerName.trim() || (ownershipDraft.ownershipType === "shared-ownership" && !ownershipDraft.otherOwnerName.trim()) || !ownershipDraft.authorityToCreate || !ownershipDraft.privacyAccepted} className="mt-5 w-full bg-emerald-700 px-4 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto">
-                  {editingOwnership ? "Save home details" : "Create home profile"}
+                <button type="submit" disabled={passportSaveStatus === "saving" || !ownershipDraft.legalOwnerName.trim() || (ownershipDraft.ownershipType === "shared-ownership" && !ownershipDraft.otherOwnerName.trim()) || !ownershipDraft.authorityToCreate || !ownershipDraft.privacyAccepted} className="mt-5 w-full bg-emerald-700 px-4 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto">
+                  {passportSaveStatus === "saving" ? "Saving home profile..." : editingOwnership ? "Save home details" : "Create home profile"}
                 </button>
+                {passportSaveError ? <p role="alert" className="mt-3 border border-red-200 bg-red-50 p-3 text-sm text-red-800">{passportSaveError}</p> : null}
               </section>
             ) : null}
           </form>
