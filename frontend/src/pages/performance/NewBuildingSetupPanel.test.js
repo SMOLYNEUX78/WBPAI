@@ -51,11 +51,12 @@ test("shared ownership asks for the other owner's name in step two", () => {
   expect(screen.queryByRole("textbox", { name: "Other owner’s name or organisation" })).not.toBeInTheDocument();
 });
 
-test("UPRN is collected with the address before home confirmation", () => {
+test("home setup starts with address search, not manual UPRN entry", () => {
   const { unmount } = render(<MemoryRouter><NewBuildingSetupPanel freshStart isActive /></MemoryRouter>);
   expect(screen.queryByText("What did WBP check?")).not.toBeInTheDocument();
-  expect(screen.getByLabelText("Property number (UPRN)")).toBeInTheDocument();
-  expect(screen.getByRole("link", { name: /Find your UPRN/ })).toHaveAttribute("href", "https://www.findmyaddress.co.uk/search");
+  expect(screen.getByRole("button", { name: "Find address" })).toBeInTheDocument();
+  expect(screen.queryByLabelText("Property number (UPRN)")).not.toBeInTheDocument();
+  expect(screen.queryByRole("link", { name: /Find your UPRN/ })).not.toBeInTheDocument();
   expect(screen.getByText("Step 1 of 3").closest("section")).toHaveClass("wbp-setup-step-enter");
   unmount();
 
@@ -66,59 +67,6 @@ test("UPRN is collected with the address before home confirmation", () => {
   render(<MemoryRouter><NewBuildingSetupPanel isActive /></MemoryRouter>);
   expect(screen.queryByLabelText("Property number (UPRN)")).not.toBeInTheDocument();
   expect(screen.getByText("Step 2 of 3").closest("section")).toHaveClass("wbp-setup-step-enter");
-});
-
-test("address check verifies the UPRN against the registered address", async () => {
-  const previousFetch = global.fetch;
-  const sessionSpy = jest.spyOn(supabase.auth, "getSession").mockResolvedValue({ data: { session: { access_token: "test-session" } } });
-  global.fetch = jest.fn(async (url) => ({
-    ok: true,
-    json: async () => String(url).includes("lookupAddress")
-        ? { match: true, registered: { address: "14 Bridgewood Road, Woodbridge", postcode: "IP12 4HA", uprn: "100091142492" } }
-        : String(url).includes("postcodes.io")
-        ? { result: { latitude: 52.0945, longitude: 1.3048, admin_district: "East Suffolk" } }
-        : { entities: [] },
-  }));
-  try {
-    render(<MemoryRouter><NewBuildingSetupPanel freshStart isActive /></MemoryRouter>);
-    fireEvent.change(screen.getByRole("textbox", { name: "Property address" }), { target: { value: "14 Bridgewood Road" } });
-    fireEvent.change(screen.getByRole("textbox", { name: "Postcode" }), { target: { value: "IP12 4HA" } });
-    fireEvent.change(screen.getByRole("textbox", { name: "Property number (UPRN)" }), { target: { value: "100091142492" } });
-    fireEvent.click(screen.getByRole("button", { name: "Check UPRN" }));
-    await waitFor(() => expect(screen.getByText("UPRN 100091142492")).toBeInTheDocument());
-    expect(screen.queryByText("What did WBP check?")).not.toBeInTheDocument();
-    expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining("/api/lookupAddress?"), { headers: { Authorization: "Bearer test-session" } });
-    expect(screen.getByText(/Address and UPRN matched against OS Places/)).toBeInTheDocument();
-    const lookupCount = global.fetch.mock.calls.filter(([url]) => String(url).includes("/api/lookupAddress?")).length;
-    fireEvent.click(screen.getByRole("button", { name: "Check UPRN" }));
-    expect(global.fetch.mock.calls.filter(([url]) => String(url).includes("/api/lookupAddress?"))).toHaveLength(lookupCount);
-    fireEvent.click(screen.getByRole("button", { name: "Use this home" }));
-    fireEvent.click(screen.getByRole("tab", { name: "design" }));
-    expect(screen.getByText(/Confirmed property UPRN:/)).toHaveTextContent("100091142492");
-  } finally {
-    sessionSpy.mockRestore();
-    global.fetch = previousFetch;
-  }
-});
-
-test("address mismatch blocks home confirmation", async () => {
-  const previousFetch = global.fetch;
-  const sessionSpy = jest.spyOn(supabase.auth, "getSession").mockResolvedValue({ data: { session: { access_token: "test-session" } } });
-  global.fetch = jest.fn(async (url) => ({ ok: true, json: async () => String(url).includes("lookupAddress")
-    ? { match: false, registered: { address: "16 Bridgewood Road", postcode: "IP12 4HA", uprn: "100091142492" } }
-    : { result: { latitude: 52.0945, longitude: 1.3048 }, entities: [] } }));
-  try {
-    render(<MemoryRouter><NewBuildingSetupPanel freshStart isActive /></MemoryRouter>);
-    fireEvent.change(screen.getByRole("textbox", { name: "Property address" }), { target: { value: "14 Bridgewood Road" } });
-    fireEvent.change(screen.getByRole("textbox", { name: "Postcode" }), { target: { value: "IP12 4HA" } });
-    fireEvent.change(screen.getByRole("textbox", { name: "Property number (UPRN)" }), { target: { value: "100091142492" } });
-    fireEvent.click(screen.getByRole("button", { name: "Check UPRN" }));
-    await waitFor(() => expect(screen.getByText(/Address and UPRN do not match/)).toBeInTheDocument());
-    expect(screen.queryByRole("button", { name: "Use this home" })).not.toBeInTheDocument();
-  } finally {
-    sessionSpy.mockRestore();
-    global.fetch = previousFetch;
-  }
 });
 
 test("choosing an OS address fills the UPRN without another OS lookup", async () => {
@@ -134,9 +82,14 @@ test("choosing an OS address fills the UPRN without another OS lookup", async ()
     fireEvent.click(screen.getByRole("button", { name: "Find address" }));
     const result = await screen.findByRole("button", { name: /14 Bridgewood Road, Woodbridge.*UPRN 100091142492/ });
     fireEvent.click(result);
-    await waitFor(() => expect(screen.getByText(/Address and UPRN matched against OS Places/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Home location found")).toBeInTheDocument());
     expect(screen.getByText("UPRN 100091142492")).toBeInTheDocument();
+    expect(screen.queryByText(/Address and UPRN matched against OS Places/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Check UPRN" })).not.toBeInTheDocument();
     expect(global.fetch.mock.calls.filter(([url]) => String(url).includes("/api/lookupAddress?"))).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: "Use this home" }));
+    fireEvent.click(screen.getByRole("tab", { name: "design" }));
+    expect(screen.getByText(/Confirmed property UPRN:/)).toHaveTextContent("100091142492");
   } finally {
     sessionSpy.mockRestore();
     global.fetch = previousFetch;

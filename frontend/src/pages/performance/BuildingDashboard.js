@@ -8408,7 +8408,6 @@ export const NewBuildingSetupPanel = ({ freshStart = false, isActive = false }) 
       return null;
     }
   });
-  const [discoveryStatus, setDiscoveryStatus] = useState("idle");
   const [discoveryError, setDiscoveryError] = useState("");
   const [addressCandidates, setAddressCandidates] = useState([]);
   const [addressSearchStatus, setAddressSearchStatus] = useState("idle");
@@ -8769,11 +8768,9 @@ export const NewBuildingSetupPanel = ({ freshStart = false, isActive = false }) 
       && propertyDiscovery.uprn === matchedUprn
       && propertyDiscovery.addressVerification) {
       setDiscoveryError("");
-      setDiscoveryStatus("complete");
       return;
     }
 
-    setDiscoveryStatus("loading");
     setDiscoveryError("");
 
     try {
@@ -8933,9 +8930,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, isActive = false }) 
         PROPERTY_DISCOVERY_CACHE_KEY,
         JSON.stringify({ search: nextSearch, snapshot })
       );
-      setDiscoveryStatus("complete");
     } catch (error) {
-      setDiscoveryStatus("error");
       setDiscoveryError(error?.message || "Property discovery could not be completed.");
     }
   };
@@ -9329,22 +9324,11 @@ export const NewBuildingSetupPanel = ({ freshStart = false, isActive = false }) 
                 {addressSearchStatus === "loading" ? "Searching addresses..." : "Find address"}
               </button>
               {addressSearchStatus === "complete" ? <div className="mt-3 border border-gray-200 bg-white p-3">
-                <p className="text-xs font-semibold text-gray-700">{addressCandidates.length ? "Choose your property" : "No matching address found. Use the UPRN option below."}</p>
+                <p className="text-xs font-semibold text-gray-700">{addressCandidates.length ? "Choose your property" : "No matching address found. Check the address and postcode, then try again."}</p>
                 {addressCandidates.length ? <div className="mt-2 max-h-48 space-y-1 overflow-y-auto">{addressCandidates.map((candidate) => <button key={candidate.uprn} type="button" onClick={() => discoverProperty(candidate)} className="block w-full border border-gray-200 p-2 text-left text-xs hover:bg-blue-50">
                   {candidate.address} · UPRN {candidate.uprn}
                 </button>)}</div> : null}
               </div> : null}
-              <div className="mt-3 border border-blue-200 bg-blue-50 p-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <label htmlFor="setup-uprn" className="text-xs font-bold text-gray-900">Property number (UPRN)</label>
-                  <a href="https://www.findmyaddress.co.uk/search" target="_blank" rel="noopener noreferrer" className="text-xs font-semibold text-blue-800 underline">Find your UPRN &#8599;</a>
-                </div>
-                <input id="setup-uprn" inputMode="numeric" maxLength={12} value={propertySearch.uprn} onChange={(event) => updatePropertySearch("uprn", event.target.value.replace(/\D/g, ""))} placeholder="Paste the UPRN here" className="mt-2 w-full border border-gray-300 bg-white p-2 text-sm sm:max-w-sm" />
-                <p className="mt-2 text-xs text-gray-600">If your home is not listed, find its UPRN on FindMyAddress and enter it here. This identifies the property, not its legal owner.</p>
-              </div>
-              {propertySearch.uprn ? <button type="button" onClick={() => discoverProperty()} disabled={discoveryStatus === "loading"} className="mt-3 bg-blue-700 px-4 py-2 text-sm font-bold text-white disabled:cursor-wait disabled:opacity-60">
-                {discoveryStatus === "loading" ? "Checking address..." : "Check UPRN"}
-              </button> : null}
 
               {discoveryError ? (
                 <p className="mt-3 border border-red-200 bg-red-50 p-2 text-xs text-red-800">{discoveryError}</p>
@@ -9359,14 +9343,12 @@ export const NewBuildingSetupPanel = ({ freshStart = false, isActive = false }) 
                       {propertyDiscovery.localAuthority ? ` · ${propertyDiscovery.localAuthority}` : ""}
                     </p>
                     {propertyDiscovery.uprn ? <p className="mt-1 text-xs font-semibold">UPRN {propertyDiscovery.uprn}</p> : null}
-                    {propertyDiscovery.addressVerification?.status === "matched" ? <p className="mt-1 text-xs font-semibold">Address and UPRN matched against OS Places. This does not prove ownership.</p>
-                      : propertyDiscovery.addressVerification?.status === "mismatch" ? <p className="mt-1 text-xs font-semibold text-red-800">Address and UPRN do not match the OS Places record{propertyDiscovery.addressVerification.registered ? `: ${propertyDiscovery.addressVerification.registered.address}` : ""}. Correct them and check again.</p>
-                      : <p className="mt-1 text-xs">UPRN supplied by you; independent address matching is unavailable. This does not prove ownership.</p>}
+                    {propertyDiscovery.addressVerification?.status === "mismatch" ? <p className="mt-1 text-xs font-semibold text-red-800">Address and UPRN do not match the OS Places record{propertyDiscovery.addressVerification.registered ? `: ${propertyDiscovery.addressVerification.registered.address}` : ""}. Correct them and check again.</p> : null}
                   </div>
 
                   <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 pt-3">
                     <p className="text-xs text-gray-600">
-                      {propertyDiscovery.confirmedAt ? "Home confirmed" : "Confirm that the address, postcode and UPRN match."}
+                      {propertyDiscovery.confirmedAt ? "Home confirmed" : "Confirm this is your home."}
                     </p>
                     {!propertyDiscovery.confirmedAt && propertyDiscovery.addressVerification?.status !== "mismatch" ? (
                       <button type="button" onClick={confirmPropertyDiscovery} className="border border-emerald-700 bg-white px-3 py-2 text-xs font-bold text-emerald-800">
