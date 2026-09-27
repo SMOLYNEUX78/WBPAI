@@ -300,6 +300,19 @@ test("saved home goes straight to the ownership check without an edit detour", (
   expect(screen.getByRole("button", { name: "Upload ownership document" })).toBeDisabled();
 });
 
+test("ownership declaration defers verification and keeps document uploads optional", () => {
+  window.localStorage.setItem("wbp-new-building-passport", JSON.stringify({
+    recordId: "WBP-001", databaseId: "building-1", legalOwnerName: "Test Owner",
+    ownershipType: "owner-occupier", tenure: "freehold",
+  }));
+  render(<MemoryRouter><NewBuildingSetupPanel /></MemoryRouter>);
+  expect(screen.getByRole("button", { name: "Save ownership declaration" })).toBeDisabled();
+  expect(screen.getByText(/No identity or Land Registry check, payment, or sale is triggered here/)).toBeInTheDocument();
+  fireEvent.click(screen.getByLabelText(/this is a declaration, not a verified ownership check/));
+  expect(screen.getByRole("button", { name: "Save ownership declaration" })).toBeEnabled();
+  expect(screen.getByRole("button", { name: "Upload photo ID" })).toBeDisabled();
+});
+
 test("saved title evidence can be removed without clearing the home profile", () => {
   window.localStorage.setItem("wbp-new-building-passport", JSON.stringify({
     recordId: "WBP-TEST", legalOwnerName: "Test Owner", ownershipType: "owner-occupier", tenure: "freehold", uprn: "100091142492",

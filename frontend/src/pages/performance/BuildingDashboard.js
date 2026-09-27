@@ -37,31 +37,6 @@ const readSavedHomePassport = () => {
   catch { return null; }
 };
 
-export const testPrivateEvidenceStorage = async (client, buildingRecordId, file) => {
-  if (!buildingRecordId) throw new Error("Save the home profile before testing private storage.");
-  if (!file || !["image/jpeg", "image/png"].includes(file.type) || file.size > 2 * 1024 * 1024) {
-    throw new Error("Choose a JPG or PNG test image no larger than 2 MB.");
-  }
-  const { data: auth, error: authError } = await client.auth.getUser();
-  if (authError || !auth?.user) throw new Error("Sign in again before testing private storage.");
-  const path = `${auth.user.id}/${buildingRecordId}/test-${window.crypto.randomUUID()}`;
-  const bucket = client.storage.from("wbp-private-evidence");
-  const { error: uploadError } = await bucket.upload(path, file, { contentType: file.type, upsert: false });
-  if (uploadError) throw new Error(`Private upload failed: ${uploadError.message}`);
-
-  let readError;
-  try {
-    const { data, error } = await bucket.download(path);
-    if (error || !data || data.size !== file.size) {
-      readError = new Error(`Private read failed: ${error?.message || "The downloaded image did not match the upload."}`);
-    }
-  } finally {
-    const { error: removeError } = await bucket.remove([path]);
-    if (removeError) throw new Error(`The test image could not be removed: ${removeError.message}`);
-  }
-  if (readError) throw readError;
-};
-
 export const findHomeProfileForOverwrite = async (client) => {
   const { data: auth, error: authError } = await client.auth.getUser();
   if (authError || !auth?.user) throw new Error("Sign in again before saving this home profile.");
@@ -8267,22 +8242,6 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   const [ownershipDocuments, setOwnershipDocuments] = useState({});
   const [ownershipUploadBusy, setOwnershipUploadBusy] = useState("");
   const [ownershipUploadStatus, setOwnershipUploadStatus] = useState("");
-  const testImageUploadRef = useRef(null);
-  const [storageTestBusy, setStorageTestBusy] = useState(false);
-  const [storageTestStatus, setStorageTestStatus] = useState("");
-  const checkPrivateUpload = async (file) => {
-    if (!file) return;
-    setStorageTestBusy(true);
-    setStorageTestStatus("");
-    try {
-      await testPrivateEvidenceStorage(supabase, ownershipRecord?.databaseId, file);
-      setStorageTestStatus("Test passed: the image was uploaded privately, read back, and removed. This does not verify the bucket's access rules for other accounts.");
-    } catch (error) {
-      setStorageTestStatus(error.message || "Private storage test failed.");
-    } finally {
-      setStorageTestBusy(false);
-    }
-  };
   useEffect(() => {
     if (!ownershipRecord?.databaseId) { setOwnershipClaim(null); return; }
     let active = true;
@@ -8390,7 +8349,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
         delete next[document.evidence_type];
         return next;
       });
-      setOwnershipUploadStatus("Document removed. The ownership check is incomplete until replacement evidence is submitted.");
+      setOwnershipUploadStatus("Document removed. You can add replacement evidence before requesting verification later.");
     } catch (error) {
       setOwnershipUploadStatus(`Could not complete removal: ${error.message}`);
     } finally {
@@ -8398,7 +8357,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
     }
   };
 
-  const requestOwnershipVerification = async () => {
+  const saveOwnershipDeclaration = async () => {
     if (!ownershipRecord?.databaseId || !ownershipDeclaration) return;
     setOwnershipClaimBusy(true);
     setOwnershipClaimError("");
@@ -8415,7 +8374,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
         claimant_user_id: auth.user.id,
         claim_type: claimType,
         evidence_route: evidenceRoute,
-        declaration_text: "I declare that I am the named owner or authorised representative of this property and request identity and ownership checks.",
+        declaration_text: "I declare that I am the named owner or authorised representative of this property. I understand that identity and ownership verification require a separate request later.",
         declaration_accepted_at: new Date().toISOString(),
         status: "self-declared",
       }).select("id,status,identity_check_status,registry_check_status,created_at").single();
@@ -9361,7 +9320,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
               <p className="text-xs font-bold uppercase text-emerald-700">{editingOwnership ? "Home profile" : "New home profile"}</p>
               <h3 className="mt-1 text-xl font-bold">{editingOwnership ? "Edit home details" : "Let’s set up your home"}</h3>
               <p className="mt-1 max-w-2xl text-sm text-gray-600">
-                Find your home, create its profile, then submit private documents for the ownership check.
+                Find your home and create its profile. You can add private ownership evidence now or later.
               </p>
             </div>
 
@@ -9515,28 +9474,21 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
             </div>
 
             <div className="mt-4">
-              <p className="mb-3 border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950">Documents are kept private. Uploading them submits evidence only; identity and HM Land Registry matching are not automated yet, and no ownership status is verified by an upload.</p>
-              <div className="mb-3 border border-gray-200 bg-gray-50 p-3 text-xs text-gray-700">
-                <strong>Test private upload</strong>
-                <p className="mt-1">Use a harmless JPG or PNG under 2 MB. WBP will upload it, read it back and remove it. It will not become identity or ownership evidence.</p>
-                <input ref={testImageUploadRef} type="file" accept=".jpg,.jpeg,.png,image/jpeg,image/png" aria-label="Test image file" className="sr-only" onChange={(event) => { checkPrivateUpload(event.target.files?.[0]); event.target.value = ""; }} />
-                <button type="button" disabled={!ownershipRecord.databaseId || storageTestBusy} onClick={() => testImageUploadRef.current?.click()} className="mt-2 border border-emerald-700 bg-white px-3 py-2 font-bold text-emerald-800 disabled:opacity-50">{storageTestBusy ? "Testing upload..." : "Test with an image"}</button>
-                {storageTestStatus ? <p role="status" className="mt-2">{storageTestStatus}</p> : null}
-              </div>
-              {!ownershipClaim ? <p className="mb-3 text-xs text-gray-700">Request the ownership check below to enable secure uploads.</p> : null}
+              <p className="mb-3 border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950">Documents are stored privately as unverified evidence. You can add them now or later. No identity or Land Registry check, payment, or sale is triggered here; verification will require a separate request when you need to transact.</p>
+              {!ownershipClaim ? <p className="mb-3 text-xs text-gray-700">Save your ownership declaration to enable optional document uploads.</p> : null}
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="border border-gray-200 p-3 text-sm"><strong>Identity</strong><p className="mt-1 text-xs text-gray-600">Passport or photocard driving licence for later identity review.</p><p className="mt-2 text-xs font-semibold">{ownershipClaim?.identity_check_status?.replaceAll("-", " ") || "Not started"}</p><><label className="mt-3 block text-xs font-semibold">Document type<select className="mt-1 block w-full border p-2" value={identityDocumentType} onChange={(event) => setIdentityDocumentType(event.target.value)}><option value="identity-passport">Passport</option><option value="identity-driving-licence">Photocard driving licence</option></select></label><input ref={identityUploadRef} type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" aria-label="Identity document file" className="sr-only" onChange={(event) => { uploadOwnershipDocument(identityDocumentType, event.target.files?.[0]); event.target.value = ""; }} /><button type="button" disabled={Boolean(!ownershipClaim || ownershipUploadBusy || ownershipDocuments["identity-passport"] || ownershipDocuments["identity-driving-licence"])} onClick={() => identityUploadRef.current?.click()} className="mt-3 border border-emerald-700 bg-emerald-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">{ownershipUploadBusy === identityDocumentType ? "Uploading..." : "Upload photo ID"}</button><p className="mt-1 text-xs text-gray-500">PDF, JPG or PNG, up to 10 MB.</p>{(ownershipDocuments["identity-passport"] || ownershipDocuments["identity-driving-licence"]) ? <div className="mt-2 flex items-center justify-between gap-2 text-xs text-emerald-800"><span className="min-w-0 break-all">Submitted: {(ownershipDocuments["identity-passport"] || ownershipDocuments["identity-driving-licence"]).original_file_name} (unverified)</span><button type="button" disabled={Boolean(ownershipUploadBusy)} onClick={() => removeOwnershipDocument(ownershipDocuments["identity-passport"] || ownershipDocuments["identity-driving-licence"])} className="font-semibold text-red-700 underline disabled:opacity-50">Remove</button></div> : null}</></div>
                 <div className="border border-gray-200 p-3 text-sm"><strong>Property ownership</strong><p className="mt-1 text-xs text-gray-600">Title register or shared-ownership agreement for later comparison with the verified identity.</p><p className="mt-2 text-xs font-semibold">{ownershipClaim?.registry_check_status?.replaceAll("-", " ") || "Not started"}</p><><input ref={ownershipUploadRef} type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" aria-label="Ownership document file" className="sr-only" onChange={(event) => { uploadOwnershipDocument("ownership-title-register", event.target.files?.[0]); event.target.value = ""; }} /><button type="button" disabled={Boolean(!ownershipClaim || ownershipUploadBusy || ownershipDocuments["ownership-title-register"])} onClick={() => ownershipUploadRef.current?.click()} className="mt-3 border border-emerald-700 bg-emerald-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">{ownershipUploadBusy === "ownership-title-register" ? "Uploading..." : "Upload ownership document"}</button><p className="mt-1 text-xs text-gray-500">PDF, JPG or PNG, up to 10 MB.</p>{ownershipDocuments["ownership-title-register"] ? <div className="mt-2 flex items-center justify-between gap-2 text-xs text-emerald-800"><span className="min-w-0 break-all">Submitted: {ownershipDocuments["ownership-title-register"].original_file_name} (unverified)</span><button type="button" disabled={Boolean(ownershipUploadBusy)} onClick={() => removeOwnershipDocument(ownershipDocuments["ownership-title-register"])} className="font-semibold text-red-700 underline disabled:opacity-50">Remove</button></div> : null}</></div>
               </div>
               {!ownershipClaim && ownershipRecord.databaseId ? <div className="mt-4 space-y-3">
-                <label className="flex items-start gap-2 text-xs text-gray-700"><input type="checkbox" checked={ownershipDeclaration} onChange={(event) => setOwnershipDeclaration(event.target.checked)} />I am the owner or am authorised to act for the owner, and I request an ownership check.</label>
-                <button type="button" disabled={!ownershipDeclaration || ownershipClaimBusy} onClick={requestOwnershipVerification} className="bg-emerald-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">{ownershipClaimBusy ? "Saving request..." : "Request ownership check"}</button>
+                <label className="flex items-start gap-2 text-xs text-gray-700"><input type="checkbox" checked={ownershipDeclaration} onChange={(event) => setOwnershipDeclaration(event.target.checked)} />I am the owner or am authorised to act for the owner. I understand this is a declaration, not a verified ownership check.</label>
+                <button type="button" disabled={!ownershipDeclaration || ownershipClaimBusy} onClick={saveOwnershipDeclaration} className="bg-emerald-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">{ownershipClaimBusy ? "Saving declaration..." : "Save ownership declaration"}</button>
               </div> : null}
               {!ownershipRecord.databaseId ? <p className="mt-3 text-xs text-amber-800">Save this home to your secure account before requesting verification.</p> : null}
-              {ownershipClaim && ownershipClaim.status !== "verified" ? <p className="mt-3 text-xs text-gray-600">Request saved. No identity or registry check has been performed until the verification service is connected.</p> : null}
+              {ownershipClaim && ownershipClaim.status !== "verified" ? <p className="mt-3 text-xs text-gray-600">Declaration saved. Identity and registry checks have not been performed. Documents can be added before a later verification request.</p> : null}
               {ownershipClaimError ? <p role="alert" className="mt-3 text-xs text-red-800">{ownershipClaimError}</p> : null}
               {ownershipUploadStatus ? <p role="status" className="mt-3 text-xs text-gray-700">{ownershipUploadStatus}</p> : null}
-              {showSetupOverlay && ownershipDocuments["ownership-title-register"] && (ownershipDocuments["identity-passport"] || ownershipDocuments["identity-driving-licence"]) ? (
+              {showSetupOverlay && ownershipClaim ? (
                 <button type="button" onClick={finishSetupOverlay} className="mt-4 bg-emerald-700 px-4 py-2 text-xs font-bold text-white">Finish setup</button>
               ) : null}
               {(ownershipRecord.titleNumber || ownershipRecord.ownershipEvidence?.fileName || ownershipRecord.ownershipEvidence?.titleNumber) ? (
