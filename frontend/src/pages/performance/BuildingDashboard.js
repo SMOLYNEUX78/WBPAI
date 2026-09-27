@@ -8752,6 +8752,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, isActive = false }) 
     setPropertySearch((current) => ({ ...current, uprn: candidate.uprn,
       latitude: candidate.latitude ?? current.latitude,
       longitude: candidate.longitude ?? current.longitude }));
+    setOwnershipDraft((current) => ({ ...current, uprn: candidate.uprn }));
     setUprnFinderOpen(false);
   };
 
@@ -8915,7 +8916,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, isActive = false }) 
 
   const confirmPropertyDiscovery = () => {
     if (!propertyDiscovery) return;
-    const uprn = propertySearch.uprn.trim();
+    const uprn = ownershipDraft.uprn.trim() || propertySearch.uprn.trim();
     const confirmedSnapshot = {
       ...propertyDiscovery,
       uprn,
@@ -9065,7 +9066,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, isActive = false }) 
       createdAt,
       lifecycleStage: "occupy",
       ...ownershipDraft,
-      propertyDiscovery,
+      propertyDiscovery: propertyDiscovery ? { ...propertyDiscovery, uprn: ownershipDraft.uprn.trim() } : null,
     });
     let genesisHash = "hash-pending";
 
@@ -9084,7 +9085,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, isActive = false }) 
       custodianStatus: "active",
       genesisHash,
       ...ownershipDraft,
-      propertyDiscovery,
+      propertyDiscovery: propertyDiscovery ? { ...propertyDiscovery, uprn: ownershipDraft.uprn.trim() } : null,
       history: [
         {
           event: "Building passport created",
@@ -9104,7 +9105,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, isActive = false }) 
       window.localStorage.setItem("wbp-new-building-passport", JSON.stringify(securedRecord));
       setOwnershipRecord(securedRecord);
       setPassportSaveStatus("saved");
-      finishSetupOverlay();
+      // Keep the setup open for the private identity and title-evidence step.
     } catch (error) {
       setPassportSaveStatus("error");
       setPassportSaveError(error?.message || "The profile is saved on this browser, but not yet in your secure account.");
@@ -9261,7 +9262,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, isActive = false }) 
               <p className="text-xs font-bold uppercase text-emerald-700">New home profile</p>
               <h3 className="mt-1 text-xl font-bold">Let’s set up your home</h3>
               <p className="mt-1 max-w-2xl text-sm text-gray-600">
-                Find the address, confirm it is yours and create the profile. Documents and monitoring can be added afterwards.
+                Find your home, create its profile, then submit private documents for the ownership check.
               </p>
             </div>
 
@@ -9271,7 +9272,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, isActive = false }) 
               </div>
             ) : null}
 
-            {!propertyDiscovery?.confirmedAt ? <section className="mt-5 border border-gray-200 bg-gray-50 p-3 sm:p-4">
+            {!propertyDiscovery?.confirmedAt ? <section className="wbp-setup-step-enter mt-5 border border-gray-200 bg-gray-50 p-3 sm:p-4">
               <div>
                 <p className="text-xs font-bold uppercase text-blue-700">Step 1 of 3</p>
                 <h4 className="mt-1 text-base font-bold">Find your home</h4>
@@ -9323,41 +9324,6 @@ export const NewBuildingSetupPanel = ({ freshStart = false, isActive = false }) 
                     </p>
                   </div>
 
-                  <div className="border border-blue-200 bg-white p-3">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-bold">Find your property number</p>
-                        <p className="mt-1 max-w-xl text-xs text-gray-600">
-                          Search using the address and postcode above, then select your home from the matches.
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setUprnLookupError("");
-                          setUprnLookupStatus("idle");
-                          setUprnFinderOpen(true);
-                          findUprnForAddress();
-                        }}
-                        className="border border-blue-700 bg-white px-3 py-2 text-xs font-bold text-blue-800"
-                      >
-                        Find UPRN
-                      </button>
-                    </div>
-                    {propertySearch.uprn ? <p className="mt-3 text-xs font-semibold text-emerald-900">Selected UPRN: {propertySearch.uprn}</p> : null}
-                    <details className="mt-3 text-xs text-gray-700">
-                      <summary className="cursor-pointer font-semibold">Already know your UPRN?</summary>
-                      <label className="mt-2 block space-y-1">
-                        <span>Enter it here</span>
-                        <input inputMode="numeric" className="w-full border border-gray-300 p-2 text-sm sm:max-w-sm"
-                          value={propertySearch.uprn}
-                          onChange={(event) => updatePropertySearch("uprn", event.target.value.replace(/\D/g, ""))}
-                          placeholder="UPRN" />
-                      </label>
-                    </details>
-                    <p className="mt-2 text-[11px] text-gray-500">You can continue without a UPRN. An address match does not verify ownership.</p>
-                  </div>
-
                   <details className="border border-gray-200 bg-white p-3">
                     <summary className="cursor-pointer text-xs font-semibold text-gray-700">What did WBP check?</summary>
                     <div className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -9379,11 +9345,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, isActive = false }) 
 
                   <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 pt-3">
                     <p className="text-xs text-gray-600">
-                      {propertyDiscovery.confirmedAt
-                        ? "Home confirmed"
-                        : propertySearch.uprn.trim()
-                        ? "UPRN added. Confirm this is the correct home."
-                        : "You can continue without the UPRN and add it later."}
+                      {propertyDiscovery.confirmedAt ? "Home confirmed" : "Confirm this is the correct home. The optional UPRN comes next."}
                     </p>
                     {!propertyDiscovery.confirmedAt ? (
                       <button type="button" onClick={confirmPropertyDiscovery} className="border border-emerald-700 bg-white px-3 py-2 text-xs font-bold text-emerald-800">
@@ -9402,6 +9364,14 @@ export const NewBuildingSetupPanel = ({ freshStart = false, isActive = false }) 
                 <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs font-bold uppercase text-emerald-700">Step 2 of 3</p><button type="button" onClick={() => { const updated = { ...propertyDiscovery, confirmedAt: null }; setPropertyDiscovery(updated); window.localStorage.setItem(PROPERTY_DISCOVERY_CACHE_KEY, JSON.stringify({ search: propertySearch, snapshot: updated })); }} className="text-xs font-semibold text-blue-700 underline">Change home</button></div>
                 <h4 className="mt-1 text-base font-bold">About you</h4>
                 <p className="mt-1 text-xs text-gray-600">{propertyDiscovery.address}, {propertyDiscovery.postcode}</p>
+                <div className="mt-4 border border-blue-200 bg-blue-50 p-3">
+                  <label className="block text-xs font-semibold text-gray-800" htmlFor="setup-uprn">Property number (UPRN, optional)</label>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <input id="setup-uprn" inputMode="numeric" className="min-w-0 flex-1 border border-gray-300 bg-white p-2 text-sm" value={ownershipDraft.uprn} onChange={(event) => { const uprn = event.target.value.replace(/\D/g, ""); updateOwnershipDraft("uprn", uprn); updatePropertySearch("uprn", uprn); }} placeholder="Add it now or later" />
+                    <button type="button" onClick={() => { setUprnLookupError(""); setUprnLookupStatus("idle"); setUprnFinderOpen(true); findUprnForAddress(); }} className="border border-blue-700 bg-white px-3 py-2 text-xs font-bold text-blue-800">Find from address</button>
+                  </div>
+                  <p className="mt-2 text-xs text-gray-600">This identifies the property; it does not prove ownership.</p>
+                </div>
                 <div className="mt-4 grid gap-4 sm:grid-cols-2">
                   <label className="space-y-1">
                     <span className="text-xs font-semibold text-gray-700">Your name</span>
@@ -9483,6 +9453,9 @@ export const NewBuildingSetupPanel = ({ freshStart = false, isActive = false }) 
               {ownershipClaim && ownershipClaim.status !== "verified" ? <p className="mt-3 text-xs text-gray-600">Request saved. No identity or registry check has been performed until the verification service is connected.</p> : null}
               {ownershipClaimError ? <p role="alert" className="mt-3 text-xs text-red-800">{ownershipClaimError}</p> : null}
               {ownershipUploadStatus ? <p role="status" className="mt-3 text-xs text-gray-700">{ownershipUploadStatus}</p> : null}
+              {showSetupOverlay && ownershipDocuments["ownership-title-register"] && (ownershipDocuments["identity-passport"] || ownershipDocuments["identity-driving-licence"]) ? (
+                <button type="button" onClick={finishSetupOverlay} className="mt-4 bg-emerald-700 px-4 py-2 text-xs font-bold text-white">Finish setup</button>
+              ) : null}
               {(ownershipRecord.titleNumber || ownershipRecord.ownershipEvidence?.fileName || ownershipRecord.ownershipEvidence?.titleNumber) ? (
                 <button type="button" onClick={clearSavedOwnershipEvidence} className="mt-4 border border-red-300 bg-white px-3 py-2 text-xs font-bold text-red-800">Remove saved ownership details</button>
               ) : null}

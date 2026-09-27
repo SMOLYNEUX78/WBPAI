@@ -50,6 +50,24 @@ test("shared ownership asks for the other owner's name in step two", () => {
   expect(screen.queryByRole("textbox", { name: "Other owner’s name or organisation" })).not.toBeInTheDocument();
 });
 
+test("UPRN is optional in step two and steps enter from the right", () => {
+  const { unmount } = render(<MemoryRouter><NewBuildingSetupPanel freshStart isActive /></MemoryRouter>);
+  expect(screen.queryByLabelText("Property number (UPRN, optional)")).not.toBeInTheDocument();
+  expect(screen.getByText("Step 1 of 3").closest("section")).toHaveClass("wbp-setup-step-enter");
+  unmount();
+
+  window.localStorage.setItem("wbp-property-discovery-draft:v1", JSON.stringify({
+    search: { address: "14 Bridgewood Road", postcode: "IP12 4HA", uprn: "" },
+    snapshot: { address: "14 Bridgewood Road", postcode: "IP12 4HA", uprn: "", sources: [], confirmedAt: "2026-09-24T00:00:00Z" },
+  }));
+  render(<MemoryRouter><NewBuildingSetupPanel isActive /></MemoryRouter>);
+  const uprn = screen.getByLabelText("Property number (UPRN, optional)");
+  expect(uprn).toHaveValue("");
+  expect(screen.getByText("Step 2 of 3").closest("section")).toHaveClass("wbp-setup-step-enter");
+  fireEvent.change(uprn, { target: { value: "100091142492" } });
+  expect(uprn).toHaveValue("100091142492");
+});
+
 test("fresh New workspace does not hydrate the existing home or model", () => {
   window.localStorage.setItem("wbp-new-building-passport", JSON.stringify({
     recordId: "WBP-EXISTING", legalOwnerName: "Existing Owner",
