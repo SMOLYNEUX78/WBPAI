@@ -8732,6 +8732,14 @@ export const NewBuildingSetupPanel = ({ freshStart = false, isActive = false }) 
       setDiscoveryError("Enter the address, postcode and UPRN before continuing.");
       return;
     }
+    if (propertyDiscovery?.address === propertySearch.address.trim()
+      && propertyDiscovery.postcode === postcode
+      && propertyDiscovery.uprn === propertySearch.uprn.trim()
+      && propertyDiscovery.addressVerification) {
+      setDiscoveryError("");
+      setDiscoveryStatus("complete");
+      return;
+    }
 
     setDiscoveryStatus("loading");
     setDiscoveryError("");
@@ -8740,8 +8748,12 @@ export const NewBuildingSetupPanel = ({ freshStart = false, isActive = false }) 
       const matchedUprn = propertySearch.uprn.trim();
       let addressVerification = { status: "unavailable", registered: null };
       try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (!sessionData?.session?.access_token) throw new Error("Not signed in");
         const params = new URLSearchParams({ address: propertySearch.address.trim(), postcode, uprn: matchedUprn });
-        const response = await fetch(`/api/lookupAddress?${params}`);
+        const response = await fetch(`/api/lookupAddress?${params}`, {
+          headers: { Authorization: `Bearer ${sessionData.session.access_token}` },
+        });
         if (response.ok) {
           const result = await response.json();
           addressVerification = { status: result.match ? "matched" : "mismatch", registered: result.registered || null };

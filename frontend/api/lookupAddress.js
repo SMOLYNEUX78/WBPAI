@@ -1,4 +1,6 @@
 const cleanPostcode = (value) => String(value || "").toUpperCase().replace(/\s/g, "");
+const supabaseUrl = process.env.SUPABASE_URL || process.env.REACT_APP_SUPABASE_URL || "https://hvtuvapshvhwfgnnhzbh.supabase.co";
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh2dHV2YXBzaHZod2Znbm5oemJoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQ3MjM4NTMsImV4cCI6MjA2MDI5OTg1M30.rZzCXqkhf93-8o5EYylgaCWxyTxeMzsNvl1lEzeBSpY";
 const addressTokens = (value) => String(value || "").toUpperCase().replace(/[^A-Z0-9 ]/g, " ").split(/\s+/).filter(Boolean);
 
 const addressesMatch = (entered, registered) => {
@@ -18,6 +20,18 @@ module.exports = async function lookupAddress(request, response) {
   if (uprn && !/^\d{1,12}$/.test(uprn)) return response.status(400).json({ error: "Enter a valid UPRN." });
   const key = process.env.OS_PLACES_API_KEY;
   if (!key) return response.status(503).json({ error: "Address lookup is not configured yet." });
+  const authorization = String(request.headers?.authorization || "");
+  if (!/^Bearer \S+$/.test(authorization)) return response.status(401).json({ error: "Sign in to check an address." });
+
+  try {
+    const auth = await fetch(`${supabaseUrl}/auth/v1/user`, {
+      headers: { apikey: supabaseAnonKey, authorization },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!auth.ok) return response.status(401).json({ error: "Sign in again to check an address." });
+  } catch {
+    return response.status(503).json({ error: "Sign-in verification is temporarily unavailable." });
+  }
 
   try {
     const url = new URL(`https://api.os.uk/search/places/v1/${uprn ? "uprn" : "find"}`);

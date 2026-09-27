@@ -6,14 +6,16 @@ const runLookup = async (query, results) => {
   const previousKey = process.env.OS_PLACES_API_KEY;
   const previousFetch = global.fetch;
   process.env.OS_PLACES_API_KEY = "test-key";
-  global.fetch = async () => ({ ok: true, json: async () => ({ results }) });
+  global.fetch = async (url) => String(url).includes("/auth/v1/user")
+    ? { ok: true }
+    : { ok: true, json: async () => ({ results }) };
   const response = {
     status(code) { this.code = code; return this; },
     setHeader() {},
     json(body) { this.body = body; return this; },
   };
   try {
-    await lookupAddress({ method: "GET", query }, response);
+    await lookupAddress({ method: "GET", query, headers: { authorization: "Bearer test-session" } }, response);
     return response;
   } finally {
     global.fetch = previousFetch;

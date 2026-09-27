@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { NewBuildingSetupPanel } from "./BuildingDashboard";
+import supabase from "../../supabaseClient";
 
 beforeEach(() => window.localStorage.clear());
 
@@ -69,6 +70,7 @@ test("UPRN is collected with the address before home confirmation", () => {
 
 test("address check verifies the UPRN against the registered address", async () => {
   const previousFetch = global.fetch;
+  const sessionSpy = jest.spyOn(supabase.auth, "getSession").mockResolvedValue({ data: { session: { access_token: "test-session" } } });
   global.fetch = jest.fn(async (url) => ({
     ok: true,
     json: async () => String(url).includes("lookupAddress")
@@ -88,18 +90,23 @@ test("address check verifies the UPRN against the registered address", async () 
     fireEvent.click(screen.getByRole("button", { name: "Check address" }));
     await waitFor(() => expect(screen.getByText("UPRN 100091142492")).toBeInTheDocument());
     expect(screen.queryByText("What did WBP check?")).not.toBeInTheDocument();
-    expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining("/api/lookupAddress?"));
+    expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining("/api/lookupAddress?"), { headers: { Authorization: "Bearer test-session" } });
     expect(screen.getByText(/Address and UPRN matched against OS Places/)).toBeInTheDocument();
+    const lookupCount = global.fetch.mock.calls.filter(([url]) => String(url).includes("/api/lookupAddress?")).length;
+    fireEvent.click(screen.getByRole("button", { name: "Check address" }));
+    expect(global.fetch.mock.calls.filter(([url]) => String(url).includes("/api/lookupAddress?"))).toHaveLength(lookupCount);
     fireEvent.click(screen.getByRole("button", { name: "Use this home" }));
     fireEvent.click(screen.getByRole("tab", { name: "design" }));
     expect(screen.getByText(/Confirmed property UPRN:/)).toHaveTextContent("100091142492");
   } finally {
+    sessionSpy.mockRestore();
     global.fetch = previousFetch;
   }
 });
 
 test("address mismatch blocks home confirmation", async () => {
   const previousFetch = global.fetch;
+  const sessionSpy = jest.spyOn(supabase.auth, "getSession").mockResolvedValue({ data: { session: { access_token: "test-session" } } });
   global.fetch = jest.fn(async (url) => ({ ok: true, json: async () => String(url).includes("lookupAddress")
     ? { match: false, registered: { address: "16 Bridgewood Road", postcode: "IP12 4HA", uprn: "100091142492" } }
     : { result: { latitude: 52.0945, longitude: 1.3048 }, entities: [] } }));
@@ -112,6 +119,7 @@ test("address mismatch blocks home confirmation", async () => {
     await waitFor(() => expect(screen.getByText(/Address and UPRN do not match/)).toBeInTheDocument());
     expect(screen.queryByRole("button", { name: "Use this home" })).not.toBeInTheDocument();
   } finally {
+    sessionSpy.mockRestore();
     global.fetch = previousFetch;
   }
 });
