@@ -29,6 +29,8 @@ export const DetailSurface = ({ children, title, onClose, modal, headerExtra }) 
   );
 };
 
+const PortalWhen = ({ active, children }) => active ? createPortal(children, document.body) : children;
+
 const DEFAULT_MATTERPORT_URL = "https://my.matterport.com/show/?m=zHm8SwWeHiN";
 const BRIDGEWOOD_UPRN = "100091142492";
 const isBridgewoodPassport = (record) => record?.uprn === BRIDGEWOOD_UPRN
@@ -8947,6 +8949,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false }) => {
           {passportSaveError ? <p className="mx-3 mt-3 border border-red-200 bg-red-50 p-2 text-xs text-red-800 sm:mx-8 lg:mx-12">{passportSaveError}</p> : null}
         </> : null}
       </section>
+      <PortalWhen active={showSetupOverlay}>
       <section className={`mx-4 mb-4 bg-gray-100 p-4 shadow ${showSetupOverlay ? `wbp-setup-overlay ${setupOverlayExiting ? "wbp-setup-overlay--exiting" : ""}` : ""}`} role={showSetupOverlay ? "dialog" : undefined} aria-modal={showSetupOverlay ? "true" : undefined} aria-label={showSetupOverlay ? "Let's set up your home" : undefined}>
       {historyStage === "audit" ? <>
       {showSetupOverlay ? <div className="mb-3 flex justify-end"><button type="button" onClick={() => setShowSetupOverlay(false)} className="border border-gray-300 bg-white px-3 py-1.5 text-sm font-semibold text-gray-800">Close</button></div> : null}
@@ -9836,6 +9839,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false }) => {
           draftHistory={historyDraft} onDraftHistoryChange={setHistoryDraft} onPlanningLookup={setDesignPlanningLookup} />
       </div></div>}
       </section>
+      </PortalWhen>
     </div>
   );
 };
