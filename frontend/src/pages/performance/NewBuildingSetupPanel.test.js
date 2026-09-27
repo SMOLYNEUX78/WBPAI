@@ -67,11 +67,13 @@ test("UPRN is collected with the address before home confirmation", () => {
   expect(screen.getByText("Step 2 of 3").closest("section")).toHaveClass("wbp-setup-step-enter");
 });
 
-test("address check shows the entered UPRN without calling an address API", async () => {
+test("address check verifies the UPRN against the registered address", async () => {
   const previousFetch = global.fetch;
   global.fetch = jest.fn(async (url) => ({
     ok: true,
-    json: async () => String(url).includes("postcodes.io")
+    json: async () => String(url).includes("lookupAddress")
+        ? { match: true, registered: { address: "14 Bridgewood Road, Woodbridge", postcode: "IP12 4HA", uprn: "100091142492" } }
+        : String(url).includes("postcodes.io")
         ? { result: { latitude: 52.0945, longitude: 1.3048, admin_district: "East Suffolk" } }
         : { entities: [] },
   }));
@@ -86,10 +88,29 @@ test("address check shows the entered UPRN without calling an address API", asyn
     fireEvent.click(screen.getByRole("button", { name: "Check address" }));
     await waitFor(() => expect(screen.getByText("UPRN 100091142492")).toBeInTheDocument());
     expect(screen.queryByText("What did WBP check?")).not.toBeInTheDocument();
-    expect(global.fetch).not.toHaveBeenCalledWith(expect.stringContaining("/api/lookupAddress?"));
+    expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining("/api/lookupAddress?"));
+    expect(screen.getByText(/Address and UPRN matched against OS Places/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Use this home" }));
     fireEvent.click(screen.getByRole("tab", { name: "design" }));
     expect(screen.getByText(/Confirmed property UPRN:/)).toHaveTextContent("100091142492");
+  } finally {
+    global.fetch = previousFetch;
+  }
+});
+
+test("address mismatch blocks home confirmation", async () => {
+  const previousFetch = global.fetch;
+  global.fetch = jest.fn(async (url) => ({ ok: true, json: async () => String(url).includes("lookupAddress")
+    ? { match: false, registered: { address: "16 Bridgewood Road", postcode: "IP12 4HA", uprn: "100091142492" } }
+    : { result: { latitude: 52.0945, longitude: 1.3048 }, entities: [] } }));
+  try {
+    render(<MemoryRouter><NewBuildingSetupPanel freshStart isActive /></MemoryRouter>);
+    fireEvent.change(screen.getByRole("textbox", { name: "Property address" }), { target: { value: "14 Bridgewood Road" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Postcode" }), { target: { value: "IP12 4HA" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Property number (UPRN)" }), { target: { value: "100091142492" } });
+    fireEvent.click(screen.getByRole("button", { name: "Check address" }));
+    await waitFor(() => expect(screen.getByText(/Address and UPRN do not match/)).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: "Use this home" })).not.toBeInTheDocument();
   } finally {
     global.fetch = previousFetch;
   }

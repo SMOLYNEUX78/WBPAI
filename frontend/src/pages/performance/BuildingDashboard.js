@@ -8738,6 +8738,17 @@ export const NewBuildingSetupPanel = ({ freshStart = false, isActive = false }) 
 
     try {
       const matchedUprn = propertySearch.uprn.trim();
+      let addressVerification = { status: "unavailable", registered: null };
+      try {
+        const params = new URLSearchParams({ address: propertySearch.address.trim(), postcode, uprn: matchedUprn });
+        const response = await fetch(`/api/lookupAddress?${params}`);
+        if (response.ok) {
+          const result = await response.json();
+          addressVerification = { status: result.match ? "matched" : "mismatch", registered: result.registered || null };
+        }
+      } catch {
+        // A failed provider check must never be presented as a verified address.
+      }
       const sharedLookup = designPlanningLookup?.address.toLowerCase() === propertySearch.address.trim().toLowerCase()
         && designPlanningLookup?.postcode === postcode.replace(/\s+/g, "");
       let latitude = Number(propertySearch.latitude) || (sharedLookup ? designPlanningLookup.latitude : null);
@@ -8801,6 +8812,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, isActive = false }) 
         address: propertySearch.address.trim(),
         postcode,
         uprn: matchedUprn,
+        addressVerification,
         latitude,
         longitude,
         localAuthority,
@@ -8838,13 +8850,9 @@ export const NewBuildingSetupPanel = ({ freshStart = false, isActive = false }) 
           {
             id: "ownership",
             label: "Ownership evidence",
-            status: matchedUprn ? "found" : "action",
-            detail: matchedUprn
-              ? `UPRN ${matchedUprn} entered by the homeowner; address match awaits review`
-              : "Homeowner has not supplied a UPRN",
-            provenance: matchedUprn
-              ? "Homeowner supplied"
-              : "Pending",
+            status: addressVerification.status === "matched" ? "checked" : "action",
+            detail: addressVerification.status === "matched" ? `UPRN ${matchedUprn} matched to the entered address by OS Places` : `UPRN ${matchedUprn} supplied by the homeowner; independent match ${addressVerification.status}`,
+            provenance: addressVerification.status === "matched" ? "OS Places" : "Homeowner supplied",
           },
           {
             id: "building-control",
@@ -8887,7 +8895,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, isActive = false }) 
   };
 
   const confirmPropertyDiscovery = () => {
-    if (!propertyDiscovery) return;
+    if (!propertyDiscovery || propertyDiscovery.addressVerification?.status === "mismatch") return;
     const uprn = ownershipDraft.uprn.trim() || propertySearch.uprn.trim();
     const confirmedSnapshot = {
       ...propertyDiscovery,
@@ -8898,10 +8906,10 @@ export const NewBuildingSetupPanel = ({ freshStart = false, isActive = false }) 
           ? {
               ...source,
               status: uprn ? "found" : "action",
-              detail: uprn
-                ? `UPRN ${uprn} added by the homeowner`
-                : "Property number can be added later",
-              provenance: uprn ? "Homeowner confirmed" : "Pending",
+              detail: propertyDiscovery.addressVerification?.status === "matched"
+                ? `UPRN ${uprn} matched to the entered address by OS Places`
+                : `UPRN ${uprn} confirmed by the homeowner; independent match pending`,
+              provenance: propertyDiscovery.addressVerification?.status === "matched" ? "OS Places" : "Homeowner confirmed",
             }
           : source
       ),
@@ -9296,14 +9304,16 @@ export const NewBuildingSetupPanel = ({ freshStart = false, isActive = false }) 
                       {propertyDiscovery.localAuthority ? ` · ${propertyDiscovery.localAuthority}` : ""}
                     </p>
                     {propertyDiscovery.uprn ? <p className="mt-1 text-xs font-semibold">UPRN {propertyDiscovery.uprn}</p> : null}
-                    <p className="mt-1 text-xs">UPRN supplied by you; WBP has not independently matched it to the address.</p>
+                    {propertyDiscovery.addressVerification?.status === "matched" ? <p className="mt-1 text-xs font-semibold">Address and UPRN matched against OS Places. This does not prove ownership.</p>
+                      : propertyDiscovery.addressVerification?.status === "mismatch" ? <p className="mt-1 text-xs font-semibold text-red-800">Address and UPRN do not match the OS Places record{propertyDiscovery.addressVerification.registered ? `: ${propertyDiscovery.addressVerification.registered.address}` : ""}. Correct them and check again.</p>
+                      : <p className="mt-1 text-xs">UPRN supplied by you; independent address matching is unavailable. This does not prove ownership.</p>}
                   </div>
 
                   <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 pt-3">
                     <p className="text-xs text-gray-600">
                       {propertyDiscovery.confirmedAt ? "Home confirmed" : "Confirm that the address, postcode and UPRN match."}
                     </p>
-                    {!propertyDiscovery.confirmedAt ? (
+                    {!propertyDiscovery.confirmedAt && propertyDiscovery.addressVerification?.status !== "mismatch" ? (
                       <button type="button" onClick={confirmPropertyDiscovery} className="border border-emerald-700 bg-white px-3 py-2 text-xs font-bold text-emerald-800">
                         Use this home
                       </button>
