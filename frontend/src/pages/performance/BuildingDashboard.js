@@ -7932,11 +7932,14 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
 export const NewBuildingSetupPanel = ({ freshStart = false }) => {
   const [setupTab, setSetupTab] = useState("ownership");
   const [historyStage, setHistoryStage] = useState("audit");
+  const [showSetupOverlay, setShowSetupOverlay] = useState(freshStart);
+  const [setupOverlayExiting, setSetupOverlayExiting] = useState(false);
   const [historyDraft, setHistoryDraft] = useState({ design: {}, build: {} });
   const [designPlanningLookup, setDesignPlanningLookup] = useState(null);
   const setupPanelRef = useRef(null);
   const setupContentRef = useRef(null);
   const previousPanelHeightRef = useRef(null);
+  const setupOverlayTimerRef = useRef(null);
   const location = useLocation();
   const recordMode = new URLSearchParams(location.search).get("record") || "new";
   const [ownershipRecord, setOwnershipRecord] = useState(() => {
@@ -7957,6 +7960,22 @@ export const NewBuildingSetupPanel = ({ freshStart = false }) => {
     }
   });
   const [passportSaveError, setPassportSaveError] = useState("");
+  useEffect(() => () => window.clearTimeout(setupOverlayTimerRef.current), []);
+  useEffect(() => {
+    if (!showSetupOverlay) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = previousOverflow; };
+  }, [showSetupOverlay]);
+  const finishSetupOverlay = () => {
+    if (!showSetupOverlay) return;
+    setHistoryStage("audit");
+    setSetupOverlayExiting(true);
+    setupOverlayTimerRef.current = window.setTimeout(() => {
+      setShowSetupOverlay(false);
+      setSetupOverlayExiting(false);
+    }, 420);
+  };
   const [ownershipDraft, setOwnershipDraft] = useState({
     ownershipType: "owner-occupier",
     legalOwnerName: "",
@@ -8757,6 +8776,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false }) => {
       window.localStorage.setItem("wbp-new-building-passport", JSON.stringify(securedRecord));
       setOwnershipRecord(securedRecord);
       setPassportSaveStatus("saved");
+      finishSetupOverlay();
     } catch (error) {
       setPassportSaveStatus("error");
       setPassportSaveError(error?.message || "The profile could not be saved securely.");
@@ -8811,6 +8831,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false }) => {
       window.localStorage.setItem("wbp-new-building-passport", JSON.stringify(securedRecord));
       setOwnershipRecord(securedRecord);
       setPassportSaveStatus("saved");
+      finishSetupOverlay();
     } catch (error) {
       setPassportSaveStatus("error");
       setPassportSaveError(error?.message || "The profile is saved on this browser, but not yet in your secure account.");
@@ -8919,18 +8940,19 @@ export const NewBuildingSetupPanel = ({ freshStart = false }) => {
             disabled={item !== "audit" && !historyUnlocked}
             title={item !== "audit" && !historyUnlocked ? "Check your address in Audit to unlock this section" : undefined}
             onClick={() => setHistoryStage(item)}
-            className={`min-w-0 flex-1 border-x border-t px-2 py-2 text-xs font-semibold capitalize transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${historyStage === item ? "border-gray-300 bg-gray-100 text-gray-950" : "border-transparent bg-emerald-100 text-emerald-800 hover:bg-emerald-50"}`}>{item}</button>)}
+            className={`min-w-0 flex-1 border-x border-t px-2 py-2 text-xs font-semibold capitalize transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${historyStage === item ? "border-gray-300 bg-gray-100 text-gray-950" : "border-transparent bg-emerald-100 text-emerald-800 hover:bg-emerald-50"}`}>{item}{item === "audit" && passportSaveStatus === "saved" ? <span className="ml-1 text-[10px] font-normal normal-case">· Home setup complete</span> : null}</button>)}
         </div>
         {ownershipRecord ? <>
           {passportSaveStatus !== "saved" ? <div className="mx-3 mt-4 flex justify-end sm:mx-8 lg:mx-12"><button type="button" disabled={passportSaveStatus === "saving"} onClick={secureExistingPassport} className="bg-emerald-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">{passportSaveStatus === "saving" ? "Saving..." : "Save to secure account"}</button></div> : null}
           {passportSaveError ? <p className="mx-3 mt-3 border border-red-200 bg-red-50 p-2 text-xs text-red-800 sm:mx-8 lg:mx-12">{passportSaveError}</p> : null}
         </> : null}
       </section>
-      <section className="mx-4 mb-4 bg-gray-100 p-4 shadow">
+      <section className={`mx-4 mb-4 bg-gray-100 p-4 shadow ${showSetupOverlay ? `wbp-setup-overlay ${setupOverlayExiting ? "wbp-setup-overlay--exiting" : ""}` : ""}`} role={showSetupOverlay ? "dialog" : undefined} aria-modal={showSetupOverlay ? "true" : undefined} aria-label={showSetupOverlay ? "Let's set up your home" : undefined}>
       {historyStage === "audit" ? <>
-      <header className="border-b border-gray-300">
+      {showSetupOverlay ? <div className="mb-3 flex justify-end"><button type="button" onClick={() => setShowSetupOverlay(false)} className="border border-gray-300 bg-white px-3 py-1.5 text-sm font-semibold text-gray-800">Close</button></div> : null}
+      <header className={`border-b border-gray-300 ${showSetupOverlay ? "hidden" : ""}`}>
       <nav className="relative -mb-px grid w-full min-w-0 grid-cols-4 gap-1 sm:flex sm:justify-center" role="tablist" aria-label="New building sections">
-        {[["ownership", "Ownership"], ["measurements", "Measurements"], ["performance", "Performance"], ["carbon", "Carbon Context"]].map(([id, label]) => (
+        {[["ownership", "Ownership"], ["measurements", "3D Model"], ["performance", "Monitoring"], ["carbon", "Carbon Context"]].map(([id, label]) => (
           <button
             key={id}
             type="button"
@@ -8954,7 +8976,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false }) => {
         ))}
       </nav>
       </header>
-      {ownershipRecord ? <div className="mb-4 border-b border-gray-200 pb-4"><div className="flex items-center justify-between gap-3"><div><h3 className="text-sm font-bold text-emerald-950">Ready to monitor</h3><p className="text-xs text-gray-600">{monitoringCompleteCount}/{monitoringReadinessSteps.length} setup steps complete</p></div><span className="text-sm font-bold text-emerald-900">{monitoringProgress}%</span></div><div role="progressbar" aria-label="Ready to monitor" aria-valuenow={monitoringProgress} aria-valuemin={0} aria-valuemax={100} className="mt-2 h-2 overflow-hidden bg-emerald-200"><div className="h-full bg-emerald-700 transition-[width] duration-300" style={{ width: `${monitoringProgress}%` }} /></div><details className="mt-2 text-xs text-emerald-950"><summary className="cursor-pointer font-semibold">What’s needed</summary><ul className="mt-2 grid gap-1 pl-5 text-gray-700 sm:grid-cols-2">{monitoringReadinessSteps.filter((step) => !step.complete).map((step) => <li key={step.label} className="list-disc">{step.label}</li>)}</ul></details></div> : null}
+      {ownershipRecord && !showSetupOverlay ? <div className="mb-4 border-b border-gray-200 pb-4"><div className="flex items-center justify-between gap-3"><div><h3 className="text-sm font-bold text-emerald-950">Ready to monitor</h3><p className="text-xs text-gray-600">{monitoringCompleteCount}/{monitoringReadinessSteps.length} setup steps complete</p></div><span className="text-sm font-bold text-emerald-900">{monitoringProgress}%</span></div><div role="progressbar" aria-label="Ready to monitor" aria-valuenow={monitoringProgress} aria-valuemin={0} aria-valuemax={100} className="mt-2 h-2 overflow-hidden bg-emerald-200"><div className="h-full bg-emerald-700 transition-[width] duration-300" style={{ width: `${monitoringProgress}%` }} /></div><details className="mt-2 text-xs text-emerald-950"><summary className="cursor-pointer font-semibold">What’s needed</summary><ul className="mt-2 grid gap-1 pl-5 text-gray-700 sm:grid-cols-2">{monitoringReadinessSteps.filter((step) => !step.complete).map((step) => <li key={step.label} className="list-disc">{step.label}</li>)}</ul></details></div> : null}
       <div ref={setupPanelRef} id="new-building-panel" role="tabpanel" aria-labelledby={`new-building-tab-${setupTab}`} className="overflow-hidden pt-4">
       <div ref={setupContentRef}>
       <div style={{ display: setupTab === "ownership" ? undefined : "none" }}>
@@ -9803,7 +9825,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false }) => {
 
       </div>
       </div>
-      {setupTab !== "ownership" ? <div className="mt-4 flex items-center justify-end gap-3 border-t border-gray-200 pt-4"><span role="status" className="text-xs text-gray-600">{sectionSaveStatus === `${setupTab} saved on this device` ? "Saved on this device" : sectionSaveStatus === `${setupTab} saved to account` ? "Saved to account" : ""}</span><button type="button" onClick={saveSetupSection} className="bg-emerald-700 px-4 py-2 text-sm font-bold text-white">Save {setupTab === "carbon" ? "carbon context" : setupTab}</button></div> : null}
+      {setupTab !== "ownership" ? <div className="mt-4 flex items-center justify-end gap-3 border-t border-gray-200 pt-4"><span role="status" className="text-xs text-gray-600">{sectionSaveStatus === `${setupTab} saved on this device` ? "Saved on this device" : sectionSaveStatus === `${setupTab} saved to account` ? "Saved to account" : ""}</span><button type="button" onClick={saveSetupSection} className="bg-emerald-700 px-4 py-2 text-sm font-bold text-white">Save {setupTab === "carbon" ? "carbon context" : setupTab === "measurements" ? "3D model" : "monitoring"}</button></div> : null}
       </div>
       </div>
       </> : <div ref={setupPanelRef} className="overflow-hidden"><div ref={setupContentRef}>

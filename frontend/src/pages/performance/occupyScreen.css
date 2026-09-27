@@ -9,6 +9,53 @@
   background: rgb(15 23 42 / 55%);
 }
 
+.wbp-setup-overlay.wbp-setup-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10001;
+  width: 100%;
+  height: 100dvh;
+  margin: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: max(16px, env(safe-area-inset-top)) 16px max(20px, env(safe-area-inset-bottom));
+  background: rgb(17 34 29 / 48%);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+}
+
+.wbp-setup-overlay > div {
+  width: min(100%, 920px);
+  margin-inline: auto;
+}
+
+.wbp-setup-overlay form,
+.wbp-setup-overlay section.mx-auto {
+  box-shadow: 0 16px 48px rgb(0 0 0 / 18%);
+}
+
+.wbp-setup-overlay--exiting {
+  pointer-events: none;
+  animation: wbp-setup-backdrop-out 420ms ease-in forwards;
+}
+
+.wbp-setup-overlay--exiting #new-building-panel {
+  animation: wbp-setup-to-audit 420ms ease-in forwards;
+}
+
+@keyframes wbp-setup-backdrop-out {
+  to { opacity: 0; }
+}
+
+@keyframes wbp-setup-to-audit {
+  to { opacity: 0; transform: translateY(-18vh) scale(.88); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wbp-setup-overlay--exiting,
+  .wbp-setup-overlay--exiting #new-building-panel { animation: none; opacity: 0; }
+}
+
 .wbp-detail-dialog {
   display: flex;
   flex-direction: column;
