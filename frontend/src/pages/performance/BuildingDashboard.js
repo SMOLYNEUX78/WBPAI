@@ -8414,6 +8414,11 @@ export const NewBuildingSetupPanel = ({ freshStart = false }) => {
   });
   const [discoveryStatus, setDiscoveryStatus] = useState("idle");
   const [discoveryError, setDiscoveryError] = useState("");
+  const [uprnFinderOpen, setUprnFinderOpen] = useState(false);
+  const [uprnCandidate, setUprnCandidate] = useState("");
+  const [uprnLookupStatus, setUprnLookupStatus] = useState("idle");
+  const [uprnLookupError, setUprnLookupError] = useState("");
+  const [uprnLookupResult, setUprnLookupResult] = useState(null);
   const [setupMode, setSetupMode] = useState("manual");
   const [apiDetails, setApiDetails] = useState("");
   const [modelInput, setModelInput] = useState("");
@@ -8724,6 +8729,34 @@ export const NewBuildingSetupPanel = ({ freshStart = false }) => {
 
   const updatePropertySearch = (field, value) => {
     setPropertySearch((current) => ({ ...current, [field]: value }));
+  };
+
+  const checkUprn = async () => {
+    if (!/^\d{1,12}$/.test(uprnCandidate)) {
+      setUprnLookupError("Enter a UPRN of up to 12 digits.");
+      return;
+    }
+    setUprnLookupStatus("loading");
+    setUprnLookupError("");
+    setUprnLookupResult(null);
+    try {
+      const response = await fetch(`https://api.uprns.io/uprns/${uprnCandidate}`);
+      if (!response.ok) throw new Error(response.status === 404
+        ? "That UPRN was not found in the open register."
+        : "The UPRN register is unavailable. Try again later.");
+      const record = await response.json();
+      if (String(record.uprn) !== uprnCandidate) throw new Error("The returned UPRN did not match.");
+      const expectedPostcode = normalisePostcode(propertySearch.postcode).replace(/\s/g, "");
+      const foundPostcode = normalisePostcode(record.postcode || "").replace(/\s/g, "");
+      if (!foundPostcode || foundPostcode !== expectedPostcode) {
+        throw new Error("This UPRN is not linked to the postcode entered for this home.");
+      }
+      setUprnLookupResult(record);
+      setUprnLookupStatus("complete");
+    } catch (error) {
+      setUprnLookupError(error?.message || "The UPRN could not be checked.");
+      setUprnLookupStatus("error");
+    }
   };
 
   const discoverProperty = async () => {
@@ -9302,14 +9335,19 @@ export const NewBuildingSetupPanel = ({ freshStart = false }) => {
                           The UPRN is your home’s permanent reference number. It helps us avoid duplicate profiles and is free to find.
                         </p>
                       </div>
-                      <a
-                        href="https://www.findmyaddress.co.uk/search"
-                        target="_blank"
-                        rel="noreferrer"
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setUprnCandidate(propertySearch.uprn);
+                          setUprnLookupResult(null);
+                          setUprnLookupError("");
+                          setUprnLookupStatus("idle");
+                          setUprnFinderOpen(true);
+                        }}
                         className="border border-blue-700 bg-white px-3 py-2 text-xs font-bold text-blue-800"
                       >
-                        Find it free
-                      </a>
+                        Check UPRN
+                      </button>
                     </div>
                     <label className="mt-3 block space-y-1">
                       <span className="text-xs font-semibold text-gray-700">Property number (UPRN)</span>
@@ -9321,7 +9359,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false }) => {
                         placeholder="Paste the number here"
                       />
                     </label>
-                    <p className="mt-2 text-[11px] text-gray-500">FindMyAddress opens separately because its licence does not allow it to be embedded in WBP.</p>
+                    <p className="mt-2 text-[11px] text-gray-500">Check a UPRN here or continue without one. This does not verify ownership.</p>
                   </div>
 
                   <details className="border border-gray-200 bg-white p-3">
@@ -10082,6 +10120,42 @@ export const NewBuildingSetupPanel = ({ freshStart = false }) => {
       </div></div>}
       </section>
       </PortalWhen>
+      {uprnFinderOpen ? createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-3 sm:p-6"
+          onKeyDown={(event) => { if (event.key === "Escape") setUprnFinderOpen(false); }}>
+          <section role="dialog" aria-modal="true" aria-labelledby="uprn-finder-title"
+            className="w-full max-w-lg border border-gray-300 bg-white p-4 shadow-xl sm:p-6">
+            <div className="flex items-start justify-between gap-3">
+              <div><h2 id="uprn-finder-title" className="text-lg font-bold">Check property number</h2>
+                <p className="mt-1 text-sm text-gray-600">{propertySearch.address}, {propertySearch.postcode}</p></div>
+              <button type="button" onClick={() => setUprnFinderOpen(false)} aria-label="Close UPRN checker"
+                className="border border-gray-300 px-2 py-1 text-lg leading-none">×</button>
+            </div>
+            <form className="mt-5 flex flex-col gap-3 sm:flex-row" onSubmit={(event) => { event.preventDefault(); checkUprn(); }}>
+              <label className="flex-1 text-xs font-semibold text-gray-700">UPRN
+                <input autoFocus inputMode="numeric" value={uprnCandidate}
+                  onChange={(event) => { setUprnCandidate(event.target.value.replace(/\D/g, "")); setUprnLookupResult(null); }}
+                  placeholder="Enter property number" className="mt-1 w-full border border-gray-300 p-2 text-sm" />
+              </label>
+              <button type="submit" disabled={uprnLookupStatus === "loading"}
+                className="self-end border border-blue-700 bg-blue-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
+                {uprnLookupStatus === "loading" ? "Checking..." : "Check"}
+              </button>
+            </form>
+            {uprnLookupError ? <p role="alert" className="mt-3 border border-red-200 bg-red-50 p-3 text-sm text-red-800">{uprnLookupError}</p> : null}
+            {uprnLookupResult ? <div className="mt-3 border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-950">
+              <p className="font-bold">UPRN {uprnLookupResult.uprn} matches this postcode</p>
+              <p className="mt-1">{uprnLookupResult.postcode}{uprnLookupResult.admin_district ? ` · ${uprnLookupResult.admin_district}` : ""}</p>
+              <p className="mt-1 text-xs">This checks the UPRN and postcode, not the street address or legal owner.</p>
+              <button type="button" onClick={() => { updatePropertySearch("uprn", uprnCandidate); setUprnFinderOpen(false); }}
+                className="mt-3 bg-emerald-700 px-4 py-2 text-xs font-bold text-white">Use this UPRN</button>
+            </div> : null}
+            <div className="mt-5 border-t border-gray-200 pt-3 text-xs text-gray-600">
+              <p>If you do not know your UPRN, you can still <a href="https://www.findmyaddress.co.uk/search" target="_blank" rel="noreferrer" className="font-semibold text-blue-700 underline">find it on FindMyAddress</a> or add it later.</p>
+              <p className="mt-2">Contains OS data © Crown copyright and database right 2026. UPRN lookup: uprns.io.</p>
+            </div>
+          </section>
+        </div>, document.body) : null}
     </div>
   );
 };
