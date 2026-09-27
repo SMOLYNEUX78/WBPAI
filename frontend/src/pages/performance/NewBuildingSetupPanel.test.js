@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { NewBuildingSetupPanel } from "./BuildingDashboard";
 
@@ -50,9 +50,9 @@ test("shared ownership asks for the other owner's name in step two", () => {
   expect(screen.queryByRole("textbox", { name: "Other owner’s name or organisation" })).not.toBeInTheDocument();
 });
 
-test("UPRN is optional in step two and steps enter from the right", () => {
+test("UPRN lookup stays with the address and manual entry remains optional", () => {
   const { unmount } = render(<MemoryRouter><NewBuildingSetupPanel freshStart isActive /></MemoryRouter>);
-  expect(screen.queryByLabelText("Property number (UPRN, optional)")).not.toBeInTheDocument();
+  expect(screen.queryByText("What did WBP check?")).not.toBeInTheDocument();
   expect(screen.getByText("Step 1 of 3").closest("section")).toHaveClass("wbp-setup-step-enter");
   unmount();
 
@@ -61,11 +61,34 @@ test("UPRN is optional in step two and steps enter from the right", () => {
     snapshot: { address: "14 Bridgewood Road", postcode: "IP12 4HA", uprn: "", sources: [], confirmedAt: "2026-09-24T00:00:00Z" },
   }));
   render(<MemoryRouter><NewBuildingSetupPanel isActive /></MemoryRouter>);
-  const uprn = screen.getByLabelText("Property number (UPRN, optional)");
+  const uprn = screen.getByLabelText("Property number (optional)");
   expect(uprn).toHaveValue("");
   expect(screen.getByText("Step 2 of 3").closest("section")).toHaveClass("wbp-setup-step-enter");
   fireEvent.change(uprn, { target: { value: "100091142492" } });
   expect(uprn).toHaveValue("100091142492");
+});
+
+test("address check automatically shows a single matching UPRN", async () => {
+  const previousFetch = global.fetch;
+  global.fetch = jest.fn(async (url) => ({
+    ok: true,
+    json: async () => String(url).includes("/api/lookupAddress")
+      ? { candidates: [{ address: "14 Bridgewood Road, IP12 4HA", postcode: "IP12 4HA", uprn: "100091142492" }] }
+      : String(url).includes("postcodes.io")
+        ? { result: { latitude: 52.0945, longitude: 1.3048, admin_district: "East Suffolk" } }
+        : { entities: [] },
+  }));
+  try {
+    render(<MemoryRouter><NewBuildingSetupPanel freshStart isActive /></MemoryRouter>);
+    fireEvent.change(screen.getByRole("textbox", { name: "Property address" }), { target: { value: "14 Bridgewood Road" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Postcode" }), { target: { value: "IP12 4HA" } });
+    fireEvent.click(screen.getByRole("button", { name: "Check address" }));
+    await waitFor(() => expect(screen.getByText("UPRN 100091142492")).toBeInTheDocument());
+    expect(screen.queryByText("What did WBP check?")).not.toBeInTheDocument();
+    expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining("/api/lookupAddress?"));
+  } finally {
+    global.fetch = previousFetch;
+  }
 });
 
 test("fresh New workspace does not hydrate the existing home or model", () => {
