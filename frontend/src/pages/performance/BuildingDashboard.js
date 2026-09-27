@@ -37,6 +37,23 @@ const readSavedHomePassport = () => {
   catch { return null; }
 };
 
+export const findHomeProfileForOverwrite = async (client) => {
+  const { data: auth, error: authError } = await client.auth.getUser();
+  if (authError || !auth?.user) throw new Error("Sign in again before saving this home profile.");
+  const { data: saved, error } = await client.from("WBPBuildingRecords")
+    .select("id,record_reference,created_at,genesis_hash")
+    .eq("custodian_user_id", auth.user.id)
+    .order("updated_at", { ascending: false }).limit(1).maybeSingle();
+  if (error) throw new Error(`Could not check the existing profile: ${error.message}`);
+  return saved ? {
+    recordId: saved.record_reference,
+    databaseId: saved.id,
+    ownerUserId: auth.user.id,
+    createdAt: saved.created_at,
+    genesisHash: saved.genesis_hash,
+  } : null;
+};
+
 const ProfileSummaryColumns = ({ record, property, setup = {} }) => {
   const carbon = setup.carbonSelections || {};
   const rows = [
@@ -8163,10 +8180,10 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
 };
 
 export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = false, isActive = false }) => {
-  const isolatedDraft = freshStart && !syncHomeProfile;
+  const isolatedDraft = freshStart;
   const [setupTab, setSetupTab] = useState("ownership");
   const [historyStage, setHistoryStage] = useState("audit");
-  const [showSetupOverlay, setShowSetupOverlay] = useState(freshStart && (!syncHomeProfile || !readSavedHomePassport()));
+  const [showSetupOverlay, setShowSetupOverlay] = useState(freshStart);
   const [editingOwnership, setEditingOwnership] = useState(false);
   const overlayVisible = showSetupOverlay && isActive;
   const [setupOverlayExiting, setSetupOverlayExiting] = useState(false);
@@ -8375,7 +8392,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
     if (isolatedDraft) return { address: "", postcode: "", uprn: "", latitude: "", longitude: "" };
     try {
       const cached = JSON.parse(window.localStorage.getItem(PROPERTY_DISCOVERY_CACHE_KEY) || "null");
-      return cached?.search || (syncHomeProfile ? readSavedHomePassport()?.propertyDiscovery : null) || {
+      return cached?.search || {
         address: "",
         postcode: "",
         uprn: "",
@@ -8389,7 +8406,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   const [propertyDiscovery, setPropertyDiscovery] = useState(() => {
     if (isolatedDraft) return null;
     try {
-      return JSON.parse(window.localStorage.getItem(PROPERTY_DISCOVERY_CACHE_KEY) || "null")?.snapshot || (syncHomeProfile ? readSavedHomePassport()?.propertyDiscovery : null) || null;
+      return JSON.parse(window.localStorage.getItem(PROPERTY_DISCOVERY_CACHE_KEY) || "null")?.snapshot || null;
     } catch {
       return null;
     }
@@ -8537,8 +8554,9 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   );
   const setupRecordId = ownershipRecord?.recordId;
   useEffect(() => {
+    if (isolatedDraft) return;
     try {
-      const saved = JSON.parse((setupRecordId && window.localStorage.getItem(`${setupRecordId}:setupSections`)) || (isolatedDraft || !setupRecordId ? window.localStorage.getItem("wbp-new-building-setup-draft") : null) || "null");
+      const saved = JSON.parse((setupRecordId && window.localStorage.getItem(`${setupRecordId}:setupSections`)) || (!setupRecordId ? window.localStorage.getItem("wbp-new-building-setup-draft") : null) || "null");
       if (!saved) return;
       setManualData((current) => ({ ...current, ...saved.manualData }));
       setEnergyConsent(Boolean(saved.energyConsent));
@@ -8569,11 +8587,14 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
     return () => { active = false; };
   }, [isolatedDraft, ownershipRecord?.databaseId, ownershipRecord?.recordId]);
   const saveSetupSection = async () => {
-    const setup = {
-      manualData, modelInput, energyConsent, historicalDataFileName, healthSensors, sensorEvidenceFileName, carbonSelections,
-    };
-    window.localStorage.setItem(ownershipRecord?.recordId ? `${ownershipRecord.recordId}:setupSections` : "wbp-new-building-setup-draft", JSON.stringify(setup));
-    if (ownershipRecord?.recordId) window.localStorage.removeItem("wbp-new-building-setup-draft");
+    const section = setupTab === "measurements" ? { manualData, modelInput }
+      : setupTab === "performance" ? { energyConsent, historicalDataFileName, healthSensors, sensorEvidenceFileName }
+      : { carbonSelections };
+    const key = ownershipRecord?.recordId ? `${ownershipRecord.recordId}:setupSections` : "wbp-new-building-setup-draft";
+    let localSetup = {};
+    try { localSetup = JSON.parse(window.localStorage.getItem(key) || "{}"); } catch { /* Invalid local data is ignored. */ }
+    const mergedLocal = { ...localSetup, ...section };
+    window.localStorage.setItem(key, JSON.stringify(mergedLocal));
     if (ownershipRecord?.databaseId) {
       const { data: auth } = await supabase.auth.getUser();
       if (auth?.user) {
@@ -8582,11 +8603,16 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
         if (readError) { setSectionSaveStatus(`Save failed: ${readError.message}`); return; }
         const { error } = await supabase.from("WBPBuildingSetupDeclarations").upsert({
           building_record_id: ownershipRecord.databaseId,
-          setup_data: { ...(existing?.setup_data || {}), ...setup },
+          setup_data: { ...(existing?.setup_data || {}), ...section },
           updated_by: auth.user.id,
           updated_at: new Date().toISOString(),
         }, { onConflict: "building_record_id" });
-        if (!error) { setSectionSaveStatus(`${setupTab} saved to account`); return; }
+        if (!error) {
+          window.localStorage.setItem(key, JSON.stringify({ ...(existing?.setup_data || {}), ...section }));
+          window.localStorage.removeItem("wbp-new-building-setup-draft");
+          setSectionSaveStatus(`${setupTab} saved to account`);
+          return;
+        }
       }
     }
     setSectionSaveStatus(`${setupTab} saved on this device`);
@@ -9076,7 +9102,16 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
 
   const createBuildingPassport = async (event) => {
     event.preventDefault();
-    const existing = editingOwnership ? ownershipRecord : null;
+    let existing = editingOwnership ? ownershipRecord : null;
+    if (syncHomeProfile && isolatedDraft && !existing) {
+      try {
+        existing = await findHomeProfileForOverwrite(supabase);
+      } catch (error) {
+        setPassportSaveStatus("error");
+        setPassportSaveError(error.message);
+        return;
+      }
+    }
     const recordId = existing?.recordId || `WBP-${new Date().getFullYear()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
     const createdAt = existing?.createdAt || new Date().toISOString();
     const canonicalPayload = JSON.stringify({
@@ -9114,15 +9149,18 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       ],
     };
 
-    window.localStorage.setItem("wbp-new-building-passport", JSON.stringify(nextRecord));
-    setOwnershipRecord(nextRecord);
-    window.requestAnimationFrame(() => setupPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    if (!syncHomeProfile) {
+      window.localStorage.setItem("wbp-new-building-passport", JSON.stringify(nextRecord));
+      setOwnershipRecord(nextRecord);
+      window.requestAnimationFrame(() => setupPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    }
     setPassportSaveStatus("saving");
     setPassportSaveError("");
     try {
       const securedRecord = await persistPassportRecord(nextRecord);
       window.localStorage.setItem("wbp-new-building-passport", JSON.stringify(securedRecord));
       setOwnershipRecord(securedRecord);
+      window.requestAnimationFrame(() => setupPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
       setPassportSaveStatus("saved");
       setEditingOwnership(false);
       // Keep the setup open for the private identity and title-evidence step.

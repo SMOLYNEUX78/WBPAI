@@ -1,9 +1,30 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { NewBuildingSetupPanel } from "./BuildingDashboard";
+import { NewBuildingSetupPanel, findHomeProfileForOverwrite } from "./BuildingDashboard";
 import supabase from "../../supabaseClient";
 
 beforeEach(() => window.localStorage.clear());
+
+test("profile overwrite resolves the signed-in user's existing WBP reference", async () => {
+  const maybeSingle = jest.fn().mockResolvedValue({ data: {
+    id: "record-1", record_reference: "WBP-2026-P42TCE",
+    created_at: "2026-09-01T00:00:00Z", genesis_hash: "original-hash",
+  }, error: null });
+  const limit = jest.fn(() => ({ maybeSingle }));
+  const order = jest.fn(() => ({ limit }));
+  const eq = jest.fn(() => ({ order }));
+  const select = jest.fn(() => ({ eq }));
+  const client = {
+    auth: { getUser: jest.fn().mockResolvedValue({ data: { user: { id: "owner-1" } }, error: null }) },
+    from: jest.fn(() => ({ select })),
+  };
+  expect(await findHomeProfileForOverwrite(client)).toEqual({
+    recordId: "WBP-2026-P42TCE", databaseId: "record-1", ownerUserId: "owner-1",
+    createdAt: "2026-09-01T00:00:00Z", genesisHash: "original-hash",
+  });
+  expect(client.from).toHaveBeenCalledWith("WBPBuildingRecords");
+  expect(eq).toHaveBeenCalledWith("custodian_user_id", "owner-1");
+});
 
 test("new building sections keep ownership first and separate the inputs", () => {
   render(<MemoryRouter><NewBuildingSetupPanel /></MemoryRouter>);
@@ -113,7 +134,7 @@ test("fresh New workspace does not hydrate the existing home or model", () => {
   expect(JSON.parse(window.localStorage.getItem("wbp-new-building-passport")).recordId).toBe("WBP-EXISTING");
 });
 
-test("profile-linked New workspace opens the saved home for editing", () => {
+test("profile-linked New workspace stays blank and leaves the saved home untouched", () => {
   window.localStorage.setItem("wbp-new-building-passport", JSON.stringify({
     recordId: "WBP-2026-P42TCE", databaseId: "record-1", ownerUserId: "owner-1",
     legalOwnerName: "Stephen", ownershipType: "owner-occupier", tenure: "freehold",
@@ -121,18 +142,28 @@ test("profile-linked New workspace opens the saved home for editing", () => {
   }));
   render(<MemoryRouter><NewBuildingSetupPanel freshStart syncHomeProfile isActive /></MemoryRouter>);
 
-  const banner = screen.getByRole("heading", { name: /14 Bridgewood Road/ }).closest(".bg-emerald-100");
-  expect(banner).toHaveTextContent("14 Bridgewood Road");
-  expect(screen.queryByRole("dialog", { name: "Let's set up your home" })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Edit home details" }));
-  expect(screen.getByRole("heading", { name: "Edit home details" })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Save home details" })).toBeInTheDocument();
-  fireEvent.change(screen.getByRole("textbox", { name: "Your name" }), { target: { value: "Updated Owner" } });
-  fireEvent.click(screen.getByLabelText(/I confirm that I own this home/));
-  fireEvent.click(screen.getByLabelText(/I agree to keep household information private/));
-  fireEvent.click(screen.getByRole("button", { name: "Save home details" }));
+  expect(screen.getByRole("dialog", { name: "Let's set up your home" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "House profile" })).toBeInTheDocument();
+  expect(screen.getByRole("textbox", { name: "Property address" })).toHaveValue("");
+  expect(screen.queryByRole("button", { name: "Edit home details" })).not.toBeInTheDocument();
   expect(JSON.parse(window.localStorage.getItem("wbp-new-building-passport"))).toMatchObject({
-    recordId: "WBP-2026-P42TCE", databaseId: "record-1", legalOwnerName: "Updated Owner",
+    recordId: "WBP-2026-P42TCE", databaseId: "record-1", legalOwnerName: "Stephen",
+  });
+});
+
+test("saving one setup section keeps previously saved profile sections", () => {
+  window.localStorage.setItem("wbp-new-building-passport", JSON.stringify({ recordId: "WBP-EXISTING" }));
+  window.localStorage.setItem("WBP-EXISTING:setupSections", JSON.stringify({
+    manualData: { internalArea: "99.2" }, energyConsent: true,
+    carbonSelections: { electricity: "unknown", fuel: "gas" },
+  }));
+  render(<MemoryRouter><NewBuildingSetupPanel /></MemoryRouter>);
+  fireEvent.click(screen.getByRole("tab", { name: "Carbon Context" }));
+  fireEvent.change(screen.getByRole("combobox", { name: "Electricity tariff" }), { target: { value: "standard" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save carbon context" }));
+  expect(JSON.parse(window.localStorage.getItem("WBP-EXISTING:setupSections"))).toMatchObject({
+    manualData: { internalArea: "99.2" }, energyConsent: true,
+    carbonSelections: { electricity: "standard", fuel: "gas" },
   });
 });
 
