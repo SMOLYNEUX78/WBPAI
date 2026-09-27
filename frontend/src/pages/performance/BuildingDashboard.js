@@ -86,7 +86,7 @@ export const ProfileSummaryColumns = ({ record, property, setup = {} }) => {
     </div>)}
   </div>;
 };
-const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed = false, activeStage, contentOnly = false, addressDraft, onAddressDraftChange, draftHistory, onDraftHistoryChange, onPlanningLookup }) => {
+export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed = false, activeStage, contentOnly = false, addressDraft, onAddressDraftChange, draftHistory, onDraftHistoryChange, onPlanningLookup }) => {
   const [localStage, setLocalStage] = useState(initiallyCollapsed ? null : "audit");
   const stage = activeStage || localStage;
   const [displayStage, setDisplayStage] = useState("audit");
@@ -112,10 +112,10 @@ const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed = false
   const isDesign = contentStage === "design";
   const isBuild = contentStage === "build";
   const isAddressHistory = isDesign || isBuild;
-  const resolvedCouncil = property?.confirmedAt ? property.localAuthority : designCouncil || property?.localAuthority;
+  const resolvedCouncil = property?.localAuthority || designCouncil;
   const isEastSuffolk = /east suffolk/i.test(resolvedCouncil || "");
   const councilRouteOpen = ecosystemStatus === "missing" || ecosystemStatus === "error" || useCouncilRoute;
-  const showHistoryInputs = !contentOnly || councilRouteOpen || selectedEcosystemRecord;
+  const showHistoryInputs = councilRouteOpen || selectedEcosystemRecord;
   const designAddress = property?.address || addressDraft?.address || "";
   const designPostcode = property?.postcode || addressDraft?.postcode || "";
   const designUprn = property?.uprn || record?.uprn || addressDraft?.uprn || "";
@@ -147,7 +147,7 @@ const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed = false
   }, [recordId, onDraftHistoryChange, changeHistory]);
 
   useEffect(() => {
-    if (!isAddressHistory || !contentOnly) return;
+    if (!isAddressHistory) return;
     const address = designAddress.trim();
     const cleanPostcode = designPostcode.replace(/\s+/g, "").toUpperCase();
     setUseCouncilRoute(false);
@@ -161,7 +161,7 @@ const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed = false
       const [projects, records] = await Promise.all([
         isDesign ? supabase.from("WBPDesignProjects").select("id,title,site_address,planning_reference,design_team")
           .ilike("site_address", addressPattern).limit(10) : Promise.resolve({ data: [] }),
-        supabase.from("WBPBuildingRecords").select("id,record_reference,lifecycle_stage,address")
+        supabase.from("WBPBuildingRecords").select("id,record_reference,lifecycle_stage,address,uprn")
           .filter("address->>postcode", "ilike", `${cleanPostcode.slice(0, -3)}%${cleanPostcode.slice(-3)}`).limit(30),
       ]);
       if (!active) return;
@@ -173,18 +173,18 @@ const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed = false
       const recordMatches = (records.data || []).filter((item) =>
         (isDesign ? ["design", "procurement", "build", "commission"] : ["build", "commission", "occupy"]).includes(item.lifecycle_stage) &&
         (item.address?.postcode || "").replace(/\s+/g, "").toUpperCase() === cleanPostcode &&
-        (item.address?.address || "").trim().toLowerCase() === address.toLowerCase()
+        (designUprn && item.uprn ? item.uprn === designUprn : (item.address?.address || "").trim().toLowerCase() === address.toLowerCase())
       ).map((item) => ({ id: item.id, label: item.record_reference,
         reference: item.record_reference, detail: `${isBuild ? "Build-stage" : "WBP"} building record in your account` }));
       const matches = [...projectMatches, ...recordMatches];
       setEcosystemMatches(matches);
-      setEcosystemStatus(matches.length ? "found" : projects.error && records.error ? "error" : "missing");
+      setEcosystemStatus(matches.length ? "found" : projects.error || records.error ? "error" : "missing");
     }, 650);
     return () => { active = false; clearTimeout(timer); };
-  }, [isAddressHistory, isDesign, isBuild, contentOnly, designAddress, designPostcode]);
+  }, [isAddressHistory, isDesign, isBuild, designAddress, designPostcode, designUprn]);
 
   useEffect(() => {
-    if (!isDesign || !contentOnly) return;
+    if (!isDesign) return;
     if (!councilRouteOpen) return;
     if (property?.planningRecords?.length && property.address === designAddress && property.postcode === designPostcode) {
       setPlanningCandidates(property.planningRecords);
@@ -230,7 +230,7 @@ const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed = false
       }
     }, 800);
     return () => { active = false; clearTimeout(timer); };
-  }, [isDesign, contentOnly, councilRouteOpen, designAddress, designPostcode, property, onPlanningLookup]);
+  }, [isDesign, councilRouteOpen, designAddress, designPostcode, property, onPlanningLookup]);
 
   useEffect(() => {
     if (contentOnly === false && activeStage === undefined && !stage) return;
@@ -339,7 +339,7 @@ const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed = false
     <div role="tabpanel" className="min-h-0 overflow-hidden pb-2">
       {contentStage === "audit" ? <ProfileSummaryColumns record={record} property={property} setup={setup} /> :
         <div className={isAddressHistory ? "grid gap-3 px-3 py-2 text-xs sm:px-5" : "grid gap-2 px-3 py-2 text-xs sm:grid-cols-2 sm:px-5"}>
-          {isAddressHistory && contentOnly ? <div className="min-w-0">
+          {isAddressHistory ? <div className="min-w-0">
             <h3 className="font-bold text-gray-900">Find an existing {contentStage} record</h3>
             <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,2fr)_minmax(130px,1fr)]">
               <label className="font-semibold text-gray-800">Address<input value={designAddress} readOnly={Boolean(property?.address)} onChange={(event) => onAddressDraftChange?.("address", event.target.value)} placeholder="House number and street" className="mt-1 block w-full border border-gray-300 bg-white px-2 py-1.5 font-normal" /></label>
@@ -491,12 +491,12 @@ const preserveTrendEnergy = (incoming, previous) => {
 
 const PROPERTY_DISCOVERY_CACHE_KEY = "wbp-property-discovery-draft:v1";
 const CARBON_EVIDENCE_TYPES = [
-  { id: "energy-history", label: "Historical energy records", help: "Bills covering the baseline period. A reviewer must confirm the actual date coverage." },
-  { id: "electricity-tariff", label: "Electricity tariff", help: "A supplier bill or tariff confirmation showing the account, dates and product." },
-  { id: "gas-tariff", label: "Gas / thermal fuel", help: "A bill or fuel-supplier statement showing the product and covered dates." },
-  { id: "heating-system", label: "Heating system", help: "Installation or commissioning record for the main heating system." },
-  { id: "solar-pv", label: "Solar PV", help: "Installation certificate or commissioning record, if installed." },
-  { id: "battery-storage", label: "Battery storage", help: "Installation or commissioning record, if installed." },
+  { id: "energy-history", section: "monitoring", label: "Historical energy records", help: "Bills covering the baseline period. A reviewer must confirm the actual date coverage." },
+  { id: "electricity-tariff", section: "monitoring", label: "Electricity tariff", help: "A supplier bill or tariff confirmation showing the account, dates and product." },
+  { id: "gas-tariff", section: "monitoring", label: "Gas / thermal fuel", help: "A bill or fuel-supplier statement showing the product and covered dates." },
+  { id: "heating-system", section: "carbon", label: "Heating system", help: "Installation or commissioning record for the main heating system." },
+  { id: "solar-pv", section: "carbon", label: "Solar PV", help: "Installation certificate or commissioning record, if installed." },
+  { id: "battery-storage", section: "carbon", label: "Battery storage", help: "Installation or commissioning record, if installed." },
 ];
 const PROPERTY_DISCOVERY_DATASETS = [
   "planning-application",
@@ -8617,7 +8617,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   }, [isolatedDraft, ownershipRecord?.databaseId, ownershipRecord?.recordId]);
   const saveSetupSection = async () => {
     const section = setupTab === "measurements" ? { manualData, modelInput }
-      : setupTab === "performance" ? { energyConsent, historicalDataFileName, healthSensors, sensorEvidenceFileName }
+      : setupTab === "performance" ? { energyConsent, historicalDataFileName, healthSensors, sensorEvidenceFileName, carbonSelections }
       : { carbonSelections };
     const key = ownershipRecord?.recordId ? `${ownershipRecord.recordId}:setupSections` : "wbp-new-building-setup-draft";
     let localSetup = {};
@@ -9281,6 +9281,22 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
     return () => observer.disconnect();
   }, []);
 
+  const renderEvidenceUpload = (type) => {
+    const evidence = carbonEvidence[type.id];
+    return <div key={type.id} className="min-w-0 space-y-2 border bg-white p-3">
+      <div className="flex items-start justify-between gap-2">
+        <h4 className="text-sm font-semibold">{type.label}</h4>
+        <span className={`shrink-0 text-xs ${evidence ? "text-amber-800" : "text-gray-500"}`}>{evidence ? "Submitted" : "Missing"}</span>
+      </div>
+      <p className="text-xs text-gray-600">{type.help}</p>
+      <input type="file" aria-label={`${type.label} evidence`} accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+        disabled={Boolean(carbonEvidenceBusy) || !ownershipRecord?.databaseId} className="block w-full text-xs"
+        onChange={(event) => { uploadCarbonEvidence(type.id, event.target.files?.[0]); event.target.value = ""; }} />
+      {carbonEvidenceBusy === type.id ? <p className="text-xs" role="status">Uploading...</p> : null}
+      {evidence ? <button type="button" className="block max-w-full break-all text-left text-xs text-blue-700 underline" onClick={() => openCarbonEvidence(evidence.storage_reference)}>{evidence.original_file_name || "View uploaded evidence"}</button> : null}
+    </div>;
+  };
+
   return (
     <div className="bg-white">
       <section className="border-b border-emerald-200 bg-emerald-100">
@@ -9756,25 +9772,23 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
               </button>
             </div>
 
-            <div className="border rounded p-3 bg-gray-50 space-y-2">
-              <h4 className="font-semibold text-sm">Energy Bill / Tariff Evidence Upload</h4>
-              <input
-                type="file"
-                accept=".pdf,.jpg,.jpeg,.png,.csv,.xlsx,.xls,application/pdf,image/*,text/csv"
-                className="block w-full text-xs"
-                onChange={(event) =>
-                  setHistoricalDataFileName(event.target.files?.[0]?.name || "")
-                }
-              />
-              {historicalDataFileName ? (
-                <p className="text-xs text-gray-700">
-                  Selected: {historicalDataFileName}
-                </p>
-              ) : null}
-              <p className="text-xs text-gray-600">
-                This only selects a local file; it is not stored or counted as audit evidence.
-                Add supported documents in Carbon Context after saving the ownership record.
-              </p>
+            <div className="grid gap-3">
+              <h4 className="font-semibold text-sm">Meter history and tariff evidence</h4>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="space-y-1 text-xs text-gray-600">Electricity tariff
+                  <select className="w-full border rounded p-2 text-xs" value={carbonSelections.electricity} onChange={(event) => setCarbonSelections((current) => ({ ...current, electricity: event.target.value }))}>
+                    <option value="unknown">Unknown / not verified</option><option value="standard">Standard grid electricity</option><option value="renewable-unverified">Renewable tariff - unverified</option>
+                  </select>
+                </label>
+                <label className="space-y-1 text-xs text-gray-600">Gas / thermal fuel
+                  <select className="w-full border rounded p-2 text-xs" value={carbonSelections.fuel} onChange={(event) => setCarbonSelections((current) => ({ ...current, fuel: event.target.value }))}>
+                    <option value="unknown">Unknown / not verified</option><option value="mains-gas">Mains gas</option><option value="green-gas-unverified">Green gas - unverified</option><option value="none">No gas supply</option><option value="other">Oil / LPG / solid fuel / other</option>
+                  </select>
+                </label>
+              </div>
+              <p className="text-xs text-gray-600">Meter readings establish consumption. Bills support tariff and fuel claims; a renewable tariff is not verified by the meter feed alone.</p>
+              {CARBON_EVIDENCE_TYPES.filter((type) => type.section === "monitoring").map(renderEvidenceUpload)}
+              {carbonEvidenceStatus ? <p className="text-sm" role="status">{carbonEvidenceStatus}</p> : null}
             </div>
 
           </div>
@@ -10021,40 +10035,12 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
         <div className="mt-4 bg-white rounded border p-4 space-y-4">
           <div>
             <p className="text-sm text-gray-600">
-              Record the tariff, fuel and building systems context used to calculate
-              operational carbon and assess whether future savings are credit-grade.
+              Record the heating system and on-site generation context used to assess
+              future carbon savings. Fuel and tariff details are collected in Monitoring.
             </p>
           </div>
 
           <div className="grid gap-3 md:grid-cols-3">
-            <label className="space-y-1 text-xs text-gray-600">
-              Electricity tariff
-              <select
-                className="border rounded p-2 w-full text-xs"
-                value={carbonSelections.electricity}
-                onChange={(event) => setCarbonSelections((current) => ({ ...current, electricity: event.target.value }))}
-              >
-                <option value="unknown">Unknown / not verified</option>
-                <option value="standard">Standard grid electricity</option>
-                <option value="renewable-unverified">Renewable tariff - unverified</option>
-              </select>
-            </label>
-
-            <label className="space-y-1 text-xs text-gray-600">
-              Gas / thermal fuel
-              <select
-                className="border rounded p-2 w-full text-xs"
-                value={carbonSelections.fuel}
-                onChange={(event) => setCarbonSelections((current) => ({ ...current, fuel: event.target.value }))}
-              >
-                <option value="unknown">Unknown / not verified</option>
-                <option value="mains-gas">Mains gas</option>
-                <option value="green-gas-unverified">Green gas - unverified</option>
-                <option value="none">No gas supply</option>
-                <option value="other">Oil / LPG / solid fuel / other</option>
-              </select>
-            </label>
-
             <label className="space-y-1 text-xs text-gray-600">
               Main heating system
               <select
@@ -10111,29 +10097,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
             <p className="text-sm text-gray-600">Documents are stored privately against this building record. An upload is submitted for review, not independently verified.</p>
           </div>
           <div className="grid gap-3 md:grid-cols-2">
-            {CARBON_EVIDENCE_TYPES.map((type) => {
-              const evidence = carbonEvidence[type.id];
-              return <div key={type.id} className="min-w-0 border bg-white p-4 space-y-2">
-                <div className="flex items-start justify-between gap-2">
-                  <h4 className="text-sm font-semibold">{type.label}</h4>
-                  <span className={`shrink-0 text-xs ${evidence ? "text-amber-800" : "text-gray-500"}`}>{evidence ? "Submitted" : "Missing"}</span>
-                </div>
-                <p className="text-xs text-gray-600">{type.help}</p>
-                <input
-                  type="file"
-                  aria-label={`${type.label} evidence`}
-                  accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
-                  disabled={Boolean(carbonEvidenceBusy) || !ownershipRecord?.databaseId}
-                  className="block w-full text-xs"
-                  onChange={(event) => {
-                    uploadCarbonEvidence(type.id, event.target.files?.[0]);
-                    event.target.value = "";
-                  }}
-                />
-                {carbonEvidenceBusy === type.id ? <p className="text-xs" role="status">Uploading...</p> : null}
-                {evidence ? <button type="button" className="block max-w-full break-all text-left text-xs text-blue-700 underline" onClick={() => openCarbonEvidence(evidence.storage_reference)}>{evidence.original_file_name || "View uploaded evidence"}</button> : null}
-              </div>;
-            })}
+            {CARBON_EVIDENCE_TYPES.filter((type) => type.section === "carbon").map(renderEvidenceUpload)}
           </div>
           {!ownershipRecord?.databaseId ? <p className="text-xs text-amber-800">Save the ownership record to your secure account to enable uploads.</p> : null}
           {carbonEvidenceStatus ? <p className="text-sm" role="status">{carbonEvidenceStatus}</p> : null}

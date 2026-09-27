@@ -1,9 +1,31 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { NewBuildingSetupPanel, ProfileSummaryColumns, findHomeProfileForOverwrite } from "./BuildingDashboard";
+import { NewBuildingSetupPanel, OccupyHistoryTabs, ProfileSummaryColumns, findHomeProfileForOverwrite } from "./BuildingDashboard";
 import supabase from "../../supabaseClient";
 
 beforeEach(() => window.localStorage.clear());
+
+test("meter and tariff evidence belong to Monitoring, not Carbon Context", () => {
+  render(<MemoryRouter><NewBuildingSetupPanel /></MemoryRouter>);
+  fireEvent.click(screen.getByRole("tab", { name: "Monitoring" }));
+  expect(screen.getByRole("combobox", { name: "Electricity tariff" })).toBeInTheDocument();
+  expect(screen.getByLabelText("Electricity tariff evidence")).toBeDisabled();
+  expect(screen.getByLabelText("Historical energy records evidence")).toBeDisabled();
+  fireEvent.click(screen.getByRole("tab", { name: "Carbon Context" }));
+  expect(screen.queryByRole("combobox", { name: "Electricity tariff" })).not.toBeInTheDocument();
+  expect(screen.getByLabelText("Heating system evidence")).toBeDisabled();
+});
+
+test("Design and Build reuse the confirmed home address without another entry", () => {
+  const property = { address: "14 Bridgewood Road", postcode: "IP12 4HA", uprn: "100091142492", localAuthority: "East Suffolk", confirmedAt: "2026-09-28T00:00:00Z" };
+  const { rerender } = render(<OccupyHistoryTabs record={{ uprn: property.uprn }} property={property} activeStage="design" contentOnly />);
+  expect(screen.getByDisplayValue(property.address)).toHaveAttribute("readonly");
+  expect(screen.getByDisplayValue(property.postcode)).toHaveAttribute("readonly");
+  expect(screen.getByText(/Confirmed property UPRN:/)).toHaveTextContent(property.uprn);
+  rerender(<OccupyHistoryTabs record={{ uprn: property.uprn }} property={property} activeStage="build" contentOnly />);
+  expect(screen.getByDisplayValue(property.address)).toHaveAttribute("readonly");
+  expect(screen.getByDisplayValue(property.postcode)).toHaveAttribute("readonly");
+});
 
 test("profile overwrite resolves the signed-in user's existing WBP reference", async () => {
   const maybeSingle = jest.fn().mockResolvedValue({ data: {
