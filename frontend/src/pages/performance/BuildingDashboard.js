@@ -99,6 +99,7 @@ const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed = false
   const showHistoryInputs = !contentOnly || councilRouteOpen || selectedEcosystemRecord;
   const designAddress = property?.address || addressDraft?.address || "";
   const designPostcode = property?.postcode || addressDraft?.postcode || "";
+  const designUprn = property?.uprn || record?.uprn || addressDraft?.uprn || "";
   const shownHistory = draftHistory || history;
   const changeHistory = onDraftHistoryChange || setHistory;
   const fields = contentStage === "design" ? [
@@ -325,6 +326,7 @@ const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed = false
               <label className="font-semibold text-gray-800">Address<input value={designAddress} readOnly={Boolean(property?.address)} onChange={(event) => onAddressDraftChange?.("address", event.target.value)} placeholder="House number and street" className="mt-1 block w-full border border-gray-300 bg-white px-2 py-1.5 font-normal" /></label>
               <label className="font-semibold text-gray-800">Postcode<input value={designPostcode} readOnly={Boolean(property?.postcode)} onChange={(event) => onAddressDraftChange?.("postcode", event.target.value)} placeholder="Postcode" className="mt-1 block w-full border border-gray-300 bg-white px-2 py-1.5 font-normal uppercase" /></label>
             </div>
+            {designUprn ? <p className="mt-2 text-gray-700">Confirmed property UPRN: <strong>{designUprn}</strong></p> : null}
             <p role="status" className="mt-2 text-gray-700">{ecosystemStatus === "checking" ? `Searching accessible WBP ${contentStage} records...` : ecosystemStatus === "found" ? `${ecosystemMatches.length} accessible ${contentStage} record(s) found.` : ecosystemStatus === "missing" ? `No accessible WBP ${contentStage} record found for this address. Continue with council records below.` : ecosystemStatus === "error" ? "WBP search unavailable. Continue with council records below." : "Enter the address and postcode to search WBP."}</p>
             {ecosystemMatches.length ? <div className="mt-2 space-y-1">{ecosystemMatches.map((item) => <div key={`${item.detail}-${item.id}`} className="flex flex-wrap items-center justify-between gap-2 border border-gray-300 bg-white px-2 py-1.5">
               <span><strong>{item.label}</strong> <span className="text-gray-600">{item.detail}</span></span>
@@ -8408,8 +8410,6 @@ export const NewBuildingSetupPanel = ({ freshStart = false, isActive = false }) 
   });
   const [discoveryStatus, setDiscoveryStatus] = useState("idle");
   const [discoveryError, setDiscoveryError] = useState("");
-  const [uprnLookupError, setUprnLookupError] = useState("");
-  const [uprnCandidates, setUprnCandidates] = useState([]);
   const [setupMode, setSetupMode] = useState("manual");
   const [apiDetails, setApiDetails] = useState("");
   const [modelInput, setModelInput] = useState("");
@@ -8720,45 +8720,16 @@ export const NewBuildingSetupPanel = ({ freshStart = false, isActive = false }) 
 
   const updatePropertySearch = (field, value) => {
     setPropertySearch((current) => ({ ...current, [field]: value, ...(["address", "postcode"].includes(field) ? { uprn: "" } : {}) }));
+    setPropertyDiscovery((current) => current?.confirmedAt ? current : null);
     if (["address", "postcode"].includes(field)) {
-      setUprnCandidates([]);
       setOwnershipDraft((current) => ({ ...current, uprn: "" }));
     }
   };
 
-  const findUprnForAddress = async (address = propertySearch.address, postcode = propertySearch.postcode) => {
-    setUprnLookupError("");
-    setUprnCandidates([]);
-    try {
-      const params = new URLSearchParams({ address: address.trim(), postcode: postcode.trim() });
-      const response = await fetch(`/api/lookupAddress?${params}`);
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || "The address search is unavailable.");
-      setUprnCandidates(result.candidates || []);
-      return result.candidates || [];
-    } catch (error) {
-      setUprnLookupError(error?.message || "The UPRN could not be checked.");
-      return [];
-    }
-  };
-
-  const selectUprnForAddress = (candidate) => {
-    setPropertySearch((current) => ({ ...current, uprn: candidate.uprn,
-      latitude: candidate.latitude ?? current.latitude,
-      longitude: candidate.longitude ?? current.longitude }));
-    setOwnershipDraft((current) => ({ ...current, uprn: candidate.uprn }));
-    setPropertyDiscovery((current) => {
-      if (!current) return current;
-      const updated = { ...current, uprn: candidate.uprn };
-      window.localStorage.setItem(PROPERTY_DISCOVERY_CACHE_KEY, JSON.stringify({ search: { ...propertySearch, uprn: candidate.uprn }, snapshot: updated }));
-      return updated;
-    });
-  };
-
   const discoverProperty = async () => {
     const postcode = normalisePostcode(propertySearch.postcode);
-    if (!propertySearch.address.trim() || !postcode) {
-      setDiscoveryError("Enter the property address and postcode first.");
+    if (!propertySearch.address.trim() || !postcode || !/^\d{1,12}$/.test(propertySearch.uprn.trim())) {
+      setDiscoveryError("Enter the address, postcode and UPRN before continuing.");
       return;
     }
 
@@ -8766,10 +8737,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, isActive = false }) 
     setDiscoveryError("");
 
     try {
-      const addressCandidates = await findUprnForAddress(propertySearch.address, postcode);
-      const sameAddress = (candidate) => candidate.address.toUpperCase().replace(/[^A-Z0-9]/g, "")
-        .includes(propertySearch.address.toUpperCase().replace(/[^A-Z0-9]/g, ""));
-      const matchedUprn = propertySearch.uprn.trim() || (addressCandidates.length === 1 && sameAddress(addressCandidates[0]) ? addressCandidates[0].uprn : "");
+      const matchedUprn = propertySearch.uprn.trim();
       const sharedLookup = designPlanningLookup?.address.toLowerCase() === propertySearch.address.trim().toLowerCase()
         && designPlanningLookup?.postcode === postcode.replace(/\s+/g, "");
       let latitude = Number(propertySearch.latitude) || (sharedLookup ? designPlanningLookup.latitude : null);
@@ -8872,11 +8840,11 @@ export const NewBuildingSetupPanel = ({ freshStart = false, isActive = false }) 
             label: "Ownership evidence",
             status: matchedUprn ? "found" : "action",
             detail: matchedUprn
-              ? `UPRN ${matchedUprn} resolved and ready for title matching`
-              : "Automatic UPRN lookup is awaiting the OS Places production connector; you do not need to find it manually",
+              ? `UPRN ${matchedUprn} entered by the homeowner; address match awaits review`
+              : "Homeowner has not supplied a UPRN",
             provenance: matchedUprn
-              ? "OS Places / owner-confirmed record"
-              : "OS Places connector pending",
+              ? "Homeowner supplied"
+              : "Pending",
           },
           {
             id: "building-control",
@@ -9302,17 +9270,18 @@ export const NewBuildingSetupPanel = ({ freshStart = false, isActive = false }) 
                     placeholder="IP12 4HA"
                   />
                 </label>
-                <div className="flex items-end">
-                  <button
-                    type="button"
-                    onClick={discoverProperty}
-                    disabled={discoveryStatus === "loading"}
-                    className="w-full bg-blue-700 px-4 py-2 text-sm font-bold text-white disabled:cursor-wait disabled:opacity-60"
-                  >
-                    {discoveryStatus === "loading" ? "Checking address..." : propertyDiscovery ? "Check again" : "Check address"}
-                  </button>
-                </div>
               </div>
+              <div className="mt-3 border border-blue-200 bg-blue-50 p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <label htmlFor="setup-uprn" className="text-xs font-bold text-gray-900">Property number (UPRN)</label>
+                  <a href="https://www.findmyaddress.co.uk/search" target="_blank" rel="noopener noreferrer" className="text-xs font-semibold text-blue-800 underline">Find your UPRN &#8599;</a>
+                </div>
+                <input id="setup-uprn" inputMode="numeric" maxLength={12} value={propertySearch.uprn} onChange={(event) => updatePropertySearch("uprn", event.target.value.replace(/\D/g, ""))} placeholder="Paste the UPRN here" className="mt-2 w-full border border-gray-300 bg-white p-2 text-sm sm:max-w-sm" />
+                <p className="mt-2 text-xs text-gray-600">FindMyAddress opens separately. Match its address and postcode before entering the UPRN. This identifies the property, not its legal owner.</p>
+              </div>
+              <button type="button" onClick={discoverProperty} disabled={discoveryStatus === "loading"} className="mt-3 bg-blue-700 px-4 py-2 text-sm font-bold text-white disabled:cursor-wait disabled:opacity-60">
+                {discoveryStatus === "loading" ? "Checking address..." : "Check address"}
+              </button>
 
               {discoveryError ? (
                 <p className="mt-3 border border-red-200 bg-red-50 p-2 text-xs text-red-800">{discoveryError}</p>
@@ -9327,13 +9296,12 @@ export const NewBuildingSetupPanel = ({ freshStart = false, isActive = false }) 
                       {propertyDiscovery.localAuthority ? ` · ${propertyDiscovery.localAuthority}` : ""}
                     </p>
                     {propertyDiscovery.uprn ? <p className="mt-1 text-xs font-semibold">UPRN {propertyDiscovery.uprn}</p> : null}
-                    {!propertyDiscovery.uprn && uprnCandidates.length > 0 ? <div className="mt-3 space-y-1"><p className="text-xs font-semibold">Choose the matching property</p>{uprnCandidates.map((candidate) => <button key={candidate.uprn} type="button" onClick={() => selectUprnForAddress(candidate)} className="block w-full border border-emerald-300 bg-white p-2 text-left text-xs hover:bg-emerald-100">{candidate.address} · UPRN {candidate.uprn}</button>)}</div> : null}
-                    {!propertyDiscovery.uprn && uprnLookupError ? <p className="mt-2 text-xs">UPRN lookup is not available yet. You can continue and add it later.</p> : null}
+                    <p className="mt-1 text-xs">UPRN supplied by you; WBP has not independently matched it to the address.</p>
                   </div>
 
                   <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 pt-3">
                     <p className="text-xs text-gray-600">
-                      {propertyDiscovery.confirmedAt ? "Home confirmed" : "Confirm this is the correct home. The optional UPRN comes next."}
+                      {propertyDiscovery.confirmedAt ? "Home confirmed" : "Confirm that the address, postcode and UPRN match."}
                     </p>
                     {!propertyDiscovery.confirmedAt ? (
                       <button type="button" onClick={confirmPropertyDiscovery} className="border border-emerald-700 bg-white px-3 py-2 text-xs font-bold text-emerald-800">
@@ -9352,7 +9320,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, isActive = false }) 
                 <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs font-bold uppercase text-emerald-700">Step 2 of 3</p><button type="button" onClick={() => { const updated = { ...propertyDiscovery, confirmedAt: null }; setPropertyDiscovery(updated); window.localStorage.setItem(PROPERTY_DISCOVERY_CACHE_KEY, JSON.stringify({ search: propertySearch, snapshot: updated })); }} className="text-xs font-semibold text-blue-700 underline">Change home</button></div>
                 <h4 className="mt-1 text-base font-bold">About you</h4>
                 <p className="mt-1 text-xs text-gray-600">{propertyDiscovery.address}, {propertyDiscovery.postcode}</p>
-                {propertyDiscovery.uprn ? <p className="mt-2 text-xs text-emerald-800">UPRN {propertyDiscovery.uprn} found from the address. This does not prove ownership.</p> : <details className="mt-3 border border-gray-200 bg-gray-50 p-3 text-xs"><summary className="cursor-pointer font-semibold">Have a UPRN to add?</summary><label className="mt-2 block" htmlFor="setup-uprn">Property number (optional)</label><input id="setup-uprn" inputMode="numeric" className="mt-1 w-full border border-gray-300 bg-white p-2 text-sm sm:max-w-sm" value={ownershipDraft.uprn} onChange={(event) => { const uprn = event.target.value.replace(/\D/g, ""); updateOwnershipDraft("uprn", uprn); updatePropertySearch("uprn", uprn); }} placeholder="UPRN" /></details>}
+                <p className="mt-2 text-xs text-emerald-800">UPRN {propertyDiscovery.uprn} recorded for this address. This does not prove ownership.</p>
                 <div className="mt-4 grid gap-4 sm:grid-cols-2">
                   <label className="space-y-1">
                     <span className="text-xs font-semibold text-gray-700">Your name</span>

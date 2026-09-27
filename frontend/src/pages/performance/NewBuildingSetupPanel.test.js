@@ -50,9 +50,11 @@ test("shared ownership asks for the other owner's name in step two", () => {
   expect(screen.queryByRole("textbox", { name: "Other owner’s name or organisation" })).not.toBeInTheDocument();
 });
 
-test("UPRN lookup stays with the address and manual entry remains optional", () => {
+test("UPRN is collected with the address before home confirmation", () => {
   const { unmount } = render(<MemoryRouter><NewBuildingSetupPanel freshStart isActive /></MemoryRouter>);
   expect(screen.queryByText("What did WBP check?")).not.toBeInTheDocument();
+  expect(screen.getByLabelText("Property number (UPRN)")).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: /Find your UPRN/ })).toHaveAttribute("href", "https://www.findmyaddress.co.uk/search");
   expect(screen.getByText("Step 1 of 3").closest("section")).toHaveClass("wbp-setup-step-enter");
   unmount();
 
@@ -61,20 +63,15 @@ test("UPRN lookup stays with the address and manual entry remains optional", () 
     snapshot: { address: "14 Bridgewood Road", postcode: "IP12 4HA", uprn: "", sources: [], confirmedAt: "2026-09-24T00:00:00Z" },
   }));
   render(<MemoryRouter><NewBuildingSetupPanel isActive /></MemoryRouter>);
-  const uprn = screen.getByLabelText("Property number (optional)");
-  expect(uprn).toHaveValue("");
+  expect(screen.queryByLabelText("Property number (UPRN)")).not.toBeInTheDocument();
   expect(screen.getByText("Step 2 of 3").closest("section")).toHaveClass("wbp-setup-step-enter");
-  fireEvent.change(uprn, { target: { value: "100091142492" } });
-  expect(uprn).toHaveValue("100091142492");
 });
 
-test("address check automatically shows a single matching UPRN", async () => {
+test("address check shows the entered UPRN without calling an address API", async () => {
   const previousFetch = global.fetch;
   global.fetch = jest.fn(async (url) => ({
     ok: true,
-    json: async () => String(url).includes("/api/lookupAddress")
-      ? { candidates: [{ address: "14 Bridgewood Road, IP12 4HA", postcode: "IP12 4HA", uprn: "100091142492" }] }
-      : String(url).includes("postcodes.io")
+    json: async () => String(url).includes("postcodes.io")
         ? { result: { latitude: 52.0945, longitude: 1.3048, admin_district: "East Suffolk" } }
         : { entities: [] },
   }));
@@ -83,9 +80,16 @@ test("address check automatically shows a single matching UPRN", async () => {
     fireEvent.change(screen.getByRole("textbox", { name: "Property address" }), { target: { value: "14 Bridgewood Road" } });
     fireEvent.change(screen.getByRole("textbox", { name: "Postcode" }), { target: { value: "IP12 4HA" } });
     fireEvent.click(screen.getByRole("button", { name: "Check address" }));
+    expect(screen.getByText("Enter the address, postcode and UPRN before continuing.")).toBeInTheDocument();
+    expect(global.fetch).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByRole("textbox", { name: "Property number (UPRN)" }), { target: { value: "100091142492" } });
+    fireEvent.click(screen.getByRole("button", { name: "Check address" }));
     await waitFor(() => expect(screen.getByText("UPRN 100091142492")).toBeInTheDocument());
     expect(screen.queryByText("What did WBP check?")).not.toBeInTheDocument();
-    expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining("/api/lookupAddress?"));
+    expect(global.fetch).not.toHaveBeenCalledWith(expect.stringContaining("/api/lookupAddress?"));
+    fireEvent.click(screen.getByRole("button", { name: "Use this home" }));
+    fireEvent.click(screen.getByRole("tab", { name: "design" }));
+    expect(screen.getByText(/Confirmed property UPRN:/)).toHaveTextContent("100091142492");
   } finally {
     global.fetch = previousFetch;
   }
