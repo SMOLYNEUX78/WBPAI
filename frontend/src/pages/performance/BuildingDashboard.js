@@ -407,6 +407,47 @@ const HEALTH_TREND_KEYS = [
   "upstairsHumidity", "downstairsHumidity", "upstairsPm25", "downstairsPm25",
   "upstairsVocs", "downstairsVocs", "upstairsPm10", "upstairsHcho", "upstairsNo2",
 ];
+const DATED_TREND_KEYS = [
+  "electricity", "gas", "internalTemp", "externalTemp", "upstairsHumidity",
+  "downstairsHumidity", "upstairsPm25", "downstairsPm25", "upstairsVocs",
+  "downstairsVocs", "upstairsPm10", "upstairsHcho", "upstairsNo2",
+];
+
+const calendarTrendBucket = (date, period) => {
+  if (period === "monthly") return date.slice(0, 7);
+  const monday = new Date(`${date}T00:00:00.000Z`);
+  monday.setUTCDate(monday.getUTCDate() - (monday.getUTCDay() + 6) % 7);
+  return monday.toISOString().slice(0, 10);
+};
+
+export const aggregateCalendarTrend = (dailyRows, period, startDate, endDate) => {
+  if (!startDate || !endDate) return [];
+  const buckets = new Map();
+  const lastDate = new Date(Math.min(Date.parse(`${endDate}T00:00:00.000Z`), Date.now() - 86400000));
+  for (let date = new Date(`${startDate}T00:00:00.000Z`); date <= lastDate; date.setUTCDate(date.getUTCDate() + 1)) {
+    const key = calendarTrendBucket(date.toISOString().slice(0, 10), period);
+    if (!buckets.has(key)) buckets.set(key, []);
+  }
+  (dailyRows || []).forEach((row) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(row?.date || "")) return;
+    const key = calendarTrendBucket(row.date, period);
+    if (buckets.has(key)) buckets.get(key).push(row);
+  });
+  return [...buckets].map(([key, rows], slot) => {
+    const point = { slot, date: key, label: period === "monthly" ? key : `Week of ${key}`,
+      dayCount: rows.length };
+    DATED_TREND_KEYS.forEach((metric) => {
+      const values = rows.map((row) => row[metric]).filter(Number.isFinite);
+      point[metric] = values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
+    });
+    point.externalTempPeak = rows.map((row) => row.externalTempPeak)
+      .filter(Number.isFinite).reduce((peak, value) => Math.max(peak, value), -Infinity);
+    if (!Number.isFinite(point.externalTempPeak)) point.externalTempPeak = null;
+    point.warmthBuffer = Number.isFinite(point.internalTemp) && Number.isFinite(point.externalTemp)
+      ? point.internalTemp - point.externalTemp : null;
+    return point;
+  });
+};
 
 const preserveTrendEnergy = (incoming, previous) => {
   if (!Array.isArray(incoming)) return previous;
@@ -1076,6 +1117,8 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
   const [selectedTrendSeason, setSelectedTrendSeason] = useState(
     activeSeasonInfo.name
   );
+  const [trendPeriod, setTrendPeriod] = useState("daily");
+  const loadedDatedEnergyRef = useRef(new Set());
   const [selectedTrendMetricKeys, setSelectedTrendMetricKeys] = useState([]);
   const [selectedHealthTrendArea, setSelectedHealthTrendArea] = useState("all");
   const [hoveredTrendSlot, setHoveredTrendSlot] = useState(null);
@@ -1097,6 +1140,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
         seasons: {
           ...(currentArchive?.seasons || {}),
           [activeSeasonInfo.key]: {
+            ...currentSeason,
             ...activeSeasonInfo,
             capturedAt,
             status:
@@ -1848,7 +1892,8 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
   };
   const applyWeeklyTrendData = (
     nextWeeklyTrendData,
-    seasonInfo = getMeteorologicalSeason()
+    seasonInfo = getMeteorologicalSeason(),
+    datedRows = []
   ) => {
     const previousData = readCachedSeasonalTrendArchive().seasons[seasonInfo.key]?.data;
     const mergedTrendData = preserveTrendEnergy(nextWeeklyTrendData, previousData);
@@ -1859,10 +1904,26 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
     );
     setSeasonalTrendArchive((currentArchive) => {
       const capturedAt = new Date().toISOString();
+      const currentSeason = currentArchive?.seasons?.[seasonInfo.key] || {};
+      const dailyByDate = new Map((currentSeason.dailyData || []).map((row) => [row.date, row]));
+      datedRows.forEach((row) => {
+        const previous = dailyByDate.get(row.date) || {};
+        const merged = { ...previous, ...row };
+        DATED_TREND_KEYS.forEach((key) => {
+          if (!Number.isFinite(row[key]) && Number.isFinite(previous[key])) merged[key] = previous[key];
+        });
+        if (previous.energySource === "CarbonSavingsDaily") {
+          merged.electricity = previous.electricity;
+          merged.gas = previous.gas;
+          merged.energySource = previous.energySource;
+        }
+        dailyByDate.set(row.date, merged);
+      });
       const nextArchive = {
         seasons: {
           ...(currentArchive?.seasons || {}),
           [seasonInfo.key]: {
+            ...currentSeason,
             ...seasonInfo,
             capturedAt,
             status:
@@ -1870,6 +1931,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
                 ? "complete"
                 : "active",
             data: mergedTrendData,
+            dailyData: [...dailyByDate.values()].sort((a, b) => a.date.localeCompare(b.date)),
           },
         },
       };
@@ -2007,7 +2069,10 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
           Object.entries({ ...cachedSeasons, ...snapshotWeeklyTrend.seasons }).map(([key, record]) => {
             const cachedData = cachedSeasons[key]?.data;
             const data = preserveTrendEnergy(record?.data, cachedData);
-            return [key, { ...record, data }];
+            const dailyData = [...new Map([
+              ...(cachedSeasons[key]?.dailyData || []), ...(record?.dailyData || []),
+            ].map((row) => [row.date, row])).values()].sort((a, b) => a.date.localeCompare(b.date));
+            return [key, { ...record, data, dailyData }];
           })
         ),
       };
@@ -4260,8 +4325,54 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
         (rows, key) => fillSparseTrendMetric(rows, key),
         averagedWeeklyTrend
       );
+      const datedBuckets = new Map();
+      const completeThrough = new Date().toISOString().slice(0, 10);
+      const dailyBucket = (timestamp) => {
+        const date = new Date(timestamp);
+        if (Number.isNaN(date.getTime())) return null;
+        const key = date.toISOString().slice(0, 10);
+        if (key >= completeThrough) return null;
+        if (!datedBuckets.has(key)) datedBuckets.set(key, { date: key, samples: {} });
+        return datedBuckets.get(key);
+      };
+      const pushDaily = (bucket, key, value) => {
+        const numeric = Number(value);
+        if (!bucket || !Number.isFinite(numeric) || (key !== "electricity" && key !== "gas" && numeric === 0)) return;
+        (bucket.samples[key] ||= []).push(numeric);
+      };
+      energyIntervalRows.forEach((row) => {
+        if (row.fuel_type === "electricity" || row.fuel_type === "gas") {
+          pushDaily(dailyBucket(row.timestamp), row.fuel_type, row.usage_kwh);
+        }
+      });
+      iaqTrendRows.forEach((row) => {
+        const bucket = dailyBucket(row.timestamp);
+        pushDaily(bucket, "internalTemp", row.temperature_inside);
+        if (row.reading_type === "dyson:upstairs") {
+          [["upstairsHumidity", row.humidity], ["upstairsPm25", row.pm25],
+            ["upstairsVocs", row.vocs], ["upstairsPm10", row.pm10],
+            ["upstairsHcho", row.hcho], ["upstairsNo2", dysonAppDisplayValue(row.reading_type, "no2", row.no2)]]
+            .forEach(([key, value]) => pushDaily(bucket, key, value));
+        }
+        if (["dyson:downstairs", "dyson:living_room"].includes(row.reading_type)) {
+          [["downstairsHumidity", row.humidity], ["downstairsPm25", row.pm25],
+            ["downstairsVocs", row.vocs]].forEach(([key, value]) => pushDaily(bucket, key, value));
+        }
+      });
+      outdoorTrendRows.forEach((row) => pushDaily(dailyBucket(row.timestamp), "externalTemp", row.temperature_outside));
+      const datedRows = [...datedBuckets.values()].map((bucket) => {
+        const result = { date: bucket.date };
+        DATED_TREND_KEYS.forEach((key) => {
+          const values = bucket.samples[key] || [];
+          result[key] = values.length ? (key === "electricity" || key === "gas"
+            ? values.reduce((sum, value) => sum + value, 0) : average(values)) : null;
+        });
+        result.externalTempPeak = bucket.samples.externalTemp?.length
+          ? Math.max(...bucket.samples.externalTemp) : null;
+        return result;
+      });
 
-      applyWeeklyTrendData(displayWeeklyTrend, activeSeasonInfo);
+      applyWeeklyTrendData(displayWeeklyTrend, activeSeasonInfo, datedRows);
     } catch (err) {
       console.error("Error fetching weekly performance trend:", err.message);
     }
@@ -5585,11 +5696,55 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
     (selectedTrendSeason === activeSeasonInfo.name
       ? seasonalTrendArchive?.seasons?.[activeSeasonInfo.key]
       : null);
+  const dateTrendSeason = selectedSeasonRecord ||
+    (selectedTrendSeason === activeSeasonInfo.name ? activeSeasonInfo : null);
   const selectedSeasonTrendData = Array.isArray(selectedSeasonRecord?.data)
     ? selectedSeasonRecord.data
     : selectedTrendSeason === activeSeasonInfo.name
     ? weeklyTrendData
     : [];
+  useEffect(() => {
+    if (trendPeriod === "daily" || !isActive) return;
+    const season = dateTrendSeason;
+    if (!season?.startDate || !season?.endDate) return;
+    const key = `${dataSourceBuildingId}:${season.key}`;
+    if (loadedDatedEnergyRef.current.has(key)) return;
+    loadedDatedEnergyRef.current.add(key);
+    let cancelled = false;
+    supabase.from("CarbonSavingsDaily")
+      .select("saving_date,baseline_electricity_kwh,baseline_gas_kwh")
+      .eq("building_id", dataSourceBuildingId)
+      .eq("scenario", CARBON_SAVINGS_SCENARIO)
+      .gte("saving_date", season.startDate)
+      .lte("saving_date", season.endDate)
+      .order("saving_date", { ascending: true }).limit(120)
+      .then(({ data, error }) => {
+        if (cancelled || error || !data?.length) return;
+        setSeasonalTrendArchive((current) => {
+          const existing = current.seasons?.[season.key] || season;
+          const days = new Map((existing.dailyData || []).map((row) => [row.date, row]));
+          data.filter((row) => row.saving_date < new Date().toISOString().slice(0, 10) &&
+              (Number(row.baseline_electricity_kwh) > 0 || Number(row.baseline_gas_kwh) > 0))
+            .forEach((row) => {
+              const previous = days.get(row.saving_date) || { date: row.saving_date };
+              days.set(row.saving_date, { ...previous,
+                electricity: Number(row.baseline_electricity_kwh),
+                gas: Number(row.baseline_gas_kwh), energySource: "CarbonSavingsDaily" });
+            });
+          const next = { seasons: { ...current.seasons, [season.key]: {
+            ...existing, dailyData: [...days.values()].sort((a, b) => a.date.localeCompare(b.date)),
+          } } };
+          localStorage.setItem(`${dataSourceBuildingId}:seasonalTrendArchive:v1`, JSON.stringify(next));
+          return next;
+        });
+      });
+    return () => { cancelled = true; };
+    // The request is keyed by season; archive refreshes must not cancel it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trendPeriod, selectedTrendSeason, isActive, dataSourceBuildingId, dateTrendSeason?.key]);
+  const chartTrendData = trendPeriod === "daily" ? selectedSeasonTrendData
+    : aggregateCalendarTrend(selectedSeasonRecord?.dailyData, trendPeriod,
+      selectedSeasonRecord?.startDate, selectedSeasonRecord?.endDate);
   const availableSeasonNames = SEASON_NAMES.filter(
     (seasonName) =>
       seasonName === activeSeasonInfo.name ||
@@ -5598,10 +5753,10 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
   const seasonalTrendLabel = selectedSeasonRecord
     ? `${selectedSeasonRecord.name} ${
         selectedSeasonRecord.status === "complete" ? "snapshot" : "season so far"
-      }: historical weekly hourly averages, Monday to Sunday`
+      }: ${trendPeriod === "daily" ? "typical hourly pattern, Monday to Sunday" : `${trendPeriod === "weekly" ? "calendar week" : "calendar month"} averages from dated readings`}`
     : `${selectedTrendSeason} data will appear once that season has readings`;
   const activeTrendMetrics = trendMetrics.filter((metric) =>
-    selectedSeasonTrendData.some((day) => Number.isFinite(day[metric.key]))
+    chartTrendData.some((day) => Number.isFinite(day[metric.key]))
   );
   const trendMetricGroups = [
     {
@@ -5765,9 +5920,9 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
       ranges[metric.key] = { min: 0, max: 100 };
       return ranges;
     }, {});
-  const metricRanges = buildMetricRanges(selectedSeasonTrendData, visibleTrendMetrics);
+  const metricRanges = buildMetricRanges(chartTrendData, visibleTrendMetrics);
   const rawMetricRanges = activeTrendMetrics.reduce((ranges, metric) => {
-    const values = selectedSeasonTrendData
+    const values = chartTrendData
       .map((point) => point[metric.key])
       .filter((value) => Number.isFinite(value));
     const min = values.length ? Math.min(...values) : 0;
@@ -5776,12 +5931,12 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
     return ranges;
   }, {});
   const hoveredTrendPoint = Number.isInteger(hoveredTrendSlot)
-    ? selectedSeasonTrendData[hoveredTrendSlot]
+    ? chartTrendData[hoveredTrendSlot]
     : null;
   const hoveredTrendX =
-    hoveredTrendPoint && selectedSeasonTrendData.length > 1
+    hoveredTrendPoint && chartTrendData.length > 1
       ? chartPadding.left +
-        (hoveredTrendPoint.slot / (selectedSeasonTrendData.length - 1)) *
+        (hoveredTrendPoint.slot / (chartTrendData.length - 1)) *
           plotWidth
       : null;
   const trendY = (range, value) => {
@@ -5944,7 +6099,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
     return clampScore(100 - normalised * 100);
   };
   const updateHoveredTrendSlot = (event) => {
-    if (!selectedSeasonTrendData.length) {
+    if (!chartTrendData.length) {
       return;
     }
 
@@ -5959,7 +6114,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
       Math.min(plotWidth, svgX - chartPadding.left)
     );
     const nextSlot = Math.round(
-      (plotX / plotWidth) * (selectedSeasonTrendData.length - 1)
+      (plotX / plotWidth) * (chartTrendData.length - 1)
     );
 
     setHoveredTrendSlot(nextSlot);
@@ -6010,12 +6165,12 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
       .map((day) => day[metric.key])
       .filter((value) => Number.isFinite(value));
     const meanValue = values.length ? average(values) : null;
-    return Number.isFinite(meanValue) && Number.isFinite(metric.summaryMultiplier)
+    return trendPeriod === "daily" && Number.isFinite(meanValue) && Number.isFinite(metric.summaryMultiplier)
       ? meanValue * metric.summaryMultiplier
       : meanValue;
   };
   const renderTrendMetricButton = (metric) => {
-    const averageValue = averageMetricValue(selectedSeasonTrendData, metric);
+    const averageValue = averageMetricValue(chartTrendData, metric);
     const metricSelected = selectedTrendMetricKeys.length === 0 ||
       selectedTrendMetricKeys.includes(metric.key);
     return (
@@ -6037,7 +6192,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
         </span>
         <span className="flex-none font-semibold">
           {Number.isFinite(averageValue)
-            ? `${formatMeasurement(averageValue)} ${metric.summaryUnit || metric.unit}`
+            ? `${formatMeasurement(averageValue)} ${trendPeriod !== "daily" && metric.energyStatus ? "kWh/day" : metric.summaryUnit || metric.unit}`
             : "No Data"}
         </span>
       </button>
@@ -7024,6 +7179,19 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
             </div>
           </div>
 
+          <div className="flex w-fit border border-gray-300 text-xs" role="group" aria-label="Trend period">
+            {[["daily", "Daily"], ["weekly", "Weekly"], ["monthly", "Monthly"]].map(([period, label]) => (
+              <button key={period} type="button" aria-pressed={trendPeriod === period}
+                onClick={() => { setTrendPeriod(period); setHoveredTrendSlot(null); }}
+                className={`px-3 py-1.5 font-semibold transition-colors ${trendPeriod === period ? "bg-gray-900 text-white" : "bg-white text-gray-700 hover:bg-gray-100"}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+          {trendPeriod !== "daily" && selectedSeasonRecord ? <p className="text-xs text-gray-600">
+            {selectedSeasonRecord.dailyData?.length || 0} dated day(s) available in this season. Energy is shown as average kWh per measured day; missing weeks or months remain blank.
+          </p> : null}
+
           {activeTrendMetrics.length > 0 ? (
             <>
               <div className="flex flex-wrap gap-2 text-xs">
@@ -7079,10 +7247,10 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
                   </p>
                 ) : null}
                 {visibleTrendMetrics.some((metric) => metric.key === "externalTemp") &&
-                selectedSeasonTrendData.some((point) => Number.isFinite(point.externalTempPeak)) ? (
+                chartTrendData.some((point) => Number.isFinite(point.externalTempPeak)) ? (
                   <p className="text-xs text-gray-600 mb-1">
-                    Indigo line: hourly average. Indigo dots: hottest recorded outdoor reading for that weekday and hour
-                    (peak {Math.max(...selectedSeasonTrendData.map((point) => point.externalTempPeak).filter(Number.isFinite)).toFixed(1)} deg C).
+                    Indigo line: average outdoor temperature. Indigo dots: hottest recorded outdoor reading
+                    (peak {Math.max(...chartTrendData.map((point) => point.externalTempPeak).filter(Number.isFinite)).toFixed(1)} deg C).
                   </p>
                 ) : null}
                 <svg
@@ -7090,7 +7258,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
                   className="w-full h-auto"
                   preserveAspectRatio="xMidYMid meet"
                   role="img"
-                  aria-label="Historical weekly hourly performance trend chart"
+                  aria-label={`${trendPeriod} seasonal performance trend chart`}
                   onPointerMove={updateHoveredTrendSlot}
                   onPointerDown={updateHoveredTrendSlot}
                   onPointerLeave={clearHoveredTrendSlot}
@@ -7153,7 +7321,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
                       />
                     );
                   })}
-                  {selectedSeasonTrendData
+                  {trendPeriod === "daily" ? selectedSeasonTrendData
                     .filter((point) => point.hour === 0)
                     .map((point) => {
                       const x =
@@ -7171,8 +7339,8 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
                           strokeWidth="1"
                         />
                       );
-                    })}
-                  {selectedSeasonTrendData
+                    }) : null}
+                  {trendPeriod === "daily" ? selectedSeasonTrendData
                     .filter((point) => point.hour % 6 === 0)
                     .map((point) => {
                       const x =
@@ -7190,8 +7358,8 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
                           strokeWidth="1"
                         />
                       );
-                    })}
-                  {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(
+                    }) : null}
+                  {trendPeriod === "daily" ? ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(
                     (dayLabel, dayIndex) => {
                       const midpointSlot = dayIndex * 24 + 11.5;
                       const x =
@@ -7211,8 +7379,18 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
                         </text>
                       );
                     }
-                  )}
-                  {selectedSeasonTrendData
+                  ) : chartTrendData.map((point, index) => {
+                    const x = chartPadding.left +
+                      (chartTrendData.length > 1 ? index / (chartTrendData.length - 1) * plotWidth : plotWidth / 2);
+                    return <g key={`period-${point.date}`}>
+                      <line x1={x} x2={x} y1={chartPadding.top} y2={chartPadding.top + plotHeight} stroke="#e5e7eb" />
+                      <text x={x} y={chartHeight - 16} textAnchor="middle" fontSize="10" fill="#4b5563">
+                        {new Date(`${trendPeriod === "monthly" ? `${point.date}-01` : point.date}T00:00:00.000Z`)
+                          .toLocaleDateString("en-GB", { day: trendPeriod === "weekly" ? "numeric" : undefined, month: "short", timeZone: "UTC" })}
+                      </text>
+                    </g>;
+                  })}
+                  {trendPeriod === "daily" ? selectedSeasonTrendData
                     .filter((point) => point.dayIndex === 0 && point.hour % 6 === 0)
                     .map((point) => {
                     const x =
@@ -7231,7 +7409,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
                         {point.hourLabel}
                       </text>
                     );
-                  })}
+                  }) : null}
                   {[0, 0.15, 0.3, 0.5, 0.7, 0.85, 1].map((tick) => {
                       const value = 100 - 100 * tick;
                       const y = chartPadding.top + tick * plotHeight;
@@ -7249,22 +7427,19 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
                         </text>
                       );
                     })}
-                  {visibleTrendMetrics.map((metric) => (
-                    <path
-                      key={metric.key}
-                      d={trendPath(selectedSeasonTrendData, metricRanges, metric)}
-                      fill="none"
-                      stroke={metric.color}
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  ))}
+                  {visibleTrendMetrics.map((metric) => <g key={metric.key}>
+                    <path d={trendPath(chartTrendData, metricRanges, metric)} fill="none"
+                      stroke={metric.color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                    {trendPeriod !== "daily" ? chartTrendData.map((point, index) => {
+                      const location = trendPoint(chartTrendData, metricRanges, point, metric, index);
+                      return location ? <circle key={`${metric.key}-${point.date}`} cx={location.x} cy={location.y} r="4" fill={metric.color} /> : null;
+                    }) : null}
+                  </g>)}
                   {visibleTrendMetrics.some((metric) => metric.key === "externalTemp")
-                    ? selectedSeasonTrendData.map((point) => {
+                    ? chartTrendData.map((point) => {
                         if (!Number.isFinite(point.externalTempPeak)) return null;
-                        const x = chartPadding.left +
-                          (point.slot / (selectedSeasonTrendData.length - 1)) * plotWidth;
+                        const x = chartPadding.left + (chartTrendData.length > 1
+                          ? point.slot / (chartTrendData.length - 1) * plotWidth : plotWidth / 2);
                         const y = trendY(
                           metricRanges.externalTemp,
                           trendHealthScore(
@@ -7323,11 +7498,11 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
                       ) : null}
                       <rect
                         x={Math.min(
-                          chartWidth - chartPadding.right - 164,
+                          chartWidth - chartPadding.right - 210,
                           Math.max(chartPadding.left, hoveredTrendX + 8)
                         )}
                         y={chartPadding.top + 8}
-                        width="156"
+                        width="200"
                         height={32 + visibleTrendMetrics.length * 16}
                         rx="4"
                         fill="white"
@@ -7335,7 +7510,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
                       />
                       <text
                         x={Math.min(
-                          chartWidth - chartPadding.right - 154,
+                          chartWidth - chartPadding.right - 200,
                           Math.max(chartPadding.left + 10, hoveredTrendX + 18)
                         )}
                         y={chartPadding.top + 27}
@@ -7343,13 +7518,13 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
                         fontWeight="600"
                         fill="#111827"
                       >
-                        {hoveredTrendPoint.label}
+                        {hoveredTrendPoint.label}{trendPeriod !== "daily" ? ` (${hoveredTrendPoint.dayCount} day(s))` : ""}
                       </text>
                       {visibleTrendMetrics.map((metric, index) => {
                         const value = hoveredTrendPoint[metric.key];
                         const y = chartPadding.top + 46 + index * 16;
                         const x = Math.min(
-                          chartWidth - chartPadding.right - 154,
+                          chartWidth - chartPadding.right - 200,
                           Math.max(chartPadding.left + 10, hoveredTrendX + 18)
                         );
 
@@ -7365,7 +7540,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
                               {metric.key === "warmthBuffer" && selectedTrendSeason === "Summer"
                                 ? "Indoor–outdoor" : metric.label}:{" "}
                               {Number.isFinite(value)
-                                ? `${formatMeasurement(value)} ${metric.unit}`
+                                ? `${formatMeasurement(value)} ${trendPeriod !== "daily" && metric.energyStatus ? "kWh/day" : metric.unit}`
                                 : "No Data"}
                             </text>
                           </g>
@@ -7413,7 +7588,9 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
             </>
           ) : (
             <div className="rounded border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
-              Weekly trend data will appear once energy or IAQ readings are available.
+              {trendPeriod === "daily"
+                ? "The hourly pattern will appear once energy or IAQ readings are available."
+                : "No dated readings are available for this season and period yet."}
             </div>
           )}
         </div>
