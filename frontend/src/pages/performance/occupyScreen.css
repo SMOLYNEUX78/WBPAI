@@ -57,7 +57,10 @@
 }
 
 @keyframes wbp-setup-to-audit {
-  to { opacity: 0; transform: translateY(-18vh) scale(.88); }
+  to {
+    opacity: 0;
+    transform: translate(var(--audit-dx, 0px), var(--audit-dy, -18vh)) scale(var(--audit-scale, .12));
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

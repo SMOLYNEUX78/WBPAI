@@ -287,15 +287,15 @@ test("carbon context can be saved and restored for the home profile", () => {
   expect(screen.getByRole("combobox", { name: "Electricity tariff" })).toHaveValue("standard");
 });
 
-test("saved home goes straight to the ownership check without an edit detour", () => {
+test("saved home goes straight to ownership evidence without an edit detour", () => {
   window.localStorage.setItem("wbp-new-building-passport", JSON.stringify({
     recordId: "WBP-001", legalOwnerName: "Test Owner", ownershipType: "owner-occupier", tenure: "freehold", uprn: "100091142492",
     propertyDiscovery: { address: "14 Bridgewood Road", postcode: "IP12 4HA", uprn: "100091142492", latitude: 52.0945, longitude: 1.3048, confirmedAt: "2026-09-01T00:00:00Z" },
   }));
   render(<MemoryRouter><NewBuildingSetupPanel /></MemoryRouter>);
   expect(screen.queryByRole("button", { name: "Edit details" })).not.toBeInTheDocument();
-  expect(screen.getByText("Step 3 of 3 · Ownership check")).toBeInTheDocument();
-  expect(screen.getByRole("heading", { name: "Ready to monitor" }).compareDocumentPosition(screen.getByText("Step 3 of 3 · Ownership check")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(screen.getByText("Step 3 of 3 · Ownership evidence")).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Ready to monitor" }).compareDocumentPosition(screen.getByText("Step 3 of 3 · Ownership evidence")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(screen.getByRole("button", { name: "Upload photo ID" })).toBeDisabled();
   expect(screen.getByRole("button", { name: "Upload ownership document" })).toBeDisabled();
 });
@@ -310,7 +310,8 @@ test("ownership declaration defers verification and keeps document uploads optio
   expect(screen.getByText(/No identity or Land Registry check, payment, or sale is triggered here/)).toBeInTheDocument();
   fireEvent.click(screen.getByLabelText(/this is a declaration, not a verified ownership check/));
   expect(screen.getByRole("button", { name: "Save ownership declaration" })).toBeEnabled();
-  expect(screen.getByRole("button", { name: "Upload photo ID" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Upload photo ID" })).toBeEnabled();
+  expect(screen.getByRole("button", { name: "Upload ownership document" })).toBeEnabled();
 });
 
 test("saved title evidence can be removed without clearing the home profile", () => {
@@ -320,7 +321,7 @@ test("saved title evidence can be removed without clearing the home profile", ()
     ownershipEvidence: { route: "title-register", titleNumber: "SK123456", fileName: "title.pdf", status: "ready-for-review" },
   }));
   render(<MemoryRouter><NewBuildingSetupPanel /></MemoryRouter>);
-  expect(screen.getByText(/Uploading them submits evidence only/)).toBeInTheDocument();
+  expect(screen.getByText(/Documents are stored privately as unverified evidence/)).toBeInTheDocument();
   expect(screen.queryByLabelText(/Upload identity document/)).not.toBeInTheDocument();
   expect(screen.queryByLabelText("Choose supporting document")).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Remove saved ownership details" }));

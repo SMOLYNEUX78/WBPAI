@@ -8190,6 +8190,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   const [historyDraft, setHistoryDraft] = useState({ design: {}, build: {} });
   const [designPlanningLookup, setDesignPlanningLookup] = useState(null);
   const setupPanelRef = useRef(null);
+  const auditTabRef = useRef(null);
   const setupContentRef = useRef(null);
   const previousPanelHeightRef = useRef(null);
   const setupOverlayTimerRef = useRef(null);
@@ -8213,10 +8214,22 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   const finishSetupOverlay = () => {
     if (!showSetupOverlay) return;
     setHistoryStage("audit");
+    const panel = setupPanelRef.current;
+    const target = auditTabRef.current;
+    if (panel && target) {
+      const from = panel.getBoundingClientRect();
+      const to = target.getBoundingClientRect();
+      if (from.width && from.height && to.width && to.height) {
+        panel.style.setProperty("--audit-dx", `${to.left + to.width / 2 - from.left - from.width / 2}px`);
+        panel.style.setProperty("--audit-dy", `${to.top + to.height / 2 - from.top - from.height / 2}px`);
+        panel.style.setProperty("--audit-scale", String(Math.max(0.08, Math.min(to.width / from.width, to.height / from.height))));
+      }
+    }
     setSetupOverlayExiting(true);
     setupOverlayTimerRef.current = window.setTimeout(() => {
       setShowSetupOverlay(false);
       setSetupOverlayExiting(false);
+      setSetupTab("measurements");
     }, 420);
   };
   const [ownershipDraft, setOwnershipDraft] = useState({
@@ -8242,6 +8255,35 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   const [ownershipDocuments, setOwnershipDocuments] = useState({});
   const [ownershipUploadBusy, setOwnershipUploadBusy] = useState("");
   const [ownershipUploadStatus, setOwnershipUploadStatus] = useState("");
+  const ensureOwnershipClaim = async (userId) => {
+    if (ownershipClaim?.id) return ownershipClaim;
+    const { data: existing, error: lookupError } = await supabase.from("WBPOwnershipClaims")
+      .select("id,status,identity_check_status,registry_check_status,created_at")
+      .eq("building_record_id", ownershipRecord.databaseId)
+      .eq("claimant_user_id", userId)
+      .order("created_at", { ascending: false }).limit(1).maybeSingle();
+    if (lookupError) throw lookupError;
+    if (existing) {
+      setOwnershipClaim(existing);
+      return existing;
+    }
+    const claimType = {
+      "shared-ownership": "shared-owner",
+      "managing-agent": "authorised-representative",
+    }[ownershipRecord.ownershipType] || ownershipRecord.ownershipType;
+    const { data, error } = await supabase.from("WBPOwnershipClaims").insert({
+      building_record_id: ownershipRecord.databaseId,
+      claimant_user_id: userId,
+      claim_type: claimType,
+      evidence_route: claimType === "authorised-representative" ? "owner-authority" : "title-register",
+      declaration_text: "I declare that I am the named owner or authorised representative of this property. I understand that identity and ownership verification require a separate request later.",
+      declaration_accepted_at: new Date().toISOString(),
+      status: "self-declared",
+    }).select("id,status,identity_check_status,registry_check_status,created_at").single();
+    if (error) throw error;
+    setOwnershipClaim(data);
+    return data;
+  };
   useEffect(() => {
     if (!ownershipRecord?.databaseId) { setOwnershipClaim(null); return; }
     let active = true;
@@ -8280,7 +8322,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   }, [ownershipRecord?.databaseId, ownershipClaim?.id]);
 
   const uploadOwnershipDocument = async (evidenceType, file) => {
-    if (!file || !ownershipRecord?.databaseId || !ownershipClaim?.id) return;
+    if (!file || !ownershipRecord?.databaseId) return;
     if (!["application/pdf", "image/jpeg", "image/png"].includes(file.type) || file.size > 10 * 1024 * 1024) {
       setOwnershipUploadStatus("Use a PDF, JPG or PNG file no larger than 10 MB.");
       return;
@@ -8291,12 +8333,13 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
     try {
       const { data: auth, error: authError } = await supabase.auth.getUser();
       if (authError || !auth.user) throw new Error("Sign in again before uploading.");
+      const claim = await ensureOwnershipClaim(auth.user.id);
       if (!window.crypto?.subtle) throw new Error("Secure file hashing is unavailable in this browser.");
       const digest = await window.crypto.subtle.digest("SHA-256", await file.arrayBuffer());
       const hash = Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
       const { data: previous, error: versionError } = await supabase.from("WBPEvidenceVersions")
         .select("version_number").eq("building_record_id", ownershipRecord.databaseId)
-        .eq("ownership_claim_id", ownershipClaim.id)
+        .eq("ownership_claim_id", claim.id)
         .eq("evidence_type", evidenceType).order("version_number", { ascending: false }).limit(1);
       if (versionError) throw versionError;
       path = `${auth.user.id}/${ownershipRecord.databaseId}/${window.crypto.randomUUID()}`;
@@ -8305,7 +8348,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       if (uploadError) throw uploadError;
       const { data, error: metadataError } = await supabase.from("WBPEvidenceVersions").insert({
         building_record_id: ownershipRecord.databaseId,
-        ownership_claim_id: ownershipClaim.id,
+        ownership_claim_id: claim.id,
         evidence_type: evidenceType,
         lifecycle_stage: "occupy",
         version_number: (previous?.[0]?.version_number || 0) + 1,
@@ -8363,23 +8406,8 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
     setOwnershipClaimError("");
     try {
       const { data: auth, error: authError } = await supabase.auth.getUser();
-      if (authError || !auth.user) throw new Error("Sign in again before requesting a check.");
-      const claimType = {
-        "shared-ownership": "shared-owner",
-        "managing-agent": "authorised-representative",
-      }[ownershipRecord.ownershipType] || ownershipRecord.ownershipType;
-      const evidenceRoute = claimType === "authorised-representative" ? "owner-authority" : "title-register";
-      const { data, error } = await supabase.from("WBPOwnershipClaims").insert({
-        building_record_id: ownershipRecord.databaseId,
-        claimant_user_id: auth.user.id,
-        claim_type: claimType,
-        evidence_route: evidenceRoute,
-        declaration_text: "I declare that I am the named owner or authorised representative of this property. I understand that identity and ownership verification require a separate request later.",
-        declaration_accepted_at: new Date().toISOString(),
-        status: "self-declared",
-      }).select("id,status,identity_check_status,registry_check_status,created_at").single();
-      if (error) throw error;
-      setOwnershipClaim(data);
+      if (authError || !auth.user) throw new Error("Sign in again before saving your declaration.");
+      await ensureOwnershipClaim(auth.user.id);
       setOwnershipDeclaration(false);
       window.requestAnimationFrame(() => setupPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
     } catch (error) {
@@ -9268,7 +9296,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
           </div>
         </div>
         <div className="mx-3 mt-2 flex border-t border-emerald-200 sm:mx-8 lg:mx-12" role="tablist" aria-label="Building history">
-          {["design", "build", "audit"].map((item) => <button key={item} type="button" role="tab" aria-selected={historyStage === item}
+          {["design", "build", "audit"].map((item) => <button key={item} ref={item === "audit" ? auditTabRef : undefined} type="button" role="tab" aria-selected={historyStage === item}
             disabled={item !== "audit" && !historyUnlocked}
             title={item !== "audit" && !historyUnlocked ? "Check your address in Audit to unlock this section" : undefined}
             onClick={() => setHistoryStage(item)}
@@ -9464,7 +9492,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
             {syncHomeProfile && !editingOwnership ? <div className="mb-4 flex justify-end"><button type="button" className="border border-emerald-700 px-3 py-2 text-xs font-bold text-emerald-800" onClick={() => { setOwnershipDraft((current) => ({ ...current, legalOwnerName: ownershipRecord.legalOwnerName || "", otherOwnerName: ownershipRecord.otherOwnerName || "", ownershipType: ownershipRecord.ownershipType || "owner-occupier", tenure: ownershipRecord.tenure || "freehold", uprn: ownershipRecord.uprn || "", privacyAccepted: Boolean(ownershipRecord.privacyAccepted), authorityToCreate: false })); setEditingOwnership(true); }}>Edit home details</button></div> : null}
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <p className="text-xs font-bold uppercase text-amber-700">Step 3 of 3 · Ownership check</p>
+                <p className="text-xs font-bold uppercase text-amber-700">Step 3 of 3 · Ownership evidence</p>
                 <h3 className="mt-1 text-base font-bold">Show that you can manage this home profile</h3>
                 <p className="mt-1 max-w-2xl text-xs text-gray-600">Choose the most convenient evidence. Creating the profile does not transfer the property or replace HM Land Registry.</p>
               </div>
@@ -9475,16 +9503,16 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
 
             <div className="mt-4">
               <p className="mb-3 border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950">Documents are stored privately as unverified evidence. You can add them now or later. No identity or Land Registry check, payment, or sale is triggered here; verification will require a separate request when you need to transact.</p>
-              {!ownershipClaim ? <p className="mb-3 text-xs text-gray-700">Save your ownership declaration to enable optional document uploads.</p> : null}
+              {!ownershipClaim ? <p className="mb-3 text-xs text-gray-700">You can upload documents directly. Your Step 2 ownership declaration will be saved with the first upload, or you can save it separately below.</p> : null}
               <div className="grid gap-3 sm:grid-cols-2">
-                <div className="border border-gray-200 p-3 text-sm"><strong>Identity</strong><p className="mt-1 text-xs text-gray-600">Passport or photocard driving licence for later identity review.</p><p className="mt-2 text-xs font-semibold">{ownershipClaim?.identity_check_status?.replaceAll("-", " ") || "Not started"}</p><><label className="mt-3 block text-xs font-semibold">Document type<select className="mt-1 block w-full border p-2" value={identityDocumentType} onChange={(event) => setIdentityDocumentType(event.target.value)}><option value="identity-passport">Passport</option><option value="identity-driving-licence">Photocard driving licence</option></select></label><input ref={identityUploadRef} type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" aria-label="Identity document file" className="sr-only" onChange={(event) => { uploadOwnershipDocument(identityDocumentType, event.target.files?.[0]); event.target.value = ""; }} /><button type="button" disabled={Boolean(!ownershipClaim || ownershipUploadBusy || ownershipDocuments["identity-passport"] || ownershipDocuments["identity-driving-licence"])} onClick={() => identityUploadRef.current?.click()} className="mt-3 border border-emerald-700 bg-emerald-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">{ownershipUploadBusy === identityDocumentType ? "Uploading..." : "Upload photo ID"}</button><p className="mt-1 text-xs text-gray-500">PDF, JPG or PNG, up to 10 MB.</p>{(ownershipDocuments["identity-passport"] || ownershipDocuments["identity-driving-licence"]) ? <div className="mt-2 flex items-center justify-between gap-2 text-xs text-emerald-800"><span className="min-w-0 break-all">Submitted: {(ownershipDocuments["identity-passport"] || ownershipDocuments["identity-driving-licence"]).original_file_name} (unverified)</span><button type="button" disabled={Boolean(ownershipUploadBusy)} onClick={() => removeOwnershipDocument(ownershipDocuments["identity-passport"] || ownershipDocuments["identity-driving-licence"])} className="font-semibold text-red-700 underline disabled:opacity-50">Remove</button></div> : null}</></div>
-                <div className="border border-gray-200 p-3 text-sm"><strong>Property ownership</strong><p className="mt-1 text-xs text-gray-600">Title register or shared-ownership agreement for later comparison with the verified identity.</p><p className="mt-2 text-xs font-semibold">{ownershipClaim?.registry_check_status?.replaceAll("-", " ") || "Not started"}</p><><input ref={ownershipUploadRef} type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" aria-label="Ownership document file" className="sr-only" onChange={(event) => { uploadOwnershipDocument("ownership-title-register", event.target.files?.[0]); event.target.value = ""; }} /><button type="button" disabled={Boolean(!ownershipClaim || ownershipUploadBusy || ownershipDocuments["ownership-title-register"])} onClick={() => ownershipUploadRef.current?.click()} className="mt-3 border border-emerald-700 bg-emerald-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">{ownershipUploadBusy === "ownership-title-register" ? "Uploading..." : "Upload ownership document"}</button><p className="mt-1 text-xs text-gray-500">PDF, JPG or PNG, up to 10 MB.</p>{ownershipDocuments["ownership-title-register"] ? <div className="mt-2 flex items-center justify-between gap-2 text-xs text-emerald-800"><span className="min-w-0 break-all">Submitted: {ownershipDocuments["ownership-title-register"].original_file_name} (unverified)</span><button type="button" disabled={Boolean(ownershipUploadBusy)} onClick={() => removeOwnershipDocument(ownershipDocuments["ownership-title-register"])} className="font-semibold text-red-700 underline disabled:opacity-50">Remove</button></div> : null}</></div>
+                <div className="border border-gray-200 p-3 text-sm"><strong>Identity</strong><p className="mt-1 text-xs text-gray-600">Passport or photocard driving licence for later identity review.</p><p className="mt-2 text-xs font-semibold">{ownershipClaim?.identity_check_status?.replaceAll("-", " ") || "Not started"}</p><><label className="mt-3 block text-xs font-semibold">Document type<select className="mt-1 block w-full border p-2" value={identityDocumentType} onChange={(event) => setIdentityDocumentType(event.target.value)}><option value="identity-passport">Passport</option><option value="identity-driving-licence">Photocard driving licence</option></select></label><input ref={identityUploadRef} type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" aria-label="Identity document file" className="sr-only" onChange={(event) => { uploadOwnershipDocument(identityDocumentType, event.target.files?.[0]); event.target.value = ""; }} /><button type="button" disabled={Boolean(!ownershipRecord.databaseId || ownershipUploadBusy || ownershipDocuments["identity-passport"] || ownershipDocuments["identity-driving-licence"])} onClick={() => identityUploadRef.current?.click()} className="mt-3 border border-emerald-700 bg-emerald-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">{ownershipUploadBusy === identityDocumentType ? "Uploading..." : "Upload photo ID"}</button><p className="mt-1 text-xs text-gray-500">PDF, JPG or PNG, up to 10 MB.</p>{(ownershipDocuments["identity-passport"] || ownershipDocuments["identity-driving-licence"]) ? <div className="mt-2 flex items-center justify-between gap-2 text-xs text-emerald-800"><span className="min-w-0 break-all">Submitted: {(ownershipDocuments["identity-passport"] || ownershipDocuments["identity-driving-licence"]).original_file_name} (unverified)</span><button type="button" disabled={Boolean(ownershipUploadBusy)} onClick={() => removeOwnershipDocument(ownershipDocuments["identity-passport"] || ownershipDocuments["identity-driving-licence"])} className="font-semibold text-red-700 underline disabled:opacity-50">Remove</button></div> : null}</></div>
+                <div className="border border-gray-200 p-3 text-sm"><strong>Property ownership</strong><p className="mt-1 text-xs text-gray-600">Title register or shared-ownership agreement for later comparison with the verified identity.</p><p className="mt-2 text-xs font-semibold">{ownershipClaim?.registry_check_status?.replaceAll("-", " ") || "Not started"}</p><><input ref={ownershipUploadRef} type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" aria-label="Ownership document file" className="sr-only" onChange={(event) => { uploadOwnershipDocument("ownership-title-register", event.target.files?.[0]); event.target.value = ""; }} /><button type="button" disabled={Boolean(!ownershipRecord.databaseId || ownershipUploadBusy || ownershipDocuments["ownership-title-register"])} onClick={() => ownershipUploadRef.current?.click()} className="mt-3 border border-emerald-700 bg-emerald-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">{ownershipUploadBusy === "ownership-title-register" ? "Uploading..." : "Upload ownership document"}</button><p className="mt-1 text-xs text-gray-500">PDF, JPG or PNG, up to 10 MB.</p>{ownershipDocuments["ownership-title-register"] ? <div className="mt-2 flex items-center justify-between gap-2 text-xs text-emerald-800"><span className="min-w-0 break-all">Submitted: {ownershipDocuments["ownership-title-register"].original_file_name} (unverified)</span><button type="button" disabled={Boolean(ownershipUploadBusy)} onClick={() => removeOwnershipDocument(ownershipDocuments["ownership-title-register"])} className="font-semibold text-red-700 underline disabled:opacity-50">Remove</button></div> : null}</></div>
               </div>
               {!ownershipClaim && ownershipRecord.databaseId ? <div className="mt-4 space-y-3">
                 <label className="flex items-start gap-2 text-xs text-gray-700"><input type="checkbox" checked={ownershipDeclaration} onChange={(event) => setOwnershipDeclaration(event.target.checked)} />I am the owner or am authorised to act for the owner. I understand this is a declaration, not a verified ownership check.</label>
                 <button type="button" disabled={!ownershipDeclaration || ownershipClaimBusy} onClick={saveOwnershipDeclaration} className="bg-emerald-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">{ownershipClaimBusy ? "Saving declaration..." : "Save ownership declaration"}</button>
               </div> : null}
-              {!ownershipRecord.databaseId ? <p className="mt-3 text-xs text-amber-800">Save this home to your secure account before requesting verification.</p> : null}
+              {!ownershipRecord.databaseId ? <p className="mt-3 text-xs text-amber-800">Save this home to your secure account before adding ownership evidence.</p> : null}
               {ownershipClaim && ownershipClaim.status !== "verified" ? <p className="mt-3 text-xs text-gray-600">Declaration saved. Identity and registry checks have not been performed. Documents can be added before a later verification request.</p> : null}
               {ownershipClaimError ? <p role="alert" className="mt-3 text-xs text-red-800">{ownershipClaimError}</p> : null}
               {ownershipUploadStatus ? <p role="status" className="mt-3 text-xs text-gray-700">{ownershipUploadStatus}</p> : null}
