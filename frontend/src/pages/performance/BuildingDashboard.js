@@ -54,13 +54,14 @@ export const findHomeProfileForOverwrite = async (client) => {
   } : null;
 };
 
-const ProfileSummaryColumns = ({ record, property, setup = {} }) => {
+export const ProfileSummaryColumns = ({ record, property, setup = {} }) => {
   const carbon = setup.carbonSelections || {};
   const rows = [
     ["Ownership", [
       ["Property number (UPRN)", record?.uprn],
       ["Local authority", property?.localAuthority],
-      ["Created by", record?.legalOwnerName],
+      ["Owner", record?.legalOwnerName],
+      ...(record?.otherOwnerName ? [["Other owner", record.otherOwnerName]] : []),
       ["Type", record?.ownershipType?.replaceAll("-", " ")],
       ["Tenure", record?.tenure],
     ]],
@@ -78,7 +79,7 @@ const ProfileSummaryColumns = ({ record, property, setup = {} }) => {
       ]),
     ]],
   ];
-  return <div className="mx-3 mt-2 grid min-w-0 grid-cols-4 gap-2 border-t border-emerald-200 pt-2 text-[10px] leading-tight [overflow-wrap:anywhere] sm:mx-8 sm:gap-3 sm:text-xs lg:mx-12">
+  return <div className="mt-2 grid w-full min-w-0 grid-cols-4 gap-2 border-t border-emerald-200 px-3 pt-2 text-[10px] leading-tight [overflow-wrap:anywhere] sm:gap-3 sm:px-5 sm:text-xs">
     {rows.map(([heading, details]) => <div key={heading} className="min-w-0 border-r border-emerald-200 pr-2 last:border-0 last:pr-0">
       <h3 className="mb-1 font-bold text-emerald-950">{heading}</h3>
       {details.map(([label, value]) => <p key={label} className="mb-0.5 break-words text-gray-800"><span className="text-gray-600">{label}: </span><span className="font-semibold">{value || "Pending"}</span></p>)}
@@ -328,8 +329,8 @@ const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed = false
     } finally { setBusy(false); }
   };
 
-  return <div className={contentOnly ? "min-w-0" : "order-2 mx-3 mt-2 border-t border-emerald-200 sm:mx-8 lg:mx-12"}>
-    {!contentOnly ? <div className="flex border-b border-emerald-200" role="tablist" aria-label="Building history">
+  return <div className={contentOnly ? "min-w-0" : "order-2 mt-2 w-full min-w-0 border-t border-emerald-200"}>
+    {!contentOnly ? <div className="flex border-b border-emerald-200 px-3 sm:px-5" role="tablist" aria-label="Building history">
       {["design", "build", "audit"].map((item) => <button key={item} type="button" role="tab"
         aria-selected={stage === item} aria-expanded={stage === item} onClick={() => { setDisplayStage(item); setLocalStage((current) => current === item ? null : item); setSearchStatus(""); setUploadStatus(""); setSaveStatus(""); }}
         className={`min-w-0 flex-1 px-2 py-2 text-xs font-semibold capitalize transition-colors ${stage === item ? "border-b-2 border-emerald-800 text-emerald-950" : "text-emerald-800 hover:bg-emerald-50"}`}>{item}</button>)}
@@ -337,7 +338,7 @@ const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed = false
     <div className={`wbp-history-panel ${stage ? "wbp-history-panel--open" : ""}`} aria-hidden={!stage}>
     <div role="tabpanel" className="min-h-0 overflow-hidden pb-2">
       {contentStage === "audit" ? <ProfileSummaryColumns record={record} property={property} setup={setup} /> :
-        <div className={isAddressHistory ? "grid gap-3 py-2 text-xs" : "grid gap-2 py-2 text-xs sm:grid-cols-2"}>
+        <div className={isAddressHistory ? "grid gap-3 px-3 py-2 text-xs sm:px-5" : "grid gap-2 px-3 py-2 text-xs sm:grid-cols-2 sm:px-5"}>
           {isAddressHistory && contentOnly ? <div className="min-w-0">
             <h3 className="font-bold text-gray-900">Find an existing {contentStage} record</h3>
             <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,2fr)_minmax(130px,1fr)]">

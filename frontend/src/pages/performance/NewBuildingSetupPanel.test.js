@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { NewBuildingSetupPanel, findHomeProfileForOverwrite } from "./BuildingDashboard";
+import { NewBuildingSetupPanel, ProfileSummaryColumns, findHomeProfileForOverwrite } from "./BuildingDashboard";
 import supabase from "../../supabaseClient";
 
 beforeEach(() => window.localStorage.clear());
@@ -298,6 +298,16 @@ test("saved home goes straight to ownership evidence without an edit detour", ()
   expect(screen.getByRole("heading", { name: "Ready to monitor" }).compareDocumentPosition(screen.getByText("Step 3 of 3 · Ownership evidence")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(screen.getByRole("button", { name: "Upload photo ID" })).toBeDisabled();
   expect(screen.getByRole("button", { name: "Upload ownership document" })).toBeDisabled();
+});
+
+test("audit summary shows the second owner across the full four-column banner", () => {
+  render(<ProfileSummaryColumns record={{
+    legalOwnerName: "Test Owner", otherOwnerName: "Claire Hardaker",
+    ownershipType: "shared-ownership", tenure: "shared-ownership",
+  }} />);
+  const secondOwner = screen.getByText("Claire Hardaker");
+  expect(secondOwner.closest("p")).toHaveTextContent("Other owner: Claire Hardaker");
+  expect(secondOwner.closest(".grid-cols-4")).toHaveClass("w-full");
 });
 
 test("ownership declaration defers verification and keeps document uploads optional", () => {
