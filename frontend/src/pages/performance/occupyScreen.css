@@ -34,6 +34,15 @@
   box-shadow: 0 16px 48px rgb(0 0 0 / 18%);
 }
 
+.wbp-setup-step-enter {
+  animation: wbp-setup-step-in 320ms ease-out both;
+}
+
+@keyframes wbp-setup-step-in {
+  from { opacity: 0; transform: translateX(32px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
 .wbp-setup-overlay--exiting {
   pointer-events: none;
   animation: wbp-setup-backdrop-out 420ms ease-in forwards;
@@ -54,6 +63,7 @@
 @media (prefers-reduced-motion: reduce) {
   .wbp-setup-overlay--exiting,
   .wbp-setup-overlay--exiting #new-building-panel { animation: none; opacity: 0; }
+  .wbp-setup-step-enter { animation: none; }
 }
 
 .wbp-detail-dialog {

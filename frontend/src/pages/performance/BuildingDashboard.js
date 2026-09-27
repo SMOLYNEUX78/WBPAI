@@ -8173,10 +8173,11 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
   );
 };
 
-export const NewBuildingSetupPanel = ({ freshStart = false }) => {
+export const NewBuildingSetupPanel = ({ freshStart = false, isActive = false }) => {
   const [setupTab, setSetupTab] = useState("ownership");
   const [historyStage, setHistoryStage] = useState("audit");
   const [showSetupOverlay, setShowSetupOverlay] = useState(freshStart);
+  const overlayVisible = showSetupOverlay && isActive;
   const [setupOverlayExiting, setSetupOverlayExiting] = useState(false);
   const [historyDraft, setHistoryDraft] = useState({ design: {}, build: {} });
   const [designPlanningLookup, setDesignPlanningLookup] = useState(null);
@@ -8206,11 +8207,11 @@ export const NewBuildingSetupPanel = ({ freshStart = false }) => {
   const [passportSaveError, setPassportSaveError] = useState("");
   useEffect(() => () => window.clearTimeout(setupOverlayTimerRef.current), []);
   useEffect(() => {
-    if (!showSetupOverlay) return undefined;
+    if (!overlayVisible) return undefined;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = previousOverflow; };
-  }, [showSetupOverlay]);
+  }, [overlayVisible]);
   const finishSetupOverlay = () => {
     if (!showSetupOverlay) return;
     setHistoryStage("audit");
@@ -9219,8 +9220,8 @@ export const NewBuildingSetupPanel = ({ freshStart = false }) => {
           {passportSaveError ? <p className="mx-3 mt-3 border border-red-200 bg-red-50 p-2 text-xs text-red-800 sm:mx-8 lg:mx-12">{passportSaveError}</p> : null}
         </> : null}
       </section>
-      <PortalWhen active={showSetupOverlay}>
-      <section className={`mx-4 mb-4 bg-gray-100 p-4 shadow ${showSetupOverlay ? `wbp-setup-overlay ${setupOverlayExiting ? "wbp-setup-overlay--exiting" : ""}` : ""}`} role={showSetupOverlay ? "dialog" : undefined} aria-modal={showSetupOverlay ? "true" : undefined} aria-label={showSetupOverlay ? "Let's set up your home" : undefined}>
+      <PortalWhen active={overlayVisible}>
+      <section className={`mx-4 mb-4 bg-gray-100 p-4 shadow ${overlayVisible ? `wbp-setup-overlay ${setupOverlayExiting ? "wbp-setup-overlay--exiting" : ""}` : ""}`} role={overlayVisible ? "dialog" : undefined} aria-modal={overlayVisible ? "true" : undefined} aria-label={overlayVisible ? "Let's set up your home" : undefined}>
       {historyStage === "audit" ? <>
       {showSetupOverlay ? <div className="mb-3 flex justify-end"><button type="button" onClick={() => setShowSetupOverlay(false)} className="border border-gray-300 bg-white px-3 py-1.5 text-sm font-semibold text-gray-800">Close</button></div> : null}
       <header className={`border-b border-gray-300 ${showSetupOverlay ? "hidden" : ""}`}>
@@ -9397,7 +9398,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false }) => {
             </section> : null}
 
             {propertyDiscovery?.confirmedAt ? (
-              <section className="mt-5 border border-gray-200 bg-white p-3 sm:p-4">
+              <section className="wbp-setup-step-enter mt-5 border border-gray-200 bg-white p-3 sm:p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs font-bold uppercase text-emerald-700">Step 2 of 3</p><button type="button" onClick={() => { const updated = { ...propertyDiscovery, confirmedAt: null }; setPropertyDiscovery(updated); window.localStorage.setItem(PROPERTY_DISCOVERY_CACHE_KEY, JSON.stringify({ search: propertySearch, snapshot: updated })); }} className="text-xs font-semibold text-blue-700 underline">Change home</button></div>
                 <h4 className="mt-1 text-base font-bold">About you</h4>
                 <p className="mt-1 text-xs text-gray-600">{propertyDiscovery.address}, {propertyDiscovery.postcode}</p>
@@ -9455,7 +9456,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false }) => {
         ) : null}
 
         {ownershipRecord ? (
-          <section className="mx-auto mt-4 max-w-4xl border border-amber-200 bg-white p-4">
+          <section className="wbp-setup-step-enter mx-auto mt-4 max-w-4xl border border-amber-200 bg-white p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <p className="text-xs font-bold uppercase text-amber-700">Step 3 of 3 · Ownership check</p>
@@ -11435,7 +11436,7 @@ const BuildingDashboard = () => {
                 style={{ width: `${100 / BUILDINGS.length}%` }}
               >
                 {building.setupOnly ? (
-                  <NewBuildingSetupPanel key={new URLSearchParams(location.search).get("record") === "existing" ? "existing" : "fresh"} freshStart={new URLSearchParams(location.search).get("record") !== "existing"} />
+                  <NewBuildingSetupPanel key={new URLSearchParams(location.search).get("record") === "existing" ? "existing" : "fresh"} freshStart={new URLSearchParams(location.search).get("record") !== "existing"} isActive={isActiveSlide} />
                 ) : building.portfolioOnly ? (
                   <PortfolioDashboardPanel
                     bridgewoodTokens={bridgewoodTokens}

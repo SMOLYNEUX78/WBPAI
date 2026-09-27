@@ -56,7 +56,7 @@ test("fresh New workspace does not hydrate the existing home or model", () => {
     propertyDiscovery: { address: "14 Bridgewood Road", postcode: "IP12 4HA" },
   }));
   window.localStorage.setItem("home:matterportModelInput", "8A48K5upwWN");
-  render(<MemoryRouter><NewBuildingSetupPanel freshStart /></MemoryRouter>);
+  render(<MemoryRouter><NewBuildingSetupPanel freshStart isActive /></MemoryRouter>);
 
   const banner = screen.getByRole("heading", { name: "House profile" }).closest(".bg-emerald-100");
   expect(banner).toHaveTextContent("3D model preview");
@@ -65,6 +65,20 @@ test("fresh New workspace does not hydrate the existing home or model", () => {
   expect(screen.getByRole("heading", { name: "Let’s set up your home" })).toBeInTheDocument();
   expect(screen.getByRole("textbox", { name: "Property address" })).toHaveValue("");
   expect(JSON.parse(window.localStorage.getItem("wbp-new-building-passport")).recordId).toBe("WBP-EXISTING");
+});
+
+test("setup dialog opens only while the New tab is active", () => {
+  const { rerender } = render(<MemoryRouter><NewBuildingSetupPanel freshStart isActive={false} /></MemoryRouter>);
+  expect(screen.queryByRole("dialog", { name: "Let's set up your home" })).not.toBeInTheDocument();
+  expect(document.body.style.overflow).not.toBe("hidden");
+
+  rerender(<MemoryRouter><NewBuildingSetupPanel freshStart isActive /></MemoryRouter>);
+  expect(screen.getByRole("dialog", { name: "Let's set up your home" })).toBeInTheDocument();
+  expect(document.body.style.overflow).toBe("hidden");
+
+  rerender(<MemoryRouter><NewBuildingSetupPanel freshStart isActive={false} /></MemoryRouter>);
+  expect(screen.queryByRole("dialog", { name: "Let's set up your home" })).not.toBeInTheDocument();
+  expect(document.body.style.overflow).not.toBe("hidden");
 });
 
 test("monitoring setup stays above every tab without counting audit evidence", () => {
