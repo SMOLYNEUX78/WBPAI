@@ -1119,6 +1119,8 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
   );
   const [trendPeriod, setTrendPeriod] = useState("daily");
   const loadedDatedEnergyRef = useRef(new Set());
+  const loadedDatedHealthRef = useRef(new Set());
+  const [datedTrendError, setDatedTrendError] = useState("");
   const [selectedTrendMetricKeys, setSelectedTrendMetricKeys] = useState([]);
   const [selectedHealthTrendArea, setSelectedHealthTrendArea] = useState("all");
   const [hoveredTrendSlot, setHoveredTrendSlot] = useState(null);
@@ -5691,11 +5693,15 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
   const seasonalTrendRecords = Object.values(
     seasonalTrendArchive?.seasons || {}
   );
+  const springTrendSeason = getMeteorologicalSeason(
+    new Date(Date.UTC(new Date().getUTCFullYear(), 3, 1))
+  );
   const selectedSeasonRecord =
     seasonalTrendRecords.find((record) => record.name === selectedTrendSeason) ||
     (selectedTrendSeason === activeSeasonInfo.name
       ? seasonalTrendArchive?.seasons?.[activeSeasonInfo.key]
-      : null);
+      : null) ||
+    (trendPeriod !== "daily" && selectedTrendSeason === "Spring" ? springTrendSeason : null);
   const dateTrendSeason = selectedSeasonRecord ||
     (selectedTrendSeason === activeSeasonInfo.name ? activeSeasonInfo : null);
   const selectedSeasonTrendData = Array.isArray(selectedSeasonRecord?.data)
@@ -5703,6 +5709,53 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
     : selectedTrendSeason === activeSeasonInfo.name
     ? weeklyTrendData
     : [];
+  useEffect(() => {
+    if (trendPeriod === "daily" || !isActive) return;
+    const season = dateTrendSeason;
+    if (!season?.startDate || !season?.endDate) return;
+    const key = `${dataSourceBuildingId}:${season.key}`;
+    if (loadedDatedHealthRef.current.has(key)) return;
+    loadedDatedHealthRef.current.add(key);
+    let cancelled = false;
+    setDatedTrendError("");
+    supabase.rpc("get_seasonal_performance_daily", {
+      p_building_id: dataSourceBuildingId,
+      p_start_date: season.startDate,
+      p_end_date: season.endDate,
+    }).then(({ data, error }) => {
+      if (cancelled) return;
+      if (error) {
+        loadedDatedHealthRef.current.delete(key);
+        setDatedTrendError("Historical health averages need the seasonal daily SQL function in Supabase.");
+        return;
+      }
+      setSeasonalTrendArchive((current) => {
+        const existing = current.seasons?.[season.key] || season;
+        const days = new Map((existing.dailyData || []).map((row) => [row.date, row]));
+        (data || []).forEach((row) => {
+          const previous = days.get(row.reading_date) || { date: row.reading_date };
+          const mapped = {
+            internalTemp: row.internal_temp, externalTemp: row.external_temp,
+            externalTempPeak: row.external_temp_peak,
+            upstairsHumidity: row.upstairs_humidity, downstairsHumidity: row.downstairs_humidity,
+            upstairsPm25: row.upstairs_pm25, downstairsPm25: row.downstairs_pm25,
+            upstairsVocs: row.upstairs_vocs, downstairsVocs: row.downstairs_vocs,
+            upstairsPm10: row.upstairs_pm10, upstairsHcho: row.upstairs_hcho,
+            upstairsNo2: row.upstairs_no2,
+          };
+          days.set(row.reading_date, { ...previous, ...mapped });
+        });
+        const next = { seasons: { ...current.seasons, [season.key]: {
+          ...existing, dailyData: [...days.values()].sort((a, b) => a.date.localeCompare(b.date)),
+        } } };
+        localStorage.setItem(`${dataSourceBuildingId}:seasonalTrendArchive:v1`, JSON.stringify(next));
+        return next;
+      });
+    });
+    return () => { cancelled = true; };
+    // The request is keyed by season; archive refreshes must not cancel it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trendPeriod, selectedTrendSeason, isActive, dataSourceBuildingId, dateTrendSeason?.key]);
   useEffect(() => {
     if (trendPeriod === "daily" || !isActive) return;
     const season = dateTrendSeason;
@@ -5748,6 +5801,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
   const availableSeasonNames = SEASON_NAMES.filter(
     (seasonName) =>
       seasonName === activeSeasonInfo.name ||
+      (trendPeriod !== "daily" && seasonName === "Spring") ||
       seasonalTrendRecords.some((record) => record.name === seasonName)
   );
   const seasonalTrendLabel = selectedSeasonRecord
@@ -5788,7 +5842,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
         activeTrendMetricKeys.includes(key)
       ),
     }))
-    .filter((group) => group.key === "all" || group.metricKeys.length > 0);
+    .filter((group) => (trendPeriod === "daily" && group.key === "all") || group.metricKeys.length > 0);
   const selectedTrendMetricGroupKey =
     selectedTrendMetricKeys.length === 0
       ? "all"
@@ -5844,6 +5898,8 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
       : selectedActiveTrendMetrics.length
       ? selectedActiveTrendMetrics
       : activeTrendMetrics;
+  const calendarEnergyAxis = trendPeriod !== "daily" && visibleTrendMetrics.length > 0 &&
+    visibleTrendMetrics.every((metric) => metric.energyStatus);
   const toggleTrendMetric = (metricKey) => {
     setSelectedTrendMetricKeys((currentKeys) => {
       const activeKeys = activeTrendMetrics.map((metric) => metric.key);
@@ -5915,9 +5971,11 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
   };
   const plotWidth = chartWidth - chartPadding.left - chartPadding.right;
   const plotHeight = chartHeight - chartPadding.top - chartPadding.bottom;
+  const calendarEnergyMax = Math.max(1, ...chartTrendData.flatMap((point) =>
+    visibleTrendMetrics.map((metric) => Number.isFinite(point[metric.key]) ? point[metric.key] : 0)));
   const buildMetricRanges = (_data, metrics) =>
     metrics.reduce((ranges, metric) => {
-      ranges[metric.key] = { min: 0, max: 100 };
+      ranges[metric.key] = calendarEnergyAxis ? { min: 0, max: calendarEnergyMax } : { min: 0, max: 100 };
       return ranges;
     }, {});
   const metricRanges = buildMetricRanges(chartTrendData, visibleTrendMetrics);
@@ -6126,7 +6184,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
   };
   const trendPoint = (data, ranges, pointData, metric, index) => {
     const rawValue = pointData[metric.key];
-    const value = trendHealthScore(metric, rawValue, pointData);
+    const value = calendarEnergyAxis ? rawValue : trendHealthScore(metric, rawValue, pointData);
     const range = ranges[metric.key];
 
     if (!Number.isFinite(value) || !range) {
@@ -6218,11 +6276,11 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
     hoveredTrendMetric && hoveredTrendPoint
       ? trendY(
           metricRanges[hoveredTrendMetric.key],
-          trendHealthScore(
+          (calendarEnergyAxis ? hoveredTrendPoint[hoveredTrendMetric.key] : trendHealthScore(
             hoveredTrendMetric,
             hoveredTrendPoint[hoveredTrendMetric.key],
             hoveredTrendPoint
-          )
+          ))
         )
       : null;
   const enerphitPerformance = {
@@ -7182,15 +7240,20 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
           <div className="flex w-fit border border-gray-300 text-xs" role="group" aria-label="Trend period">
             {[["daily", "Daily"], ["weekly", "Weekly"], ["monthly", "Monthly"]].map(([period, label]) => (
               <button key={period} type="button" aria-pressed={trendPeriod === period}
-                onClick={() => { setTrendPeriod(period); setHoveredTrendSlot(null); }}
+                onClick={() => {
+                  setTrendPeriod(period);
+                  setSelectedTrendMetricKeys(period === "daily" ? [] : ["electricity", "gas"]);
+                  setHoveredTrendSlot(null);
+                }}
                 className={`px-3 py-1.5 font-semibold transition-colors ${trendPeriod === period ? "bg-gray-900 text-white" : "bg-white text-gray-700 hover:bg-gray-100"}`}>
                 {label}
               </button>
             ))}
           </div>
           {trendPeriod !== "daily" && selectedSeasonRecord ? <p className="text-xs text-gray-600">
-            {selectedSeasonRecord.dailyData?.length || 0} dated day(s) available in this season. Energy is shown as average kWh per measured day; missing weeks or months remain blank.
+            {selectedSeasonRecord.dailyData?.length || 0} dated day(s) available in this season. Each point averages measured days in that week or month; missing periods remain blank.
           </p> : null}
+          {datedTrendError && trendPeriod !== "daily" ? <p className="text-xs text-red-700">{datedTrendError}</p> : null}
 
           {activeTrendMetrics.length > 0 ? (
             <>
@@ -7264,7 +7327,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
                   onPointerLeave={clearHoveredTrendSlot}
                   style={{ touchAction: "none" }}
                 >
-                  {[
+                  {!calendarEnergyAxis && [
                     { min: 85, max: 100, color: "#fecaca", label: "+ BAD" },
                     { min: 70, max: 85, color: "#fde68a", label: "+ RISK" },
                     { min: 30, max: 70, color: "#bbf7d0", label: "0 OK" },
@@ -7423,7 +7486,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
                           fontSize="9"
                           fill="#374151"
                         >
-                          {formatDeviationScore(value)}
+                          {calendarEnergyAxis ? (calendarEnergyMax * (1 - tick)).toFixed(1) : formatDeviationScore(value)}
                         </text>
                       );
                     })}
@@ -7485,7 +7548,9 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
                           >
                             {hoveredTrendMetric &&
                             Number.isFinite(hoveredTrendPoint?.[hoveredTrendMetric.key])
-                              ? formatDeviationScore(
+                              ? calendarEnergyAxis
+                                ? formatMeasurement(hoveredTrendPoint[hoveredTrendMetric.key])
+                                : formatDeviationScore(
                                   trendHealthScore(
                                     hoveredTrendMetric,
                                     hoveredTrendPoint[hoveredTrendMetric.key],
@@ -7581,9 +7646,9 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
                 </div>
               )}
               <p className="text-xs text-gray-600">
-                Lines are plotted on a shared deviation scale: 0 is good/fine,
-                positive values are drifting high, and negative values are
-                drifting low. Hover values still show the original units.
+                {calendarEnergyAxis
+                  ? "Energy lines show average kWh per measured day, starting at zero."
+                  : "Lines use a shared deviation scale for unlike units: 0 is fine, positive is high and negative is low. Hover values show measured units."}
               </p>
             </>
           ) : (

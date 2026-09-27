@@ -29,3 +29,18 @@ test("monthly view retains gaps and uses a recorded peak rather than an average 
   expect(points[1]).toMatchObject({ gas: null, externalTemp: null, dayCount: 0 });
   expect(points[2]).toMatchObject({ gas: 6, externalTempPeak: 35 });
 });
+
+test("summer monthly view averages dated health readings in June, July and August", () => {
+  const rows = [
+    { date: "2026-06-10", upstairsHumidity: 50, downstairsHumidity: 60, upstairsPm25: 4 },
+    { date: "2026-06-11", upstairsHumidity: 54, downstairsHumidity: 64, upstairsPm25: 6 },
+    { date: "2026-07-01", upstairsHumidity: 56, downstairsHumidity: 66 },
+    { date: "2026-08-01", upstairsHumidity: 58, downstairsHumidity: 68, upstairsPm25: 8 },
+  ];
+  const points = aggregateCalendarTrend(rows, "monthly", "2026-06-01", "2026-08-31");
+
+  expect(points.map((point) => point.date)).toEqual(["2026-06", "2026-07", "2026-08"]);
+  expect(points[0]).toMatchObject({ upstairsHumidity: 52, downstairsHumidity: 62, upstairsPm25: 5 });
+  expect(points[1]).toMatchObject({ upstairsHumidity: 56, downstairsHumidity: 66, upstairsPm25: null });
+  expect(points[2]).toMatchObject({ upstairsHumidity: 58, downstairsHumidity: 68, upstairsPm25: 8 });
+});
