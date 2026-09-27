@@ -20,7 +20,7 @@ test("health setup distinguishes label scanning, connection and metric validatio
   render(<MemoryRouter><NewBuildingSetupPanel /></MemoryRouter>);
   fireEvent.click(screen.getByRole("tab", { name: "Monitoring" }));
   expect(screen.getByText("1. Identify the instrument")).toBeInTheDocument();
-  expect(screen.getByLabelText("Scan device QR label")).toHaveAttribute("accept", "image/*");
+  expect(screen.getByRole("button", { name: "Scan IAQ product" })).toBeInTheDocument();
   expect(screen.getByRole("combobox", { name: "Connection route" })).toHaveValue("dyson");
   expect(screen.getByRole("combobox", { name: "Collector stream" })).toHaveValue("");
   expect(screen.getByText("3. Metrics to validate")).toBeInTheDocument();

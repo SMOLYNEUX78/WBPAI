@@ -8470,6 +8470,8 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   const [healthSensors, setHealthSensors] = useState([]);
   const [sensorEvidenceFileName, setSensorEvidenceFileName] = useState("");
   const [sensorScanStatus, setSensorScanStatus] = useState("");
+  const [sensorScannerOpen, setSensorScannerOpen] = useState(false);
+  const sensorVideoRef = useRef(null);
   const [sensorCheckBusy, setSensorCheckBusy] = useState("");
   const [sensorDraft, setSensorDraft] = useState({
     manufacturer: "",
@@ -9215,19 +9217,8 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
     setSensorDraft((current) => ({ ...current, [field]: value }));
   };
 
-  const scanSensorLabel = async (file) => {
-    if (!file) return;
-    if (!window.BarcodeDetector || !window.createImageBitmap) {
-      setSensorScanStatus("QR scanning is unavailable in this browser. Enter the device details manually.");
-      return;
-    }
+  const acceptSensorCode = (raw) => {
     try {
-      const bitmap = await window.createImageBitmap(file);
-      let codes;
-      try { codes = await new window.BarcodeDetector({ formats: ["qr_code"] }).detect(bitmap); }
-      finally { bitmap.close?.(); }
-      const raw = codes?.[0]?.rawValue || "";
-      if (!raw) { setSensorScanStatus("No QR code found. Try a clearer photo or enter details manually."); return; }
       let details = {};
       try {
         if (raw.startsWith("{")) details = JSON.parse(raw);
@@ -9251,6 +9242,31 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       setSensorScanStatus("Could not read this label. Enter the device details manually.");
     }
   };
+
+  useEffect(() => {
+    if (!sensorScannerOpen) return undefined;
+    let active = true;
+    let controls;
+    import("@zxing/browser").then(async ({ BrowserQRCodeReader }) => {
+      if (!active || !sensorVideoRef.current) return;
+      const reader = new BrowserQRCodeReader();
+      controls = await reader.decodeFromConstraints(
+        { video: { facingMode: { ideal: "environment" } }, audio: false }, sensorVideoRef.current,
+        (result) => {
+          if (!active || !result) return;
+          acceptSensorCode(result.getText());
+          setSensorScannerOpen(false);
+        }
+      );
+      if (!active) controls.stop();
+    }).catch(() => {
+      if (active) {
+        setSensorScanStatus("Camera could not start. Allow camera access or enter the device details manually.");
+        setSensorScannerOpen(false);
+      }
+    });
+    return () => { active = false; controls?.stop(); };
+  }, [sensorScannerOpen]);
 
   const checkSensorReading = async (sensor) => {
     if (sensor.connectionMethod !== "dyson" || !sensor.readingType) return;
@@ -9877,11 +9893,16 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                 <p className="text-xs text-gray-600">
                   Scan a label if available, then confirm its details and location. A QR code does not connect the device.
                 </p>
-                <label className="mt-2 block text-xs font-semibold text-gray-700">Scan device QR label
-                  <input type="file" accept="image/*" capture="environment" className="mt-1 block w-full text-xs font-normal"
-                    onChange={(event) => { scanSensorLabel(event.target.files?.[0]); event.target.value = ""; }} />
-                </label>
+                <button type="button" className="mt-2 border border-emerald-700 bg-white px-3 py-2 text-xs font-semibold text-emerald-950"
+                  onClick={() => {
+                    if (!navigator.mediaDevices?.getUserMedia) { setSensorScanStatus("Camera access is unavailable here. Open WBP over HTTPS or enter details manually."); return; }
+                    setSensorScanStatus(""); setSensorScannerOpen(true);
+                  }}>Scan IAQ product</button>
                 {sensorScanStatus ? <p role="status" className="mt-1 text-xs text-gray-700">{sensorScanStatus}</p> : null}
+                {sensorScannerOpen ? <div className="mt-2 space-y-2 border border-emerald-300 bg-gray-900 p-2">
+                  <video ref={sensorVideoRef} autoPlay muted playsInline aria-label="Live camera for sensor QR scan" className="max-h-72 w-full object-contain" />
+                  <button type="button" onClick={() => setSensorScannerOpen(false)} className="bg-white px-3 py-1.5 text-xs font-semibold text-gray-900">Close camera</button>
+                </div> : null}
               </div>
 
               <div className="grid gap-2 sm:grid-cols-2">
@@ -9995,6 +10016,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                     <select className="mt-1 w-full border bg-white p-2 text-xs" value={sensorDraft.connectionMethod}
                       onChange={(event) => setSensorDraft((current) => ({ ...current, connectionMethod: event.target.value, readingType: "" }))}>
                       <option value="dyson">Existing Dyson collector</option>
+                      <option value="bluetooth">Bluetooth integration needed</option>
                       <option value="manufacturer-api">Manufacturer integration needed</option>
                       <option value="matter">Matter integration needed</option>
                       <option value="gateway">Local gateway / MQTT integration needed</option>
