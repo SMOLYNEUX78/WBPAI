@@ -498,6 +498,15 @@ const CARBON_EVIDENCE_TYPES = [
   { id: "solar-pv", section: "carbon", label: "Solar PV", help: "Installation certificate or commissioning record, if installed." },
   { id: "battery-storage", section: "carbon", label: "Battery storage", help: "Installation or commissioning record, if installed." },
 ];
+const SENSOR_READING_COLUMNS = {
+  temperature: "temperature_inside", humidity: "humidity", pm25: "pm25",
+  pm10: "pm10", voc: "vocs", no2: "no2", co2: "co2", hcho: "hcho",
+};
+const DYSON_READING_TYPES = [
+  ["dyson:upstairs", "Dyson upstairs"],
+  ["dyson:living_room", "Dyson downstairs / living room"],
+  ["dyson:downstairs", "Dyson downstairs (older label)"],
+];
 const PROPERTY_DISCOVERY_DATASETS = [
   "planning-application",
   "listed-building",
@@ -8460,6 +8469,8 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   const [sectionSaveStatus, setSectionSaveStatus] = useState("");
   const [healthSensors, setHealthSensors] = useState([]);
   const [sensorEvidenceFileName, setSensorEvidenceFileName] = useState("");
+  const [sensorScanStatus, setSensorScanStatus] = useState("");
+  const [sensorCheckBusy, setSensorCheckBusy] = useState("");
   const [sensorDraft, setSensorDraft] = useState({
     manufacturer: "",
     model: "",
@@ -8470,6 +8481,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
     verificationDate: "",
     placementNotes: "",
     metrics: ["temperature", "humidity"],
+    connectionMethod: "dyson", readingType: "", identificationMethod: "manual",
   });
   useEffect(() => {
     if (isolatedDraft) return;
@@ -9203,6 +9215,61 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
     setSensorDraft((current) => ({ ...current, [field]: value }));
   };
 
+  const scanSensorLabel = async (file) => {
+    if (!file) return;
+    if (!window.BarcodeDetector || !window.createImageBitmap) {
+      setSensorScanStatus("QR scanning is unavailable in this browser. Enter the device details manually.");
+      return;
+    }
+    try {
+      const bitmap = await window.createImageBitmap(file);
+      let codes;
+      try { codes = await new window.BarcodeDetector({ formats: ["qr_code"] }).detect(bitmap); }
+      finally { bitmap.close?.(); }
+      const raw = codes?.[0]?.rawValue || "";
+      if (!raw) { setSensorScanStatus("No QR code found. Try a clearer photo or enter details manually."); return; }
+      let details = {};
+      try {
+        if (raw.startsWith("{")) details = JSON.parse(raw);
+        else if (/^https?:\/\//i.test(raw)) details = Object.fromEntries(new URL(raw).searchParams);
+      } catch { /* Unknown labels can still be entered manually. */ }
+      const manufacturer = String(details.manufacturer || details.brand || "").slice(0, 100);
+      const model = String(details.model || "").slice(0, 100);
+      const serialNumber = String(details.serial || details.serialNumber || "").slice(0, 100);
+      if (!manufacturer && !model && !serialNumber) {
+        setSensorScanStatus("QR detected, but it does not expose a model or serial number WBP can read. Enter these manually; pairing codes are not stored.");
+        return;
+      }
+      setSensorDraft((current) => ({ ...current,
+        manufacturer: manufacturer || current.manufacturer,
+        model: model || current.model,
+        serialNumber: serialNumber || current.serialNumber,
+        identificationMethod: "qr-label",
+      }));
+      setSensorScanStatus("Label details filled in. Check them against the device before registering.");
+    } catch {
+      setSensorScanStatus("Could not read this label. Enter the device details manually.");
+    }
+  };
+
+  const checkSensorReading = async (sensor) => {
+    if (sensor.connectionMethod !== "dyson" || !sensor.readingType) return;
+    setSensorCheckBusy(sensor.id);
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const { data, error } = await supabase.from("Readings")
+      .select("*")
+      .eq("building_id", "home").eq("reading_type", sensor.readingType)
+      .gte("timestamp", since).order("timestamp", { ascending: false }).limit(1);
+    const row = data?.[0];
+    const metricStatus = Object.fromEntries(sensor.metrics.map((metric) => [metric,
+      row?.[SENSOR_READING_COLUMNS[metric]] != null ? "observed" : "not observed"]));
+    setHealthSensors((current) => current.map((item) => item.id === sensor.id ? {
+      ...item, connectionStatus: error ? "check failed" : row ? "stream has recent sample" : "no recent sample",
+      lastSampleAt: row?.timestamp || "", metricStatus: error ? {} : metricStatus,
+    } : item));
+    setSensorCheckBusy("");
+  };
+
   const toggleSensorMetric = (metric) => {
     setSensorDraft((current) => ({
       ...current,
@@ -9228,6 +9295,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
         ...sensorDraft,
         id: `health-sensor-${Date.now()}`,
         evidenceFileName: sensorEvidenceFileName,
+        connectionStatus: "not checked", metricStatus: {},
       },
     ]);
     setSensorDraft({
@@ -9240,6 +9308,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       verificationDate: "",
       placementNotes: "",
       metrics: ["temperature", "humidity"],
+      connectionMethod: "dyson", readingType: "", identificationMethod: "manual",
     });
     setSensorEvidenceFileName("");
   };
@@ -9804,11 +9873,15 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
 
             <div className="border rounded p-3 bg-gray-50 space-y-3">
               <div>
-                <h4 className="font-semibold text-sm">Instrument Register</h4>
+                <h4 className="font-semibold text-sm">1. Identify the instrument</h4>
                 <p className="text-xs text-gray-600">
-                  Record only the metrics exposed by this device. Evidence grades are
-                  provisional until the audit pack is independently reviewed.
+                  Scan a label if available, then confirm its details and location. A QR code does not connect the device.
                 </p>
+                <label className="mt-2 block text-xs font-semibold text-gray-700">Scan device QR label
+                  <input type="file" accept="image/*" capture="environment" className="mt-1 block w-full text-xs font-normal"
+                    onChange={(event) => { scanSensorLabel(event.target.files?.[0]); event.target.value = ""; }} />
+                </label>
+                {sensorScanStatus ? <p role="status" className="mt-1 text-xs text-gray-700">{sensorScanStatus}</p> : null}
               </div>
 
               <div className="grid gap-2 sm:grid-cols-2">
@@ -9861,7 +9934,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                   />
                 </label>
                 <label className="space-y-1 text-xs text-gray-600">
-                  Provisional evidence grade
+                  Provisional device grade
                   <select
                     className="border rounded p-2 w-full text-xs bg-white"
                     value={sensorDraft.evidenceGrade}
@@ -9915,9 +9988,33 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                 </label>
               </div>
 
+              <div className="space-y-2 border-t pt-3">
+                <h4 className="font-semibold text-sm">2. Connect readings</h4>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <label className="text-xs text-gray-600">Connection route
+                    <select className="mt-1 w-full border bg-white p-2 text-xs" value={sensorDraft.connectionMethod}
+                      onChange={(event) => setSensorDraft((current) => ({ ...current, connectionMethod: event.target.value, readingType: "" }))}>
+                      <option value="dyson">Existing Dyson collector</option>
+                      <option value="manufacturer-api">Manufacturer integration needed</option>
+                      <option value="matter">Matter integration needed</option>
+                      <option value="gateway">Local gateway / MQTT integration needed</option>
+                      <option value="manual">Record only, no data connection</option>
+                    </select>
+                  </label>
+                  {sensorDraft.connectionMethod === "dyson" ? <label className="text-xs text-gray-600">Collector stream
+                    <select className="mt-1 w-full border bg-white p-2 text-xs" value={sensorDraft.readingType}
+                      onChange={(event) => handleSensorDraftChange("readingType", event.target.value)}>
+                      <option value="">Choose stream</option>
+                      {DYSON_READING_TYPES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                    </select>
+                  </label> : null}
+                </div>
+                <p className="text-xs text-gray-600">Selecting a route does not pair a device. A Dyson stream check confirms data availability, not that this physical sensor produced it. Other routes need a supported connector.</p>
+              </div>
+
               <fieldset className="space-y-2">
                 <legend className="text-xs font-semibold text-gray-700">
-                  Metrics supplied by this device
+                  3. Metrics to validate
                 </legend>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {healthMetricOptions.map(([value, label]) => (
@@ -9948,6 +10045,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                 />
               </label>
 
+              <p className="text-xs text-gray-600">Metric availability is checked against a recent sample after registration. Physical and calibration checks remain separate from a live connection.</p>
               <button
                 type="button"
                 className="bg-blue-600 disabled:bg-gray-300 disabled:text-gray-500 text-white px-4 py-2 rounded text-sm font-semibold"
@@ -10001,6 +10099,9 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                         )
                         .join(", ")}
                     </p>
+                    <p className="text-gray-700"><strong>Connection:</strong> {sensor.connectionMethod === "dyson" ? sensor.readingType || "Dyson stream not selected" : sensor.connectionMethod || "Not set"} · {sensor.connectionStatus || "not checked"}{sensor.lastSampleAt ? ` · ${new Date(sensor.lastSampleAt).toLocaleString()}` : ""}</p>
+                    {sensor.metrics.map((metric) => <p key={metric} className="text-gray-600">{healthMetricOptions.find(([value]) => value === metric)?.[1] || metric}: {sensor.metricStatus?.[metric] || "Not validated"}</p>)}
+                    {sensor.connectionMethod === "dyson" && sensor.readingType ? <button type="button" disabled={sensorCheckBusy === sensor.id} onClick={() => checkSensorReading(sensor)} className="border border-emerald-700 px-2 py-1 font-semibold text-emerald-900 disabled:opacity-50">{sensorCheckBusy === sensor.id ? "Checking..." : "Check recent sample"}</button> : null}
                     <p className="text-gray-600">
                       <strong>Assurance:</strong>{" "}
                       {sensor.verificationStatus.replaceAll("-", " ")}

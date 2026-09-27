@@ -16,6 +16,16 @@ test("meter and tariff evidence belong to Monitoring, not Carbon Context", () =>
   expect(screen.getByLabelText("Heating system evidence")).toBeDisabled();
 });
 
+test("health setup distinguishes label scanning, connection and metric validation", () => {
+  render(<MemoryRouter><NewBuildingSetupPanel /></MemoryRouter>);
+  fireEvent.click(screen.getByRole("tab", { name: "Monitoring" }));
+  expect(screen.getByText("1. Identify the instrument")).toBeInTheDocument();
+  expect(screen.getByLabelText("Scan device QR label")).toHaveAttribute("accept", "image/*");
+  expect(screen.getByRole("combobox", { name: "Connection route" })).toHaveValue("dyson");
+  expect(screen.getByRole("combobox", { name: "Collector stream" })).toHaveValue("");
+  expect(screen.getByText("3. Metrics to validate")).toBeInTheDocument();
+});
+
 test("Design and Build reuse the confirmed home address without another entry", () => {
   const property = { address: "14 Bridgewood Road", postcode: "IP12 4HA", uprn: "100091142492", localAuthority: "East Suffolk", confirmedAt: "2026-09-28T00:00:00Z" };
   const { rerender } = render(<OccupyHistoryTabs record={{ uprn: property.uprn }} property={property} activeStage="design" contentOnly />);
