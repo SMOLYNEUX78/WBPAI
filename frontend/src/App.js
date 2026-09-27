@@ -185,6 +185,13 @@ const RoleGateway = () => {
         profile: intent.profile,
         updated_at: new Date().toISOString(),
       }, { onConflict: "user_id,workspace_role" });
+      if (session.user.email?.toLowerCase() !== TEST_PROFESSIONAL_EMAIL) {
+        await supabase.rpc("wbp_request_organisation_access", {
+          p_workspace_role: intent.role,
+          p_organisation_name: intent.profile.organisationName,
+          p_registration_number: intent.profile.registrationNumber || null,
+        });
+      }
     }
 
     window.localStorage.removeItem(AUTH_INTENT_KEY);
@@ -645,12 +652,26 @@ const ProfessionalWorkspace = () => {
   const [designProjects, setDesignProjects] = useState([]);
   const [buildInvitations, setBuildInvitations] = useState([]);
   const [isTestAccount, setIsTestAccount] = useState(false);
+  const [organisationAccess, setOrganisationAccess] = useState(null);
+  const [pendingRequests, setPendingRequests] = useState([]);
+  const refreshRequests = useCallback(async (organisationId) => {
+    const { data, error } = await supabase.rpc("wbp_pending_organisation_requests", { p_organisation_id: organisationId });
+    if (!error) setPendingRequests(data || []);
+  }, []);
   useEffect(() => {
     let active = true;
     supabase.auth.getUser().then(async ({ data }) => {
       if (!active || !data.user) return;
       setProfileEmail(data.user.email || "");
       setIsTestAccount(data.user.email?.toLowerCase() === TEST_PROFESSIONAL_EMAIL);
+      if (data.user.email?.toLowerCase() !== TEST_PROFESSIONAL_EMAIL) {
+        const accessResult = await supabase.rpc("wbp_organisation_access", { p_workspace_role: role });
+        if (active && !accessResult.error) {
+          const approved = (accessResult.data || []).find((item) => item.request_status === "approved");
+          setOrganisationAccess(approved || null);
+          if (approved?.access_role === "admin") refreshRequests(approved.organisation_id);
+        }
+      }
       let cached = {};
       try {
         cached = JSON.parse(window.localStorage.getItem(`wbp-${role}-profile-${data.user.id}`) || window.localStorage.getItem(`wbp-organisation-profile-${data.user.id}`) || "{}");
@@ -674,7 +695,15 @@ const ProfessionalWorkspace = () => {
       }
     });
     return () => { active = false; };
-  }, [role, location.state]);
+  }, [role, location.state, refreshRequests]);
+  const reviewRequest = async (requestId, approve) => {
+    const { error } = await supabase.rpc("wbp_review_organisation_request", { p_request_id: requestId, p_approve: approve });
+    if (error) setProfileStatus(error.message);
+    else {
+      setProfileStatus(approve ? "Staff access approved." : "Request declined.");
+      refreshRequests(organisationAccess.organisation_id);
+    }
+  };
   useEffect(() => {
     if (isBuilder) return;
     let active = true;
@@ -745,12 +774,22 @@ const ProfessionalWorkspace = () => {
           <span>{profile.organisationType || (isBuilder ? "Contractor profile" : "Design practice profile")}</span>
         </div>
         <div className="wbp-organisation-meta">
-          <span>{isTestAccount ? "Test account · Organisation not verified" : "Self-declared · Organisation not verified"}</span>
+          <span>{isTestAccount ? "Test account · Organisation not verified" : organisationAccess ? `Verified organisation · ${organisationAccess.access_role}` : "Self-declared · Organisation not verified"}</span>
         </div>
         <dl className="wbp-organisation-details">{profileDetails.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{label === "Website" && /^https:\/\//i.test(value) ? <a href={value} target="_blank" rel="noopener noreferrer">{value}</a> : value}</dd></div>)}</dl>
       </section>
 
       {profileStatus ? <p className="wbp-profile-save-status" role="status">{profileStatus}</p> : null}
+
+      {organisationAccess?.access_role === "admin" ? <section className="mx-5 mt-5 border border-gray-200 bg-white p-4 sm:mx-8" aria-label="Staff access requests">
+        <h2 className="font-semibold">Staff access requests</h2>
+        {pendingRequests.length ? pendingRequests.map((request) => <div key={request.request_id} className="flex flex-wrap items-center gap-3 border-t py-3 text-sm">
+          <span className="flex-1">{request.user_email} · {request.workspace_role === "architect" ? "Design" : "Build"}</span>
+          <button type="button" className="border px-3 py-1" onClick={() => reviewRequest(request.request_id, true)}>Approve</button>
+          <button type="button" className="border px-3 py-1" onClick={() => reviewRequest(request.request_id, false)}>Decline</button>
+        </div>) : <p className="text-sm text-gray-600">No pending requests.</p>}
+        <p className="mt-2 text-xs text-gray-600">Staff access does not grant permission to sell property or data rights.</p>
+      </section> : null}
 
       <section className="wbp-workspace-actions">
         <button type="button" className="is-primary" onClick={() => navigate(isBuilder ? "/dashboard/new?role=builder&phase=build" : "/workspace/architect/project/new")}>
@@ -781,7 +820,36 @@ const ProfessionalWorkspace = () => {
 
 const AuthenticatedRoute = ({ children, requireProfessionalEmail = false }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [authReady, setAuthReady] = useState(false);
+  const [professionalAccess, setProfessionalAccess] = useState({ loading: requireProfessionalEmail, approved: false, status: "" });
+  const [requestName, setRequestName] = useState("");
+  const [requestRegistration, setRequestRegistration] = useState("");
+  const [requestMessage, setRequestMessage] = useState("");
+  const role = location.pathname.includes("/builder") ? "builder" : "architect";
+
+  const checkProfessionalAccess = useCallback(async (user) => {
+    if (user.email?.toLowerCase() === TEST_PROFESSIONAL_EMAIL) {
+      setProfessionalAccess({ loading: false, approved: true, status: "test" });
+      return;
+    }
+    const { data, error } = await supabase.rpc("wbp_organisation_access", { p_workspace_role: role });
+    const approved = (data || []).some((item) => item.request_status === "approved");
+    setProfessionalAccess({ loading: false, approved, status: error ? "unavailable" : data?.[0]?.request_status || "not-requested" });
+  }, [role]);
+
+  const requestProfessionalAccess = async (event) => {
+    event.preventDefault();
+    setRequestMessage("");
+    const { data, error } = await supabase.rpc("wbp_request_organisation_access", {
+      p_workspace_role: role, p_organisation_name: requestName, p_registration_number: requestRegistration || null,
+    });
+    if (error) setRequestMessage(error.message);
+    else {
+      setRequestMessage(data === "organisation-review" ? "Organisation review requested. We must approve its identity and email domain first." : "Request sent to your organisation administrator.");
+      setProfessionalAccess({ loading: false, approved: false, status: "pending" });
+    }
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -796,6 +864,7 @@ const AuthenticatedRoute = ({ children, requireProfessionalEmail = false }) => {
         return;
       }
       setAuthReady(true);
+      if (requireProfessionalEmail) checkProfessionalAccess(data.session.user);
     });
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!mounted) return;
@@ -807,16 +876,31 @@ const AuthenticatedRoute = ({ children, requireProfessionalEmail = false }) => {
         navigate("/login", { replace: true });
       } else {
         setAuthReady(true);
+        if (requireProfessionalEmail) checkProfessionalAccess(session.user);
       }
     });
     return () => {
       mounted = false;
       listener.subscription.unsubscribe();
     };
-  }, [navigate, requireProfessionalEmail]);
+  }, [navigate, requireProfessionalEmail, checkProfessionalAccess]);
 
   if (!authReady) {
     return <main className="flex min-h-screen items-center justify-center bg-white text-sm font-semibold text-gray-600">Checking secure access...</main>;
+  }
+  if (requireProfessionalEmail && !professionalAccess.approved) {
+    if (professionalAccess.loading) return <main className="p-6 text-sm">Checking organisation access...</main>;
+    return <main className="mx-auto max-w-xl space-y-4 p-6">
+      <h1 className="text-xl font-bold">Organisation access</h1>
+      <p className="text-sm text-gray-700">{professionalAccess.status === "pending" ? "Your request is awaiting approval. An approved company email alone does not authorise work on the organisation's records." : professionalAccess.status === "unavailable" ? "Organisation access is not configured yet. Ask the WBP administrator to apply Organisation Access.sql in Supabase." : "Request access to your organisation's Design or Build workspace."}</p>
+      {professionalAccess.status !== "pending" && professionalAccess.status !== "unavailable" ? <form onSubmit={requestProfessionalAccess} className="space-y-3">
+        <label className="block text-sm">Organisation name<input className="mt-1 w-full border p-2" value={requestName} onChange={(event) => setRequestName(event.target.value)} required /></label>
+        <label className="block text-sm">Registration number<input className="mt-1 w-full border p-2" value={requestRegistration} onChange={(event) => setRequestRegistration(event.target.value)} /></label>
+        <button type="submit" className="border border-emerald-700 bg-emerald-700 px-4 py-2 text-white">Request access</button>
+      </form> : null}
+      {requestMessage ? <p role="status" className="text-sm">{requestMessage}</p> : null}
+      <button type="button" className="border px-4 py-2 text-sm" onClick={() => navigate("/login")}>Back to sign in</button>
+    </main>;
   }
   return children;
 };

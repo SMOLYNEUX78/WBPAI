@@ -155,3 +155,16 @@ test("signed-in test account can set a password", async () => {
   await waitFor(() => expect(supabase.auth.updateUser).toHaveBeenCalledWith({ password: "a-long-test-password" }));
   expect(screen.getByText(/Password saved/)).toBeInTheDocument();
 });
+
+test("unapproved professional email cannot open a design workspace", async () => {
+  const session = { user: { id: "pending-user", email: "person@example-studio.co.uk" } };
+  supabase.auth.getSession.mockResolvedValue({ data: { session } });
+  supabase.auth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: jest.fn() } } });
+  supabase.rpc.mockResolvedValue({ data: [{ request_status: "pending" }], error: null });
+  window.history.pushState({}, "", "/workspace/architect/project/new");
+
+  render(<App />);
+  expect(await screen.findByRole("heading", { name: "Organisation access" })).toBeInTheDocument();
+  expect(screen.getByText(/awaiting approval/)).toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: "New design project" })).not.toBeInTheDocument();
+});
