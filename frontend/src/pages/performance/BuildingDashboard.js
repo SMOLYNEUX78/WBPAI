@@ -8410,6 +8410,8 @@ export const NewBuildingSetupPanel = ({ freshStart = false, isActive = false }) 
   });
   const [discoveryStatus, setDiscoveryStatus] = useState("idle");
   const [discoveryError, setDiscoveryError] = useState("");
+  const [addressCandidates, setAddressCandidates] = useState([]);
+  const [addressSearchStatus, setAddressSearchStatus] = useState("idle");
   const [setupMode, setSetupMode] = useState("manual");
   const [apiDetails, setApiDetails] = useState("");
   const [modelInput, setModelInput] = useState("");
@@ -8722,19 +8724,49 @@ export const NewBuildingSetupPanel = ({ freshStart = false, isActive = false }) 
     setPropertySearch((current) => ({ ...current, [field]: value, ...(["address", "postcode"].includes(field) ? { uprn: "" } : {}) }));
     setPropertyDiscovery((current) => current?.confirmedAt ? current : null);
     if (["address", "postcode"].includes(field)) {
+      setAddressCandidates([]);
+      setAddressSearchStatus("idle");
       setOwnershipDraft((current) => ({ ...current, uprn: "" }));
     }
   };
 
-  const discoverProperty = async () => {
+  const searchRegisteredAddresses = async () => {
     const postcode = normalisePostcode(propertySearch.postcode);
-    if (!propertySearch.address.trim() || !postcode || !/^\d{1,12}$/.test(propertySearch.uprn.trim())) {
+    if (!propertySearch.address.trim() || !postcode) {
+      setDiscoveryError("Enter an address and postcode to search.");
+      return;
+    }
+    setAddressSearchStatus("loading");
+    setAddressCandidates([]);
+    setDiscoveryError("");
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData?.session?.access_token) throw new Error("Sign in to search for your home.");
+      const params = new URLSearchParams({ address: propertySearch.address.trim(), postcode });
+      const response = await fetch(`/api/lookupAddress?${params}`, {
+        headers: { Authorization: `Bearer ${sessionData.session.access_token}` },
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Address search is unavailable.");
+      setAddressCandidates(result.candidates || []);
+      setAddressSearchStatus("complete");
+    } catch (error) {
+      setAddressSearchStatus("error");
+      setDiscoveryError(error?.message || "Address search is unavailable.");
+    }
+  };
+
+  const discoverProperty = async (selectedAddress = null) => {
+    const address = selectedAddress?.address || propertySearch.address.trim();
+    const postcode = normalisePostcode(selectedAddress?.postcode || propertySearch.postcode);
+    const matchedUprn = selectedAddress?.uprn || propertySearch.uprn.trim();
+    if (!address || !postcode || !/^\d{1,12}$/.test(matchedUprn)) {
       setDiscoveryError("Enter the address, postcode and UPRN before continuing.");
       return;
     }
-    if (propertyDiscovery?.address === propertySearch.address.trim()
+    if (propertyDiscovery?.address === address
       && propertyDiscovery.postcode === postcode
-      && propertyDiscovery.uprn === propertySearch.uprn.trim()
+      && propertyDiscovery.uprn === matchedUprn
       && propertyDiscovery.addressVerification) {
       setDiscoveryError("");
       setDiscoveryStatus("complete");
@@ -8745,12 +8777,13 @@ export const NewBuildingSetupPanel = ({ freshStart = false, isActive = false }) 
     setDiscoveryError("");
 
     try {
-      const matchedUprn = propertySearch.uprn.trim();
-      let addressVerification = { status: "unavailable", registered: null };
-      try {
+      let addressVerification = selectedAddress
+        ? { status: "matched", registered: selectedAddress }
+        : { status: "unavailable", registered: null };
+      if (!selectedAddress) try {
         const { data: sessionData } = await supabase.auth.getSession();
         if (!sessionData?.session?.access_token) throw new Error("Not signed in");
-        const params = new URLSearchParams({ address: propertySearch.address.trim(), postcode, uprn: matchedUprn });
+        const params = new URLSearchParams({ address, postcode, uprn: matchedUprn });
         const response = await fetch(`/api/lookupAddress?${params}`, {
           headers: { Authorization: `Bearer ${sessionData.session.access_token}` },
         });
@@ -8761,10 +8794,10 @@ export const NewBuildingSetupPanel = ({ freshStart = false, isActive = false }) 
       } catch {
         // A failed provider check must never be presented as a verified address.
       }
-      const sharedLookup = designPlanningLookup?.address.toLowerCase() === propertySearch.address.trim().toLowerCase()
+      const sharedLookup = designPlanningLookup?.address.toLowerCase() === address.toLowerCase()
         && designPlanningLookup?.postcode === postcode.replace(/\s+/g, "");
-      let latitude = Number(propertySearch.latitude) || (sharedLookup ? designPlanningLookup.latitude : null);
-      let longitude = Number(propertySearch.longitude) || (sharedLookup ? designPlanningLookup.longitude : null);
+      let latitude = selectedAddress?.latitude || Number(propertySearch.latitude) || (sharedLookup ? designPlanningLookup.latitude : null);
+      let longitude = selectedAddress?.longitude || Number(propertySearch.longitude) || (sharedLookup ? designPlanningLookup.longitude : null);
       let localAuthority = sharedLookup ? designPlanningLookup.localAuthority : "";
       let postcodeMatched = Boolean(sharedLookup);
 
@@ -8821,7 +8854,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, isActive = false }) 
         version: 1,
         discoveredAt,
         confirmedAt: null,
-        address: propertySearch.address.trim(),
+        address,
         postcode,
         uprn: matchedUprn,
         addressVerification,
@@ -8878,6 +8911,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, isActive = false }) 
 
       const nextSearch = {
         ...propertySearch,
+        address,
         postcode,
         uprn: matchedUprn,
         latitude: latitude || "",
@@ -8891,7 +8925,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, isActive = false }) 
       }));
       setManualData((current) => ({
         ...current,
-        address: propertySearch.address.trim(),
+        address,
         latitude: latitude || current.latitude,
         longitude: longitude || current.longitude,
       }));
@@ -9268,7 +9302,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, isActive = false }) 
               <div>
                 <p className="text-xs font-bold uppercase text-blue-700">Step 1 of 3</p>
                 <h4 className="mt-1 text-base font-bold">Find your home</h4>
-                <p className="mt-1 text-sm text-gray-600">Enter the address exactly as you normally use it.</p>
+                <p className="mt-1 text-sm text-gray-600">Search your address, then choose the matching property.</p>
               </div>
 
               <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,2fr)_minmax(130px,1fr)]">
@@ -9291,17 +9325,26 @@ export const NewBuildingSetupPanel = ({ freshStart = false, isActive = false }) 
                   />
                 </label>
               </div>
+              <button type="button" onClick={searchRegisteredAddresses} disabled={addressSearchStatus === "loading"} className="mt-3 bg-blue-700 px-4 py-2 text-sm font-bold text-white disabled:cursor-wait disabled:opacity-60">
+                {addressSearchStatus === "loading" ? "Searching addresses..." : "Find address"}
+              </button>
+              {addressSearchStatus === "complete" ? <div className="mt-3 border border-gray-200 bg-white p-3">
+                <p className="text-xs font-semibold text-gray-700">{addressCandidates.length ? "Choose your property" : "No matching address found. Use the UPRN option below."}</p>
+                {addressCandidates.length ? <div className="mt-2 max-h-48 space-y-1 overflow-y-auto">{addressCandidates.map((candidate) => <button key={candidate.uprn} type="button" onClick={() => discoverProperty(candidate)} className="block w-full border border-gray-200 p-2 text-left text-xs hover:bg-blue-50">
+                  {candidate.address} · UPRN {candidate.uprn}
+                </button>)}</div> : null}
+              </div> : null}
               <div className="mt-3 border border-blue-200 bg-blue-50 p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <label htmlFor="setup-uprn" className="text-xs font-bold text-gray-900">Property number (UPRN)</label>
                   <a href="https://www.findmyaddress.co.uk/search" target="_blank" rel="noopener noreferrer" className="text-xs font-semibold text-blue-800 underline">Find your UPRN &#8599;</a>
                 </div>
                 <input id="setup-uprn" inputMode="numeric" maxLength={12} value={propertySearch.uprn} onChange={(event) => updatePropertySearch("uprn", event.target.value.replace(/\D/g, ""))} placeholder="Paste the UPRN here" className="mt-2 w-full border border-gray-300 bg-white p-2 text-sm sm:max-w-sm" />
-                <p className="mt-2 text-xs text-gray-600">FindMyAddress opens separately. Match its address and postcode before entering the UPRN. This identifies the property, not its legal owner.</p>
+                <p className="mt-2 text-xs text-gray-600">If your home is not listed, find its UPRN on FindMyAddress and enter it here. This identifies the property, not its legal owner.</p>
               </div>
-              <button type="button" onClick={discoverProperty} disabled={discoveryStatus === "loading"} className="mt-3 bg-blue-700 px-4 py-2 text-sm font-bold text-white disabled:cursor-wait disabled:opacity-60">
-                {discoveryStatus === "loading" ? "Checking address..." : "Check address"}
-              </button>
+              {propertySearch.uprn ? <button type="button" onClick={() => discoverProperty()} disabled={discoveryStatus === "loading"} className="mt-3 bg-blue-700 px-4 py-2 text-sm font-bold text-white disabled:cursor-wait disabled:opacity-60">
+                {discoveryStatus === "loading" ? "Checking address..." : "Check UPRN"}
+              </button> : null}
 
               {discoveryError ? (
                 <p className="mt-3 border border-red-200 bg-red-50 p-2 text-xs text-red-800">{discoveryError}</p>

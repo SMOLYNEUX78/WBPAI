@@ -43,13 +43,18 @@ module.exports = async function lookupAddress(request, response) {
     if (uprn && upstream.status === 404) return response.status(200).json({ match: false, registered: null });
     if (!upstream.ok) return response.status(502).json({ error: "The address register could not be reached." });
     const payload = await upstream.json();
-    const candidates = (payload.results || []).map(({ DPA, LPI }) => DPA || LPI).filter(Boolean).map((row) => ({
-      uprn: String(row.UPRN || ""),
-      address: String(row.ADDRESS || ""),
-      postcode: String(row.POSTCODE || row.POSTCODE_LOCATOR || ""),
-      latitude: Number.isFinite(Number(row.LAT)) ? Number(row.LAT) : null,
-      longitude: Number.isFinite(Number(row.LNG)) ? Number(row.LNG) : null,
-    })).filter((row) => /^\d{1,12}$/.test(row.uprn));
+    const candidates = (payload.results || []).map(({ DPA, LPI }) => DPA || LPI).filter(Boolean).map((row) => {
+      const registeredPostcode = String(row.POSTCODE || row.POSTCODE_LOCATOR || "");
+      const registeredAddress = String(row.ADDRESS || "").trim();
+      const postcodeSuffix = registeredPostcode.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s*");
+      return {
+        uprn: String(row.UPRN || ""),
+        address: registeredPostcode ? registeredAddress.replace(new RegExp(`,?\\s*${postcodeSuffix}$`, "i"), "").trim() : registeredAddress,
+        postcode: registeredPostcode,
+        latitude: Number.isFinite(Number(row.LAT)) ? Number(row.LAT) : null,
+        longitude: Number.isFinite(Number(row.LNG)) ? Number(row.LNG) : null,
+      };
+    }).filter((row) => /^\d{1,12}$/.test(row.uprn));
     response.setHeader("Cache-Control", "private, max-age=300");
     if (uprn) {
       const registered = candidates.find((row) => row.uprn === uprn);
