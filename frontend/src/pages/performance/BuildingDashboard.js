@@ -8498,7 +8498,9 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   const [meterIdentifiers, setMeterIdentifiers] = useState({ supplyId: "", displayId: "" });
   const [billReview, setBillReview] = useState({ supplier: "", tariff: "", mpan: "", mprn: "", unitRatePence: "", standingChargePence: "" });
   const [billDraftFile, setBillDraftFile] = useState(null);
+  const billUploadRef = useRef(null);
   const [billStatus, setBillStatus] = useState("");
+  const [billTarget, setBillTarget] = useState(null);
   const [meterScanStatus, setMeterScanStatus] = useState("");
   const [meterScannerOpen, setMeterScannerOpen] = useState(false);
   const meterVideoRef = useRef(null);
@@ -8514,6 +8516,22 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   const [sensorScannerOpen, setSensorScannerOpen] = useState(false);
   const sensorVideoRef = useRef(null);
   const [sensorCheckBusy, setSensorCheckBusy] = useState("");
+  useEffect(() => {
+    if (!syncHomeProfile || !isolatedDraft) return undefined;
+    let active = true;
+    const loadBillTarget = async () => {
+      const { data: auth } = await supabase.auth.getUser();
+      if (!active || !auth?.user) return;
+      const { data, error } = await supabase.from("WBPBuildingRecords")
+        .select("id,record_reference,uprn")
+        .eq("custodian_user_id", auth.user.id).eq("uprn", "100091142492")
+        .order("updated_at", { ascending: false }).limit(1).maybeSingle();
+      if (active && !error) setBillTarget(data || null);
+    };
+    loadBillTarget();
+    return () => { active = false; };
+  }, [syncHomeProfile, isolatedDraft]);
+  const billRecordId = ownershipRecord?.databaseId || billTarget?.id;
   const [sensorDraft, setSensorDraft] = useState({
     manufacturer: "",
     model: "",
@@ -8731,9 +8749,27 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
     return () => { active = false; };
   }, [ownershipRecord?.databaseId]);
 
-  const uploadCarbonEvidence = async (type, file) => {
+  useEffect(() => {
+    if (!billRecordId || ownershipRecord?.databaseId) return undefined;
+    let active = true;
+    supabase.from("WBPEvidenceVersions")
+      .select("id,evidence_type,original_file_name,storage_reference,created_at,assurance_status")
+      .eq("building_record_id", billRecordId).eq("evidence_type", "energy-bill")
+      .order("created_at", { ascending: false }).limit(1)
+      .then(({ data, error }) => {
+        if (active && !error && data?.[0]) setCarbonEvidence((current) => ({ ...current, "energy-bill": data[0] }));
+      });
+    supabase.from("WBPBuildingSetupDeclarations").select("setup_data")
+      .eq("building_record_id", billRecordId).maybeSingle()
+      .then(({ data, error }) => {
+        if (active && !error && data?.setup_data?.billReview) setBillReview((current) => ({ ...current, ...data.setup_data.billReview }));
+      });
+    return () => { active = false; };
+  }, [billRecordId, ownershipRecord?.databaseId]);
+
+  const uploadCarbonEvidence = async (type, file, targetId = ownershipRecord?.databaseId) => {
     if (!file) return;
-    if (!ownershipRecord?.databaseId) {
+    if (!targetId) {
       setCarbonEvidenceStatus("Save the ownership record to your secure account before uploading evidence.");
       return;
     }
@@ -8752,18 +8788,18 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       const hash = Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
       const { data: previous, error: versionError } = await supabase.from("WBPEvidenceVersions")
         .select("version_number")
-        .eq("building_record_id", ownershipRecord.databaseId)
+        .eq("building_record_id", targetId)
         .eq("evidence_type", type)
         .order("version_number", { ascending: false })
         .limit(1);
       if (versionError) throw versionError;
       const version = (previous?.[0]?.version_number || 0) + 1;
-      path = `${auth.user.id}/${ownershipRecord.databaseId}/${window.crypto.randomUUID()}`;
+      path = `${auth.user.id}/${targetId}/${window.crypto.randomUUID()}`;
       const { error: uploadError } = await supabase.storage.from("wbp-private-evidence")
         .upload(path, file, { contentType: file.type, upsert: false });
       if (uploadError) throw uploadError;
       const { data, error: metadataError } = await supabase.from("WBPEvidenceVersions").insert({
-        building_record_id: ownershipRecord.databaseId,
+        building_record_id: targetId,
         evidence_type: type,
         lifecycle_stage: "occupy",
         version_number: version,
@@ -8824,11 +8860,26 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
 
   const confirmEnergyBill = async () => {
     if (!billDraftFile) return;
-    const uploaded = await uploadCarbonEvidence("energy-bill", billDraftFile);
+    const uploaded = await uploadCarbonEvidence("energy-bill", billDraftFile, billRecordId);
     if (!uploaded) return;
     setBillDraftFile(null);
     setBillStatus("Bill stored privately. Tariff details are customer-confirmed, not supplier-verified.");
-    await saveSetupSection({ billReview });
+    if (ownershipRecord?.databaseId === billRecordId) {
+      await saveSetupSection({ billReview });
+      return;
+    }
+    const { data: auth } = await supabase.auth.getUser();
+    if (!auth?.user) { setBillStatus("Bill uploaded, but tariff details could not be saved. Sign in again."); return; }
+    const { data: existing, error: readError } = await supabase.from("WBPBuildingSetupDeclarations")
+      .select("setup_data").eq("building_record_id", billRecordId).maybeSingle();
+    if (readError) { setBillStatus(`Bill uploaded, but tariff details could not be saved: ${readError.message}`); return; }
+    const { error } = await supabase.from("WBPBuildingSetupDeclarations").upsert({
+      building_record_id: billRecordId,
+      setup_data: { ...(existing?.setup_data || {}), billReview },
+      updated_by: auth.user.id,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "building_record_id" });
+    if (error) setBillStatus(`Bill uploaded, but tariff details could not be saved: ${error.message}`);
   };
 
   const handleManualChange = (field, value) => {
@@ -9875,22 +9926,6 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
               </p>
             </div>
 
-            <div className="space-y-3 border bg-gray-50 p-3">
-              <h4 className="text-sm font-semibold">Add a recent energy bill</h4>
-              <p className="text-xs text-gray-600">Text PDFs may fill some details. For scanned bills or images, enter them manually. Check the details before saving.</p>
-              <input type="file" aria-label="Choose energy bill" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
-                disabled={!ownershipRecord?.databaseId || Boolean(carbonEvidenceBusy)} className="block w-full text-xs"
-                onChange={(event) => { prepareEnergyBill(event.target.files?.[0]); event.target.value = ""; }} />
-              {!ownershipRecord?.databaseId ? <p className="text-xs text-amber-800">Save the home profile to your secure account before uploading.</p> : null}
-              {billStatus ? <p role="status" className="text-xs text-gray-700">{billStatus}</p> : null}
-              {(billDraftFile || carbonEvidence["energy-bill"]) ? <div className="grid gap-2 sm:grid-cols-2">
-                {[["supplier", "Supplier"], ["tariff", "Tariff name"], ["mpan", "Electricity MPAN"], ["mprn", "Gas MPRN"], ["unitRatePence", "Unit rate (p/kWh)"], ["standingChargePence", "Standing charge (p/day)"]].map(([field, label]) =>
-                  <label key={field} className="space-y-1 text-xs text-gray-700">{label}<input type="text" className="w-full border bg-white p-2 text-xs" value={billReview[field] || ""} onChange={(event) => setBillReview((current) => ({ ...current, [field]: event.target.value }))} /></label>)}
-              </div> : null}
-              {billDraftFile ? <button type="button" disabled={Boolean(carbonEvidenceBusy)} onClick={confirmEnergyBill} className="bg-emerald-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Confirm details and upload bill</button> : null}
-              {carbonEvidence["energy-bill"] ? <button type="button" className="block break-all text-left text-xs text-blue-700 underline" onClick={() => openCarbonEvidence(carbonEvidence["energy-bill"].storage_reference)}>{carbonEvidence["energy-bill"].original_file_name || "View uploaded bill"} (customer-confirmed)</button> : null}
-            </div>
-
             <div className="border rounded p-3 bg-gray-50 space-y-3">
               <div>
                 <h4 className="font-semibold text-sm">Smart meter details</h4>
@@ -9899,11 +9934,26 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                 </p>
               </div>
 
+              <div className="flex flex-wrap gap-2">
               <button type="button" className="border border-emerald-700 bg-white px-3 py-2 text-xs font-semibold text-emerald-950"
                 onClick={() => {
                   if (!navigator.mediaDevices?.getUserMedia) { setMeterScanStatus("Camera access is unavailable. Enter the details from your bill or display."); return; }
                   setMeterScanStatus(""); setMeterScannerOpen(true);
                 }}>Scan meter or display label</button>
+              <input ref={billUploadRef} type="file" className="sr-only" aria-label="Choose energy bill" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+                onChange={(event) => { prepareEnergyBill(event.target.files?.[0]); event.target.value = ""; }} />
+              <button type="button" disabled={!billRecordId || Boolean(carbonEvidenceBusy)} onClick={() => billUploadRef.current?.click()}
+                className="border border-emerald-700 bg-white px-3 py-2 text-xs font-semibold text-emerald-950 disabled:opacity-50">Scan or upload energy bill</button>
+              </div>
+              {billRecordId ? <p className="text-xs text-emerald-900">Bill will be saved to {ownershipRecord?.recordId || billTarget?.record_reference}.</p>
+                : <p className="text-xs text-amber-800">A saved WBP-001 home profile is needed to store the bill privately.</p>}
+              {billStatus ? <p role="status" className="text-xs text-gray-700">{billStatus}</p> : null}
+              {(billDraftFile || carbonEvidence["energy-bill"]) ? <div className="grid gap-2 sm:grid-cols-2">
+                {[["supplier", "Supplier"], ["tariff", "Tariff name"], ["mpan", "Electricity MPAN"], ["mprn", "Gas MPRN"], ["unitRatePence", "Unit rate (p/kWh)"], ["standingChargePence", "Standing charge (p/day)"]].map(([field, label]) =>
+                  <label key={field} className="space-y-1 text-xs text-gray-700">{label}<input type="text" className="w-full border bg-white p-2 text-xs" value={billReview[field] || ""} onChange={(event) => setBillReview((current) => ({ ...current, [field]: event.target.value }))} /></label>)}
+              </div> : null}
+              {billDraftFile ? <button type="button" disabled={Boolean(carbonEvidenceBusy)} onClick={confirmEnergyBill} className="bg-emerald-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Confirm details and upload bill</button> : null}
+              {carbonEvidence["energy-bill"] ? <button type="button" className="block break-all text-left text-xs text-blue-700 underline" onClick={() => openCarbonEvidence(carbonEvidence["energy-bill"].storage_reference)}>{carbonEvidence["energy-bill"].original_file_name || "View uploaded bill"} (customer-confirmed)</button> : null}
               {meterScannerOpen ? <div className="space-y-2 border border-emerald-300 bg-gray-900 p-2">
                 <video ref={meterVideoRef} autoPlay muted playsInline aria-label="Live camera for smart meter label scan" className="max-h-72 w-full object-contain" />
                 <button type="button" className="bg-white px-3 py-1 text-xs" onClick={() => setMeterScannerOpen(false)}>Cancel scan</button>
