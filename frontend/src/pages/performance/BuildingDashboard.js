@@ -10002,7 +10002,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
             </div>
 
             <div className="grid gap-3">
-              <h4 className="font-semibold text-sm">Meter history and tariff evidence</h4>
+              <h4 className="font-semibold text-sm">2. Meter history and tariff evidence</h4>
               <p className="text-xs text-gray-600">A bill supports tariff, supplier and fuel claims, including carbon context. It does not replace consented meter readings or independently verify a renewable tariff.</p>
               <div className="space-y-3 border bg-gray-50 p-3">
                 <p className="text-xs text-gray-600">Text PDFs may fill some details. For scanned bills or images, enter them manually and confirm before saving.</p>
