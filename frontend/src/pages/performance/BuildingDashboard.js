@@ -86,7 +86,7 @@ export const ProfileSummaryColumns = ({ record, property, setup = {} }) => {
     </div>)}
   </div>;
 };
-export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed = false, activeStage, contentOnly = false, addressDraft, onAddressDraftChange, draftHistory, onDraftHistoryChange, onPlanningLookup }) => {
+export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed = false, activeStage, contentOnly = false, addressDraft, onAddressDraftChange, draftHistory, onDraftHistoryChange, onPlanningLookup, internalArea, onInternalAreaChange }) => {
   const [localStage, setLocalStage] = useState(initiallyCollapsed ? null : "audit");
   const stage = activeStage || localStage;
   const [displayStage, setDisplayStage] = useState("audit");
@@ -130,6 +130,7 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
     ["constructionStart", "Construction start"], ["completionDate", "Completion year / date"],
     ["buildingControlReference", "Building control / completion reference"], ["evidenceSourceUrl", "Building record URL"],
   ];
+  const designArea = internalArea ?? shownHistory.design?.internalArea ?? setup?.manualData?.internalArea ?? "";
 
   useEffect(() => {
     setLocalStage(initiallyCollapsed ? null : "audit");
@@ -273,6 +274,9 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
   const saveHistory = async (event) => {
     event.preventDefault();
     if (!recordId) { setSaveStatus("Save this home to your secure account first."); return; }
+    if (stage === "design" && designArea !== "" && !(Number(designArea) > 0)) {
+      setSaveStatus("Enter a valid internal area greater than zero."); return;
+    }
     setSaveStatus("Saving...");
     const { data: auth, error: authError } = await supabase.auth.getUser();
     if (authError || !auth.user) { setSaveStatus("Sign in again before saving."); return; }
@@ -282,6 +286,9 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
     const setupData = { ...(existing?.setup_data || {}), historicalStages: {
       ...(existing?.setup_data?.historicalStages || {}), [stage]: shownHistory[stage],
     } };
+    if (stage === "design") {
+      setupData.manualData = { ...(setupData.manualData || {}), internalArea: designArea };
+    }
     const { error } = await supabase.from("WBPBuildingSetupDeclarations").upsert({
       building_record_id: recordId, setup_data: setupData, updated_by: auth.user.id,
       updated_at: new Date().toISOString(),
@@ -382,6 +389,21 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
           </div> : null}
           {showHistoryInputs ? <form onSubmit={saveHistory} className="grid gap-2 border-t border-emerald-200 pt-2 sm:grid-cols-3">
             {fields.map(([key, label]) => <label key={key} className="min-w-0 font-semibold text-emerald-950">{label}<input value={shownHistory[stage]?.[key] || ""} onChange={(event) => changeHistory((current) => ({ ...current, [stage]: { ...current[stage], [key]: event.target.value } }))} className="mt-1 block w-full min-w-0 border border-emerald-300 bg-white px-2 py-1.5 font-normal text-gray-900" /></label>)}
+            {isDesign ? <>
+              <label className="min-w-0 font-semibold text-emerald-950">Internal floor area (m2)
+                <input type="number" min="1" step="0.1" value={designArea} onChange={(event) => {
+                  const value = event.target.value;
+                  onInternalAreaChange?.(value);
+                  changeHistory((current) => ({ ...current, design: { ...current.design, internalArea: value } }));
+                }} className="mt-1 block w-full min-w-0 border border-emerald-300 bg-white px-2 py-1.5 font-normal text-gray-900" />
+              </label>
+              <label className="min-w-0 font-semibold text-emerald-950">Area source
+                <select value={shownHistory.design?.areaSource || ""} onChange={(event) => changeHistory((current) => ({ ...current, design: { ...current.design, areaSource: event.target.value } }))} className="mt-1 block w-full min-w-0 border border-emerald-300 bg-white px-2 py-1.5 font-normal text-gray-900">
+                  <option value="">Select source</option><option value="original-plans">Original plans</option><option value="measured-survey">Measured survey</option><option value="3d-model">3D model estimate</option>
+                </select>
+              </label>
+              <p className="self-end text-gray-600">Check that the area covers the intended heated floors before using it for EUI.</p>
+            </> : null}
             <div className="flex items-end gap-2"><button type="submit" disabled={!recordId} className="bg-emerald-700 px-3 py-1.5 font-semibold text-white disabled:opacity-50">Save {stage}</button>{saveStatus ? <span role="status" className="text-gray-700">{saveStatus}</span> : null}</div>
           </form> : null}
           {showHistoryInputs ? <div className="min-w-0">
@@ -1205,6 +1227,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
         {
           ...createEmptyMatterportMetadata("Paste a Matterport URL or ID", building),
           ...manualMatterportData,
+          internalArea: Number(homeSetup.manualData?.internalArea) || manualMatterportData.internalArea || "--",
           address: building.address || manualMatterportData.address,
         }
       );
@@ -1216,11 +1239,11 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
         "Model connected, geodata awaiting SDK / API",
         building
       ),
-      internalArea: getEstimatedInternalArea(matterportModelId, building),
       ...manualMatterportData,
+      internalArea: Number(homeSetup.manualData?.internalArea) || getEstimatedInternalArea(matterportModelId, building),
       address: building.address || manualMatterportData.address,
     });
-  }, [building, matterportModelId, manualMatterportData]);
+  }, [building, matterportModelId, manualMatterportData, homeSetup.manualData?.internalArea]);
 
   const applyBuildingScope = (query) => {
     if (building.legacyUnscopedData) {
@@ -5202,7 +5225,9 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
       aria-hidden="true"
     />
   );
-  const hasConfirmedArea = matterportMetadata.internalArea !== "--";
+  const hasConfirmedArea = dataSourceBuildingId === "home"
+    ? Number(homeSetup.manualData?.internalArea) > 0 && Boolean(homeSetup.historicalStages?.design?.areaSource)
+    : matterportMetadata.internalArea !== "--";
   const hasEnergyBaseline = Number.isFinite(historicalPerformance);
   const recentSummaryMeteredDays = Number(energySummary.baselineMeteredDays) || 0;
   const persistedHistoryMeteredDays = Number(
@@ -5344,14 +5369,19 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
   const verifierApprovalComplete =
     mrvEvidence.verifierStatus === "approved" &&
     Boolean(mrvEvidence.verifierName?.trim());
+  const evidenceAddress = dataSourceBuildingId === "home"
+    ? [homePassport?.propertyDiscovery?.address, homePassport?.propertyDiscovery?.postcode].filter(Boolean).join(", ")
+    : building.address;
+  const evidenceLatitude = dataSourceBuildingId === "home" ? homePassport?.propertyDiscovery?.latitude : building.latitude;
+  const evidenceLongitude = dataSourceBuildingId === "home" ? homePassport?.propertyDiscovery?.longitude : building.longitude;
   const evidencePackChecks = [
     {
       category: "Monitoring inputs",
       label: "Building identity",
-      detail: `${building.address || "Address pending"} / ${
-        building.latitude || "--"
-      }, ${building.longitude || "--"}`,
-      complete: Boolean(building.address && building.latitude && building.longitude),
+      detail: `${evidenceAddress || "Address pending"} / ${
+        evidenceLatitude ?? "--"
+      }, ${evidenceLongitude ?? "--"}`,
+      complete: Boolean(evidenceAddress && evidenceLatitude != null && evidenceLongitude != null),
     },
     {
       category: "Monitoring inputs",
@@ -5479,9 +5509,9 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
         id: building.id,
         dataSourceId: dataSourceBuildingId,
         name: building.name,
-        address: building.address,
-        latitude: building.latitude,
-        longitude: building.longitude,
+        address: evidenceAddress,
+        latitude: evidenceLatitude,
+        longitude: evidenceLongitude,
         internalAreaM2: matterportMetadata.internalArea,
         matterportModelId,
       },
@@ -6589,7 +6619,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
             ) : null}
             {[
               ...(dataSourceBuildingId === "home" ? [] : [["Address", [homePassport?.propertyDiscovery?.address, homePassport?.propertyDiscovery?.postcode].filter(Boolean).join(", ") || matterportMetadata.address]]),
-              ["Coordinates", [homeSetup.manualData?.latitude || homePassport?.propertyDiscovery?.latitude || matterportMetadata.latitude, homeSetup.manualData?.longitude || homePassport?.propertyDiscovery?.longitude || matterportMetadata.longitude].filter((value) => value !== null && value !== undefined && value !== "").join(", ")],
+              ["Coordinates", (homePassport?.propertyDiscovery?.latitude != null && homePassport?.propertyDiscovery?.longitude != null) ? `${homePassport.propertyDiscovery.latitude}, ${homePassport.propertyDiscovery.longitude}` : dataSourceBuildingId === "home" ? "Pending matched UPRN location" : [matterportMetadata.latitude, matterportMetadata.longitude].join(", ")],
               ["Internal area", homeSetup.manualData?.internalArea ? `${homeSetup.manualData.internalArea} m2` : matterportMetadata.internalArea !== "--" ? `${matterportMetadata.internalArea} m2` : "Pending"],
             ].map(([label, value]) => <div key={label} className={dataSourceBuildingId === "home" ? "min-w-0 py-0.5" : "min-w-0 border-b border-gray-100 py-1.5 last:border-0"}><dt className="text-gray-600">{label}</dt><dd className={`break-words font-semibold text-gray-900 ${dataSourceBuildingId === "home" && label === "Address" ? "text-base" : ""}`}>{value || "Pending"}</dd></div>)}
           </dl>
@@ -8578,8 +8608,8 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
     .find((value) => extractMatterportModelId(value)) || "";
   const embedUrl = useMemo(() => buildMatterportEmbedUrl(bannerModelInput), [bannerModelInput]);
   const buildingAddress = [ownershipProperty?.address, ownershipProperty?.postcode].filter(Boolean).join(", ");
-  const buildingLatitude = manualData.latitude || ownershipProperty?.latitude || "";
-  const buildingLongitude = manualData.longitude || ownershipProperty?.longitude || "";
+  const buildingLatitude = ownershipProperty?.latitude ?? "";
+  const buildingLongitude = ownershipProperty?.longitude ?? "";
   const hasCompleteBuildingProfile = Boolean(
     buildingAddress && buildingLatitude && buildingLongitude && manualData.internalArea
   );
@@ -8858,8 +8888,8 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       }
       const sharedLookup = designPlanningLookup?.address.toLowerCase() === address.toLowerCase()
         && designPlanningLookup?.postcode === postcode.replace(/\s+/g, "");
-      let latitude = selectedAddress?.latitude || Number(propertySearch.latitude) || (sharedLookup ? designPlanningLookup.latitude : null);
-      let longitude = selectedAddress?.longitude || Number(propertySearch.longitude) || (sharedLookup ? designPlanningLookup.longitude : null);
+      let latitude = selectedAddress?.latitude ?? addressVerification.registered?.latitude ?? null;
+      let longitude = selectedAddress?.longitude ?? addressVerification.registered?.longitude ?? null;
       let localAuthority = sharedLookup ? designPlanningLookup.localAuthority : "";
       let postcodeMatched = Boolean(sharedLookup);
 
@@ -8869,13 +8899,11 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
         );
         if (postcodeResponse.ok) {
           const postcodePayload = await postcodeResponse.json();
-          latitude = latitude || postcodePayload?.result?.latitude || null;
-          longitude = longitude || postcodePayload?.result?.longitude || null;
           localAuthority = postcodePayload?.result?.admin_district || "";
           postcodeMatched = true;
         }
       } catch {
-        // Manual coordinates still allow discovery when postcode lookup is unavailable.
+        // The council can remain pending if the postcode lookup is unavailable.
       }
 
       const planningRecords = sharedLookup ? designPlanningLookup.planningRecords : [];
@@ -8988,8 +9016,6 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       setManualData((current) => ({
         ...current,
         address,
-        latitude: latitude || current.latitude,
-        longitude: longitude || current.longitude,
       }));
       window.localStorage.setItem(
         PROPERTY_DISCOVERY_CACHE_KEY,
@@ -9721,7 +9747,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
         <div className="mx-auto mt-4 w-full max-w-4xl bg-gray-100 p-4 rounded shadow">
           <div className="grid gap-5">
             <div className="space-y-4">
-              <div className="grid gap-3 sm:grid-cols-3 [&>*]:min-w-0">
+              <div className="grid gap-3 sm:grid-cols-2 [&>*]:min-w-0">
                 <div className="bg-white rounded border p-3">
                   <p className="text-xs uppercase tracking-wide text-gray-500">
                     WBP-001 Address
@@ -9731,43 +9757,10 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
 
                 <div className="bg-white rounded border p-3">
                   <p className="text-xs uppercase tracking-wide text-gray-500">
-                    Coordinates
+                    Property coordinates
                   </p>
-                  <div className="grid grid-cols-2 gap-2 mt-2">
-                    <input
-                      type="number"
-                      className="border p-2 w-full text-sm"
-                      value={buildingLatitude}
-                      onChange={(event) =>
-                        handleManualChange("latitude", event.target.value)
-                      }
-                      placeholder="Lat"
-                    />
-                    <input
-                      type="number"
-                      className="border p-2 w-full text-sm"
-                      value={buildingLongitude}
-                      onChange={(event) =>
-                        handleManualChange("longitude", event.target.value)
-                      }
-                      placeholder="Long"
-                    />
-                  </div>
-                </div>
-
-                <div className="bg-white rounded border p-3">
-                  <p className="text-xs uppercase tracking-wide text-gray-500">
-                    Internal Area
-                  </p>
-                  <input
-                    type="number"
-                    className="border p-2 w-full text-sm mt-2"
-                    value={manualData.internalArea}
-                    onChange={(event) =>
-                      handleManualChange("internalArea", event.target.value)
-                    }
-                    placeholder="m2"
-                  />
+                  <p className="mt-2 text-sm">{buildingLatitude !== "" && buildingLongitude !== "" ? `${buildingLatitude}, ${buildingLongitude}` : "Pending matched UPRN location"}</p>
+                  <p className="mt-1 text-xs text-gray-600">From the confirmed property record. Internal area is recorded in Design.</p>
                 </div>
               </div>
 
@@ -10233,10 +10226,11 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       </div>
       </> : <div ref={setupPanelRef} className="overflow-hidden"><div ref={setupContentRef}>
         <OccupyHistoryTabs key={historyStage} record={ownershipRecord} property={ownershipProperty}
-          setup={{ energyConsent, historicalDataFileName, healthSensors, sensorEvidenceFileName, carbonSelections }}
+          setup={{ energyConsent, historicalDataFileName, healthSensors, sensorEvidenceFileName, carbonSelections, manualData }}
           activeStage={historyStage} contentOnly addressDraft={propertySearch}
           onAddressDraftChange={(field, value) => { setPropertySearch((current) => ({ ...current, [field]: value })); if (!propertyDiscovery?.confirmedAt) setPropertyDiscovery(null); }}
-          draftHistory={historyDraft} onDraftHistoryChange={setHistoryDraft} onPlanningLookup={setDesignPlanningLookup} />
+          draftHistory={historyDraft} onDraftHistoryChange={setHistoryDraft} onPlanningLookup={setDesignPlanningLookup}
+          internalArea={manualData.internalArea} onInternalAreaChange={(value) => handleManualChange("internalArea", value)} />
       </div></div>}
       </section>
       </PortalWhen>

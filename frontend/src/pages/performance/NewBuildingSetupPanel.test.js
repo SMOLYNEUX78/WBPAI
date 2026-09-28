@@ -26,6 +26,40 @@ test("health setup distinguishes label scanning, connection and metric validatio
   expect(screen.getByText("3. Metrics to validate")).toBeInTheDocument();
 });
 
+test("3D Model displays property coordinates without manual coordinate or area fields", () => {
+  window.localStorage.setItem("wbp-new-building-passport", JSON.stringify({
+    recordId: "WBP-TEST", propertyDiscovery: {
+      address: "14 Bridgewood Road", postcode: "IP12 4HA", uprn: "100091142492",
+      latitude: 52.0945, longitude: 1.30488,
+    },
+  }));
+  render(<MemoryRouter><NewBuildingSetupPanel /></MemoryRouter>);
+  fireEvent.click(screen.getByRole("tab", { name: "3D Model" }));
+  expect(screen.getByText("52.0945, 1.30488")).toBeInTheDocument();
+  expect(screen.queryByPlaceholderText("Lat")).not.toBeInTheDocument();
+  expect(screen.queryByPlaceholderText("Long")).not.toBeInTheDocument();
+  expect(screen.queryByPlaceholderText("m2")).not.toBeInTheDocument();
+  expect(screen.getByText(/Internal area is recorded in Design/)).toBeInTheDocument();
+});
+
+test("Design records internal area and its source after the home lookup", async () => {
+  const from = jest.spyOn(supabase, "from").mockImplementation((table) => ({
+    select: () => table === "WBPDesignProjects"
+      ? { ilike: () => ({ limit: async () => ({ data: [], error: null }) }) }
+      : { filter: () => ({ limit: async () => ({ data: [], error: null }) }) },
+  }));
+  const onInternalAreaChange = jest.fn();
+  try {
+    render(<OccupyHistoryTabs record={{ uprn: "100091142492" }} property={{
+      address: "14 Bridgewood Road", postcode: "IP12 4HA", uprn: "100091142492", localAuthority: "East Suffolk",
+    }} activeStage="design" contentOnly internalArea="" onInternalAreaChange={onInternalAreaChange} />);
+    const area = await screen.findByRole("spinbutton", { name: "Internal floor area (m2)" });
+    fireEvent.change(area, { target: { value: "99.2" } });
+    expect(onInternalAreaChange).toHaveBeenCalledWith("99.2");
+    expect(screen.getByRole("combobox", { name: "Area source" })).toBeInTheDocument();
+  } finally { from.mockRestore(); }
+});
+
 test("Design and Build reuse the confirmed home address without another entry", () => {
   const property = { address: "14 Bridgewood Road", postcode: "IP12 4HA", uprn: "100091142492", localAuthority: "East Suffolk", confirmedAt: "2026-09-28T00:00:00Z" };
   const { rerender } = render(<OccupyHistoryTabs record={{ uprn: property.uprn }} property={property} activeStage="design" contentOnly />);
