@@ -9928,32 +9928,17 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
 
             <div className="border rounded p-3 bg-gray-50 space-y-3">
               <div>
-                <h4 className="font-semibold text-sm">Smart meter details</h4>
+                <h4 className="font-semibold text-sm">1. Import your energy data</h4>
                 <p className="text-xs text-gray-600">
                   Scan a meter or in-home display label if it has a QR code, or enter the supply number from your bill. Scanning fills details only; it does not connect the meter or grant data access.
                 </p>
               </div>
 
-              <div className="flex flex-wrap gap-2">
               <button type="button" className="border border-emerald-700 bg-white px-3 py-2 text-xs font-semibold text-emerald-950"
                 onClick={() => {
                   if (!navigator.mediaDevices?.getUserMedia) { setMeterScanStatus("Camera access is unavailable. Enter the details from your bill or display."); return; }
                   setMeterScanStatus(""); setMeterScannerOpen(true);
-                }}>Scan meter or display label</button>
-              <input ref={billUploadRef} type="file" className="sr-only" aria-label="Choose energy bill" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
-                onChange={(event) => { prepareEnergyBill(event.target.files?.[0]); event.target.value = ""; }} />
-              <button type="button" disabled={!billRecordId || Boolean(carbonEvidenceBusy)} onClick={() => billUploadRef.current?.click()}
-                className="border border-emerald-700 bg-white px-3 py-2 text-xs font-semibold text-emerald-950 disabled:opacity-50">Scan or upload energy bill</button>
-              </div>
-              {billRecordId ? <p className="text-xs text-emerald-900">Bill will be saved to {ownershipRecord?.recordId || billTarget?.record_reference}.</p>
-                : <p className="text-xs text-amber-800">A saved WBP-001 home profile is needed to store the bill privately.</p>}
-              {billStatus ? <p role="status" className="text-xs text-gray-700">{billStatus}</p> : null}
-              {(billDraftFile || carbonEvidence["energy-bill"]) ? <div className="grid gap-2 sm:grid-cols-2">
-                {[["supplier", "Supplier"], ["tariff", "Tariff name"], ["mpan", "Electricity MPAN"], ["mprn", "Gas MPRN"], ["unitRatePence", "Unit rate (p/kWh)"], ["standingChargePence", "Standing charge (p/day)"]].map(([field, label]) =>
-                  <label key={field} className="space-y-1 text-xs text-gray-700">{label}<input type="text" className="w-full border bg-white p-2 text-xs" value={billReview[field] || ""} onChange={(event) => setBillReview((current) => ({ ...current, [field]: event.target.value }))} /></label>)}
-              </div> : null}
-              {billDraftFile ? <button type="button" disabled={Boolean(carbonEvidenceBusy)} onClick={confirmEnergyBill} className="bg-emerald-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Confirm details and upload bill</button> : null}
-              {carbonEvidence["energy-bill"] ? <button type="button" className="block break-all text-left text-xs text-blue-700 underline" onClick={() => openCarbonEvidence(carbonEvidence["energy-bill"].storage_reference)}>{carbonEvidence["energy-bill"].original_file_name || "View uploaded bill"} (customer-confirmed)</button> : null}
+                }}>Scan your smart meter</button>
               {meterScannerOpen ? <div className="space-y-2 border border-emerald-300 bg-gray-900 p-2">
                 <video ref={meterVideoRef} autoPlay muted playsInline aria-label="Live camera for smart meter label scan" className="max-h-72 w-full object-contain" />
                 <button type="button" className="bg-white px-3 py-1 text-xs" onClick={() => setMeterScannerOpen(false)}>Cancel scan</button>
@@ -10026,6 +10011,23 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
 
             <div className="grid gap-3">
               <h4 className="font-semibold text-sm">Meter history and tariff evidence</h4>
+              <p className="text-xs text-gray-600">A bill supports tariff, supplier and fuel claims, including carbon context. It does not replace consented meter readings or independently verify a renewable tariff.</p>
+              <div className="space-y-3 border bg-gray-50 p-3">
+                <p className="text-xs text-gray-600">Text PDFs may fill some details. For scanned bills or images, enter them manually and confirm before saving.</p>
+                <input ref={billUploadRef} type="file" className="sr-only" aria-label="Choose energy bill" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+                  onChange={(event) => { prepareEnergyBill(event.target.files?.[0]); event.target.value = ""; }} />
+                <button type="button" disabled={!billRecordId || Boolean(carbonEvidenceBusy)} onClick={() => billUploadRef.current?.click()}
+                  className="border border-emerald-700 bg-white px-3 py-2 text-xs font-semibold text-emerald-950 disabled:opacity-50">Scan or upload energy bill</button>
+                {billRecordId ? <p className="text-xs text-emerald-900">Bill will be saved to {ownershipRecord?.recordId || billTarget?.record_reference}.</p>
+                  : <p className="text-xs text-amber-800">A saved WBP-001 home profile is needed to store the bill privately.</p>}
+                {billStatus ? <p role="status" className="text-xs text-gray-700">{billStatus}</p> : null}
+                {(billDraftFile || carbonEvidence["energy-bill"]) ? <div className="grid gap-2 sm:grid-cols-2">
+                  {[["supplier", "Supplier"], ["tariff", "Tariff name"], ["mpan", "Electricity MPAN"], ["mprn", "Gas MPRN"], ["unitRatePence", "Unit rate (p/kWh)"], ["standingChargePence", "Standing charge (p/day)"]].map(([field, label]) =>
+                    <label key={field} className="space-y-1 text-xs text-gray-700">{label}<input type="text" className="w-full border bg-white p-2 text-xs" value={billReview[field] || ""} onChange={(event) => setBillReview((current) => ({ ...current, [field]: event.target.value }))} /></label>)}
+                </div> : null}
+                {billDraftFile ? <button type="button" disabled={Boolean(carbonEvidenceBusy)} onClick={confirmEnergyBill} className="bg-emerald-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Confirm details and upload bill</button> : null}
+                {carbonEvidence["energy-bill"] ? <button type="button" className="block break-all text-left text-xs text-blue-700 underline" onClick={() => openCarbonEvidence(carbonEvidence["energy-bill"].storage_reference)}>{carbonEvidence["energy-bill"].original_file_name || "View uploaded bill"} (customer-confirmed)</button> : null}
+              </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="space-y-1 text-xs text-gray-600">Electricity tariff
                   <select className="w-full border rounded p-2 text-xs" value={carbonSelections.electricity} onChange={(event) => setCarbonSelections((current) => ({ ...current, electricity: event.target.value }))}>
@@ -10056,7 +10058,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
 
             <div className="border rounded p-3 bg-gray-50 space-y-3">
               <div>
-                <h4 className="font-semibold text-sm">1. Identify the instrument</h4>
+                <h4 className="font-semibold text-sm">1. Import health data</h4>
                 <p className="text-xs text-gray-600">
                   Scan a label if available, then confirm its details and location. A QR code does not connect the device.
                 </p>
@@ -10064,7 +10066,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                   onClick={() => {
                     if (!navigator.mediaDevices?.getUserMedia) { setSensorScanStatus("Camera access is unavailable here. Open WBP over HTTPS or enter details manually."); return; }
                     setSensorScanStatus(""); setSensorScannerOpen(true);
-                  }}>Scan IAQ product</button>
+                  }}>Scan IAQ sensor</button>
                 {sensorScanStatus ? <p role="status" className="mt-1 text-xs text-gray-700">{sensorScanStatus}</p> : null}
                 {sensorScannerOpen ? <div className="mt-2 space-y-2 border border-emerald-300 bg-gray-900 p-2">
                   <video ref={sensorVideoRef} autoPlay muted playsInline aria-label="Live camera for sensor QR scan" className="max-h-72 w-full object-contain" />
