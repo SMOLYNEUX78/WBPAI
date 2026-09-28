@@ -9919,22 +9919,14 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
           <div className="bg-white rounded border p-4 space-y-4">
             <div>
               <h3 className="font-semibold mb-2">Energy Data</h3>
-              <p className="text-sm text-gray-600">
-                Import historical smart-meter data to set the carbon baseline,
-                calculate daily averages, annualised EUI, HDD intensity and future
-                regulated/unregulated splits.
-              </p>
             </div>
 
             <div className="border rounded p-3 bg-gray-50 space-y-3">
               <div>
                 <h4 className="font-semibold text-sm">1. Import your energy data</h4>
-                <p className="text-xs text-gray-600">
-                  Scan a meter or in-home display label if it has a QR code, or enter the supply number from your bill. Scanning fills details only; it does not connect the meter or grant data access.
-                </p>
               </div>
 
-              <button type="button" className="border border-emerald-700 bg-white px-3 py-2 text-xs font-semibold text-emerald-950"
+              <button type="button" title="Scans label details only; does not connect the meter" className="border border-emerald-700 bg-white px-3 py-2 text-xs font-semibold text-emerald-950"
                 onClick={() => {
                   if (!navigator.mediaDevices?.getUserMedia) { setMeterScanStatus("Camera access is unavailable. Enter the details from your bill or display."); return; }
                   setMeterScanStatus(""); setMeterScannerOpen(true);
@@ -10050,19 +10042,12 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
           <div className="bg-white rounded border p-4 space-y-4">
             <div>
               <h3 className="font-semibold mb-2">Health Data</h3>
-              <p className="text-sm text-gray-600">
-                Register each IAQ instrument so its readings carry the device,
-                placement and assurance evidence needed for health scoring and audit.
-              </p>
             </div>
 
             <div className="border rounded p-3 bg-gray-50 space-y-3">
               <div>
-                <h4 className="font-semibold text-sm">1. Import health data</h4>
-                <p className="text-xs text-gray-600">
-                  Scan a label if available, then confirm its details and location. A QR code does not connect the device.
-                </p>
-                <button type="button" className="mt-2 border border-emerald-700 bg-white px-3 py-2 text-xs font-semibold text-emerald-950"
+                <h4 className="font-semibold text-sm">1. Import your health data</h4>
+                <button type="button" title="Scans label details only; does not connect the sensor" className="mt-2 border border-emerald-700 bg-white px-3 py-2 text-xs font-semibold text-emerald-950"
                   onClick={() => {
                     if (!navigator.mediaDevices?.getUserMedia) { setSensorScanStatus("Camera access is unavailable here. Open WBP over HTTPS or enter details manually."); return; }
                     setSensorScanStatus(""); setSensorScannerOpen(true);
