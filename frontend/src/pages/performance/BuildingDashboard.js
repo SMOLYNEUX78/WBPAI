@@ -8,6 +8,7 @@ import matterportMark from "../../assets/matterport-mark.png";
 import PrototypeTabs from "../../PrototypeTabs";
 import { getReadinessGates } from "./readinessGates";
 import { mergeMonthlyHlaRows } from "./monthlyHla";
+import { extractEnergyBillPdf } from "./energyBill";
 import "./occupyScreen.css";
 
 export const DetailSurface = ({ children, title, onClose, modal, headerExtra }) => {
@@ -67,6 +68,8 @@ export const ProfileSummaryColumns = ({ record, property, setup = {} }) => {
     ]],
     ["Energy", [
       ["Monitoring", setup.energyConsent ? "Consented" : "Pending"],
+      ["Supplier", setup.billReview?.supplier],
+      ["Tariff", setup.billReview?.tariff],
       ["Selected historical file", setup.historicalDataFileName],
     ]],
     ["Health", [
@@ -513,6 +516,7 @@ const preserveTrendEnergy = (incoming, previous) => {
 
 const PROPERTY_DISCOVERY_CACHE_KEY = "wbp-property-discovery-draft:v1";
 const CARBON_EVIDENCE_TYPES = [
+  { id: "energy-bill", section: "monitoring", label: "Energy bill", help: "Supplier bill for customer-confirmed tariff details. Usage still comes from the meter feed." },
   { id: "energy-history", section: "monitoring", label: "Historical energy records", help: "Bills covering the baseline period. A reviewer must confirm the actual date coverage." },
   { id: "electricity-tariff", section: "monitoring", label: "Electricity tariff", help: "A supplier bill or tariff confirmation showing the account, dates and product." },
   { id: "gas-tariff", section: "monitoring", label: "Gas / thermal fuel", help: "A bill or fuel-supplier statement showing the product and covered dates." },
@@ -8492,6 +8496,9 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   }, [modelInput, ownershipRecord?.recordId]);
   const [energyConsent, setEnergyConsent] = useState(false);
   const [meterIdentifiers, setMeterIdentifiers] = useState({ supplyId: "", displayId: "" });
+  const [billReview, setBillReview] = useState({ supplier: "", tariff: "", mpan: "", mprn: "", unitRatePence: "", standingChargePence: "" });
+  const [billDraftFile, setBillDraftFile] = useState(null);
+  const [billStatus, setBillStatus] = useState("");
   const [meterScanStatus, setMeterScanStatus] = useState("");
   const [meterScannerOpen, setMeterScannerOpen] = useState(false);
   const meterVideoRef = useRef(null);
@@ -8638,6 +8645,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       setManualData((current) => ({ ...current, ...saved.manualData }));
       setEnergyConsent(Boolean(saved.energyConsent));
       setMeterIdentifiers((current) => ({ ...current, ...saved.meterIdentifiers }));
+      setBillReview((current) => ({ ...current, ...saved.billReview }));
       setHealthSensors(Array.isArray(saved.healthSensors) ? saved.healthSensors : []);
       setCarbonSelections((current) => ({ ...current, ...saved.carbonSelections }));
       if (saved.modelInput) setModelInput(saved.modelInput);
@@ -8656,6 +8664,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
         setManualData((current) => ({ ...current, ...saved.manualData }));
         setEnergyConsent(Boolean(saved.energyConsent));
         setMeterIdentifiers((current) => ({ ...current, ...saved.meterIdentifiers }));
+        setBillReview((current) => ({ ...current, ...saved.billReview }));
         setHealthSensors(Array.isArray(saved.healthSensors) ? saved.healthSensors : []);
         setCarbonSelections((current) => ({ ...current, ...saved.carbonSelections }));
         setHistoricalDataFileName(saved.historicalDataFileName || "");
@@ -8665,10 +8674,11 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       });
     return () => { active = false; };
   }, [isolatedDraft, ownershipRecord?.databaseId, ownershipRecord?.recordId]);
-  const saveSetupSection = async () => {
+  const saveSetupSection = async (overrides = {}) => {
     const section = setupTab === "measurements" ? { manualData, modelInput }
-      : setupTab === "performance" ? { energyConsent, meterIdentifiers, historicalDataFileName, healthSensors, sensorEvidenceFileName, carbonSelections }
+      : setupTab === "performance" ? { energyConsent, meterIdentifiers, billReview, historicalDataFileName, healthSensors, sensorEvidenceFileName, carbonSelections }
       : { carbonSelections };
+    Object.assign(section, overrides);
     const key = ownershipRecord?.recordId ? `${ownershipRecord.recordId}:setupSections` : "wbp-new-building-setup-draft";
     let localSetup = {};
     try { localSetup = JSON.parse(window.localStorage.getItem(key) || "{}"); } catch { /* Invalid local data is ignored. */ }
@@ -8769,9 +8779,11 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       if (metadataError) throw metadataError;
       setCarbonEvidence((current) => ({ ...current, [type]: data }));
       setCarbonEvidenceStatus(`${file.name} uploaded for review. It is not yet verified.`);
+      return data;
     } catch (error) {
       if (path) await supabase.storage.from("wbp-private-evidence").remove([path]);
       setCarbonEvidenceStatus(`Upload failed: ${error.message}`);
+      return null;
     } finally {
       setCarbonEvidenceBusy("");
     }
@@ -8784,6 +8796,39 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       return;
     }
     window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+  };
+
+  const prepareEnergyBill = async (file) => {
+    if (!file) return;
+    setBillStatus("");
+    if (!["application/pdf", "image/jpeg", "image/png"].includes(file.type) || file.size > 10 * 1024 * 1024) {
+      setBillStatus("Choose a PDF, JPG or PNG bill no larger than 10 MB.");
+      return;
+    }
+    setBillDraftFile(file);
+    if (file.type !== "application/pdf") {
+      setBillStatus("Image selected. Enter the tariff details from the bill, then confirm the private upload.");
+      return;
+    }
+    setBillStatus("Reading the PDF for tariff details...");
+    try {
+      const extracted = await extractEnergyBillPdf(file);
+      setBillReview((current) => ({ ...current, ...Object.fromEntries(Object.entries(extracted).filter(([, value]) => value)) }));
+      setBillStatus(Object.values(extracted).some(Boolean)
+        ? "Possible details found. Check every field against the bill before confirming."
+        : "No readable tariff text found. Enter the details from the bill manually.");
+    } catch {
+      setBillStatus("This PDF could not be read automatically. Enter the details from the bill manually.");
+    }
+  };
+
+  const confirmEnergyBill = async () => {
+    if (!billDraftFile) return;
+    const uploaded = await uploadCarbonEvidence("energy-bill", billDraftFile);
+    if (!uploaded) return;
+    setBillDraftFile(null);
+    setBillStatus("Bill stored privately. Tariff details are customer-confirmed, not supplier-verified.");
+    await saveSetupSection({ billReview });
   };
 
   const handleManualChange = (field, value) => {
@@ -9830,6 +9875,22 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
               </p>
             </div>
 
+            <div className="space-y-3 border bg-gray-50 p-3">
+              <h4 className="text-sm font-semibold">Add a recent energy bill</h4>
+              <p className="text-xs text-gray-600">Text PDFs may fill some details. For scanned bills or images, enter them manually. Check the details before saving.</p>
+              <input type="file" aria-label="Choose energy bill" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+                disabled={!ownershipRecord?.databaseId || Boolean(carbonEvidenceBusy)} className="block w-full text-xs"
+                onChange={(event) => { prepareEnergyBill(event.target.files?.[0]); event.target.value = ""; }} />
+              {!ownershipRecord?.databaseId ? <p className="text-xs text-amber-800">Save the home profile to your secure account before uploading.</p> : null}
+              {billStatus ? <p role="status" className="text-xs text-gray-700">{billStatus}</p> : null}
+              {(billDraftFile || carbonEvidence["energy-bill"]) ? <div className="grid gap-2 sm:grid-cols-2">
+                {[["supplier", "Supplier"], ["tariff", "Tariff name"], ["mpan", "Electricity MPAN"], ["mprn", "Gas MPRN"], ["unitRatePence", "Unit rate (p/kWh)"], ["standingChargePence", "Standing charge (p/day)"]].map(([field, label]) =>
+                  <label key={field} className="space-y-1 text-xs text-gray-700">{label}<input type="text" className="w-full border bg-white p-2 text-xs" value={billReview[field] || ""} onChange={(event) => setBillReview((current) => ({ ...current, [field]: event.target.value }))} /></label>)}
+              </div> : null}
+              {billDraftFile ? <button type="button" disabled={Boolean(carbonEvidenceBusy)} onClick={confirmEnergyBill} className="bg-emerald-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Confirm details and upload bill</button> : null}
+              {carbonEvidence["energy-bill"] ? <button type="button" className="block break-all text-left text-xs text-blue-700 underline" onClick={() => openCarbonEvidence(carbonEvidence["energy-bill"].storage_reference)}>{carbonEvidence["energy-bill"].original_file_name || "View uploaded bill"} (customer-confirmed)</button> : null}
+            </div>
+
             <div className="border rounded p-3 bg-gray-50 space-y-3">
               <div>
                 <h4 className="font-semibold text-sm">Smart meter details</h4>
@@ -9906,9 +9967,10 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
 
               <button
                 type="button"
-                className="bg-blue-600 text-white px-4 py-2 rounded text-sm font-semibold"
+                disabled
+                className="border border-gray-300 bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-600"
               >
-                Register Data Access
+                Meter connection not yet available
               </button>
             </div>
 
@@ -9927,7 +9989,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                 </label>
               </div>
               <p className="text-xs text-gray-600">Meter readings establish consumption. Bills support tariff and fuel claims; a renewable tariff is not verified by the meter feed alone.</p>
-              {CARBON_EVIDENCE_TYPES.filter((type) => type.section === "monitoring").map(renderEvidenceUpload)}
+              <details className="border p-3 text-xs"><summary className="cursor-pointer font-semibold">Additional meter and tariff evidence</summary><div className="mt-2 space-y-2">{CARBON_EVIDENCE_TYPES.filter((type) => type.section === "monitoring" && type.id !== "energy-bill").map(renderEvidenceUpload)}</div></details>
               {carbonEvidenceStatus ? <p className="text-sm" role="status">{carbonEvidenceStatus}</p> : null}
             </div>
 
@@ -10283,7 +10345,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
 
       </div>
       </div>
-      {setupTab !== "ownership" ? <div className="mt-4 flex items-center justify-end gap-3 border-t border-gray-200 pt-4"><span role="status" className="text-xs text-gray-600">{sectionSaveStatus === `${setupTab} saved on this device` ? "Saved on this device" : sectionSaveStatus === `${setupTab} saved to account` ? "Saved to account" : ""}</span><button type="button" onClick={saveSetupSection} className="bg-emerald-700 px-4 py-2 text-sm font-bold text-white">Save {setupTab === "carbon" ? "carbon context" : setupTab === "measurements" ? "3D model" : "monitoring"}</button></div> : null}
+      {setupTab !== "ownership" ? <div className="mt-4 flex items-center justify-end gap-3 border-t border-gray-200 pt-4"><span role="status" className="text-xs text-gray-600">{sectionSaveStatus === `${setupTab} saved on this device` ? "Saved on this device" : sectionSaveStatus === `${setupTab} saved to account` ? "Saved to account" : ""}</span><button type="button" onClick={() => saveSetupSection()} className="bg-emerald-700 px-4 py-2 text-sm font-bold text-white">Save {setupTab === "carbon" ? "carbon context" : setupTab === "measurements" ? "3D model" : "monitoring"}</button></div> : null}
       </div>
       </div>
       </> : <div ref={setupPanelRef} className="overflow-hidden"><div ref={setupContentRef}>
