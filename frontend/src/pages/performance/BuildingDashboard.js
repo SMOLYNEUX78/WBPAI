@@ -8491,6 +8491,10 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
     if (modelInput.trim()) window.localStorage.setItem(`${ownershipRecord.recordId}:matterportModelInput`, modelInput.trim());
   }, [modelInput, ownershipRecord?.recordId]);
   const [energyConsent, setEnergyConsent] = useState(false);
+  const [meterIdentifiers, setMeterIdentifiers] = useState({ supplyId: "", displayId: "" });
+  const [meterScanStatus, setMeterScanStatus] = useState("");
+  const [meterScannerOpen, setMeterScannerOpen] = useState(false);
+  const meterVideoRef = useRef(null);
   const [historicalDataFileName, setHistoricalDataFileName] = useState("");
   const [carbonSelections, setCarbonSelections] = useState({ electricity: "unknown", fuel: "unknown", heating: "unknown", solar: "none", battery: "none" });
   const [carbonEvidence, setCarbonEvidence] = useState({});
@@ -8633,6 +8637,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       if (!saved) return;
       setManualData((current) => ({ ...current, ...saved.manualData }));
       setEnergyConsent(Boolean(saved.energyConsent));
+      setMeterIdentifiers((current) => ({ ...current, ...saved.meterIdentifiers }));
       setHealthSensors(Array.isArray(saved.healthSensors) ? saved.healthSensors : []);
       setCarbonSelections((current) => ({ ...current, ...saved.carbonSelections }));
       if (saved.modelInput) setModelInput(saved.modelInput);
@@ -8650,6 +8655,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
         const saved = data.setup_data;
         setManualData((current) => ({ ...current, ...saved.manualData }));
         setEnergyConsent(Boolean(saved.energyConsent));
+        setMeterIdentifiers((current) => ({ ...current, ...saved.meterIdentifiers }));
         setHealthSensors(Array.isArray(saved.healthSensors) ? saved.healthSensors : []);
         setCarbonSelections((current) => ({ ...current, ...saved.carbonSelections }));
         setHistoricalDataFileName(saved.historicalDataFileName || "");
@@ -8661,7 +8667,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   }, [isolatedDraft, ownershipRecord?.databaseId, ownershipRecord?.recordId]);
   const saveSetupSection = async () => {
     const section = setupTab === "measurements" ? { manualData, modelInput }
-      : setupTab === "performance" ? { energyConsent, historicalDataFileName, healthSensors, sensorEvidenceFileName, carbonSelections }
+      : setupTab === "performance" ? { energyConsent, meterIdentifiers, historicalDataFileName, healthSensors, sensorEvidenceFileName, carbonSelections }
       : { carbonSelections };
     const key = ownershipRecord?.recordId ? `${ownershipRecord.recordId}:setupSections` : "wbp-new-building-setup-draft";
     let localSetup = {};
@@ -9243,6 +9249,46 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
     setSensorDraft((current) => ({ ...current, [field]: value }));
   };
 
+  useEffect(() => {
+    if (!meterScannerOpen) return undefined;
+    let active = true;
+    let controls;
+    import("@zxing/browser").then(async ({ BrowserQRCodeReader }) => {
+      if (!active || !meterVideoRef.current) return;
+      controls = await new BrowserQRCodeReader().decodeFromConstraints(
+        { video: { facingMode: { ideal: "environment" } }, audio: false }, meterVideoRef.current,
+        (result) => {
+          if (!active || !result) return;
+          const raw = result.getText().trim();
+          let details = {};
+          try {
+            if (raw.startsWith("{")) details = JSON.parse(raw);
+            else if (/^https?:\/\//i.test(raw)) details = Object.fromEntries(new URL(raw).searchParams);
+          } catch { /* Unrecognised labels are not imported. */ }
+          const supplyId = String(details.mpan || details.MPAN || details.mprn || details.MPRN || "").replace(/\s/g, "");
+          const displayId = String(details.mac || details.MAC || details.guid || details.GUID || details.cin || details.CIN || "").trim();
+          if (/^\d{10,21}$/.test(supplyId) || /^[a-z\d:-]{6,40}$/i.test(displayId)) {
+            setMeterIdentifiers((current) => ({
+              supplyId: /^\d{10,21}$/.test(supplyId) ? supplyId : current.supplyId,
+              displayId: /^[a-z\d:-]{6,40}$/i.test(displayId) ? displayId : current.displayId,
+            }));
+            setMeterScanStatus("Label details filled in. Confirm them against your bill or display before continuing.");
+          } else {
+            setMeterScanStatus("QR found, but it does not contain a recognised MPAN, MPRN or display ID. Enter these from your bill or display. Meter serial numbers are different.");
+          }
+          setMeterScannerOpen(false);
+        }
+      );
+      if (!active) controls.stop();
+    }).catch(() => {
+      if (active) {
+        setMeterScanStatus("Camera unavailable. Allow access or enter the details from your bill or display.");
+        setMeterScannerOpen(false);
+      }
+    });
+    return () => { active = false; controls?.stop(); };
+  }, [meterScannerOpen]);
+
   const acceptSensorCode = (raw) => {
     try {
       let details = {};
@@ -9786,23 +9832,39 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
 
             <div className="border rounded p-3 bg-gray-50 space-y-3">
               <div>
-                <h4 className="font-semibold text-sm">n3rgy Registration Mock</h4>
+                <h4 className="font-semibold text-sm">Smart meter details</h4>
                 <p className="text-xs text-gray-600">
-                  Capture the consent and meter identifiers needed before importing
-                  half-hourly smart-meter history.
+                  Scan a meter or in-home display label if it has a QR code, or enter the supply number from your bill. Scanning fills details only; it does not connect the meter or grant data access.
                 </p>
               </div>
+
+              <button type="button" className="border border-emerald-700 bg-white px-3 py-2 text-xs font-semibold text-emerald-950"
+                onClick={() => {
+                  if (!navigator.mediaDevices?.getUserMedia) { setMeterScanStatus("Camera access is unavailable. Enter the details from your bill or display."); return; }
+                  setMeterScanStatus(""); setMeterScannerOpen(true);
+                }}>Scan meter or display label</button>
+              {meterScannerOpen ? <div className="space-y-2 border border-emerald-300 bg-gray-900 p-2">
+                <video ref={meterVideoRef} autoPlay muted playsInline aria-label="Live camera for smart meter label scan" className="max-h-72 w-full object-contain" />
+                <button type="button" className="bg-white px-3 py-1 text-xs" onClick={() => setMeterScannerOpen(false)}>Cancel scan</button>
+              </div> : null}
+              {meterScanStatus ? <p role="status" className="text-xs text-gray-700">{meterScanStatus}</p> : null}
 
               <div className="grid gap-2 sm:grid-cols-2">
                 <input
                   type="text"
                   className="border rounded p-2 w-full text-xs"
                   placeholder="MPAN / MPRN"
+                  aria-label="MPAN or MPRN from bill"
+                  value={meterIdentifiers.supplyId}
+                  onChange={(event) => setMeterIdentifiers((current) => ({ ...current, supplyId: event.target.value }))}
                 />
                 <input
                   type="text"
                   className="border rounded p-2 w-full text-xs"
                   placeholder="IHD MAC / Device ID"
+                  aria-label="In-home display MAC or device ID"
+                  value={meterIdentifiers.displayId}
+                  onChange={(event) => setMeterIdentifiers((current) => ({ ...current, displayId: event.target.value }))}
                 />
                 <input
                   type="text"
