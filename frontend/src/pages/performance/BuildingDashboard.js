@@ -67,7 +67,7 @@ export const ProfileSummaryColumns = ({ record, property, setup = {} }) => {
       ["Tenure", record?.tenure],
     ]],
     ["Energy", [
-      ["Monitoring", setup.energyConsent ? "Consented" : "Pending"],
+      ["Monitoring", setup.energyConsent ? "Access requested; not connected" : "Not connected"],
       ["Supplier", setup.billReview?.supplier],
       ["Tariff", setup.billReview?.tariff],
       ["Selected historical file", setup.historicalDataFileName],
@@ -8645,7 +8645,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   const monitoringReadinessSteps = [
     { label: "Home profile created", complete: Boolean(ownershipRecord) },
     { label: "Address, location and internal area", complete: hasCompleteBuildingProfile },
-    { label: "Energy monitoring consent", complete: energyConsent },
+    { label: "Smart-meter connection", complete: false },
     { label: "Indoor sensor registered", complete: healthSensors.length > 0 },
   ];
   const monitoringCompleteCount = monitoringReadinessSteps.filter(
@@ -9926,58 +9926,10 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                 <h4 className="font-semibold text-sm">1. Import your energy data</h4>
               </div>
 
-              <button type="button" title="Scans label details only; does not connect the meter" className="border border-emerald-700 bg-white px-3 py-2 text-xs font-semibold text-emerald-950"
-                onClick={() => {
-                  if (!navigator.mediaDevices?.getUserMedia) { setMeterScanStatus("Camera access is unavailable. Enter the details from your bill or display."); return; }
-                  setMeterScanStatus(""); setMeterScannerOpen(true);
-                }}>Scan your smart meter</button>
-              {meterScannerOpen ? <div className="space-y-2 border border-emerald-300 bg-gray-900 p-2">
-                <video ref={meterVideoRef} autoPlay muted playsInline aria-label="Live camera for smart meter label scan" className="max-h-72 w-full object-contain" />
-                <button type="button" className="bg-white px-3 py-1 text-xs" onClick={() => setMeterScannerOpen(false)}>Cancel scan</button>
-              </div> : null}
-              {meterScanStatus ? <p role="status" className="text-xs text-gray-700">{meterScanStatus}</p> : null}
-
-              <div className="grid gap-2 sm:grid-cols-2">
-                <input
-                  type="text"
-                  className="border rounded p-2 w-full text-xs"
-                  placeholder="MPAN / MPRN"
-                  aria-label="MPAN or MPRN from bill"
-                  value={meterIdentifiers.supplyId}
-                  onChange={(event) => setMeterIdentifiers((current) => ({ ...current, supplyId: event.target.value }))}
-                />
-                <input
-                  type="text"
-                  className="border rounded p-2 w-full text-xs"
-                  placeholder="IHD MAC / Device ID"
-                  aria-label="In-home display MAC or device ID"
-                  value={meterIdentifiers.displayId}
-                  onChange={(event) => setMeterIdentifiers((current) => ({ ...current, displayId: event.target.value }))}
-                />
-                <input
-                  type="text"
-                  className="border rounded p-2 w-full text-xs"
-                  placeholder="House number or name"
-                />
-                <input
-                  type="text"
-                  className="border rounded p-2 w-full text-xs"
-                  placeholder="Postcode"
-                />
-                <input
-                  type="date"
-                  className="border rounded p-2 w-full text-xs"
-                  aria-label="Historical data start date"
-                />
-                <select
-                  className="border rounded p-2 w-full text-xs"
-                  defaultValue="half-hourly"
-                >
-                  <option value="half-hourly">Half-hourly consumption</option>
-                  <option value="daily">Daily consumption</option>
-                  <option value="inventory">Meter inventory check</option>
-                </select>
-              </div>
+              <button type="button" disabled className="border border-gray-300 bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-600">
+                Import energy data
+              </button>
+              <p className="text-xs text-gray-600">Available when WBP's n3rgy connection and bill-based consent process are approved.</p>
 
               <label className="flex items-start gap-2 text-xs text-gray-700">
                 <input
@@ -9987,18 +9939,26 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                   onChange={(event) => setEnergyConsent(event.target.checked)}
                 />
                 <span>
-                  Customer has given consent for WBPAI to retrieve historical smart-meter
-                  data for this building profile.
+                  I would like WBP to request access to this home's smart-meter history. Formal consent will follow when the connection is available.
                 </span>
               </label>
-
-              <button
-                type="button"
-                disabled
-                className="border border-gray-300 bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-600"
-              >
-                Meter connection not yet available
-              </button>
+              <details className="text-xs text-gray-700"><summary className="cursor-pointer">Meter number fallback</summary>
+                <p className="mt-2">If the address lookup cannot identify the meter, use a bill or scan its label to confirm the MPAN or MPRN. No IHD is required for the proposed bill-based route.</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <input type="text" className="min-w-0 flex-1 border bg-white p-2" placeholder="MPAN / MPRN" aria-label="MPAN or MPRN from bill"
+                    value={meterIdentifiers.supplyId} onChange={(event) => setMeterIdentifiers((current) => ({ ...current, supplyId: event.target.value }))} />
+                  <button type="button" className="border border-emerald-700 bg-white px-3 py-2 font-semibold text-emerald-950"
+                    onClick={() => {
+                      if (!navigator.mediaDevices?.getUserMedia) { setMeterScanStatus("Camera unavailable. Enter the number from your bill."); return; }
+                      setMeterScanStatus(""); setMeterScannerOpen(true);
+                    }}>Scan meter label</button>
+                </div>
+                {meterScannerOpen ? <div className="mt-2 space-y-2 border border-emerald-300 bg-gray-900 p-2">
+                  <video ref={meterVideoRef} autoPlay muted playsInline aria-label="Live camera for smart meter label scan" className="max-h-72 w-full object-contain" />
+                  <button type="button" className="bg-white px-3 py-1" onClick={() => setMeterScannerOpen(false)}>Cancel scan</button>
+                </div> : null}
+                {meterScanStatus ? <p role="status" className="mt-1">{meterScanStatus}</p> : null}
+              </details>
             </div>
 
             <div className="grid gap-3">
