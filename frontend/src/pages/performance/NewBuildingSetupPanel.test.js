@@ -57,6 +57,9 @@ test("Dyson label text extracts identity and electrical rating without claiming 
     ratedPowerW: "58", ratedVoltage: "230-240", ratedFrequencyHz: "50",
   });
   expect(parseSensorLabelText("dyson TP02 58W")).not.toHaveProperty("serialNumber");
+  expect(parseSensorLabelText("DYSON -TPO2 NN6-UK-HDA1783A")).toMatchObject({
+    manufacturer: "Dyson", model: "TP02", serialNumber: "NN6-UK-HDA1783A",
+  });
 });
 
 test("fresh New tab loads and saves health instruments through the existing home account", async () => {

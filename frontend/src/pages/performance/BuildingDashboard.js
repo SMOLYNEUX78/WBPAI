@@ -572,7 +572,7 @@ export const decodeSensorLabel = (raw, isQrCode) => {
 export const parseSensorLabelText = (text) => {
   const value = String(text || "").replace(/\s+/g, " ");
   const dyson = /\bdyson\b/i.test(value);
-  const model = dyson ? value.match(/\b(?:TP|DP|HP|PH|BP)\s?\d{2}\b/i)?.[0]?.replace(/\s/g, "").toUpperCase()
+  const model = dyson ? value.match(/\b(?:TP|DP|HP|PH|BP)\s?[0-9O]{2}\b/i)?.[0]?.replace(/\s/g, "").toUpperCase().replace(/O/g, "0")
     : value.match(/\bmodel(?:\s*(?:no\.?|number))?\s*[:#]?\s*([A-Z0-9][A-Z0-9._-]{2,20})/i)?.[1];
   const serial = value.match(/\bserial\s*(?:no\.?|number|#)?\s*[:#]?\s*([A-Z0-9][A-Z0-9-]{6,24})/i)?.[1]
     || (dyson ? value.match(/\b[A-Z0-9]{2,4}-[A-Z]{2}-[A-Z0-9]{6,12}\b/i)?.[0] : "");
@@ -9596,7 +9596,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
             frame.height = video.videoHeight;
             frame.getContext("2d")?.drawImage(video, 0, 0, frame.width, frame.height);
             frame.toBlob((blob) => {
-              if (blob) scanSensorPhoto(blob, decoded);
+              if (blob) scanSensorPhoto(blob, decoded, result.getResultPoints());
             }, "image/jpeg", 0.95);
           }
           setSensorScannerOpen(false);
@@ -9612,36 +9612,89 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
     return () => { active = false; controls?.stop(); };
   }, [sensorScannerOpen]);
 
-  const scanSensorPhoto = async (file, knownBarcode = null) => {
+  const scanSensorPhoto = async (file, knownBarcode = null, knownPoints = null) => {
     if (!file) return;
     setSensorPhotoBusy(true);
     setSensorScanStatus(knownBarcode ? "Barcode captured. Reading printed label..." : "Reading barcode and printed label...");
     const imageUrl = URL.createObjectURL(file);
     try {
       let barcodeDetails = knownBarcode;
+      let barcodePoints = knownPoints;
       if (!barcodeDetails) {
         try {
           const [{ BrowserMultiFormatReader, BarcodeFormat }, { DecodeHintType }] = await Promise.all([import("@zxing/browser"), import("@zxing/library")]);
           const reader = new BrowserMultiFormatReader(new Map([[DecodeHintType.TRY_HARDER, true]]));
           const result = await reader.decodeFromImageUrl(imageUrl);
           barcodeDetails = decodeSensorLabel(result.getText(), result.getBarcodeFormat() === BarcodeFormat.QR_CODE);
+          barcodePoints = result.getResultPoints();
         } catch { /* Printed text may still identify the sensor. */ }
       }
       let printedDetails = {};
+      let ocrError = "";
       try {
-        const { createWorker } = await import("tesseract.js");
-        const worker = await createWorker("eng");
-        try { printedDetails = parseSensorLabelText((await worker.recognize(file)).data.text); }
+        const { createWorker, PSM } = await import("tesseract.js");
+        const ocrPath = `${process.env.PUBLIC_URL || ""}/ocr`;
+        const worker = await createWorker("eng", 1, {
+          langPath: ocrPath, workerPath: `${ocrPath}/worker.min.js`, corePath: `${ocrPath}/core`,
+        });
+        try {
+          const image = new Image();
+          image.src = imageUrl;
+          await image.decode();
+          const points = barcodePoints?.filter((point) => Number.isFinite(point.getX()) && Number.isFinite(point.getY()));
+          const crop = (left, top, right, bottom) => {
+            const x = Math.max(0, Math.floor(left));
+            const y = Math.max(0, Math.floor(top));
+            const width = Math.min(image.naturalWidth - x, Math.ceil(right - left));
+            const height = Math.min(image.naturalHeight - y, Math.ceil(bottom - top));
+            if (width <= 0 || height <= 0) return null;
+            const canvas = document.createElement("canvas");
+            canvas.width = width;
+            canvas.height = height;
+            canvas.getContext("2d")?.drawImage(image, x, y, width, height, 0, 0, width, height);
+            return canvas;
+          };
+          let labelImage = file;
+          let modelImage = null;
+          if (points?.length >= 2) {
+            const xs = points.map((point) => point.getX());
+            const ys = points.map((point) => point.getY());
+            const left = Math.min(...xs);
+            const right = Math.max(...xs);
+            const top = Math.min(...ys);
+            const bottom = Math.max(...ys);
+            const span = Math.max(right - left, bottom - top);
+            if (span > 40) {
+              labelImage = crop(left - span * 0.65, top - span * 0.15, right + span * 0.15, bottom + span * 0.5) || file;
+              if (right - left > bottom - top) {
+                modelImage = crop(left - span * 0.17, top - span * 0.05, left, top + span * 0.12);
+              }
+            }
+          }
+          const labelText = (await worker.recognize(labelImage)).data.text;
+          printedDetails = parseSensorLabelText(labelText);
+          if (modelImage && !printedDetails.model) {
+            await worker.setParameters({ tessedit_pageseg_mode: PSM.SINGLE_WORD });
+            const modelText = (await worker.recognize(modelImage)).data.text;
+            const model = modelText.match(/\b(?:TP|DP|HP|PH|BP)\s?[0-9O]{2}\b/i)?.[0]?.replace(/\s/g, "").toUpperCase().replace(/O/g, "0");
+            if (model) printedDetails = { ...printedDetails, manufacturer: printedDetails.manufacturer || "Dyson", model };
+          }
+        }
         finally { await worker.terminate(); }
-      } catch { /* A readable barcode can still be used if OCR is unavailable. */ }
+      } catch (error) { ocrError = error?.message || "Text recognition unavailable"; }
+      if (barcodeDetails?.labelCode && /^[-A-Z0-9]{12,24}$/i.test(barcodeDetails.labelCode) && printedDetails.manufacturer === "Dyson" && !printedDetails.serialNumber) {
+        printedDetails.serialNumber = barcodeDetails.labelCode;
+      }
       const details = { ...(barcodeDetails || {}), ...printedDetails };
       if (Object.keys(details).length) {
         setSensorDraft((current) => ({ ...current, ...details, identificationMethod: Object.keys(printedDetails).length ? "label-photo" : barcodeDetails?.identificationMethod || "label-photo" }));
         setSensorScanStatus(Object.keys(printedDetails).length
           ? "Label details filled in. Check the model and serial against the printed label before adding the instrument."
-          : "Barcode captured, but the printed details were not clear. Enter or check the model and serial manually.");
+          : ocrError ? `Barcode captured, but printed-text reading failed: ${ocrError}. Enter the model and serial manually.`
+            : "Barcode captured, but the printed details were not clear. Try a closer photo of the label, or enter the model and serial manually.");
       } else {
-        setSensorScanStatus("No readable label details found. Try a sharper photo in good light, or enter the printed details manually.");
+        setSensorScanStatus(ocrError ? `Printed-text reading failed: ${ocrError}. Try again or enter the details manually.`
+          : "No readable label details found. Try a closer photo of the label in good light, or enter the printed details manually.");
       }
     } catch {
       setSensorScanStatus("Could not read that photo. Try a sharper photo or enter the printed details manually.");
