@@ -9642,20 +9642,25 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
           image.src = imageUrl;
           await image.decode();
           const points = barcodePoints?.filter((point) => Number.isFinite(point.getX()) && Number.isFinite(point.getY()));
-          const crop = (left, top, right, bottom) => {
+          const crop = (left, top, right, bottom, scale = 1) => {
             const x = Math.max(0, Math.floor(left));
             const y = Math.max(0, Math.floor(top));
             const width = Math.min(image.naturalWidth - x, Math.ceil(right - left));
             const height = Math.min(image.naturalHeight - y, Math.ceil(bottom - top));
             if (width <= 0 || height <= 0) return null;
             const canvas = document.createElement("canvas");
-            canvas.width = width;
-            canvas.height = height;
-            canvas.getContext("2d")?.drawImage(image, x, y, width, height, 0, 0, width, height);
+            canvas.width = width * scale;
+            canvas.height = height * scale;
+            const context = canvas.getContext("2d");
+            if (context) {
+              context.filter = scale > 1 ? "grayscale(1) contrast(160%)" : "none";
+              context.drawImage(image, x, y, width, height, 0, 0, canvas.width, canvas.height);
+            }
             return canvas;
           };
           let labelImage = file;
           let modelImage = null;
+          let ratingImage = null;
           if (points?.length >= 2) {
             const xs = points.map((point) => point.getX());
             const ys = points.map((point) => point.getY());
@@ -9667,7 +9672,8 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
             if (span > 40) {
               labelImage = crop(left - span * 0.65, top - span * 0.15, right + span * 0.15, bottom + span * 0.5) || file;
               if (right - left > bottom - top) {
-                modelImage = crop(left - span * 0.17, top - span * 0.05, left, top + span * 0.12);
+                modelImage = crop(left - span * 0.19, top - span * 0.07, left + span * 0.02, top + span * 0.13, 3);
+                ratingImage = crop(left + span * 0.1, top + span * 0.12, right + span * 0.1, bottom + span * 0.5, 2);
               }
             }
           }
@@ -9678,6 +9684,12 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
             const modelText = (await worker.recognize(modelImage)).data.text;
             const model = modelText.match(/\b(?:TP|DP|HP|PH|BP)\s?[0-9O]{2}\b/i)?.[0]?.replace(/\s/g, "").toUpperCase().replace(/O/g, "0");
             if (model) printedDetails = { ...printedDetails, manufacturer: printedDetails.manufacturer || "Dyson", model };
+          }
+          if (ratingImage && !printedDetails.ratedPowerW) {
+            await worker.setParameters({ tessedit_pageseg_mode: PSM.SPARSE_TEXT });
+            const ratingText = (await worker.recognize(ratingImage)).data.text;
+            const power = ratingText.match(/\b(\d{1,4})\s?W\b/i)?.[1];
+            if (power) printedDetails = { ...printedDetails, ratedPowerW: power };
           }
         }
         finally { await worker.terminate(); }
