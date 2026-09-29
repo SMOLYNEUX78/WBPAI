@@ -5,14 +5,14 @@ import supabase from "../../supabaseClient";
 
 beforeEach(() => window.localStorage.clear());
 
-test("meter and tariff evidence belong to Monitoring, not Carbon Context", () => {
+test("monitoring uses the bill for tariff evidence without duplicate classifications", () => {
   render(<MemoryRouter><NewBuildingSetupPanel /></MemoryRouter>);
   fireEvent.click(screen.getByRole("tab", { name: "Monitoring" }));
-  expect(screen.getByRole("combobox", { name: "Electricity tariff" })).toBeInTheDocument();
-  expect(screen.getByLabelText("Electricity tariff evidence")).toBeDisabled();
-  expect(screen.getByLabelText("Historical energy records evidence")).toBeDisabled();
-  fireEvent.click(screen.getByRole("tab", { name: "Carbon Context" }));
+  expect(screen.getByText("2. Tariff evidence")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Scan or upload energy bill" })).toBeInTheDocument();
   expect(screen.queryByRole("combobox", { name: "Electricity tariff" })).not.toBeInTheDocument();
+  expect(screen.queryByText("Additional meter and tariff evidence")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("tab", { name: "Carbon Context" }));
   expect(screen.getByLabelText("Heating system evidence")).toBeDisabled();
 });
 

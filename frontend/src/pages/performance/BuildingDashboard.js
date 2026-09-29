@@ -87,14 +87,13 @@ export const ProfileSummaryColumns = ({ record, property, setup = {} }) => {
       ["Gas MPRN", bill.mprn],
       ["Gas unit rate", bill.gasUnitRatePence && `${bill.gasUnitRatePence} p/kWh`],
       ["Gas standing charge", bill.gasStandingChargePence && `${bill.gasStandingChargePence} p/day`],
-      ["Selected historical file", setup.historicalDataFileName],
     ]],
     ["Health", [
       ["Sensors", setup.healthSensors?.length ? `${setup.healthSensors.length} registered` : "Pending"],
       ["Selected sensor file", setup.sensorEvidenceFileName],
     ]],
     ["Carbon context", [
-      ...["electricity", "fuel", "heating", "solar", "battery"].map((field) => [
+      ...["heating", "solar", "battery"].map((field) => [
         field.charAt(0).toUpperCase() + field.slice(1), carbon[field]?.replaceAll("-", " "),
       ]),
     ]],
@@ -534,9 +533,6 @@ const preserveTrendEnergy = (incoming, previous) => {
 const PROPERTY_DISCOVERY_CACHE_KEY = "wbp-property-discovery-draft:v1";
 const CARBON_EVIDENCE_TYPES = [
   { id: "energy-bill", section: "monitoring", label: "Energy bill", help: "Supplier bill for customer-confirmed tariff details. Usage still comes from the meter feed." },
-  { id: "energy-history", section: "monitoring", label: "Historical energy records", help: "Bills covering the baseline period. A reviewer must confirm the actual date coverage." },
-  { id: "electricity-tariff", section: "monitoring", label: "Electricity tariff", help: "A supplier bill or tariff confirmation showing the account, dates and product." },
-  { id: "gas-tariff", section: "monitoring", label: "Gas / thermal fuel", help: "A bill or fuel-supplier statement showing the product and covered dates." },
   { id: "heating-system", section: "carbon", label: "Heating system", help: "Installation or commissioning record for the main heating system." },
   { id: "solar-pv", section: "carbon", label: "Solar PV", help: "Installation certificate or commissioning record, if installed." },
   { id: "battery-storage", section: "carbon", label: "Battery storage", help: "Installation or commissioning record, if installed." },
@@ -8570,7 +8566,6 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   const [meterScanStatus, setMeterScanStatus] = useState("");
   const [meterScannerOpen, setMeterScannerOpen] = useState(false);
   const meterVideoRef = useRef(null);
-  const [historicalDataFileName, setHistoricalDataFileName] = useState("");
   const [carbonSelections, setCarbonSelections] = useState({ electricity: "unknown", fuel: "unknown", heating: "unknown", solar: "none", battery: "none" });
   const [carbonEvidence, setCarbonEvidence] = useState({});
   const [carbonEvidenceStatus, setCarbonEvidenceStatus] = useState("");
@@ -8731,7 +8726,6 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       setHealthSensors(Array.isArray(saved.healthSensors) ? saved.healthSensors : []);
       setCarbonSelections((current) => ({ ...current, ...saved.carbonSelections }));
       if (saved.modelInput) setModelInput(saved.modelInput);
-      setHistoricalDataFileName(saved.historicalDataFileName || "");
       setSensorEvidenceFileName(saved.sensorEvidenceFileName || "");
     } catch { /* Invalid local draft is ignored. */ }
   }, [isolatedDraft, setupRecordId]);
@@ -8749,7 +8743,6 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
         setBillReview(normaliseBillReview(saved.billReview));
         setHealthSensors(Array.isArray(saved.healthSensors) ? saved.healthSensors : []);
         setCarbonSelections((current) => ({ ...current, ...saved.carbonSelections }));
-        setHistoricalDataFileName(saved.historicalDataFileName || "");
         setSensorEvidenceFileName(saved.sensorEvidenceFileName || "");
         if (saved.modelInput) setModelInput(saved.modelInput);
         window.localStorage.setItem(`${ownershipRecord.recordId}:setupSections`, JSON.stringify(saved));
@@ -8758,7 +8751,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   }, [isolatedDraft, ownershipRecord?.databaseId, ownershipRecord?.recordId]);
   const saveSetupSection = async (overrides = {}) => {
     const section = setupTab === "measurements" ? { manualData, modelInput }
-      : setupTab === "performance" ? { energyConsent, meterIdentifiers, historicalDataFileName, healthSensors, sensorEvidenceFileName, carbonSelections }
+      : setupTab === "performance" ? { energyConsent, meterIdentifiers, healthSensors, sensorEvidenceFileName, carbonSelections }
       : { carbonSelections };
     Object.assign(section, overrides);
     const key = ownershipRecord?.recordId ? `${ownershipRecord.recordId}:setupSections` : "wbp-new-building-setup-draft";
@@ -10061,7 +10054,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
             </div>
 
             <div className="grid gap-3">
-              <h4 className="font-semibold text-sm">2. Meter history and tariff evidence</h4>
+              <h4 className="font-semibold text-sm">2. Tariff evidence</h4>
               <p className="text-xs text-gray-600">A bill supports tariff, supplier and fuel claims, including carbon context. It does not replace consented meter readings or independently verify a renewable tariff.</p>
               <div className="space-y-3 border bg-gray-50 p-3">
                 <p className="text-xs text-gray-600">Text PDFs may fill some details. For scanned bills or images, enter them manually and confirm before saving.</p>
@@ -10081,20 +10074,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                 {carbonEvidence["energy-bill"] ? <button type="button" className="block break-all text-left text-xs text-blue-700 underline" onClick={() => openCarbonEvidence(carbonEvidence["energy-bill"].storage_reference)}>{carbonEvidence["energy-bill"].original_file_name || "View uploaded bill"} (customer-confirmed)</button> : null}
                 {!billDraftFile && carbonEvidence["energy-bill"] ? <button type="button" disabled={billExtracting} onClick={rereadSavedEnergyBill} className="block text-left text-xs font-semibold text-emerald-800 underline disabled:opacity-50">Read saved bill again</button> : null}
               </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="space-y-1 text-xs text-gray-600">Electricity tariff
-                  <select className="w-full border rounded p-2 text-xs" value={carbonSelections.electricity} onChange={(event) => setCarbonSelections((current) => ({ ...current, electricity: event.target.value }))}>
-                    <option value="unknown">Unknown / not verified</option><option value="standard">Standard grid electricity</option><option value="renewable-unverified">Renewable tariff - unverified</option>
-                  </select>
-                </label>
-                <label className="space-y-1 text-xs text-gray-600">Gas / thermal fuel
-                  <select className="w-full border rounded p-2 text-xs" value={carbonSelections.fuel} onChange={(event) => setCarbonSelections((current) => ({ ...current, fuel: event.target.value }))}>
-                    <option value="unknown">Unknown / not verified</option><option value="mains-gas">Mains gas</option><option value="green-gas-unverified">Green gas - unverified</option><option value="none">No gas supply</option><option value="other">Oil / LPG / solid fuel / other</option>
-                  </select>
-                </label>
-              </div>
-              <p className="text-xs text-gray-600">Meter readings establish consumption. Bills support tariff and fuel claims; a renewable tariff is not verified by the meter feed alone.</p>
-              <details className="border p-3 text-xs"><summary className="cursor-pointer font-semibold">Additional meter and tariff evidence</summary><div className="mt-2 space-y-2">{CARBON_EVIDENCE_TYPES.filter((type) => type.section === "monitoring" && type.id !== "energy-bill").map(renderEvidenceUpload)}</div></details>
+              <p className="text-xs text-gray-600">Smart-meter readings establish consumption. The bill supports supplier and tariff details; a renewable tariff still requires review.</p>
               {carbonEvidenceStatus ? <p className="text-sm" role="status">{carbonEvidenceStatus}</p> : null}
             </div>
 
@@ -10448,7 +10428,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       </div>
       </> : <div ref={setupPanelRef} className="overflow-hidden"><div ref={setupContentRef}>
         <OccupyHistoryTabs key={historyStage} record={ownershipRecord} property={ownershipProperty}
-          setup={{ energyConsent, historicalDataFileName, healthSensors, sensorEvidenceFileName, carbonSelections, manualData, billReview }}
+          setup={{ energyConsent, healthSensors, sensorEvidenceFileName, carbonSelections, manualData, billReview }}
           activeStage={historyStage} contentOnly addressDraft={propertySearch}
           onAddressDraftChange={(field, value) => { setPropertySearch((current) => ({ ...current, [field]: value })); if (!propertyDiscovery?.confirmedAt) setPropertyDiscovery(null); }}
           draftHistory={historyDraft} onDraftHistoryChange={setHistoryDraft} onPlanningLookup={setDesignPlanningLookup}
