@@ -393,13 +393,15 @@ test("audit summary shows the second owner across the full four-column banner", 
   expect(secondOwner.closest(".grid-cols-4")).toHaveClass("w-full");
 });
 
-test("audit energy column shows confirmed bill details", () => {
+test("audit banner keeps energy and carbon context concise across two columns", () => {
   render(<ProfileSummaryColumns setup={{ billReview: {
     supplier: "Good Energy", electricityTariff: "Good Energy Fix Jan27", gasTariff: "Good Energy Fix Jan27",
     electricityUnitRatePence: "20.61", gasUnitRatePence: "5.00",
-  } }} />);
-  expect(screen.getByText("Electricity tariff:").closest("p")).toHaveTextContent("Good Energy Fix Jan27");
-  expect(screen.getByText("Gas unit rate:").closest("p")).toHaveTextContent("5.00 p/kWh");
+  }, carbonSelections: { heating: "heat-pump", solar: "none", battery: "none" } }} />);
+  expect(screen.getByRole("heading", { name: "Energy" }).parentElement).toHaveClass("col-span-2");
+  expect(screen.getByText("Electricity:").closest("p")).toHaveTextContent("Good Energy Fix Jan27");
+  expect(screen.getByText("Heating:").closest("p")).toHaveTextContent("heat pump");
+  expect(screen.queryByText("Gas unit rate:")).not.toBeInTheDocument();
 });
 
 test("ownership declaration defers verification and keeps document uploads optional", () => {

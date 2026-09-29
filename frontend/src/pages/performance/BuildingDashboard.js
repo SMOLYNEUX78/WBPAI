@@ -77,31 +77,24 @@ export const ProfileSummaryColumns = ({ record, property, setup = {} }) => {
       ["Tenure", record?.tenure],
     ]],
     ["Energy", [
-      ["Monitoring", setup.energyConsent ? "Access requested; not connected" : "Not connected"],
       ["Supplier", bill.supplier],
-      ["Electricity tariff", bill.electricityTariff],
-      ["Electricity MPAN", bill.mpan],
-      ["Electricity unit rate", bill.electricityUnitRatePence && `${bill.electricityUnitRatePence} p/kWh`],
-      ["Electricity standing charge", bill.electricityStandingChargePence && `${bill.electricityStandingChargePence} p/day`],
-      ["Gas tariff", bill.gasTariff],
-      ["Gas MPRN", bill.mprn],
-      ["Gas unit rate", bill.gasUnitRatePence && `${bill.gasUnitRatePence} p/kWh`],
-      ["Gas standing charge", bill.gasStandingChargePence && `${bill.gasStandingChargePence} p/day`],
+      ["Electricity", bill.electricityTariff],
+      ["Gas", bill.gasTariff],
+    ], [
+      ...["heating", "solar", "battery"].map((field) => [
+        field.charAt(0).toUpperCase() + field.slice(1), carbon[field]?.replaceAll("-", " "),
+      ]),
     ]],
     ["Health", [
       ["Sensors", setup.healthSensors?.length ? `${setup.healthSensors.length} registered` : "Pending"],
       ["Selected sensor file", setup.sensorEvidenceFileName],
     ]],
-    ["Carbon context", [
-      ...["heating", "solar", "battery"].map((field) => [
-        field.charAt(0).toUpperCase() + field.slice(1), carbon[field]?.replaceAll("-", " "),
-      ]),
-    ]],
   ];
+  const renderDetails = (details) => details.map(([label, value]) => <p key={label} className="mb-0.5 break-words text-gray-800"><span className="text-gray-600">{label}: </span><span className="font-semibold">{value || "Pending"}</span></p>);
   return <div className="mt-2 grid w-full min-w-0 grid-cols-4 gap-2 border-t border-emerald-200 px-3 pt-2 text-[10px] leading-tight [overflow-wrap:anywhere] sm:gap-3 sm:px-5 sm:text-xs">
-    {rows.map(([heading, details]) => <div key={heading} className="min-w-0 border-r border-emerald-200 pr-2 last:border-0 last:pr-0">
+    {rows.map(([heading, details, systems]) => <div key={heading} className={`min-w-0 border-r border-emerald-200 pr-2 last:border-0 last:pr-0 ${systems ? "col-span-2" : ""}`}>
       <h3 className="mb-1 font-bold text-emerald-950">{heading}</h3>
-      {details.map(([label, value]) => <p key={label} className="mb-0.5 break-words text-gray-800"><span className="text-gray-600">{label}: </span><span className="font-semibold">{value || "Pending"}</span></p>)}
+      {systems ? <div className="grid min-w-0 grid-cols-2 gap-2 sm:gap-3"><div className="min-w-0">{renderDetails(details)}</div><div className="min-w-0"><h4 className="mb-0.5 font-semibold text-emerald-950">Carbon context</h4>{renderDetails(systems)}</div></div> : renderDetails(details)}
     </div>)}
   </div>;
 };
