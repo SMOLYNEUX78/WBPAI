@@ -5,6 +5,12 @@ import supabase from "../../supabaseClient";
 
 beforeEach(() => window.localStorage.clear());
 
+test("building history banner labels its audit stage Occupy", () => {
+  render(<OccupyHistoryTabs record={null} property={null} />);
+  expect(screen.getByRole("tab", { name: "Occupy" })).toBeInTheDocument();
+  expect(screen.queryByRole("tab", { name: "Audit" })).not.toBeInTheDocument();
+});
+
 test("energy monitoring contains bill and carbon context while health has its own tab", () => {
   render(<MemoryRouter><NewBuildingSetupPanel /></MemoryRouter>);
   expect(screen.getByRole("tab", { name: "Ownership" })).toBeInTheDocument();

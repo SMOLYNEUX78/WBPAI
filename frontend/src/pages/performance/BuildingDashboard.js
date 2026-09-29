@@ -354,7 +354,7 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
     {!contentOnly ? <div className="flex border-b border-emerald-200 px-3 sm:px-5" role="tablist" aria-label="Building history">
       {["design", "build", "audit"].map((item) => <button key={item} type="button" role="tab"
         aria-selected={stage === item} aria-expanded={stage === item} onClick={() => { setDisplayStage(item); setLocalStage((current) => current === item ? null : item); setSearchStatus(""); setUploadStatus(""); setSaveStatus(""); }}
-        className={`min-w-0 flex-1 px-2 py-2 text-xs font-semibold capitalize transition-colors ${stage === item ? "border-b-2 border-emerald-800 text-emerald-950" : "text-emerald-800 hover:bg-emerald-50"}`}>{item}</button>)}
+        className={`min-w-0 flex-1 px-2 py-2 text-xs font-semibold capitalize transition-colors ${stage === item ? "border-b-2 border-emerald-800 text-emerald-950" : "text-emerald-800 hover:bg-emerald-50"}`}>{item === "audit" ? "Occupy" : item}</button>)}
     </div> : null}
     <div className={`wbp-history-panel ${stage ? "wbp-history-panel--open" : ""}`} aria-hidden={!stage}>
     <div role="tabpanel" className="min-h-0 overflow-hidden pb-2">
