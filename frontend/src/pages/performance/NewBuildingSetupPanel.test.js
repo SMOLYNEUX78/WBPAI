@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { NewBuildingSetupPanel, OccupyHistoryTabs, ProfileSummaryColumns, decodeSensorLabel, parseSensorLabelText, mergeScannedSensor, findAccountHomeRecord, findHomeProfileForOverwrite } from "./BuildingDashboard";
+import { NewBuildingSetupPanel, OccupyHistoryTabs, ProfileSummaryColumns, decodeSensorLabel, parseSensorLabelText, mergeScannedSensor, registerSensorDraft, findAccountHomeRecord, findHomeProfileForOverwrite } from "./BuildingDashboard";
 import supabase from "../../supabaseClient";
 
 beforeEach(() => window.localStorage.clear());
@@ -72,6 +72,15 @@ test("scanning another sensor clears the previous room and connection details", 
   });
 });
 
+test("complete scans register once while incomplete scans remain drafts", () => {
+  const draft = { manufacturer: "Dyson", model: "Pure Cool Link", location: "Upstairs", labelCode: "NN6-UK-HDA1783A" };
+  const registered = registerSensorDraft([], draft, "label.jpg");
+  expect(registered.healthSensors).toEqual([expect.objectContaining({ ...draft, evidenceFileName: "label.jpg" })]);
+  expect(registered.healthSensorDraft.manufacturer).toBe("");
+  expect(registerSensorDraft(registered.healthSensors, draft, "").healthSensors).toHaveLength(1);
+  expect(registerSensorDraft([], { ...draft, location: "" }, "").healthSensorDraft).toEqual({ ...draft, location: "" });
+});
+
 test("fresh New tab loads and saves health instruments through the existing home account", async () => {
   const storedSensor = {
     id: "sensor-1", manufacturer: "Dyson", model: "TP02", location: "Upstairs",
@@ -132,6 +141,39 @@ test("saving health monitoring keeps a scanned but incomplete instrument on the 
     await waitFor(() => expect(upsert).toHaveBeenCalledWith(expect.objectContaining({
       building_record_id: "home-id",
       setup_data: expect.objectContaining({ healthSensors: [storedSensor], healthSensorDraft: expect.objectContaining({ manufacturer: "Dyson", labelCode: "NN6-UK-HDA1783A" }) }),
+    }), expect.anything()));
+  } finally {
+    from.mockRestore();
+    getUser.mockRestore();
+  }
+});
+
+test("saving a complete scanned instrument registers it on the home account", async () => {
+  const upsert = jest.fn().mockResolvedValue({ error: null });
+  const getUser = jest.spyOn(supabase.auth, "getUser").mockResolvedValue({ data: { user: { id: "owner-1" } }, error: null });
+  const from = jest.spyOn(supabase, "from").mockImplementation((table) => {
+    const chain = {
+      eq: () => chain, order: () => chain, limit: () => chain,
+      then: (resolve) => Promise.resolve({ data: [], error: null }).then(resolve),
+      maybeSingle: async () => ({ data: table === "WBPBuildingRecords"
+        ? { id: "home-id", record_reference: "WBP-001", custodian_user_id: "owner-1" }
+        : { setup_data: { healthSensors: [] } }, error: null }),
+    };
+    return { select: () => chain, upsert };
+  });
+  try {
+    render(<MemoryRouter><NewBuildingSetupPanel freshStart syncHomeProfile /></MemoryRouter>);
+    fireEvent.click(screen.getByRole("tab", { name: "Health Monitoring" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Manufacturer" }), { target: { value: "Dyson" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Model" }), { target: { value: "Pure Cool Link" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Label code" }), { target: { value: "NN6-UK-HDA1783A" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Installed location" }), { target: { value: "Upstairs" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save health monitoring" }));
+    await waitFor(() => expect(upsert).toHaveBeenCalledWith(expect.objectContaining({
+      building_record_id: "home-id", setup_data: expect.objectContaining({
+        healthSensors: [expect.objectContaining({ manufacturer: "Dyson", model: "Pure Cool Link", location: "Upstairs", labelCode: "NN6-UK-HDA1783A" })],
+        healthSensorDraft: expect.objectContaining({ manufacturer: "" }),
+      }),
     }), expect.anything()));
   } finally {
     from.mockRestore();

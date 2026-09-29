@@ -83,6 +83,20 @@ export const mergeScannedSensor = (current, scanned) => {
   const nextIdentity = sensorIdentity(scanned);
   return { ...(previousIdentity && nextIdentity && previousIdentity === nextIdentity ? current : emptySensorDraft()), ...scanned };
 };
+export const registerSensorDraft = (sensors, draft, evidenceFileName) => {
+  const complete = ["manufacturer", "model", "location"].every((field) => String(draft?.[field] || "").trim());
+  if (!complete) return { healthSensors: sensors, healthSensorDraft: draft, sensorEvidenceFileName: evidenceFileName };
+  const identity = sensorIdentity(draft);
+  const alreadyRegistered = identity && sensors.some((sensor) => sensorIdentity(sensor) === identity);
+  return {
+    healthSensors: alreadyRegistered ? sensors : [...sensors, {
+      ...draft, id: `health-sensor-${Date.now()}`, evidenceFileName,
+      connectionStatus: "not checked", metricStatus: {},
+    }],
+    healthSensorDraft: emptySensorDraft(),
+    sensorEvidenceFileName: alreadyRegistered ? evidenceFileName : "",
+  };
+};
 
 export const ProfileSummaryColumns = ({ record, property, setup = {} }) => {
   const carbon = setup.carbonSelections || {};
@@ -8849,7 +8863,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
     }
     const section = setupTab === "measurements" ? { manualData, modelInput }
       : setupTab === "energy" ? { energyConsent, meterIdentifiers, carbonSelections }
-      : { healthSensors, healthSensorDraft: sensorDraft, sensorEvidenceFileName };
+      : registerSensorDraft(healthSensors, sensorDraft, sensorEvidenceFileName);
     if (setupTab === "measurements" && modelAreaEdited) {
       section.historicalStages = { ...historyDraft, design: { ...historyDraft.design, internalArea: manualData.internalArea, areaSource: "3d-model" } };
     }
@@ -8882,7 +8896,15 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
         } } : section;
         if (setupTab === "health" && healthSensorsLoadedId !== targetRecordId) {
           const storedSensors = Array.isArray(existing?.setup_data?.healthSensors) ? existing.setup_data.healthSensors : [];
-          savedSection = { ...savedSection, healthSensors: Array.from(new Map([...storedSensors, ...healthSensors].map((sensor) => [sensor.id, sensor])).values()) };
+          const mergedSensors = Array.from(new Map([...storedSensors, ...section.healthSensors].map((sensor) => [sensor.id, sensor])).values());
+          const seenIdentities = new Set();
+          savedSection = { ...savedSection, healthSensors: mergedSensors.filter((sensor) => {
+            const identity = sensorIdentity(sensor);
+            if (!identity) return true;
+            if (seenIdentities.has(identity)) return false;
+            seenIdentities.add(identity);
+            return true;
+          }) };
         }
         const { error } = await supabase.from("WBPBuildingSetupDeclarations").upsert({
           building_record_id: targetRecordId,
@@ -8894,6 +8916,9 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
           const savedSetup = { ...(existing?.setup_data || {}), ...savedSection };
           if (setupTab === "health") {
             setHealthSensors(savedSection.healthSensors);
+            sensorDraftTouchedRef.current = true;
+            setSensorDraft(savedSection.healthSensorDraft);
+            setSensorEvidenceFileName(savedSection.sensorEvidenceFileName);
             setHealthSensorsLoadedId(targetRecordId);
           }
           window.localStorage.setItem(key, JSON.stringify(savedSetup));
@@ -8912,6 +8937,12 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
     setSectionSaveStatus(syncHomeProfile
       ? "Save failed: No secure home profile is available. This device kept a draft; complete Ownership, then save again to sync it."
       : `${setupTab} saved on this device`);
+    if (setupTab === "health") {
+      setHealthSensors(section.healthSensors);
+      sensorDraftTouchedRef.current = true;
+      setSensorDraft(section.healthSensorDraft);
+      setSensorEvidenceFileName(section.sensorEvidenceFileName);
+    }
     if (setupTab === "measurements") setModelAreaEdited(false);
   };
 
@@ -9787,26 +9818,12 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   };
 
   const addHealthSensor = () => {
-    if (
-      !sensorDraft.manufacturer.trim() ||
-      !sensorDraft.model.trim() ||
-      !sensorDraft.location.trim()
-    ) {
-      return;
-    }
-
-    setHealthSensors((current) => [
-      ...current,
-      {
-        ...sensorDraft,
-        id: `health-sensor-${Date.now()}`,
-        evidenceFileName: sensorEvidenceFileName,
-        connectionStatus: "not checked", metricStatus: {},
-      },
-    ]);
+    const registered = registerSensorDraft(healthSensors, sensorDraft, sensorEvidenceFileName);
+    if (registered.healthSensorDraft === sensorDraft) return;
+    setHealthSensors(registered.healthSensors);
     sensorDraftTouchedRef.current = true;
-    setSensorDraft(emptySensorDraft());
-    setSensorEvidenceFileName("");
+    setSensorDraft(registered.healthSensorDraft);
+    setSensorEvidenceFileName(registered.sensorEvidenceFileName);
   };
 
   useLayoutEffect(() => {
