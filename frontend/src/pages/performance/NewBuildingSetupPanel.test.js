@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { NewBuildingSetupPanel, OccupyHistoryTabs, ProfileSummaryColumns, findAccountHomeRecord, findHomeProfileForOverwrite } from "./BuildingDashboard";
+import { NewBuildingSetupPanel, OccupyHistoryTabs, ProfileSummaryColumns, decodeSensorLabel, findAccountHomeRecord, findHomeProfileForOverwrite } from "./BuildingDashboard";
 import supabase from "../../supabaseClient";
 
 beforeEach(() => window.localStorage.clear());
@@ -31,10 +31,23 @@ test("health setup distinguishes label scanning, connection and metric validatio
   render(<MemoryRouter><NewBuildingSetupPanel /></MemoryRouter>);
   fireEvent.click(screen.getByRole("tab", { name: "Health Monitoring" }));
   expect(screen.getByText("1. Import your health data")).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Scan IAQ sensor" })).toBeInTheDocument();
-  expect(screen.getByRole("combobox", { name: "Connection route" })).toHaveValue("dyson");
-  expect(screen.getByRole("combobox", { name: "Collector stream" })).toHaveValue("");
+  expect(screen.getByRole("button", { name: "Scan QR or barcode" })).toBeInTheDocument();
+  expect(screen.getByRole("textbox", { name: "Label code" })).toBeInTheDocument();
+  expect(screen.getByRole("combobox", { name: "Connection route" })).toHaveValue("manual");
+  expect(screen.queryByRole("combobox", { name: "Collector stream" })).not.toBeInTheDocument();
   expect(screen.getByText("3. Metrics to validate")).toBeInTheDocument();
+});
+
+test("barcode labels keep a reviewable code without claiming it is a serial or connection", () => {
+  expect(decodeSensorLabel(" 1234567890123 ", false)).toEqual({ labelCode: "1234567890123", identificationMethod: "barcode-label" });
+  expect(decodeSensorLabel("", false)).toBeNull();
+});
+
+test("QR labels fill only supported identity fields and discard pairing tokens", () => {
+  expect(decodeSensorLabel('{"brand":"Example","model":"Air One","serial":"A123","password":"secret"}', true)).toEqual({
+    manufacturer: "Example", model: "Air One", serialNumber: "A123", identificationMethod: "qr-label",
+  });
+  expect(decodeSensorLabel("https://example.com/pair?password=secret", true)).toBeNull();
 });
 
 test("3D Model displays property coordinates without manual coordinate or area fields", () => {

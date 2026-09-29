@@ -550,6 +550,24 @@ const DYSON_READING_TYPES = [
   ["dyson:living_room", "Dyson downstairs / living room"],
   ["dyson:downstairs", "Dyson downstairs (older label)"],
 ];
+export const decodeSensorLabel = (raw, isQrCode) => {
+  const value = String(raw || "").trim();
+  if (!isQrCode) {
+    const labelCode = [...value].filter((character) => character.charCodeAt(0) >= 32 && character.charCodeAt(0) !== 127).join("").slice(0, 100);
+    return labelCode ? { labelCode, identificationMethod: "barcode-label" } : null;
+  }
+  let details = {};
+  try {
+    if (value.startsWith("{")) details = JSON.parse(value);
+    else if (/^https?:\/\//i.test(value)) details = Object.fromEntries(new URL(value).searchParams);
+  } catch { return null; }
+  const manufacturer = String(details.manufacturer || details.brand || "").slice(0, 100);
+  const model = String(details.model || "").slice(0, 100);
+  const serialNumber = String(details.serial || details.serialNumber || "").slice(0, 100);
+  return manufacturer || model || serialNumber
+    ? { manufacturer, model, serialNumber, identificationMethod: "qr-label" }
+    : null;
+};
 const PROPERTY_DISCOVERY_DATASETS = [
   "planning-application",
   "listed-building",
@@ -8597,13 +8615,14 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
     manufacturer: "",
     model: "",
     serialNumber: "",
+    labelCode: "",
     location: "",
     evidenceGrade: "indicative",
     verificationStatus: "unverified",
     verificationDate: "",
     placementNotes: "",
-    metrics: ["temperature", "humidity"],
-    connectionMethod: "dyson", readingType: "", identificationMethod: "manual",
+    metrics: [],
+    connectionMethod: "manual", readingType: "", identificationMethod: "manual",
   });
   useEffect(() => {
     if (isolatedDraft) return;
@@ -9480,44 +9499,28 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
     return () => { active = false; controls?.stop(); };
   }, [meterScannerOpen]);
 
-  const acceptSensorCode = (raw) => {
-    try {
-      let details = {};
-      try {
-        if (raw.startsWith("{")) details = JSON.parse(raw);
-        else if (/^https?:\/\//i.test(raw)) details = Object.fromEntries(new URL(raw).searchParams);
-      } catch { /* Unknown labels can still be entered manually. */ }
-      const manufacturer = String(details.manufacturer || details.brand || "").slice(0, 100);
-      const model = String(details.model || "").slice(0, 100);
-      const serialNumber = String(details.serial || details.serialNumber || "").slice(0, 100);
-      if (!manufacturer && !model && !serialNumber) {
-        setSensorScanStatus("QR detected, but it does not expose a model or serial number WBP can read. Enter these manually; pairing codes are not stored.");
-        return;
-      }
-      setSensorDraft((current) => ({ ...current,
-        manufacturer: manufacturer || current.manufacturer,
-        model: model || current.model,
-        serialNumber: serialNumber || current.serialNumber,
-        identificationMethod: "qr-label",
-      }));
-      setSensorScanStatus("Label details filled in. Check them against the device before registering.");
-    } catch {
-      setSensorScanStatus("Could not read this label. Enter the device details manually.");
+  const acceptSensorCode = (raw, isQrCode) => {
+    const decoded = decodeSensorLabel(raw, isQrCode);
+    if (!decoded) {
+      setSensorScanStatus(isQrCode ? "QR detected, but it does not expose a model or serial number WBP can read. Enter these manually; pairing codes are not stored." : "The barcode could not be read. Enter the label details manually.");
+      return;
     }
+    setSensorDraft((current) => ({ ...current, ...Object.fromEntries(Object.entries(decoded).filter(([, value]) => value)) }));
+    setSensorScanStatus(isQrCode ? "Label details filled in. Check them against the device before registering." : "Barcode captured. Confirm the code on the label, then enter the manufacturer, model, serial number and location manually.");
   };
 
   useEffect(() => {
     if (!sensorScannerOpen) return undefined;
     let active = true;
     let controls;
-    import("@zxing/browser").then(async ({ BrowserQRCodeReader }) => {
+    import("@zxing/browser").then(async ({ BrowserMultiFormatReader, BarcodeFormat }) => {
       if (!active || !sensorVideoRef.current) return;
-      const reader = new BrowserQRCodeReader();
+      const reader = new BrowserMultiFormatReader();
       controls = await reader.decodeFromConstraints(
         { video: { facingMode: { ideal: "environment" } }, audio: false }, sensorVideoRef.current,
         (result) => {
           if (!active || !result) return;
-          acceptSensorCode(result.getText());
+          acceptSensorCode(result.getText(), result.getBarcodeFormat() === BarcodeFormat.QR_CODE);
           setSensorScannerOpen(false);
         }
       );
@@ -9581,13 +9584,14 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       manufacturer: "",
       model: "",
       serialNumber: "",
+      labelCode: "",
       location: "",
       evidenceGrade: "indicative",
       verificationStatus: "unverified",
       verificationDate: "",
       placementNotes: "",
-      metrics: ["temperature", "humidity"],
-      connectionMethod: "dyson", readingType: "", identificationMethod: "manual",
+      metrics: [],
+      connectionMethod: "manual", readingType: "", identificationMethod: "manual",
     });
     setSensorEvidenceFileName("");
   };
@@ -10097,14 +10101,14 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
             <div className="border rounded p-3 bg-gray-50 space-y-3">
               <div>
                 <h4 className="font-semibold text-sm">1. Import your health data</h4>
-                <button type="button" title="Scans label details only; does not connect the sensor" className="mt-2 border border-emerald-700 bg-white px-3 py-2 text-xs font-semibold text-emerald-950"
+                <button type="button" title="Reads QR and barcodes; does not connect the sensor" className="mt-2 border border-emerald-700 bg-white px-3 py-2 text-xs font-semibold text-emerald-950"
                   onClick={() => {
                     if (!navigator.mediaDevices?.getUserMedia) { setSensorScanStatus("Camera access is unavailable here. Open WBP over HTTPS or enter details manually."); return; }
                     setSensorScanStatus(""); setSensorScannerOpen(true);
-                  }}>Scan IAQ sensor</button>
+                  }}>Scan QR or barcode</button>
                 {sensorScanStatus ? <p role="status" className="mt-1 text-xs text-gray-700">{sensorScanStatus}</p> : null}
                 {sensorScannerOpen ? <div className="mt-2 space-y-2 border border-emerald-300 bg-gray-900 p-2">
-                  <video ref={sensorVideoRef} autoPlay muted playsInline aria-label="Live camera for sensor QR scan" className="max-h-72 w-full object-contain" />
+                  <video ref={sensorVideoRef} autoPlay muted playsInline aria-label="Live camera for sensor barcode or QR scan" className="max-h-72 w-full object-contain" />
                   <button type="button" onClick={() => setSensorScannerOpen(false)} className="bg-white px-3 py-1.5 text-xs font-semibold text-gray-900">Close camera</button>
                 </div> : null}
               </div>
@@ -10144,6 +10148,16 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                       handleSensorDraftChange("serialNumber", event.target.value)
                     }
                     placeholder="Optional device identifier"
+                  />
+                </label>
+                <label className="space-y-1 text-xs text-gray-600">
+                  Label code
+                  <input
+                    type="text"
+                    className="border rounded p-2 w-full text-xs bg-white"
+                    value={sensorDraft.labelCode || ""}
+                    onChange={(event) => handleSensorDraftChange("labelCode", event.target.value)}
+                    placeholder="Scanned barcode or printed code, if available"
                   />
                 </label>
                 <label className="space-y-1 text-xs text-gray-600">
@@ -10310,6 +10324,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                           {sensor.location}
                           {sensor.serialNumber ? ` | ${sensor.serialNumber}` : ""}
                         </p>
+                        {sensor.labelCode ? <p className="text-gray-600 break-words">Label code: {sensor.labelCode}</p> : null}
                       </div>
                       <span className="shrink-0 border rounded px-2 py-1 uppercase text-[10px] text-gray-600">
                         {sensor.evidenceGrade}
