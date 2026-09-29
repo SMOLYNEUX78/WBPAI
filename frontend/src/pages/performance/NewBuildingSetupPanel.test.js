@@ -207,7 +207,7 @@ test("the WBP summary does not repeat a registered sensor as an unfinished scan"
   expect(screen.getByText("Dyson · TP02 · Downstairs living room")).toBeInTheDocument();
 });
 
-test("profile banner omits draft file and carbon details", () => {
+test("profile banner keeps carbon details without a heading or draft file", () => {
   render(<ProfileSummaryColumns setup={{
     sensorEvidenceFileName: "sensor-label.jpg",
     carbonSelections: { heating: "gas" },
@@ -216,6 +216,10 @@ test("profile banner omits draft file and carbon details", () => {
   expect(screen.getByText("Good Energy")).toBeInTheDocument();
   expect(screen.queryByText("Selected sensor file")).not.toBeInTheDocument();
   expect(screen.queryByText("Carbon context")).not.toBeInTheDocument();
+  expect(screen.getByText("Heating:")).toBeInTheDocument();
+  expect(screen.getByText("Solar:")).toBeInTheDocument();
+  expect(screen.getByText("Battery:")).toBeInTheDocument();
+  expect(screen.getByText("gas")).toBeInTheDocument();
 });
 
 test("New banner shows a three-line address area and core profile fields", () => {

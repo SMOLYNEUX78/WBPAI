@@ -106,6 +106,7 @@ export const registerSensorDraft = (sensors, draft, evidenceFileName) => {
 
 export const ProfileSummaryColumns = ({ record, property, setup = {} }) => {
   const bill = normaliseBillReview(setup.billReview);
+  const carbon = setup.carbonSelections || {};
   const sensors = Array.isArray(setup.healthSensors) ? setup.healthSensors : [];
   const pendingSensor = setup.healthSensorDraft || {};
   const pendingIdentity = sensorIdentity(pendingSensor);
@@ -122,7 +123,11 @@ export const ProfileSummaryColumns = ({ record, property, setup = {} }) => {
       ["Type", record?.ownershipType?.replaceAll("-", " ")],
       ["Tenure", record?.tenure],
     ]],
-    ["Energy", [["Supplier", bill.supplier]], []],
+    ["Energy", [["Supplier", bill.supplier]], [
+      ...["heating", "solar", "battery"].map((field) => [
+        field.charAt(0).toUpperCase() + field.slice(1), carbon[field]?.replaceAll("-", " "),
+      ]),
+    ]],
     ["Health", [
       ["Sensors", sensors.length ? `${sensors.length} registered` : "Pending"],
       ...sensors.map((sensor, index) => [`Instrument ${index + 1}`, [sensor.manufacturer, sensor.model, sensor.location].filter(Boolean).join(" · ")]),
@@ -141,6 +146,7 @@ export const ProfileSummaryColumns = ({ record, property, setup = {} }) => {
         <div className="mt-1 grid min-w-0 grid-cols-2 gap-2 sm:gap-3">
           {fuelDetails.map(([fuel, fields]) => <div key={fuel} className="min-w-0"><h4 className="font-semibold text-emerald-950">{fuel}</h4>{renderDetails(fields)}</div>)}
         </div>
+        <div className="mt-2 grid min-w-0 grid-cols-2 gap-x-2 border-t border-emerald-200 pt-2 sm:gap-x-3">{renderDetails(systems)}</div>
       </div> : <>{renderDetails(details)}{heading === "Health" && hasPendingSensor ? <div className="mt-2 border-t border-emerald-200 pt-2">
         <h4 className="font-semibold text-emerald-950">Unregistered scan</h4>
         <p className="break-words text-gray-800">{[pendingSensor.manufacturer, pendingSensor.model].filter(Boolean).join(" · ") || pendingIdentity}</p>
