@@ -38,7 +38,13 @@ const readSavedHomePassport = () => {
   catch { return null; }
 };
 
-export const findAccountHomeRecord = async (client, userId) => {
+export const findAccountHomeRecord = async (client, userId, preferredId) => {
+  if (preferredId) {
+    const preferred = await client.from("WBPBuildingRecords").select("*")
+      .eq("custodian_user_id", userId).eq("lifecycle_stage", "occupy")
+      .eq("id", preferredId).maybeSingle();
+    if (preferred.error || preferred.data) return preferred;
+  }
   return client.from("WBPBuildingRecords").select("*")
     .eq("custodian_user_id", userId).eq("lifecycle_stage", "occupy")
     .order("updated_at", { ascending: false }).limit(1).maybeSingle();
@@ -67,6 +73,9 @@ export const findHomeProfileForOverwrite = async (client, uprn) => {
 export const ProfileSummaryColumns = ({ record, property, setup = {} }) => {
   const carbon = setup.carbonSelections || {};
   const bill = normaliseBillReview(setup.billReview);
+  const sensors = Array.isArray(setup.healthSensors) ? setup.healthSensors : [];
+  const pendingSensor = setup.healthSensorDraft || {};
+  const hasPendingSensor = ["manufacturer", "model", "serialNumber", "labelCode", "location"].some((field) => pendingSensor[field]);
   const rows = [
     ["Ownership", [
       ["Property number (UPRN)", record?.uprn],
@@ -84,7 +93,9 @@ export const ProfileSummaryColumns = ({ record, property, setup = {} }) => {
       ]),
     ]],
     ["Health", [
-      ["Sensors", setup.healthSensors?.length ? `${setup.healthSensors.length} registered` : "Pending"],
+      ["Sensors", sensors.length ? `${sensors.length} registered` : "Pending"],
+      ...sensors.map((sensor, index) => [`Instrument ${index + 1}`, [sensor.manufacturer, sensor.model, sensor.location].filter(Boolean).join(" · ")]),
+      ...(hasPendingSensor ? [["Scanned device", [pendingSensor.manufacturer, pendingSensor.model, pendingSensor.location].filter(Boolean).join(" · ") || pendingSensor.labelCode || pendingSensor.serialNumber], ["Registration", "Awaiting model and room confirmation"]] : []),
       ["Selected sensor file", setup.sensorEvidenceFileName],
     ]],
   ];
@@ -790,7 +801,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
     const loadPassportId = async () => {
       const { data: auth } = await supabase.auth.getUser();
       if (!active || !auth?.user) return;
-      const { data, error } = await findAccountHomeRecord(supabase, auth.user.id);
+      const { data, error } = await findAccountHomeRecord(supabase, auth.user.id, readSavedHomePassport()?.databaseId);
       if (active && !error && data?.record_reference) {
         const { data: snapshot } = await supabase.from("WBPPropertyDiscoverySnapshots")
           .select("latitude, longitude, local_authority")
@@ -8609,6 +8620,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   const [carbonEvidenceBusy, setCarbonEvidenceBusy] = useState("");
   const [sectionSaveStatus, setSectionSaveStatus] = useState("");
   const [healthSensors, setHealthSensors] = useState([]);
+  const [healthSensorsLoadedId, setHealthSensorsLoadedId] = useState(null);
   const [pendingLocalSensors, setPendingLocalSensors] = useState([]);
   const [sensorEvidenceFileName, setSensorEvidenceFileName] = useState("");
   const [sensorScanStatus, setSensorScanStatus] = useState("");
@@ -8622,7 +8634,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
     const loadBillTarget = async () => {
       const { data: auth } = await supabase.auth.getUser();
       if (!active || !auth?.user) return;
-      const { data, error } = await findAccountHomeRecord(supabase, auth.user.id);
+      const { data, error } = await findAccountHomeRecord(supabase, auth.user.id, readSavedHomePassport()?.databaseId);
       if (active && !error) setBillTarget(data || null);
     };
     loadBillTarget();
@@ -8630,7 +8642,6 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   }, [syncHomeProfile, isolatedDraft]);
   const billRecordId = ownershipRecord?.databaseId || billTarget?.id;
   const healthRecordId = ownershipRecord?.databaseId || (syncHomeProfile ? billTarget?.id : null);
-  const healthRecordReference = ownershipRecord?.recordId || (syncHomeProfile ? billTarget?.record_reference : null);
   const [sensorDraft, setSensorDraft] = useState({
     manufacturer: "",
     model: "",
@@ -8770,6 +8781,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       setMeterIdentifiers((current) => ({ ...current, ...saved.meterIdentifiers }));
       setBillReview(normaliseBillReview(saved.billReview));
       setHealthSensors(Array.isArray(saved.healthSensors) ? saved.healthSensors : []);
+      if (saved.healthSensorDraft) setSensorDraft((current) => ({ ...current, ...saved.healthSensorDraft }));
       setCarbonSelections((current) => ({ ...current, ...saved.carbonSelections }));
       if (saved.modelInput) setModelInput(saved.modelInput);
       setSensorEvidenceFileName(saved.sensorEvidenceFileName || "");
@@ -8789,6 +8801,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
         setMeterIdentifiers((current) => ({ ...current, ...saved.meterIdentifiers }));
         setBillReview(normaliseBillReview(saved.billReview));
         setHealthSensors(Array.isArray(saved.healthSensors) ? saved.healthSensors : []);
+        if (saved.healthSensorDraft) setSensorDraft((current) => ({ ...current, ...saved.healthSensorDraft }));
         setCarbonSelections((current) => ({ ...current, ...saved.carbonSelections }));
         setSensorEvidenceFileName(saved.sensorEvidenceFileName || "");
         if (saved.modelInput) setModelInput(saved.modelInput);
@@ -8797,7 +8810,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
     return () => { active = false; };
   }, [isolatedDraft, ownershipRecord?.databaseId, ownershipRecord?.recordId]);
   useEffect(() => {
-    if (!isolatedDraft || !syncHomeProfile || ownershipRecord?.databaseId || !healthRecordId) return undefined;
+    if (!isolatedDraft || !syncHomeProfile || !healthRecordId) return undefined;
     let active = true;
     const loadAccountSensors = async () => {
       const { data: auth } = await supabase.auth.getUser();
@@ -8805,6 +8818,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       const { data, error } = await supabase.from("WBPBuildingSetupDeclarations")
         .select("setup_data").eq("building_record_id", healthRecordId).maybeSingle();
       if (!active || error) return;
+      setHealthSensorsLoadedId(healthRecordId);
       const cachedPassport = readSavedHomePassport();
       let localSensors = [];
       try {
@@ -8812,6 +8826,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
         if (Array.isArray(draft?.healthSensors)) localSensors = draft.healthSensors;
       } catch { /* Ignore a damaged browser draft. */ }
       const accountSensors = Array.isArray(data?.setup_data?.healthSensors) ? data.setup_data.healthSensors : [];
+      if (data?.setup_data?.healthSensorDraft) setSensorDraft((current) => ({ ...current, ...data.setup_data.healthSensorDraft }));
       const sameHome = cachedPassport?.ownerUserId === auth.user.id && cachedPassport.databaseId === healthRecordId;
       setHealthSensors((current) => Array.from(new Map([...accountSensors, ...(sameHome ? localSensors : []), ...current].map((sensor) => [sensor.id, sensor])).values()));
       if (localSensors.length && sameHome) setSectionSaveStatus("Local sensor draft ready to sync. Save health monitoring to add it to your account.");
@@ -8827,28 +8842,41 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
     }
     const section = setupTab === "measurements" ? { manualData, modelInput }
       : setupTab === "energy" ? { energyConsent, meterIdentifiers, carbonSelections }
-      : { healthSensors, sensorEvidenceFileName };
+      : { healthSensors, healthSensorDraft: sensorDraft, sensorEvidenceFileName };
     if (setupTab === "measurements" && modelAreaEdited) {
       section.historicalStages = { ...historyDraft, design: { ...historyDraft.design, internalArea: manualData.internalArea, areaSource: "3d-model" } };
     }
     Object.assign(section, overrides);
-    const targetRecordId = setupTab === "health" ? healthRecordId : ownershipRecord?.databaseId;
-    const recordReference = setupTab === "health" ? healthRecordReference : ownershipRecord?.recordId;
+    let targetRecordId = ownershipRecord?.databaseId || (syncHomeProfile ? billTarget?.id : null);
+    let recordReference = ownershipRecord?.recordId || (syncHomeProfile ? billTarget?.record_reference : null);
+    const { data: auth } = await supabase.auth.getUser();
+    if (!targetRecordId && syncHomeProfile && auth?.user) {
+      const { data: accountRecord, error: lookupError } = await findAccountHomeRecord(
+        supabase, auth.user.id, readSavedHomePassport()?.databaseId
+      );
+      if (lookupError) { setSectionSaveStatus(`Save failed: ${lookupError.message}`); return; }
+      targetRecordId = accountRecord?.id;
+      recordReference = accountRecord?.record_reference;
+      if (accountRecord) setBillTarget(accountRecord);
+    }
     const key = recordReference ? `${recordReference}:setupSections` : "wbp-new-building-setup-draft";
     let localSetup = {};
     try { localSetup = JSON.parse(window.localStorage.getItem(key) || "{}"); } catch { /* Invalid local data is ignored. */ }
     const mergedLocal = { ...localSetup, ...section };
     window.localStorage.setItem(key, JSON.stringify(mergedLocal));
     if (targetRecordId) {
-      const { data: auth } = await supabase.auth.getUser();
       if (auth?.user) {
         const { data: existing, error: readError } = await supabase.from("WBPBuildingSetupDeclarations")
           .select("setup_data").eq("building_record_id", targetRecordId).maybeSingle();
         if (readError) { setSectionSaveStatus(`Save failed: ${readError.message}`); return; }
-        const savedSection = section.historicalStages ? { ...section, historicalStages: {
+        let savedSection = section.historicalStages ? { ...section, historicalStages: {
           ...(existing?.setup_data?.historicalStages || {}), ...section.historicalStages,
           design: { ...(existing?.setup_data?.historicalStages?.design || {}), ...section.historicalStages.design },
         } } : section;
+        if (setupTab === "health" && healthSensorsLoadedId !== targetRecordId) {
+          const storedSensors = Array.isArray(existing?.setup_data?.healthSensors) ? existing.setup_data.healthSensors : [];
+          savedSection = { ...savedSection, healthSensors: Array.from(new Map([...storedSensors, ...healthSensors].map((sensor) => [sensor.id, sensor])).values()) };
+        }
         const { error } = await supabase.from("WBPBuildingSetupDeclarations").upsert({
           building_record_id: targetRecordId,
           setup_data: { ...(existing?.setup_data || {}), ...savedSection },
@@ -8857,6 +8885,10 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
         }, { onConflict: "building_record_id" });
         if (!error) {
           const savedSetup = { ...(existing?.setup_data || {}), ...savedSection };
+          if (setupTab === "health") {
+            setHealthSensors(savedSection.healthSensors);
+            setHealthSensorsLoadedId(targetRecordId);
+          }
           window.localStorage.setItem(key, JSON.stringify(savedSetup));
           if (setupTab !== "health" || pendingLocalSensors.length === 0) window.localStorage.removeItem("wbp-new-building-setup-draft");
           window.dispatchEvent(new CustomEvent("wbp:setup-updated", { detail: { recordId: targetRecordId, setupData: savedSetup } }));
@@ -8870,8 +8902,8 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       setSectionSaveStatus("Save failed: Sign in again to save this section to your account.");
       return;
     }
-    setSectionSaveStatus(setupTab === "health" && syncHomeProfile
-      ? "Saved only on this device. Sign in and create or select a home profile, then save again to sync it."
+    setSectionSaveStatus(syncHomeProfile
+      ? "Save failed: No secure home profile is available. This device kept a draft; complete Ownership, then save again to sync it."
       : `${setupTab} saved on this device`);
     if (setupTab === "measurements") setModelAreaEdited(false);
   };

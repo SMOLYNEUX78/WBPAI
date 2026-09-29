@@ -99,6 +99,46 @@ test("fresh New tab loads and saves health instruments through the existing home
   }
 });
 
+test("saving health monitoring keeps a scanned but incomplete instrument on the account", async () => {
+  const storedSensor = { id: "sensor-1", manufacturer: "Dyson", model: "TP02", location: "Upstairs", metrics: [], evidenceGrade: "indicative", verificationStatus: "unverified", connectionMethod: "manual" };
+  const upsert = jest.fn().mockResolvedValue({ error: null });
+  const getUser = jest.spyOn(supabase.auth, "getUser").mockResolvedValue({ data: { user: { id: "owner-1" } }, error: null });
+  const from = jest.spyOn(supabase, "from").mockImplementation((table) => {
+    const chain = {
+      eq: () => chain, order: () => chain, limit: () => chain,
+      then: (resolve) => Promise.resolve({ data: [], error: null }).then(resolve),
+      maybeSingle: async () => ({ data: table === "WBPBuildingRecords"
+        ? { id: "home-id", record_reference: "WBP-001", custodian_user_id: "owner-1" }
+        : { setup_data: { healthSensors: [storedSensor] } }, error: null }),
+    };
+    return { select: () => chain, upsert };
+  });
+  try {
+    render(<MemoryRouter><NewBuildingSetupPanel freshStart syncHomeProfile /></MemoryRouter>);
+    fireEvent.click(screen.getByRole("tab", { name: "Health Monitoring" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Manufacturer" }), { target: { value: "Dyson" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Label code" }), { target: { value: "NN6-UK-HDA1783A" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save health monitoring" }));
+    await waitFor(() => expect(upsert).toHaveBeenCalledWith(expect.objectContaining({
+      building_record_id: "home-id",
+      setup_data: expect.objectContaining({ healthSensors: [storedSensor], healthSensorDraft: expect.objectContaining({ manufacturer: "Dyson", labelCode: "NN6-UK-HDA1783A" }) }),
+    }), expect.anything()));
+  } finally {
+    from.mockRestore();
+    getUser.mockRestore();
+  }
+});
+
+test("WBP profile summary shows saved instruments and an unregistered scan separately", () => {
+  render(<ProfileSummaryColumns setup={{
+    healthSensors: [{ id: "sensor-1", manufacturer: "Dyson", model: "TP02", location: "Upstairs" }],
+    healthSensorDraft: { manufacturer: "Dyson", labelCode: "NN6-UK-HDA1783A" },
+  }} />);
+  expect(screen.getByText("1 registered")).toBeInTheDocument();
+  expect(screen.getByText("Dyson · TP02 · Upstairs")).toBeInTheDocument();
+  expect(screen.getByText("Awaiting model and room confirmation")).toBeInTheDocument();
+});
+
 test("3D Model displays property coordinates and accepts an area for Design", () => {
   window.localStorage.setItem("wbp-new-building-passport", JSON.stringify({
     recordId: "WBP-TEST", propertyDiscovery: {
@@ -181,6 +221,17 @@ test("bill upload and WBP-001 select the same saved occupy record", async () => 
   expect(eq).toHaveBeenCalledWith("custodian_user_id", "owner-1");
   expect(eq).toHaveBeenCalledWith("lifecycle_stage", "occupy");
   expect(order).toHaveBeenCalledWith("updated_at", { ascending: false });
+  expect(client.from).toHaveBeenCalledTimes(1);
+});
+
+test("account home lookup prefers the selected saved profile over a newer unrelated one", async () => {
+  const chosen = { id: "selected-home", record_reference: "WBP-001" };
+  const maybeSingle = jest.fn().mockResolvedValue({ data: chosen, error: null });
+  const eq = jest.fn(() => ({ eq, maybeSingle }));
+  const client = { from: jest.fn(() => ({ select: () => ({ eq }) })) };
+  const result = await findAccountHomeRecord(client, "owner-1", "selected-home");
+  expect(result.data).toEqual(chosen);
+  expect(eq).toHaveBeenCalledWith("id", "selected-home");
   expect(client.from).toHaveBeenCalledTimes(1);
 });
 
