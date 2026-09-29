@@ -9586,7 +9586,19 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
         { video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false }, sensorVideoRef.current,
         (result) => {
           if (!active || !result) return;
-          acceptSensorCode(result.getText(), result.getBarcodeFormat() === BarcodeFormat.QR_CODE);
+          const isQrCode = result.getBarcodeFormat() === BarcodeFormat.QR_CODE;
+          const decoded = decodeSensorLabel(result.getText(), isQrCode);
+          acceptSensorCode(result.getText(), isQrCode);
+          const video = sensorVideoRef.current;
+          if (!isQrCode && decoded && video?.videoWidth && video?.videoHeight) {
+            const frame = document.createElement("canvas");
+            frame.width = video.videoWidth;
+            frame.height = video.videoHeight;
+            frame.getContext("2d")?.drawImage(video, 0, 0, frame.width, frame.height);
+            frame.toBlob((blob) => {
+              if (blob) scanSensorPhoto(blob, decoded);
+            }, "image/jpeg", 0.95);
+          }
           setSensorScannerOpen(false);
         }
       );
@@ -9600,19 +9612,21 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
     return () => { active = false; controls?.stop(); };
   }, [sensorScannerOpen]);
 
-  const scanSensorPhoto = async (file) => {
+  const scanSensorPhoto = async (file, knownBarcode = null) => {
     if (!file) return;
     setSensorPhotoBusy(true);
-    setSensorScanStatus("Reading barcode and printed label...");
+    setSensorScanStatus(knownBarcode ? "Barcode captured. Reading printed label..." : "Reading barcode and printed label...");
     const imageUrl = URL.createObjectURL(file);
     try {
-      const [{ BrowserMultiFormatReader, BarcodeFormat }, { DecodeHintType }] = await Promise.all([import("@zxing/browser"), import("@zxing/library")]);
-      const reader = new BrowserMultiFormatReader(new Map([[DecodeHintType.TRY_HARDER, true]]));
-      let barcodeDetails = null;
-      try {
-        const result = await reader.decodeFromImageUrl(imageUrl);
-        barcodeDetails = decodeSensorLabel(result.getText(), result.getBarcodeFormat() === BarcodeFormat.QR_CODE);
-      } catch { /* Printed text may still identify the sensor. */ }
+      let barcodeDetails = knownBarcode;
+      if (!barcodeDetails) {
+        try {
+          const [{ BrowserMultiFormatReader, BarcodeFormat }, { DecodeHintType }] = await Promise.all([import("@zxing/browser"), import("@zxing/library")]);
+          const reader = new BrowserMultiFormatReader(new Map([[DecodeHintType.TRY_HARDER, true]]));
+          const result = await reader.decodeFromImageUrl(imageUrl);
+          barcodeDetails = decodeSensorLabel(result.getText(), result.getBarcodeFormat() === BarcodeFormat.QR_CODE);
+        } catch { /* Printed text may still identify the sensor. */ }
+      }
       let printedDetails = {};
       try {
         const { createWorker } = await import("tesseract.js");
@@ -9622,8 +9636,10 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       } catch { /* A readable barcode can still be used if OCR is unavailable. */ }
       const details = { ...(barcodeDetails || {}), ...printedDetails };
       if (Object.keys(details).length) {
-        setSensorDraft((current) => ({ ...current, ...details, identificationMethod: "label-photo" }));
-        setSensorScanStatus("Label details filled in. Check the model and serial against the printed label before adding the instrument.");
+        setSensorDraft((current) => ({ ...current, ...details, identificationMethod: Object.keys(printedDetails).length ? "label-photo" : barcodeDetails?.identificationMethod || "label-photo" }));
+        setSensorScanStatus(Object.keys(printedDetails).length
+          ? "Label details filled in. Check the model and serial against the printed label before adding the instrument."
+          : "Barcode captured, but the printed details were not clear. Enter or check the model and serial manually.");
       } else {
         setSensorScanStatus("No readable label details found. Try a sharper photo in good light, or enter the printed details manually.");
       }
@@ -10211,7 +10227,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
             <div className="border rounded p-3 bg-gray-50 space-y-3">
               <div>
                 <h4 className="font-semibold text-sm">1. Import your health data</h4>
-                <button type="button" title="Reads QR and barcodes; does not connect the sensor" className="mt-2 border border-emerald-700 bg-white px-3 py-2 text-xs font-semibold text-emerald-950"
+                <button type="button" title="Reads QR or barcode and nearby printed label; does not connect the sensor" className="mt-2 border border-emerald-700 bg-white px-3 py-2 text-xs font-semibold text-emerald-950"
                   onClick={() => {
                     if (!navigator.mediaDevices?.getUserMedia) { setSensorScanStatus("Camera access is unavailable here. Open WBP over HTTPS or enter details manually."); return; }
                     setSensorScanStatus(""); setSensorScannerOpen(true);
