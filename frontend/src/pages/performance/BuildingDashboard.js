@@ -6663,20 +6663,19 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
         ) : null}
 
         <div className={dataSourceBuildingId === "home" ? "order-1 grid min-h-[190px] min-w-0 grid-cols-2 items-stretch sm:min-h-[210px]" : "grid grid-cols-1 items-stretch gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)] sm:gap-5"}>
-          <dl className={dataSourceBuildingId === "home" ? "order-2 min-w-0 px-3 py-2 text-xs sm:px-5" : "grid min-w-0 grid-cols-2 gap-x-3 border border-gray-200 bg-white p-3 text-xs sm:grid-cols-1"}>
+          <dl className={dataSourceBuildingId === "home" ? "order-2 min-w-0 px-2 py-2 text-xs sm:px-5" : "grid min-w-0 grid-cols-2 gap-x-3 border border-gray-200 bg-white p-3 text-xs sm:grid-cols-1"}>
             {dataSourceBuildingId === "home" ? (
-              <div className="grid min-w-0 grid-cols-1 items-start gap-2 py-0.5 sm:grid-cols-[minmax(0,1fr)_auto]">
-                <div className="min-w-0">
-                  <dt className="text-gray-600">Address</dt>
-                  <dd className="break-words text-sm font-semibold text-gray-900 sm:text-base">
-                    <span className="block">{homePassport?.propertyDiscovery?.address || matterportMetadata.address || "Pending"}</span>
-                    <span className="block">{homePassport?.propertyDiscovery?.postcode || ""}</span>
-                  </dd>
-                  <p className="mt-1 break-words text-[10px] text-gray-700 sm:text-xs">UPRN: <span className="font-semibold">{homePassport?.uprn || "Pending"}</span></p>
-                </div>
-                <button type="button" disabled title="Home-profile sales are not available yet" className="max-w-full justify-self-start break-words border border-emerald-300 bg-white/60 px-1.5 py-1 text-left text-[9px] font-semibold leading-tight text-emerald-900 opacity-70 sm:px-2 sm:text-[10px]">
+              <div className="grid min-w-0 grid-cols-1 items-start gap-1 py-0.5 sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-2">
+                <button type="button" disabled title="Home-profile sales are not available yet" className="order-1 max-w-full justify-self-start break-words border border-emerald-300 bg-white/60 px-1.5 py-1 text-left text-[9px] font-semibold leading-tight text-emerald-900 opacity-70 sm:order-2 sm:px-2 sm:text-[10px]">
                   {homePassportId || "WBP-2026-P42TCE"}
                 </button>
+                <div className="order-2 min-w-0 sm:order-1">
+                  <p className="break-words text-xs font-semibold leading-tight text-gray-900 sm:text-base sm:leading-normal">
+                    <span className="block">{homePassport?.propertyDiscovery?.address || matterportMetadata.address || "Pending"}</span>
+                    <span className="block">{homePassport?.propertyDiscovery?.postcode || ""}</span>
+                  </p>
+                  <p className="mt-1 break-words text-[10px] text-gray-700 sm:text-xs">UPRN: <span className="font-semibold">{homePassport?.uprn || "Pending"}</span></p>
+                </div>
               </div>
             ) : null}
             <div className={dataSourceBuildingId === "home" ? "grid min-w-0 grid-cols-2 gap-x-2 sm:gap-x-4" : "contents"}>
