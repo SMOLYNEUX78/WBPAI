@@ -6705,7 +6705,6 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
                 ...(dataSourceBuildingId === "home" ? [] : [["Address", [homePassport?.propertyDiscovery?.address, homePassport?.propertyDiscovery?.postcode].filter(Boolean).join(", ") || matterportMetadata.address]]),
                 ["Coordinates", (homePassport?.propertyDiscovery?.latitude != null && homePassport?.propertyDiscovery?.longitude != null) ? `${homePassport.propertyDiscovery.latitude}, ${homePassport.propertyDiscovery.longitude}` : dataSourceBuildingId === "home" ? "Pending matched UPRN location" : [matterportMetadata.latitude, matterportMetadata.longitude].join(", ")],
                 ...(dataSourceBuildingId === "home" ? [["Energy supplier", normaliseBillReview(homeSetup.billReview).supplier]] : []),
-                ["Internal area", homeSetup.manualData?.internalArea ? `${homeSetup.manualData.internalArea} m2` : matterportMetadata.internalArea !== "--" ? `${matterportMetadata.internalArea} m2` : "Pending"],
               ].map(([label, value]) => <div key={label} className={dataSourceBuildingId === "home" ? "min-w-0 py-0.5" : "min-w-0 border-b border-gray-100 py-1.5 last:border-0"}><dt className="text-gray-600">{label}</dt><dd className="break-words font-semibold text-gray-900">{value || "Pending"}</dd></div>)}
             </div>
           </dl>
@@ -8314,6 +8313,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   const overlayVisible = showSetupOverlay && isActive;
   const [setupOverlayExiting, setSetupOverlayExiting] = useState(false);
   const [historyDraft, setHistoryDraft] = useState({ design: {}, build: {} });
+  const [modelAreaEdited, setModelAreaEdited] = useState(false);
   const [designPlanningLookup, setDesignPlanningLookup] = useState(null);
   const setupPanelRef = useRef(null);
   const auditTabRef = useRef(null);
@@ -8743,6 +8743,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       const saved = JSON.parse((setupRecordId && window.localStorage.getItem(`${setupRecordId}:setupSections`)) || (!setupRecordId ? window.localStorage.getItem("wbp-new-building-setup-draft") : null) || "null");
       if (!saved) return;
       setManualData((current) => ({ ...current, ...saved.manualData }));
+      if (saved.historicalStages) setHistoryDraft((current) => ({ ...current, ...saved.historicalStages }));
       setEnergyConsent(Boolean(saved.energyConsent));
       setMeterIdentifiers((current) => ({ ...current, ...saved.meterIdentifiers }));
       setBillReview(normaliseBillReview(saved.billReview));
@@ -8761,6 +8762,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
         if (!active || error || !data?.setup_data) return;
         const saved = data.setup_data;
         setManualData((current) => ({ ...current, ...saved.manualData }));
+        if (saved.historicalStages) setHistoryDraft((current) => ({ ...current, ...saved.historicalStages }));
         setEnergyConsent(Boolean(saved.energyConsent));
         setMeterIdentifiers((current) => ({ ...current, ...saved.meterIdentifiers }));
         setBillReview(normaliseBillReview(saved.billReview));
@@ -8773,9 +8775,16 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
     return () => { active = false; };
   }, [isolatedDraft, ownershipRecord?.databaseId, ownershipRecord?.recordId]);
   const saveSetupSection = async (overrides = {}) => {
+    if (setupTab === "measurements" && manualData.internalArea !== "" && !(Number(manualData.internalArea) > 0)) {
+      setSectionSaveStatus("Save failed: Enter an internal floor area greater than zero.");
+      return;
+    }
     const section = setupTab === "measurements" ? { manualData, modelInput }
       : setupTab === "energy" ? { energyConsent, meterIdentifiers, carbonSelections }
       : { healthSensors, sensorEvidenceFileName };
+    if (setupTab === "measurements" && modelAreaEdited) {
+      section.historicalStages = { ...historyDraft, design: { ...historyDraft.design, internalArea: manualData.internalArea, areaSource: "3d-model" } };
+    }
     Object.assign(section, overrides);
     const key = ownershipRecord?.recordId ? `${ownershipRecord.recordId}:setupSections` : "wbp-new-building-setup-draft";
     let localSetup = {};
@@ -8788,18 +8797,23 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
         const { data: existing, error: readError } = await supabase.from("WBPBuildingSetupDeclarations")
           .select("setup_data").eq("building_record_id", ownershipRecord.databaseId).maybeSingle();
         if (readError) { setSectionSaveStatus(`Save failed: ${readError.message}`); return; }
+        const savedSection = section.historicalStages ? { ...section, historicalStages: {
+          ...(existing?.setup_data?.historicalStages || {}), ...section.historicalStages,
+          design: { ...(existing?.setup_data?.historicalStages?.design || {}), ...section.historicalStages.design },
+        } } : section;
         const { error } = await supabase.from("WBPBuildingSetupDeclarations").upsert({
           building_record_id: ownershipRecord.databaseId,
-          setup_data: { ...(existing?.setup_data || {}), ...section },
+          setup_data: { ...(existing?.setup_data || {}), ...savedSection },
           updated_by: auth.user.id,
           updated_at: new Date().toISOString(),
         }, { onConflict: "building_record_id" });
         if (!error) {
-          const savedSetup = { ...(existing?.setup_data || {}), ...section };
+          const savedSetup = { ...(existing?.setup_data || {}), ...savedSection };
           window.localStorage.setItem(key, JSON.stringify(savedSetup));
           window.localStorage.removeItem("wbp-new-building-setup-draft");
           window.dispatchEvent(new CustomEvent("wbp:setup-updated", { detail: { recordId: ownershipRecord.databaseId, setupData: savedSetup } }));
           setSectionSaveStatus(`${setupTab} saved to account`);
+          if (setupTab === "measurements") setModelAreaEdited(false);
           return;
         }
         setSectionSaveStatus(`Save failed: ${error.message}`);
@@ -8809,6 +8823,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       return;
     }
     setSectionSaveStatus(`${setupTab} saved on this device`);
+    if (setupTab === "measurements") setModelAreaEdited(false);
   };
 
   useEffect(() => {
@@ -9680,7 +9695,6 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
             <p className="text-xs font-semibold text-emerald-900">Address</p>
             <h3 className="break-words text-base font-bold text-gray-950">{buildingAddress || "House profile"}</h3>
             <p className="mt-1 break-words text-xs text-gray-700">Coordinates: {[buildingLatitude, buildingLongitude].filter((value) => value !== "" && value !== null && value !== undefined).join(", ") || "Pending"}</p>
-            <p className="break-words text-xs text-gray-700">Internal area: {manualData.internalArea ? `${manualData.internalArea} m2` : isBridgewoodProfile ? `${HOME_BUILDING.estimatedInternalArea} m2 (model estimate)` : "Pending"}</p>
           </div>
         </div>
         <div className="mx-3 mt-2 flex border-t border-emerald-200 sm:mx-8 lg:mx-12" role="tablist" aria-label="Building history">
@@ -9988,6 +10002,14 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
               </div>
             </div>
           ) : null}
+          <label className="block text-xs font-semibold text-gray-800">Internal floor area from 3D model (m2)
+            <input type="number" min="1" step="0.1" value={manualData.internalArea} onChange={(event) => {
+              const value = event.target.value;
+              handleManualChange("internalArea", value);
+              setHistoryDraft((current) => ({ ...current, design: { ...current.design, internalArea: value, areaSource: "3d-model" } }));
+              setModelAreaEdited(true);
+            }} className="mt-1 block w-full border bg-white p-2 text-sm font-normal" placeholder="Enter the area shown by your model" />
+          </label>
           <a href="https://matterport.com/3d-camera-app" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 border border-yellow-300 bg-yellow-50 p-3 text-sm font-semibold text-gray-900 transition-colors hover:bg-yellow-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-yellow-700">
             <img src={matterportMark} alt="" className="h-12 w-12 shrink-0 object-contain" />
             <span className="min-w-0"><strong className="block text-base text-gray-900">matterport</strong><span>Scan your home with the Matterport app</span></span>
@@ -10020,7 +10042,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                     Property coordinates
                   </p>
                   <p className="mt-2 text-sm">{buildingLatitude !== "" && buildingLongitude !== "" ? `${buildingLatitude}, ${buildingLongitude}` : "Pending matched UPRN location"}</p>
-                  <p className="mt-1 text-xs text-gray-600">From the confirmed property record. Internal area is recorded in Design.</p>
+                  <p className="mt-1 text-xs text-gray-600">From the confirmed property record.</p>
                 </div>
               </div>
 

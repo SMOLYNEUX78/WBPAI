@@ -51,7 +51,7 @@ test("QR labels fill only supported identity fields and discard pairing tokens",
   expect(decodeSensorLabel("https://example.com/pair?password=secret", true)).toBeNull();
 });
 
-test("3D Model displays property coordinates without manual coordinate or area fields", () => {
+test("3D Model displays property coordinates and accepts an area for Design", () => {
   window.localStorage.setItem("wbp-new-building-passport", JSON.stringify({
     recordId: "WBP-TEST", propertyDiscovery: {
       address: "14 Bridgewood Road", postcode: "IP12 4HA", uprn: "100091142492",
@@ -63,8 +63,10 @@ test("3D Model displays property coordinates without manual coordinate or area f
   expect(screen.getByText("52.0945, 1.30488")).toBeInTheDocument();
   expect(screen.queryByPlaceholderText("Lat")).not.toBeInTheDocument();
   expect(screen.queryByPlaceholderText("Long")).not.toBeInTheDocument();
-  expect(screen.queryByPlaceholderText("m2")).not.toBeInTheDocument();
-  expect(screen.getByText(/Internal area is recorded in Design/)).toBeInTheDocument();
+  const area = screen.getByRole("spinbutton", { name: "Internal floor area from 3D model (m2)" });
+  fireEvent.change(area, { target: { value: "99.2" } });
+  expect(area).toHaveValue(99.2);
+  expect(screen.queryByText(/Internal area: 99.2 m2/)).not.toBeInTheDocument();
 });
 
 test("Design records internal area and its source after the home lookup", async () => {
