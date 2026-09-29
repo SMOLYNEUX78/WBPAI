@@ -96,7 +96,16 @@ export const ProfileSummaryColumns = ({ record, property, setup = {} }) => {
   return <div className="mt-2 grid w-full min-w-0 grid-cols-4 gap-2 border-t border-emerald-200 px-3 pt-2 text-[10px] leading-tight [overflow-wrap:anywhere] sm:gap-3 sm:px-5 sm:text-xs">
     {rows.map(([heading, details, systems]) => <div key={heading} className={`min-w-0 border-r border-emerald-200 pr-2 last:border-0 last:pr-0 ${systems ? "col-span-2" : ""}`}>
       <h3 className="mb-1 font-bold text-emerald-950">{heading}</h3>
-      {systems ? <div className="grid min-w-0 grid-cols-2 gap-2 sm:gap-3"><div className="min-w-0">{renderDetails(details)}{fuelDetails.map(([fuel, fields]) => <div key={fuel} className="mt-1"><h4 className="font-semibold text-emerald-950">{fuel}</h4>{renderDetails(fields)}</div>)}</div><div className="min-w-0"><h4 className="mb-0.5 font-semibold text-emerald-950">Carbon context</h4>{renderDetails(systems)}</div></div> : renderDetails(details)}
+      {systems ? <div className="min-w-0">
+        {renderDetails(details)}
+        <div className="mt-1 grid min-w-0 grid-cols-2 gap-2 sm:gap-3">
+          {fuelDetails.map(([fuel, fields]) => <div key={fuel} className="min-w-0"><h4 className="font-semibold text-emerald-950">{fuel}</h4>{renderDetails(fields)}</div>)}
+        </div>
+        <div className="mt-2 border-t border-emerald-200 pt-2">
+          <h4 className="mb-1 font-semibold text-emerald-950">Carbon context</h4>
+          <div className="grid min-w-0 grid-cols-2 gap-x-2 sm:gap-x-3">{renderDetails(systems)}</div>
+        </div>
+      </div> : renderDetails(details)}
     </div>)}
   </div>;
 };

@@ -414,6 +414,9 @@ test("audit banner keeps energy and carbon context concise across two columns", 
   expect(screen.getByText("Supplier:").closest("p")).toHaveTextContent("Good Energy");
   const electricity = screen.getByRole("heading", { name: "Electricity" }).parentElement;
   const gas = screen.getByRole("heading", { name: "Gas" }).parentElement;
+  expect(electricity.parentElement).toHaveClass("grid-cols-2");
+  expect(gas.parentElement).toBe(electricity.parentElement);
+  expect(screen.getByRole("heading", { name: "Carbon context" }).parentElement).toHaveClass("border-t");
   expect(within(electricity).getByText("MPAN:").closest("p")).toHaveTextContent("1234567890123");
   expect(within(electricity).getByText("Tariff:").closest("p")).toHaveTextContent("Good Energy Fix Jan27");
   expect(within(gas).getByText("MPRN:").closest("p")).toHaveTextContent("1234567890");
