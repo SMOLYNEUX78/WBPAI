@@ -78,6 +78,10 @@ const emptySensorDraft = () => ({
 });
 const sensorIdentity = (sensor) => String(sensor?.labelCode || sensor?.serialNumber || "")
   .replace(/[^a-z0-9]/gi, "").toUpperCase();
+const addressLines = (address, postcode) => {
+  const parts = String(address || "").split(",").map((part) => part.trim()).filter(Boolean);
+  return [parts[0] || "Pending", parts.slice(1).join(", ") || "\u00a0", postcode || "\u00a0"];
+};
 export const mergeScannedSensor = (current, scanned) => {
   const previousIdentity = sensorIdentity(current);
   const nextIdentity = sensorIdentity(scanned);
@@ -101,7 +105,6 @@ export const registerSensorDraft = (sensors, draft, evidenceFileName) => {
 };
 
 export const ProfileSummaryColumns = ({ record, property, setup = {} }) => {
-  const carbon = setup.carbonSelections || {};
   const bill = normaliseBillReview(setup.billReview);
   const sensors = Array.isArray(setup.healthSensors) ? setup.healthSensors : [];
   const pendingSensor = setup.healthSensorDraft || {};
@@ -119,17 +122,10 @@ export const ProfileSummaryColumns = ({ record, property, setup = {} }) => {
       ["Type", record?.ownershipType?.replaceAll("-", " ")],
       ["Tenure", record?.tenure],
     ]],
-    ["Energy", [
-      ["Supplier", bill.supplier],
-    ], [
-      ...["heating", "solar", "battery"].map((field) => [
-        field.charAt(0).toUpperCase() + field.slice(1), carbon[field]?.replaceAll("-", " "),
-      ]),
-    ]],
+    ["Energy", [["Supplier", bill.supplier]], []],
     ["Health", [
       ["Sensors", sensors.length ? `${sensors.length} registered` : "Pending"],
       ...sensors.map((sensor, index) => [`Instrument ${index + 1}`, [sensor.manufacturer, sensor.model, sensor.location].filter(Boolean).join(" · ")]),
-      ["Selected sensor file", setup.sensorEvidenceFileName],
     ]],
   ];
   const fuelDetails = [
@@ -144,10 +140,6 @@ export const ProfileSummaryColumns = ({ record, property, setup = {} }) => {
         {renderDetails(details)}
         <div className="mt-1 grid min-w-0 grid-cols-2 gap-2 sm:gap-3">
           {fuelDetails.map(([fuel, fields]) => <div key={fuel} className="min-w-0"><h4 className="font-semibold text-emerald-950">{fuel}</h4>{renderDetails(fields)}</div>)}
-        </div>
-        <div className="mt-2 border-t border-emerald-200 pt-2">
-          <h4 className="mb-1 font-semibold text-emerald-950">Carbon context</h4>
-          <div className="grid min-w-0 grid-cols-2 gap-x-2 sm:gap-x-3">{renderDetails(systems)}</div>
         </div>
       </div> : <>{renderDetails(details)}{heading === "Health" && hasPendingSensor ? <div className="mt-2 border-t border-emerald-200 pt-2">
         <h4 className="font-semibold text-emerald-950">Unregistered scan</h4>
@@ -6756,9 +6748,9 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
                   {homePassportId || "WBP-2026-P42TCE"}
                 </button>
                 <div className="order-2 min-w-0 sm:order-1">
+                  <p className="text-[10px] text-gray-600 sm:text-xs">Address:</p>
                   <p className="break-words text-xs font-semibold leading-tight text-gray-900 sm:text-base sm:leading-normal">
-                    <span className="block">{homePassport?.propertyDiscovery?.address || matterportMetadata.address || "Pending"}</span>
-                    <span className="block">{homePassport?.propertyDiscovery?.postcode || ""}</span>
+                    {addressLines(homePassport?.propertyDiscovery?.address || matterportMetadata.address, homePassport?.propertyDiscovery?.postcode).map((line, index) => <span key={index} className="block min-h-[1em]">{line}</span>)}
                   </p>
                   <p className="mt-1 break-words text-[10px] text-gray-700 sm:text-xs">UPRN: <span className="font-semibold">{homePassport?.uprn || "Pending"}</span></p>
                 </div>
@@ -9890,9 +9882,13 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
               : <div className="absolute inset-0 flex items-center justify-center bg-white/70 p-2 text-center text-xs text-gray-500">3D model preview</div>}
           </div>
           <div className="min-w-0 px-3 py-2 sm:px-5">
-            <p className="text-xs font-semibold text-emerald-900">Address</p>
-            <h3 className="break-words text-base font-bold text-gray-950">{buildingAddress || "House profile"}</h3>
+            <p className="text-xs font-semibold text-emerald-900">Address:</p>
+            <h3 aria-label="Home address" className="break-words text-base font-bold text-gray-950">
+              {addressLines(ownershipProperty?.address, ownershipProperty?.postcode).map((line, index) => <span key={index} className="block min-h-[1em]">{line}</span>)}
+            </h3>
+            <p className="mt-1 break-words text-xs text-gray-700">UPRN: <span className="font-semibold">{ownershipRecord?.uprn || ownershipProperty?.uprn || "Pending"}</span></p>
             <p className="mt-1 break-words text-xs text-gray-700">Coordinates: {[buildingLatitude, buildingLongitude].filter((value) => value !== "" && value !== null && value !== undefined).join(", ") || "Pending"}</p>
+            <p className="mt-1 break-words text-xs text-gray-700">Energy supplier: <span className="font-semibold">{billReview.supplier || "Pending"}</span></p>
           </div>
         </div>
         <div className="mx-3 mt-2 flex border-t border-emerald-200 sm:mx-8 lg:mx-12" role="tablist" aria-label="Building history">

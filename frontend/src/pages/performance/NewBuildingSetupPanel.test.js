@@ -207,6 +207,28 @@ test("the WBP summary does not repeat a registered sensor as an unfinished scan"
   expect(screen.getByText("Dyson · TP02 · Downstairs living room")).toBeInTheDocument();
 });
 
+test("profile banner omits draft file and carbon details", () => {
+  render(<ProfileSummaryColumns setup={{
+    sensorEvidenceFileName: "sensor-label.jpg",
+    carbonSelections: { heating: "gas" },
+    billReview: { supplier: "Good Energy" },
+  }} />);
+  expect(screen.getByText("Good Energy")).toBeInTheDocument();
+  expect(screen.queryByText("Selected sensor file")).not.toBeInTheDocument();
+  expect(screen.queryByText("Carbon context")).not.toBeInTheDocument();
+});
+
+test("New banner shows a three-line address area and core profile fields", () => {
+  render(<MemoryRouter><NewBuildingSetupPanel freshStart /></MemoryRouter>);
+  const banner = screen.getByRole("heading", { name: "Home address" }).closest(".bg-emerald-100");
+  expect(within(banner).getByRole("heading", { name: "Home address" }).querySelectorAll("span")).toHaveLength(3);
+  expect(banner).toHaveTextContent("Address:");
+  expect(banner).toHaveTextContent("UPRN:");
+  expect(banner).toHaveTextContent("Coordinates:");
+  expect(banner).toHaveTextContent("Energy supplier:");
+  expect(banner).not.toHaveTextContent("House profile");
+});
+
 test("3D Model displays property coordinates and accepts an area for Design", () => {
   window.localStorage.setItem("wbp-new-building-passport", JSON.stringify({
     recordId: "WBP-TEST", propertyDiscovery: {
@@ -327,7 +349,7 @@ test("new building sections keep ownership first and separate the inputs", () =>
 
   expect(screen.queryByRole("heading", { name: "New Building" })).not.toBeInTheDocument();
   expect(screen.getByRole("tablist", { name: "New building sections" })).toBeInTheDocument();
-  const profile = screen.getByRole("heading", { name: "House profile" }).closest("section");
+  const profile = screen.getByRole("heading", { name: "Home address" }).closest("section");
   expect(profile).toHaveClass("bg-emerald-100");
   expect(profile.parentElement).not.toHaveClass("p-4");
   expect(profile).toHaveTextContent("3D model preview");
@@ -421,7 +443,7 @@ test("fresh New workspace does not hydrate the existing home or model", () => {
   window.localStorage.setItem("home:matterportModelInput", "8A48K5upwWN");
   render(<MemoryRouter><NewBuildingSetupPanel freshStart isActive /></MemoryRouter>);
 
-  const banner = screen.getByRole("heading", { name: "House profile" }).closest(".bg-emerald-100");
+  const banner = screen.getByRole("heading", { name: "Home address" }).closest(".bg-emerald-100");
   expect(banner).toHaveTextContent("3D model preview");
   expect(banner).not.toHaveTextContent("14 Bridgewood Road");
   expect(screen.queryByTitle("3D model preview")).not.toBeInTheDocument();
@@ -439,7 +461,7 @@ test("profile-linked New workspace stays blank and leaves the saved home untouch
   render(<MemoryRouter><NewBuildingSetupPanel freshStart syncHomeProfile isActive /></MemoryRouter>);
 
   expect(screen.getByRole("dialog", { name: "Let's set up your home" })).toBeInTheDocument();
-  expect(screen.getByRole("heading", { name: "House profile" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Home address" })).toBeInTheDocument();
   expect(screen.getByRole("textbox", { name: "Property address" })).toHaveValue("");
   expect(screen.queryByRole("button", { name: "Edit home details" })).not.toBeInTheDocument();
   expect(JSON.parse(window.localStorage.getItem("wbp-new-building-passport"))).toMatchObject({
@@ -481,7 +503,7 @@ test("monitoring setup stays above every tab without counting audit evidence", (
   window.localStorage.setItem("wbp-new-building-passport", JSON.stringify({ recordId: "WBP-TEST", legalOwnerName: "Test Owner", ownershipType: "owner-occupier", tenure: "freehold" }));
   render(<MemoryRouter><NewBuildingSetupPanel /></MemoryRouter>);
 
-  const banner = screen.getByRole("heading", { name: "House profile" }).closest(".bg-emerald-100");
+  const banner = screen.getByRole("heading", { name: "Home address" }).closest(".bg-emerald-100");
   expect(banner).not.toHaveTextContent("WBP-TEST");
   expect(banner).not.toHaveTextContent("Home profile created");
   expect(banner).not.toHaveTextContent("Ownership unverified");
