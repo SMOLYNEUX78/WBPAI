@@ -33,16 +33,17 @@ export const parseEnergyBillText = (text) => {
   if (/\bgood\s+energy\b|goodenergy\.co\.uk/i.test(text)) result.supplier = "Good Energy";
   let fuel = "";
   for (const line of lines) {
-    if (/^(?:your\s+)?electricity\b/i.test(line)) fuel = "electricity";
-    else if (/^(?:your\s+)?gas\b/i.test(line)) fuel = "gas";
-    const lineFuel = /\belectricity\b/i.test(line) ? "electricity" : /\bgas\b/i.test(line) ? "gas" : fuel;
+    if (/\belectricity\s+(?:supply\s+number|charges)\b|^(?:your\s+)?electricity\b/i.test(line)) fuel = "electricity";
+    else if (/\bgas\s+(?:meter\s+point\s+reference|charges)\b|^(?:your\s+)?gas\b/i.test(line)) fuel = "gas";
+    const lineFuel = fuel;
     if (!result.supplier) {
       const found = line.match(/(?:supplier|energy provider)\s*:\s*(.+?)(?=\s+(?:account|tariff|electricity|gas|bill)\b|$)/i);
       if (found) result.supplier = found[1].trim();
     }
     if (!result.mpan) result.mpan = numberAfterLabel(line, "MPAN|electricity supply number", 13, 13);
-    if (!result.mprn) result.mprn = numberAfterLabel(line, "MPRN|gas supply number", 6, 10);
-    const tariff = line.match(/^(?:(?:electricity|gas)\s+)?tariff(?: name)?\s*:\s*(.+)$/i)?.[1]?.trim();
+    if (!result.mprn) result.mprn = numberAfterLabel(line, "MPRN|gas supply number|meter point reference", 6, 10);
+    const tariff = line.match(/\btariff name\s*:?[ \t]+(.+?)(?=\s+(?:product type|payment method|unit rate|standing charge)\b|$)/i)?.[1]?.trim()
+      || line.match(/^tariff\s*:\s*(.+)$/i)?.[1]?.trim();
     if (tariff && lineFuel && !result[`${lineFuel}Tariff`]) result[`${lineFuel}Tariff`] = tariff;
     if (lineFuel && /unit\s+rate/i.test(line) && !result[`${lineFuel}UnitRatePence`]) {
       result[`${lineFuel}UnitRatePence`] = priceFromLine(line, /unit\s+rate\s*:?/i);

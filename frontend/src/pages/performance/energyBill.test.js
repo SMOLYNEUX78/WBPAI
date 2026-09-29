@@ -43,3 +43,19 @@ Good Energy Registered address`);
   expect(result.mpan).toBe("");
   expect(result.mprn).toBe("");
 });
+
+test("reads the two-column Good Energy charges page OCR", () => {
+  expect(parseEnergyBillText(`Electricity Supply number S 1012905988160 Prices do not include VAT
+Good Energy Fix Jan27 - End date: 31 January 2027 Tariff name Good Energy Fix Jan27
+Energy Unit rate 20.61p/kWh
+Standing charge 53.62p/day
+Gas Meter Point Reference: 3019419002
+Good Energy Fix Jan27 - End date: 31 January 2027 Tariff name Good Energy Fix Jan27
+Unit rate 5.00p/kWh
+Standing charge 32.26p/day`)).toEqual(expect.objectContaining({
+    supplier: "Good Energy", electricityTariff: "Good Energy Fix Jan27", gasTariff: "Good Energy Fix Jan27",
+    mpan: "1012905988160", mprn: "3019419002",
+    electricityUnitRatePence: "20.61", electricityStandingChargePence: "53.62",
+    gasUnitRatePence: "5.00", gasStandingChargePence: "32.26",
+  }));
+});
