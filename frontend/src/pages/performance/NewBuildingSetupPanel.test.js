@@ -32,6 +32,7 @@ test("health setup distinguishes label scanning, connection and metric validatio
   fireEvent.click(screen.getByRole("tab", { name: "Health Monitoring" }));
   expect(screen.getByText("1. Import your health data")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Scan QR or barcode" })).toBeInTheDocument();
+  expect(screen.getByLabelText("Scan a sensor label photo")).toHaveAttribute("accept", "image/*");
   expect(screen.getByRole("textbox", { name: "Label code" })).toBeInTheDocument();
   expect(screen.getByRole("combobox", { name: "Connection route" })).toHaveValue("manual");
   expect(screen.queryByRole("combobox", { name: "Collector stream" })).not.toBeInTheDocument();

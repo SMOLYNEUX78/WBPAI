@@ -8596,6 +8596,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   const [sensorEvidenceFileName, setSensorEvidenceFileName] = useState("");
   const [sensorScanStatus, setSensorScanStatus] = useState("");
   const [sensorScannerOpen, setSensorScannerOpen] = useState(false);
+  const [sensorPhotoBusy, setSensorPhotoBusy] = useState(false);
   const sensorVideoRef = useRef(null);
   const [sensorCheckBusy, setSensorCheckBusy] = useState("");
   useEffect(() => {
@@ -9513,11 +9514,11 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
     if (!sensorScannerOpen) return undefined;
     let active = true;
     let controls;
-    import("@zxing/browser").then(async ({ BrowserMultiFormatReader, BarcodeFormat }) => {
+    Promise.all([import("@zxing/browser"), import("@zxing/library")]).then(async ([{ BrowserMultiFormatReader, BarcodeFormat }, { DecodeHintType }]) => {
       if (!active || !sensorVideoRef.current) return;
-      const reader = new BrowserMultiFormatReader();
+      const reader = new BrowserMultiFormatReader(new Map([[DecodeHintType.TRY_HARDER, true]]));
       controls = await reader.decodeFromConstraints(
-        { video: { facingMode: { ideal: "environment" } }, audio: false }, sensorVideoRef.current,
+        { video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false }, sensorVideoRef.current,
         (result) => {
           if (!active || !result) return;
           acceptSensorCode(result.getText(), result.getBarcodeFormat() === BarcodeFormat.QR_CODE);
@@ -9533,6 +9534,24 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
     });
     return () => { active = false; controls?.stop(); };
   }, [sensorScannerOpen]);
+
+  const scanSensorPhoto = async (file) => {
+    if (!file) return;
+    setSensorPhotoBusy(true);
+    setSensorScanStatus("");
+    const imageUrl = URL.createObjectURL(file);
+    try {
+      const [{ BrowserMultiFormatReader, BarcodeFormat }, { DecodeHintType }] = await Promise.all([import("@zxing/browser"), import("@zxing/library")]);
+      const reader = new BrowserMultiFormatReader(new Map([[DecodeHintType.TRY_HARDER, true]]));
+      const result = await reader.decodeFromImageUrl(imageUrl);
+      acceptSensorCode(result.getText(), result.getBarcodeFormat() === BarcodeFormat.QR_CODE);
+    } catch {
+      setSensorScanStatus("No readable code found in that photo. Try a sharper, closer photo in good light, or enter the printed code manually.");
+    } finally {
+      URL.revokeObjectURL(imageUrl);
+      setSensorPhotoBusy(false);
+    }
+  };
 
   const checkSensorReading = async (sensor) => {
     if (sensor.connectionMethod !== "dyson" || !sensor.readingType) return;
@@ -10106,6 +10125,10 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                     if (!navigator.mediaDevices?.getUserMedia) { setSensorScanStatus("Camera access is unavailable here. Open WBP over HTTPS or enter details manually."); return; }
                     setSensorScanStatus(""); setSensorScannerOpen(true);
                   }}>Scan QR or barcode</button>
+                <label className="ml-2 inline-block border border-emerald-700 bg-white px-3 py-2 text-xs font-semibold text-emerald-950">
+                  {sensorPhotoBusy ? "Reading photo..." : "Scan a photo"}
+                  <input type="file" accept="image/*" capture="environment" disabled={sensorPhotoBusy} className="sr-only" aria-label="Scan a sensor label photo" onChange={(event) => { scanSensorPhoto(event.target.files?.[0]); event.target.value = ""; }} />
+                </label>
                 {sensorScanStatus ? <p role="status" className="mt-1 text-xs text-gray-700">{sensorScanStatus}</p> : null}
                 {sensorScannerOpen ? <div className="mt-2 space-y-2 border border-emerald-300 bg-gray-900 p-2">
                   <video ref={sensorVideoRef} autoPlay muted playsInline aria-label="Live camera for sensor barcode or QR scan" className="max-h-72 w-full object-contain" />
