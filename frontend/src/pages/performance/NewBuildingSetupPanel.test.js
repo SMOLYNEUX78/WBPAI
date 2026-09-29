@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { NewBuildingSetupPanel, OccupyHistoryTabs, ProfileSummaryColumns, findHomeProfileForOverwrite } from "./BuildingDashboard";
+import { NewBuildingSetupPanel, OccupyHistoryTabs, ProfileSummaryColumns, findAccountHomeRecord, findHomeProfileForOverwrite } from "./BuildingDashboard";
 import supabase from "../../supabaseClient";
 
 beforeEach(() => window.localStorage.clear());
@@ -91,6 +91,20 @@ test("profile overwrite resolves the signed-in user's existing WBP reference", a
   expect(client.from).toHaveBeenCalledWith("WBPBuildingRecords");
   expect(eq).toHaveBeenCalledWith("custodian_user_id", "owner-1");
   expect(eq).toHaveBeenCalledWith("uprn", "100091142492");
+});
+
+test("bill upload and WBP-001 select the same saved home record", async () => {
+  const chosen = { id: "saved-home", uprn: "100091142492", record_reference: "WBP-2026-P42TCE" };
+  const maybeSingle = jest.fn().mockResolvedValue({ data: chosen, error: null });
+  const eq = jest.fn(() => ({ eq, maybeSingle }));
+  const client = { from: jest.fn(() => ({ select: () => ({ eq }) })) };
+  const result = await findAccountHomeRecord(client, "owner-1", {
+    databaseId: "saved-home", ownerUserId: "owner-1", uprn: "100091142492",
+  });
+  expect(result.data).toEqual(chosen);
+  expect(eq).toHaveBeenCalledWith("id", "saved-home");
+  expect(eq).toHaveBeenCalledWith("uprn", "100091142492");
+  expect(client.from).toHaveBeenCalledTimes(1);
 });
 
 test("step two displays a secure-save failure instead of appearing unresponsive", async () => {

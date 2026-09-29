@@ -33,9 +33,24 @@ export const DetailSurface = ({ children, title, onClose, modal, headerExtra }) 
 const PortalWhen = ({ active, children }) => active ? createPortal(children, document.body) : children;
 
 const DEFAULT_MATTERPORT_URL = "https://my.matterport.com/show/?m=zHm8SwWeHiN";
+const HOME_UPRN = "100091142492";
 const readSavedHomePassport = () => {
   try { return JSON.parse(window.localStorage.getItem("wbp-new-building-passport") || "null"); }
   catch { return null; }
+};
+
+export const findAccountHomeRecord = async (client, userId, cached = null) => {
+  const cachedId = cached?.uprn === HOME_UPRN && cached?.ownerUserId === userId
+    ? cached.databaseId : null;
+  if (cachedId) {
+    const { data, error } = await client.from("WBPBuildingRecords").select("*")
+      .eq("id", cachedId).eq("custodian_user_id", userId).eq("uprn", HOME_UPRN).maybeSingle();
+    if (error) return { data: null, error };
+    if (data) return { data, error: null };
+  }
+  return client.from("WBPBuildingRecords").select("*")
+    .eq("custodian_user_id", userId).eq("uprn", HOME_UPRN)
+    .order("updated_at", { ascending: false }).limit(1).maybeSingle();
 };
 
 export const findHomeProfileForOverwrite = async (client, uprn) => {
@@ -749,11 +764,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
     const loadPassportId = async () => {
       const { data: auth } = await supabase.auth.getUser();
       if (!active || !auth?.user) return;
-      const { data, error } = await supabase.from("WBPBuildingRecords")
-        .select("*")
-        .eq("custodian_user_id", auth.user.id)
-        .eq("uprn", "100091142492")
-        .order("updated_at", { ascending: false }).limit(1).maybeSingle();
+      const { data, error } = await findAccountHomeRecord(supabase, auth.user.id, readSavedHomePassport());
       if (active && !error && data?.record_reference) {
         const { data: snapshot } = await supabase.from("WBPPropertyDiscoverySnapshots")
           .select("latitude, longitude, local_authority")
@@ -8545,10 +8556,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
     const loadBillTarget = async () => {
       const { data: auth } = await supabase.auth.getUser();
       if (!active || !auth?.user) return;
-      const { data, error } = await supabase.from("WBPBuildingRecords")
-        .select("id,record_reference,uprn")
-        .eq("custodian_user_id", auth.user.id).eq("uprn", "100091142492")
-        .order("updated_at", { ascending: false }).limit(1).maybeSingle();
+      const { data, error } = await findAccountHomeRecord(supabase, auth.user.id, readSavedHomePassport());
       if (active && !error) setBillTarget(data || null);
     };
     loadBillTarget();
