@@ -1,15 +1,73 @@
+const emptyBill = {
+  supplier: "", electricityTariff: "", gasTariff: "", mpan: "", mprn: "",
+  electricityUnitRatePence: "", gasUnitRatePence: "",
+  electricityStandingChargePence: "", gasStandingChargePence: "",
+};
+
+export const normaliseBillReview = (saved = {}) => ({
+  ...emptyBill,
+  ...saved,
+  electricityTariff: saved.electricityTariff || saved.tariff || "",
+  electricityUnitRatePence: saved.electricityUnitRatePence || saved.unitRatePence || "",
+  electricityStandingChargePence: saved.electricityStandingChargePence || saved.standingChargePence || "",
+});
+
+const numberAfterLabel = (line, label, min, max) => {
+  const match = line.match(new RegExp(`(?:${label})[^\\d]{0,35}([\\d\\s-]{${min},32})`, "i"));
+  const value = match?.[1]?.replace(/\D/g, "") || "";
+  return value.length >= min && value.length <= max ? value : "";
+};
+
+const priceFromLine = (line, label) => {
+  const index = line.search(label);
+  if (index < 0) return "";
+  const tail = line.slice(index).replace(label, "").slice(0, 90);
+  const match = tail.match(/(?:£\s*(0?\.\d{2,5})|([\d]{1,3}(?:\.\d{1,4})?)\s*p(?:ence)?)/i);
+  if (!match) return "";
+  return match[1] ? String(Number((Number(match[1]) * 100).toFixed(4))) : match[2];
+};
+
 export const parseEnergyBillText = (text) => {
-  const clean = text.replace(/\s+/g, " ");
-  const field = (pattern) => clean.match(pattern)?.[1]?.trim() || "";
-  const rate = (kind) => field(new RegExp(`${kind}[^\\d]{0,45}(\\d{1,3}(?:\\.\\d{1,4})?)\\s*p(?:ence)?\\s*(?:/|per)\\s*kWh`, "i"));
-  return {
-    supplier: field(/(?:supplier|energy provider)\s*[:-]?\s*([a-z][a-z &.-]{2,50}?)(?=\s+(?:account|tariff|electricity|gas|bill|supply)\b|$)/i),
-    tariff: field(/(?:tariff(?: name)?|product)\s*[:-]?\s*([a-z0-9][a-z0-9 &+().-]{2,60}?)(?=\s+(?:account|unit rate|standing charge|electricity|gas|bill|supply)\b|$)/i),
-    mpan: field(/\bMPAN\b[^\d]{0,30}(\d(?:[\s\d]{10,23}\d)?)/i).replace(/\D/g, ""),
-    mprn: field(/\bMPRN\b[^\d]{0,30}(\d{6,11})/i),
-    unitRatePence: rate("(?:electricity|gas)?\\s*unit rate"),
-    standingChargePence: field(/standing charge[^\d]{0,45}(\d{1,3}(?:\.\d{1,4})?)\s*p(?:ence)?\s*(?:\/|per)\s*day/i),
-  };
+  const lines = text.split(/\r?\n/).map((line) => line.replace(/\s+/g, " ").trim()).filter(Boolean);
+  const result = { ...emptyBill };
+  let fuel = "";
+  for (const line of lines) {
+    if (/^(?:your\s+)?electricity\b/i.test(line)) fuel = "electricity";
+    else if (/^(?:your\s+)?gas\b/i.test(line)) fuel = "gas";
+    const lineFuel = /\belectricity\b/i.test(line) ? "electricity" : /\bgas\b/i.test(line) ? "gas" : fuel;
+    if (!result.supplier) {
+      const found = line.match(/(?:supplier|energy provider)\s*:\s*(.+?)(?=\s+(?:account|tariff|electricity|gas|bill)\b|$)/i);
+      if (found) result.supplier = found[1].trim();
+    }
+    if (!result.mpan) result.mpan = numberAfterLabel(line, "MPAN|electricity supply number", 13, 13);
+    if (!result.mprn) result.mprn = numberAfterLabel(line, "MPRN|gas supply number", 6, 10);
+    const tariff = line.match(/(?:tariff(?: name)?|product)\s*:\s*(.+?)(?=\s+(?:account|unit rate|standing charge|electricity|gas|bill)\b|$)/i)?.[1]?.trim();
+    if (tariff && lineFuel && !result[`${lineFuel}Tariff`]) result[`${lineFuel}Tariff`] = tariff;
+    if (lineFuel && /unit\s+rate/i.test(line) && !result[`${lineFuel}UnitRatePence`]) {
+      result[`${lineFuel}UnitRatePence`] = priceFromLine(line, /unit\s+rate\s*:?/i);
+    }
+    if (lineFuel && /standing\s+charge/i.test(line) && !result[`${lineFuel}StandingChargePence`]) {
+      result[`${lineFuel}StandingChargePence`] = priceFromLine(line, /standing\s+charge\s*:?/i);
+    }
+    if (!lineFuel && tariff && !result.electricityTariff) result.electricityTariff = tariff;
+  }
+  return result;
+};
+
+const pdfPageLines = (items) => {
+  const lines = [];
+  for (const item of items) {
+    const value = item.str?.trim();
+    if (!value) continue;
+    const x = item.transform?.[4] ?? 0;
+    const y = item.transform?.[5] ?? 0;
+    let line = lines.find((candidate) => Math.abs(candidate.y - y) < 2);
+    if (!line) { line = { y, parts: [] }; lines.push(line); }
+    line.parts.push({ x, value });
+  }
+  return lines.sort((a, b) => b.y - a.y)
+    .map((line) => line.parts.sort((a, b) => a.x - b.x).map((part) => part.value).join(" "))
+    .join("\n");
 };
 
 export const extractEnergyBillPdf = async (file) => {
@@ -17,12 +75,12 @@ export const extractEnergyBillPdf = async (file) => {
   const document = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
   try {
     const pages = [];
-    for (let pageNumber = 1; pageNumber <= Math.min(document.numPages, 3); pageNumber += 1) {
+    for (let pageNumber = 1; pageNumber <= Math.min(document.numPages, 5); pageNumber += 1) {
       const page = await document.getPage(pageNumber);
       const content = await page.getTextContent();
-      pages.push(content.items.map((item) => item.str || "").join(" "));
+      pages.push(pdfPageLines(content.items));
     }
-    return parseEnergyBillText(pages.join(" "));
+    return parseEnergyBillText(pages.join("\n"));
   } finally {
     await document.destroy();
   }

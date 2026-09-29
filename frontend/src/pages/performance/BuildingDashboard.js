@@ -8,7 +8,7 @@ import matterportMark from "../../assets/matterport-mark.png";
 import PrototypeTabs from "../../PrototypeTabs";
 import { getReadinessGates } from "./readinessGates";
 import { mergeMonthlyHlaRows } from "./monthlyHla";
-import { extractEnergyBillPdf } from "./energyBill";
+import { extractEnergyBillPdf, normaliseBillReview } from "./energyBill";
 import "./occupyScreen.css";
 
 export const DetailSurface = ({ children, title, onClose, modal, headerExtra }) => {
@@ -57,6 +57,7 @@ export const findHomeProfileForOverwrite = async (client) => {
 
 export const ProfileSummaryColumns = ({ record, property, setup = {} }) => {
   const carbon = setup.carbonSelections || {};
+  const bill = normaliseBillReview(setup.billReview);
   const rows = [
     ["Ownership", [
       ["Property number (UPRN)", record?.uprn],
@@ -68,8 +69,15 @@ export const ProfileSummaryColumns = ({ record, property, setup = {} }) => {
     ]],
     ["Energy", [
       ["Monitoring", setup.energyConsent ? "Access requested; not connected" : "Not connected"],
-      ["Supplier", setup.billReview?.supplier],
-      ["Tariff", setup.billReview?.tariff],
+      ["Supplier", bill.supplier],
+      ["Electricity tariff", bill.electricityTariff],
+      ["Electricity MPAN", bill.mpan],
+      ["Electricity unit rate", bill.electricityUnitRatePence && `${bill.electricityUnitRatePence} p/kWh`],
+      ["Electricity standing charge", bill.electricityStandingChargePence && `${bill.electricityStandingChargePence} p/day`],
+      ["Gas tariff", bill.gasTariff],
+      ["Gas MPRN", bill.mprn],
+      ["Gas unit rate", bill.gasUnitRatePence && `${bill.gasUnitRatePence} p/kWh`],
+      ["Gas standing charge", bill.gasStandingChargePence && `${bill.gasStandingChargePence} p/day`],
       ["Selected historical file", setup.historicalDataFileName],
     ]],
     ["Health", [
@@ -742,6 +750,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
       const { data, error } = await supabase.from("WBPBuildingRecords")
         .select("*")
         .eq("custodian_user_id", auth.user.id)
+        .eq("uprn", "100091142492")
         .order("updated_at", { ascending: false }).limit(1).maybeSingle();
       if (active && !error && data?.record_reference) {
         const { data: snapshot } = await supabase.from("WBPPropertyDiscoverySnapshots")
@@ -789,6 +798,14 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
       });
     return () => { active = false; };
   }, [dataSourceBuildingId, homePassportDatabaseId, isActive]);
+  useEffect(() => {
+    if (dataSourceBuildingId !== "home" || !homePassportDatabaseId) return undefined;
+    const onSetupUpdated = (event) => {
+      if (event.detail?.recordId === homePassportDatabaseId) setHomeSetup(event.detail.setupData);
+    };
+    window.addEventListener("wbp:setup-updated", onSetupUpdated);
+    return () => window.removeEventListener("wbp:setup-updated", onSetupUpdated);
+  }, [dataSourceBuildingId, homePassportDatabaseId]);
   const activeSeasonInfo = useMemo(() => getMeteorologicalSeason(), []);
   const [deepDivePanel, setDeepDivePanel] = useState(null);
   const [occupyDetail, setOccupyDetail] = useState(null);
@@ -6625,6 +6642,11 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
               ...(dataSourceBuildingId === "home" ? [] : [["Address", [homePassport?.propertyDiscovery?.address, homePassport?.propertyDiscovery?.postcode].filter(Boolean).join(", ") || matterportMetadata.address]]),
               ["Coordinates", (homePassport?.propertyDiscovery?.latitude != null && homePassport?.propertyDiscovery?.longitude != null) ? `${homePassport.propertyDiscovery.latitude}, ${homePassport.propertyDiscovery.longitude}` : dataSourceBuildingId === "home" ? "Pending matched UPRN location" : [matterportMetadata.latitude, matterportMetadata.longitude].join(", ")],
               ["Internal area", homeSetup.manualData?.internalArea ? `${homeSetup.manualData.internalArea} m2` : matterportMetadata.internalArea !== "--" ? `${matterportMetadata.internalArea} m2` : "Pending"],
+              ...(dataSourceBuildingId === "home" ? [
+                ["Energy supplier", normaliseBillReview(homeSetup.billReview).supplier],
+                ["Electricity tariff", normaliseBillReview(homeSetup.billReview).electricityTariff],
+                ["Gas tariff", normaliseBillReview(homeSetup.billReview).gasTariff],
+              ] : []),
             ].map(([label, value]) => <div key={label} className={dataSourceBuildingId === "home" ? "min-w-0 py-0.5" : "min-w-0 border-b border-gray-100 py-1.5 last:border-0"}><dt className="text-gray-600">{label}</dt><dd className={`break-words font-semibold text-gray-900 ${dataSourceBuildingId === "home" && label === "Address" ? "text-base" : ""}`}>{value || "Pending"}</dd></div>)}
           </dl>
 
@@ -8496,7 +8518,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   }, [modelInput, ownershipRecord?.recordId]);
   const [energyConsent, setEnergyConsent] = useState(false);
   const [meterIdentifiers, setMeterIdentifiers] = useState({ supplyId: "", displayId: "" });
-  const [billReview, setBillReview] = useState({ supplier: "", tariff: "", mpan: "", mprn: "", unitRatePence: "", standingChargePence: "" });
+  const [billReview, setBillReview] = useState(() => normaliseBillReview());
   const [billDraftFile, setBillDraftFile] = useState(null);
   const billUploadRef = useRef(null);
   const [billStatus, setBillStatus] = useState("");
@@ -8663,7 +8685,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       setManualData((current) => ({ ...current, ...saved.manualData }));
       setEnergyConsent(Boolean(saved.energyConsent));
       setMeterIdentifiers((current) => ({ ...current, ...saved.meterIdentifiers }));
-      setBillReview((current) => ({ ...current, ...saved.billReview }));
+      setBillReview(normaliseBillReview(saved.billReview));
       setHealthSensors(Array.isArray(saved.healthSensors) ? saved.healthSensors : []);
       setCarbonSelections((current) => ({ ...current, ...saved.carbonSelections }));
       if (saved.modelInput) setModelInput(saved.modelInput);
@@ -8682,7 +8704,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
         setManualData((current) => ({ ...current, ...saved.manualData }));
         setEnergyConsent(Boolean(saved.energyConsent));
         setMeterIdentifiers((current) => ({ ...current, ...saved.meterIdentifiers }));
-        setBillReview((current) => ({ ...current, ...saved.billReview }));
+        setBillReview(normaliseBillReview(saved.billReview));
         setHealthSensors(Array.isArray(saved.healthSensors) ? saved.healthSensors : []);
         setCarbonSelections((current) => ({ ...current, ...saved.carbonSelections }));
         setHistoricalDataFileName(saved.historicalDataFileName || "");
@@ -8762,7 +8784,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
     supabase.from("WBPBuildingSetupDeclarations").select("setup_data")
       .eq("building_record_id", billRecordId).maybeSingle()
       .then(({ data, error }) => {
-        if (active && !error && data?.setup_data?.billReview) setBillReview((current) => ({ ...current, ...data.setup_data.billReview }));
+        if (active && !error && data?.setup_data?.billReview) setBillReview(normaliseBillReview(data.setup_data.billReview));
       });
     return () => { active = false; };
   }, [billRecordId, ownershipRecord?.databaseId]);
@@ -8849,7 +8871,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
     setBillStatus("Reading the PDF for tariff details...");
     try {
       const extracted = await extractEnergyBillPdf(file);
-      setBillReview((current) => ({ ...current, ...Object.fromEntries(Object.entries(extracted).filter(([, value]) => value)) }));
+      setBillReview(normaliseBillReview(extracted));
       setBillStatus(Object.values(extracted).some(Boolean)
         ? "Possible details found. Check every field against the bill before confirming."
         : "No readable tariff text found. Enter the details from the bill manually.");
@@ -8858,28 +8880,34 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
     }
   };
 
+  const saveConfirmedBillDetails = async () => {
+    if (!billRecordId) { setBillStatus("Select a saved WBP-001 home profile before saving bill details."); return false; }
+    const { data: auth, error: authError } = await supabase.auth.getUser();
+    if (authError || !auth?.user) { setBillStatus("Sign in again to save bill details."); return false; }
+    const { data: existing, error: readError } = await supabase.from("WBPBuildingSetupDeclarations")
+      .select("setup_data").eq("building_record_id", billRecordId).maybeSingle();
+    if (readError) { setBillStatus(`Tariff details could not be saved: ${readError.message}`); return false; }
+    const setupData = { ...(existing?.setup_data || {}), billReview: normaliseBillReview(billReview) };
+    const { error } = await supabase.from("WBPBuildingSetupDeclarations").upsert({
+      building_record_id: billRecordId,
+      setup_data: setupData,
+      updated_by: auth.user.id,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "building_record_id" });
+    if (error) { setBillStatus(`Tariff details could not be saved: ${error.message}`); return false; }
+    const recordRef = ownershipRecord?.recordId || billTarget?.record_reference;
+    if (recordRef) window.localStorage.setItem(`${recordRef}:setupSections`, JSON.stringify(setupData));
+    window.dispatchEvent(new CustomEvent("wbp:setup-updated", { detail: { recordId: billRecordId, setupData } }));
+    setBillStatus("Tariff details saved to WBP-001 and WBP-001cc as customer-confirmed data.");
+    return true;
+  };
+
   const confirmEnergyBill = async () => {
     if (!billDraftFile) return;
     const uploaded = await uploadCarbonEvidence("energy-bill", billDraftFile, billRecordId);
     if (!uploaded) return;
     setBillDraftFile(null);
-    setBillStatus("Bill stored privately. Tariff details are customer-confirmed, not supplier-verified.");
-    if (ownershipRecord?.databaseId === billRecordId) {
-      await saveSetupSection({ billReview });
-      return;
-    }
-    const { data: auth } = await supabase.auth.getUser();
-    if (!auth?.user) { setBillStatus("Bill uploaded, but tariff details could not be saved. Sign in again."); return; }
-    const { data: existing, error: readError } = await supabase.from("WBPBuildingSetupDeclarations")
-      .select("setup_data").eq("building_record_id", billRecordId).maybeSingle();
-    if (readError) { setBillStatus(`Bill uploaded, but tariff details could not be saved: ${readError.message}`); return; }
-    const { error } = await supabase.from("WBPBuildingSetupDeclarations").upsert({
-      building_record_id: billRecordId,
-      setup_data: { ...(existing?.setup_data || {}), billReview },
-      updated_by: auth.user.id,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: "building_record_id" });
-    if (error) setBillStatus(`Bill uploaded, but tariff details could not be saved: ${error.message}`);
+    await saveConfirmedBillDetails();
   };
 
   const handleManualChange = (field, value) => {
@@ -9974,10 +10002,11 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                   : <p className="text-xs text-amber-800">A saved WBP-001 home profile is needed to store the bill privately.</p>}
                 {billStatus ? <p role="status" className="text-xs text-gray-700">{billStatus}</p> : null}
                 {(billDraftFile || carbonEvidence["energy-bill"]) ? <div className="grid gap-2 sm:grid-cols-2">
-                  {[["supplier", "Supplier"], ["tariff", "Tariff name"], ["mpan", "Electricity MPAN"], ["mprn", "Gas MPRN"], ["unitRatePence", "Unit rate (p/kWh)"], ["standingChargePence", "Standing charge (p/day)"]].map(([field, label]) =>
+                  {[["supplier", "Supplier"], ["electricityTariff", "Electricity tariff"], ["mpan", "Electricity MPAN"], ["electricityUnitRatePence", "Electricity unit rate (p/kWh)"], ["electricityStandingChargePence", "Electricity standing charge (p/day)"], ["gasTariff", "Gas tariff"], ["mprn", "Gas MPRN"], ["gasUnitRatePence", "Gas unit rate (p/kWh)"], ["gasStandingChargePence", "Gas standing charge (p/day)"]].map(([field, label]) =>
                     <label key={field} className="space-y-1 text-xs text-gray-700">{label}<input type="text" className="w-full border bg-white p-2 text-xs" value={billReview[field] || ""} onChange={(event) => setBillReview((current) => ({ ...current, [field]: event.target.value }))} /></label>)}
                 </div> : null}
                 {billDraftFile ? <button type="button" disabled={Boolean(carbonEvidenceBusy)} onClick={confirmEnergyBill} className="bg-emerald-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Confirm details and upload bill</button> : null}
+                {!billDraftFile && carbonEvidence["energy-bill"] ? <button type="button" disabled={!billRecordId || Boolean(carbonEvidenceBusy)} onClick={saveConfirmedBillDetails} className="bg-emerald-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Save confirmed tariff details</button> : null}
                 {carbonEvidence["energy-bill"] ? <button type="button" className="block break-all text-left text-xs text-blue-700 underline" onClick={() => openCarbonEvidence(carbonEvidence["energy-bill"].storage_reference)}>{carbonEvidence["energy-bill"].original_file_name || "View uploaded bill"} (customer-confirmed)</button> : null}
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
