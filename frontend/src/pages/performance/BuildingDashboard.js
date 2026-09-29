@@ -803,11 +803,50 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
   useEffect(() => {
     if (dataSourceBuildingId !== "home" || !homePassportDatabaseId || !isActive) return undefined;
     let active = true;
-    supabase.from("WBPBuildingSetupDeclarations").select("setup_data")
-      .eq("building_record_id", homePassportDatabaseId).maybeSingle()
-      .then(({ data, error }) => {
-        if (active && !error && data?.setup_data) setHomeSetup(data.setup_data);
-      });
+    const loadHomeSetup = async () => {
+      const { data, error } = await supabase.from("WBPBuildingSetupDeclarations").select("setup_data")
+        .eq("building_record_id", homePassportDatabaseId).maybeSingle();
+      if (!active || error) return;
+      const setupData = data?.setup_data || {};
+      setHomeSetup(setupData);
+      if (Object.values(normaliseBillReview(setupData.billReview)).some(Boolean)) return;
+
+      const { data: evidence, error: evidenceError } = await supabase.from("WBPEvidenceVersions")
+        .select("original_file_name,storage_reference")
+        .eq("building_record_id", homePassportDatabaseId).eq("evidence_type", "energy-bill")
+        .order("created_at", { ascending: false }).limit(1);
+      const savedBill = evidence?.[0];
+      if (!active || evidenceError || !savedBill?.storage_reference) return;
+      const { data: file, error: downloadError } = await supabase.storage.from("wbp-private-evidence")
+        .download(savedBill.storage_reference);
+      if (!active || downloadError || !file) return;
+      try {
+        const name = savedBill.original_file_name || "energy-bill.pdf";
+        const billFile = new File([file], name, { type: file.type || (name.toLowerCase().endsWith(".pdf") ? "application/pdf" : "image/jpeg") });
+        const parsed = billFile.type === "application/pdf" ? await extractEnergyBillPdf(billFile) : await extractEnergyBillImage(billFile);
+        const billReview = normaliseBillReview(parsed);
+        if (!active || !Object.values(billReview).some(Boolean)) return;
+        const { data: auth } = await supabase.auth.getUser();
+        if (!active || !auth?.user) return;
+        const { data: latest, error: latestError } = await supabase.from("WBPBuildingSetupDeclarations")
+          .select("setup_data").eq("building_record_id", homePassportDatabaseId).maybeSingle();
+        if (!active || latestError) return;
+        const latestSetup = latest?.setup_data || {};
+        if (Object.values(normaliseBillReview(latestSetup.billReview)).some(Boolean)) {
+          setHomeSetup(latestSetup);
+          return;
+        }
+        const recoveredSetup = { ...latestSetup, billReview };
+        const { error: saveError } = await supabase.from("WBPBuildingSetupDeclarations").upsert({
+          building_record_id: homePassportDatabaseId,
+          setup_data: recoveredSetup,
+          updated_by: auth.user.id,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "building_record_id" });
+        if (active && !saveError) setHomeSetup(recoveredSetup);
+      } catch { /* Keep the bill private and leave unconfirmed fields pending if extraction fails. */ }
+    };
+    loadHomeSetup();
     return () => { active = false; };
   }, [dataSourceBuildingId, homePassportDatabaseId, isActive]);
   useEffect(() => {
