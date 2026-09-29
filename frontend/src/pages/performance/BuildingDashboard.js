@@ -78,10 +78,6 @@ export const ProfileSummaryColumns = ({ record, property, setup = {} }) => {
     ]],
     ["Energy", [
       ["Supplier", bill.supplier],
-      ["Electricity MPAN", bill.mpan],
-      ["Electricity tariff", bill.electricityTariff],
-      ["Gas MPRN", bill.mprn],
-      ["Gas tariff", bill.gasTariff],
     ], [
       ...["heating", "solar", "battery"].map((field) => [
         field.charAt(0).toUpperCase() + field.slice(1), carbon[field]?.replaceAll("-", " "),
@@ -92,11 +88,15 @@ export const ProfileSummaryColumns = ({ record, property, setup = {} }) => {
       ["Selected sensor file", setup.sensorEvidenceFileName],
     ]],
   ];
+  const fuelDetails = [
+    ["Electricity", [["MPAN", bill.mpan], ["Tariff", bill.electricityTariff]]],
+    ["Gas", [["MPRN", bill.mprn], ["Tariff", bill.gasTariff]]],
+  ];
   const renderDetails = (details) => details.map(([label, value]) => <p key={label} className="mb-0.5 break-words text-gray-800"><span className="text-gray-600">{label}: </span><span className="font-semibold">{value || "Pending"}</span></p>);
   return <div className="mt-2 grid w-full min-w-0 grid-cols-4 gap-2 border-t border-emerald-200 px-3 pt-2 text-[10px] leading-tight [overflow-wrap:anywhere] sm:gap-3 sm:px-5 sm:text-xs">
     {rows.map(([heading, details, systems]) => <div key={heading} className={`min-w-0 border-r border-emerald-200 pr-2 last:border-0 last:pr-0 ${systems ? "col-span-2" : ""}`}>
       <h3 className="mb-1 font-bold text-emerald-950">{heading}</h3>
-      {systems ? <div className="grid min-w-0 grid-cols-2 gap-2 sm:gap-3"><div className="min-w-0">{renderDetails(details)}</div><div className="min-w-0"><h4 className="mb-0.5 font-semibold text-emerald-950">Carbon context</h4>{renderDetails(systems)}</div></div> : renderDetails(details)}
+      {systems ? <div className="grid min-w-0 grid-cols-2 gap-2 sm:gap-3"><div className="min-w-0">{renderDetails(details)}{fuelDetails.map(([fuel, fields]) => <div key={fuel} className="mt-1"><h4 className="font-semibold text-emerald-950">{fuel}</h4>{renderDetails(fields)}</div>)}</div><div className="min-w-0"><h4 className="mb-0.5 font-semibold text-emerald-950">Carbon context</h4>{renderDetails(systems)}</div></div> : renderDetails(details)}
     </div>)}
   </div>;
 };
@@ -10059,9 +10059,15 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                 {billRecordId ? <p className="text-xs text-emerald-900">Bill will be saved to {ownershipRecord?.recordId || billTarget?.record_reference}.</p>
                   : <p className="text-xs text-amber-800">A saved WBP-001 home profile is needed to store the bill privately.</p>}
                 {billStatus ? <p role="status" className="text-xs text-gray-700">{billStatus}</p> : null}
-                {(billDraftFile || carbonEvidence["energy-bill"]) ? <div className="grid gap-2 sm:grid-cols-2">
-                  {[["supplier", "Supplier"], ["electricityTariff", "Electricity tariff"], ["mpan", "Electricity MPAN"], ["electricityUnitRatePence", "Electricity unit rate (p/kWh)"], ["electricityStandingChargePence", "Electricity standing charge (p/day)"], ["gasTariff", "Gas tariff"], ["mprn", "Gas MPRN"], ["gasUnitRatePence", "Gas unit rate (p/kWh)"], ["gasStandingChargePence", "Gas standing charge (p/day)"]].map(([field, label]) =>
-                    <label key={field} className="space-y-1 text-xs text-gray-700">{label}<input type="text" className="w-full border bg-white p-2 text-xs" value={billReview[field] || ""} onChange={(event) => setBillReview((current) => ({ ...current, [field]: event.target.value }))} /></label>)}
+                {(billDraftFile || carbonEvidence["energy-bill"]) ? <div className="space-y-3">
+                  <label className="block space-y-1 text-xs text-gray-700">Supplier<input type="text" className="w-full border bg-white p-2 text-xs" value={billReview.supplier || ""} onChange={(event) => setBillReview((current) => ({ ...current, supplier: event.target.value }))} /></label>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {[
+                      ["Electricity", [["mpan", "MPAN"], ["electricityTariff", "Tariff"], ["electricityUnitRatePence", "Unit rate (p/kWh)"], ["electricityStandingChargePence", "Standing charge (p/day)"]]],
+                      ["Gas", [["mprn", "MPRN"], ["gasTariff", "Tariff"], ["gasUnitRatePence", "Unit rate (p/kWh)"], ["gasStandingChargePence", "Standing charge (p/day)"]]],
+                    ].map(([fuel, fields]) => <fieldset key={fuel} className="grid min-w-0 gap-2 border p-2"><legend className="px-1 text-xs font-semibold text-gray-800">{fuel}</legend>{fields.map(([field, label]) =>
+                      <label key={field} className="space-y-1 text-xs text-gray-700">{label}<input type="text" className="w-full border bg-white p-2 text-xs" value={billReview[field] || ""} onChange={(event) => setBillReview((current) => ({ ...current, [field]: event.target.value }))} /></label>)}</fieldset>)}
+                  </div>
                 </div> : null}
                 {billDraftFile ? <button type="button" disabled={billExtracting || Boolean(carbonEvidenceBusy)} onClick={confirmEnergyBill} className="bg-emerald-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">{billExtracting ? "Reading bill..." : "Confirm details and upload bill"}</button> : null}
                 {!billDraftFile && carbonEvidence["energy-bill"] ? <button type="button" disabled={!billRecordId || billExtracting || Boolean(carbonEvidenceBusy)} onClick={saveConfirmedBillDetails} className="bg-emerald-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Save confirmed tariff details</button> : null}

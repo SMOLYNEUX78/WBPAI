@@ -412,10 +412,12 @@ test("audit banner keeps energy and carbon context concise across two columns", 
   }, carbonSelections: { heating: "heat-pump", solar: "none", battery: "none" } }} />);
   expect(screen.getByRole("heading", { name: "Energy" }).parentElement).toHaveClass("col-span-2");
   expect(screen.getByText("Supplier:").closest("p")).toHaveTextContent("Good Energy");
-  expect(screen.getByText("Electricity MPAN:").closest("p")).toHaveTextContent("1234567890123");
-  expect(screen.getByText("Electricity tariff:").closest("p")).toHaveTextContent("Good Energy Fix Jan27");
-  expect(screen.getByText("Gas MPRN:").closest("p")).toHaveTextContent("1234567890");
-  expect(screen.getByText("Gas tariff:").closest("p")).toHaveTextContent("Good Energy Fix Jan27");
+  const electricity = screen.getByRole("heading", { name: "Electricity" }).parentElement;
+  const gas = screen.getByRole("heading", { name: "Gas" }).parentElement;
+  expect(within(electricity).getByText("MPAN:").closest("p")).toHaveTextContent("1234567890123");
+  expect(within(electricity).getByText("Tariff:").closest("p")).toHaveTextContent("Good Energy Fix Jan27");
+  expect(within(gas).getByText("MPRN:").closest("p")).toHaveTextContent("1234567890");
+  expect(within(gas).getByText("Tariff:").closest("p")).toHaveTextContent("Good Energy Fix Jan27");
   expect(screen.getByText("Heating:").closest("p")).toHaveTextContent("heat pump");
   expect(screen.queryByText("Gas unit rate:")).not.toBeInTheDocument();
 });
