@@ -78,8 +78,10 @@ export const ProfileSummaryColumns = ({ record, property, setup = {} }) => {
     ]],
     ["Energy", [
       ["Supplier", bill.supplier],
-      ["Electricity", bill.electricityTariff],
-      ["Gas", bill.gasTariff],
+      ["Electricity MPAN", bill.mpan],
+      ["Electricity tariff", bill.electricityTariff],
+      ["Gas MPRN", bill.mprn],
+      ["Gas tariff", bill.gasTariff],
     ], [
       ...["heating", "solar", "battery"].map((field) => [
         field.charAt(0).toUpperCase() + field.slice(1), carbon[field]?.replaceAll("-", " "),
@@ -8743,8 +8745,8 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   }, [isolatedDraft, ownershipRecord?.databaseId, ownershipRecord?.recordId]);
   const saveSetupSection = async (overrides = {}) => {
     const section = setupTab === "measurements" ? { manualData, modelInput }
-      : setupTab === "performance" ? { energyConsent, meterIdentifiers, healthSensors, sensorEvidenceFileName, carbonSelections }
-      : { carbonSelections };
+      : setupTab === "energy" ? { energyConsent, meterIdentifiers, carbonSelections }
+      : { healthSensors, sensorEvidenceFileName };
     Object.assign(section, overrides);
     const key = ownershipRecord?.recordId ? `${ownershipRecord.recordId}:setupSections` : "wbp-new-building-setup-draft";
     let localSetup = {};
@@ -9652,9 +9654,9 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
         <div className="mx-3 mt-2 flex border-t border-emerald-200 sm:mx-8 lg:mx-12" role="tablist" aria-label="Building history">
           {["design", "build", "audit"].map((item) => <button key={item} ref={item === "audit" ? auditTabRef : undefined} type="button" role="tab" aria-selected={historyStage === item}
             disabled={item !== "audit" && !historyUnlocked}
-            title={item !== "audit" && !historyUnlocked ? "Check your address in Audit to unlock this section" : undefined}
+            title={item !== "audit" && !historyUnlocked ? "Check your address in Occupy to unlock this section" : undefined}
             onClick={() => setHistoryStage(item)}
-            className={`min-w-0 flex-1 border-x border-t px-2 py-2 text-xs font-semibold capitalize transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${historyStage === item ? "border-gray-300 bg-gray-100 text-gray-950" : "border-transparent bg-emerald-100 text-emerald-800 hover:bg-emerald-50"}`}>{item}{item === "audit" && passportSaveStatus === "saved" ? <span className="ml-1 text-[10px] font-normal normal-case">· Home setup complete</span> : null}</button>)}
+            className={`min-w-0 flex-1 border-x border-t px-2 py-2 text-xs font-semibold capitalize transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${historyStage === item ? "border-gray-300 bg-gray-100 text-gray-950" : "border-transparent bg-emerald-100 text-emerald-800 hover:bg-emerald-50"}`}>{item === "audit" ? "Occupy" : item}{item === "audit" && passportSaveStatus === "saved" ? <span className="ml-1 text-[10px] font-normal normal-case">· Home setup complete</span> : null}</button>)}
         </div>
         {ownershipRecord ? <>
           {passportSaveStatus !== "saved" ? <div className="mx-3 mt-4 flex justify-end sm:mx-8 lg:mx-12"><button type="button" disabled={passportSaveStatus === "saving"} onClick={secureExistingPassport} className="bg-emerald-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">{passportSaveStatus === "saving" ? "Saving..." : "Save to secure account"}</button></div> : null}
@@ -9667,7 +9669,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       {showSetupOverlay ? <div className="mb-3 flex justify-end"><button type="button" onClick={() => setShowSetupOverlay(false)} className="border border-gray-300 bg-white px-3 py-1.5 text-sm font-semibold text-gray-800">Close</button></div> : null}
       <header className={`border-b border-gray-300 ${showSetupOverlay ? "hidden" : ""}`}>
       <nav className="relative -mb-px grid w-full min-w-0 grid-cols-4 gap-1 sm:flex sm:justify-center" role="tablist" aria-label="New building sections">
-        {[["ownership", "Ownership"], ["measurements", "3D Model"], ["performance", "Monitoring"], ["carbon", "Carbon Context"]].map(([id, label]) => (
+        {[["ownership", "Ownership"], ["measurements", "3D Model"], ["energy", "Energy Monitoring"], ["health", "Health Monitoring"]].map(([id, label]) => (
           <button
             key={id}
             type="button"
@@ -9997,10 +9999,10 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       </div>
       </div>
 
-      <div style={{ display: setupTab === "performance" ? undefined : "none" }}>
+      <div style={{ display: setupTab === "energy" || setupTab === "health" ? undefined : "none" }}>
       <div className="min-w-0">
-        <div className="grid gap-4 md:grid-cols-2 items-start">
-          <div className="bg-white rounded border p-4 space-y-4">
+        <div className="grid gap-4 items-start">
+          <div className="bg-white rounded border p-4 space-y-4" style={{ display: setupTab === "energy" ? undefined : "none" }}>
             <div>
               <h3 className="font-semibold mb-2">Energy Data</h3>
             </div>
@@ -10072,7 +10074,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
 
           </div>
 
-          <div className="bg-white rounded border p-4 space-y-4">
+          <div className="bg-white rounded border p-4 space-y-4" style={{ display: setupTab === "health" ? undefined : "none" }}>
             <div>
               <h3 className="font-semibold mb-2">Health Data</h3>
             </div>
@@ -10340,13 +10342,13 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       </div>
       </div>
 
-      <div style={{ display: setupTab === "carbon" ? undefined : "none" }}>
+      <div style={{ display: setupTab === "energy" ? undefined : "none" }}>
       <div className="min-w-0">
         <div className="mt-4 bg-white rounded border p-4 space-y-4">
           <div>
             <p className="text-sm text-gray-600">
               Record the heating system and on-site generation context used to assess
-              future carbon savings. Fuel and tariff details are collected in Monitoring.
+              future carbon savings. Supplier and tariff details are collected above from the energy bill.
             </p>
           </div>
 
@@ -10415,7 +10417,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
 
       </div>
       </div>
-      {setupTab !== "ownership" ? <div className="mt-4 flex items-center justify-end gap-3 border-t border-gray-200 pt-4"><span role="status" className="text-xs text-gray-600">{sectionSaveStatus === `${setupTab} saved on this device` ? "Saved on this device" : sectionSaveStatus === `${setupTab} saved to account` ? "Saved to account" : sectionSaveStatus.startsWith("Save failed:") ? sectionSaveStatus : ""}</span><button type="button" onClick={() => saveSetupSection()} className="bg-emerald-700 px-4 py-2 text-sm font-bold text-white">Save {setupTab === "carbon" ? "carbon context" : setupTab === "measurements" ? "3D model" : "monitoring"}</button></div> : null}
+      {setupTab !== "ownership" ? <div className="mt-4 flex items-center justify-end gap-3 border-t border-gray-200 pt-4"><span role="status" className="text-xs text-gray-600">{sectionSaveStatus === `${setupTab} saved on this device` ? "Saved on this device" : sectionSaveStatus === `${setupTab} saved to account` ? "Saved to account" : sectionSaveStatus.startsWith("Save failed:") ? sectionSaveStatus : ""}</span><button type="button" onClick={() => saveSetupSection()} className="bg-emerald-700 px-4 py-2 text-sm font-bold text-white">Save {setupTab === "measurements" ? "3D model" : setupTab === "energy" ? "energy monitoring" : "health monitoring"}</button></div> : null}
       </div>
       </div>
       </> : <div ref={setupPanelRef} className="overflow-hidden"><div ref={setupContentRef}>

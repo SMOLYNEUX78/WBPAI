@@ -5,22 +5,27 @@ import supabase from "../../supabaseClient";
 
 beforeEach(() => window.localStorage.clear());
 
-test("monitoring uses the bill for tariff evidence without duplicate classifications", () => {
+test("energy monitoring contains bill and carbon context while health has its own tab", () => {
   render(<MemoryRouter><NewBuildingSetupPanel /></MemoryRouter>);
-  fireEvent.click(screen.getByRole("tab", { name: "Monitoring" }));
+  expect(screen.getByRole("tab", { name: "Ownership" })).toBeInTheDocument();
+  expect(screen.getByRole("tab", { name: "3D Model" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("tab", { name: "Energy Monitoring" }));
   expect(screen.getByText("2. Tariff evidence")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Scan or upload energy bill" })).toBeInTheDocument();
   expect(screen.queryByRole("combobox", { name: "Electricity tariff" })).not.toBeInTheDocument();
-  expect(screen.queryByText("Additional meter and tariff evidence")).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole("tab", { name: "Carbon Context" }));
   expect(screen.getByLabelText("Heating system evidence")).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Save energy monitoring" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("tab", { name: "Health Monitoring" }));
+  expect(screen.getByRole("button", { name: "Save health monitoring" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Scan IAQ sensor" })).toBeVisible();
+  expect(screen.getByRole("button", { name: "Scan or upload energy bill", hidden: true })).not.toBeVisible();
 });
 
 test("health setup distinguishes label scanning, connection and metric validation", () => {
   render(<MemoryRouter><NewBuildingSetupPanel /></MemoryRouter>);
-  fireEvent.click(screen.getByRole("tab", { name: "Monitoring" }));
-  expect(screen.getByText("1. Identify the instrument")).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Scan IAQ product" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("tab", { name: "Health Monitoring" }));
+  expect(screen.getByText("1. Import your health data")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Scan IAQ sensor" })).toBeInTheDocument();
   expect(screen.getByRole("combobox", { name: "Connection route" })).toHaveValue("dyson");
   expect(screen.getByRole("combobox", { name: "Collector stream" })).toHaveValue("");
   expect(screen.getByText("3. Metrics to validate")).toBeInTheDocument();
@@ -396,10 +401,15 @@ test("audit summary shows the second owner across the full four-column banner", 
 test("audit banner keeps energy and carbon context concise across two columns", () => {
   render(<ProfileSummaryColumns setup={{ billReview: {
     supplier: "Good Energy", electricityTariff: "Good Energy Fix Jan27", gasTariff: "Good Energy Fix Jan27",
+    mpan: "1234567890123", mprn: "1234567890",
     electricityUnitRatePence: "20.61", gasUnitRatePence: "5.00",
   }, carbonSelections: { heating: "heat-pump", solar: "none", battery: "none" } }} />);
   expect(screen.getByRole("heading", { name: "Energy" }).parentElement).toHaveClass("col-span-2");
-  expect(screen.getByText("Electricity:").closest("p")).toHaveTextContent("Good Energy Fix Jan27");
+  expect(screen.getByText("Supplier:").closest("p")).toHaveTextContent("Good Energy");
+  expect(screen.getByText("Electricity MPAN:").closest("p")).toHaveTextContent("1234567890123");
+  expect(screen.getByText("Electricity tariff:").closest("p")).toHaveTextContent("Good Energy Fix Jan27");
+  expect(screen.getByText("Gas MPRN:").closest("p")).toHaveTextContent("1234567890");
+  expect(screen.getByText("Gas tariff:").closest("p")).toHaveTextContent("Good Energy Fix Jan27");
   expect(screen.getByText("Heating:").closest("p")).toHaveTextContent("heat pump");
   expect(screen.queryByText("Gas unit rate:")).not.toBeInTheDocument();
 });
