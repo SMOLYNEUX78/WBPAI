@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { NewBuildingSetupPanel, OccupyHistoryTabs, ProfileSummaryColumns, decodeSensorLabel, findAccountHomeRecord, findHomeProfileForOverwrite } from "./BuildingDashboard";
+import { NewBuildingSetupPanel, OccupyHistoryTabs, ProfileSummaryColumns, decodeSensorLabel, parseSensorLabelText, findAccountHomeRecord, findHomeProfileForOverwrite } from "./BuildingDashboard";
 import supabase from "../../supabaseClient";
 
 beforeEach(() => window.localStorage.clear());
@@ -49,6 +49,51 @@ test("QR labels fill only supported identity fields and discard pairing tokens",
     manufacturer: "Example", model: "Air One", serialNumber: "A123", identificationMethod: "qr-label",
   });
   expect(decodeSensorLabel("https://example.com/pair?password=secret", true)).toBeNull();
+});
+
+test("Dyson label text extracts identity and electrical rating without claiming a connection", () => {
+  expect(parseSensorLabelText("dyson TP02 SERIAL NO. NN6-UK-HDA1783A 230-240V 50Hz 58W")).toEqual({
+    manufacturer: "Dyson", model: "TP02", serialNumber: "NN6-UK-HDA1783A",
+    ratedPowerW: "58", ratedVoltage: "230-240", ratedFrequencyHz: "50",
+  });
+  expect(parseSensorLabelText("dyson TP02 58W")).not.toHaveProperty("serialNumber");
+});
+
+test("fresh New tab loads and saves health instruments through the existing home account", async () => {
+  const storedSensor = {
+    id: "sensor-1", manufacturer: "Dyson", model: "TP02", location: "Upstairs",
+    metrics: [], evidenceGrade: "indicative", verificationStatus: "unverified", connectionMethod: "manual",
+  };
+  const phoneSensor = { ...storedSensor, id: "sensor-2", location: "Downstairs" };
+  window.localStorage.setItem("wbp-new-building-setup-draft", JSON.stringify({ healthSensors: [phoneSensor] }));
+  const upsert = jest.fn().mockResolvedValue({ error: null });
+  const getUser = jest.spyOn(supabase.auth, "getUser").mockResolvedValue({ data: { user: { id: "owner-1" } }, error: null });
+  const from = jest.spyOn(supabase, "from").mockImplementation((table) => {
+    const chain = {
+      eq: () => chain, order: () => chain, limit: () => chain,
+      then: (resolve) => Promise.resolve({ data: [], error: null }).then(resolve),
+      maybeSingle: async () => ({ data: table === "WBPBuildingRecords"
+        ? { id: "home-id", record_reference: "WBP-001", custodian_user_id: "owner-1" }
+        : { setup_data: { healthSensors: [storedSensor] } }, error: null }),
+    };
+    return { select: () => chain, upsert };
+  });
+  try {
+    render(<MemoryRouter><NewBuildingSetupPanel freshStart syncHomeProfile /></MemoryRouter>);
+    fireEvent.click(screen.getByRole("tab", { name: "Health Monitoring" }));
+    expect(await screen.findByText("Dyson TP02")).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: "Load 1 sensor draft from this device" }));
+    expect(screen.getAllByText("Dyson TP02")).toHaveLength(2);
+    expect(await screen.findByText("Downstairs")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Save health monitoring" }));
+    await waitFor(() => expect(upsert).toHaveBeenCalledWith(expect.objectContaining({
+      building_record_id: "home-id", setup_data: expect.objectContaining({ healthSensors: [storedSensor, phoneSensor] }),
+    }), expect.anything()));
+    expect(await screen.findByText("Saved to account")).toBeInTheDocument();
+  } finally {
+    from.mockRestore();
+    getUser.mockRestore();
+  }
 });
 
 test("3D Model displays property coordinates and accepts an area for Design", () => {

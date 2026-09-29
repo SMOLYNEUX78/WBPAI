@@ -568,6 +568,22 @@ export const decodeSensorLabel = (raw, isQrCode) => {
     ? { manufacturer, model, serialNumber, identificationMethod: "qr-label" }
     : null;
 };
+
+export const parseSensorLabelText = (text) => {
+  const value = String(text || "").replace(/\s+/g, " ");
+  const dyson = /\bdyson\b/i.test(value);
+  const model = dyson ? value.match(/\b(?:TP|DP|HP|PH|BP)\s?\d{2}\b/i)?.[0]?.replace(/\s/g, "").toUpperCase()
+    : value.match(/\bmodel(?:\s*(?:no\.?|number))?\s*[:#]?\s*([A-Z0-9][A-Z0-9._-]{2,20})/i)?.[1];
+  const serial = value.match(/\bserial\s*(?:no\.?|number|#)?\s*[:#]?\s*([A-Z0-9][A-Z0-9-]{6,24})/i)?.[1]
+    || (dyson ? value.match(/\b[A-Z0-9]{2,4}-[A-Z]{2}-[A-Z0-9]{6,12}\b/i)?.[0] : "");
+  const power = value.match(/\b(\d{1,4})\s?W\b/i)?.[1];
+  const voltage = value.match(/\b(\d{2,3}(?:\s?[-–]\s?\d{2,3})?)\s?V\b/i)?.[1]?.replace(/\s/g, "");
+  const frequency = value.match(/\b(\d{2,3})\s?Hz\b/i)?.[1];
+  return Object.fromEntries(Object.entries({
+    manufacturer: dyson ? "Dyson" : "", model: model || "", serialNumber: serial || "",
+    ratedPowerW: power || "", ratedVoltage: voltage || "", ratedFrequencyHz: frequency || "",
+  }).filter(([, field]) => field));
+};
 const PROPERTY_DISCOVERY_DATASETS = [
   "planning-application",
   "listed-building",
@@ -8593,6 +8609,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   const [carbonEvidenceBusy, setCarbonEvidenceBusy] = useState("");
   const [sectionSaveStatus, setSectionSaveStatus] = useState("");
   const [healthSensors, setHealthSensors] = useState([]);
+  const [pendingLocalSensors, setPendingLocalSensors] = useState([]);
   const [sensorEvidenceFileName, setSensorEvidenceFileName] = useState("");
   const [sensorScanStatus, setSensorScanStatus] = useState("");
   const [sensorScannerOpen, setSensorScannerOpen] = useState(false);
@@ -8612,11 +8629,16 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
     return () => { active = false; };
   }, [syncHomeProfile, isolatedDraft]);
   const billRecordId = ownershipRecord?.databaseId || billTarget?.id;
+  const healthRecordId = ownershipRecord?.databaseId || (syncHomeProfile ? billTarget?.id : null);
+  const healthRecordReference = ownershipRecord?.recordId || (syncHomeProfile ? billTarget?.record_reference : null);
   const [sensorDraft, setSensorDraft] = useState({
     manufacturer: "",
     model: "",
     serialNumber: "",
     labelCode: "",
+    ratedPowerW: "",
+    ratedVoltage: "",
+    ratedFrequencyHz: "",
     location: "",
     evidenceGrade: "indicative",
     verificationStatus: "unverified",
@@ -8774,6 +8796,30 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       });
     return () => { active = false; };
   }, [isolatedDraft, ownershipRecord?.databaseId, ownershipRecord?.recordId]);
+  useEffect(() => {
+    if (!isolatedDraft || !syncHomeProfile || ownershipRecord?.databaseId || !healthRecordId) return undefined;
+    let active = true;
+    const loadAccountSensors = async () => {
+      const { data: auth } = await supabase.auth.getUser();
+      if (!active || !auth?.user) return;
+      const { data, error } = await supabase.from("WBPBuildingSetupDeclarations")
+        .select("setup_data").eq("building_record_id", healthRecordId).maybeSingle();
+      if (!active || error) return;
+      const cachedPassport = readSavedHomePassport();
+      let localSensors = [];
+      try {
+        const draft = JSON.parse(window.localStorage.getItem("wbp-new-building-setup-draft") || "null");
+        if (Array.isArray(draft?.healthSensors)) localSensors = draft.healthSensors;
+      } catch { /* Ignore a damaged browser draft. */ }
+      const accountSensors = Array.isArray(data?.setup_data?.healthSensors) ? data.setup_data.healthSensors : [];
+      const sameHome = cachedPassport?.ownerUserId === auth.user.id && cachedPassport.databaseId === healthRecordId;
+      setHealthSensors((current) => Array.from(new Map([...accountSensors, ...(sameHome ? localSensors : []), ...current].map((sensor) => [sensor.id, sensor])).values()));
+      if (localSensors.length && sameHome) setSectionSaveStatus("Local sensor draft ready to sync. Save health monitoring to add it to your account.");
+      if (localSensors.length && !sameHome) setPendingLocalSensors(localSensors);
+    };
+    loadAccountSensors();
+    return () => { active = false; };
+  }, [isolatedDraft, syncHomeProfile, ownershipRecord?.databaseId, healthRecordId]);
   const saveSetupSection = async (overrides = {}) => {
     if (setupTab === "measurements" && manualData.internalArea !== "" && !(Number(manualData.internalArea) > 0)) {
       setSectionSaveStatus("Save failed: Enter an internal floor area greater than zero.");
@@ -8786,23 +8832,25 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       section.historicalStages = { ...historyDraft, design: { ...historyDraft.design, internalArea: manualData.internalArea, areaSource: "3d-model" } };
     }
     Object.assign(section, overrides);
-    const key = ownershipRecord?.recordId ? `${ownershipRecord.recordId}:setupSections` : "wbp-new-building-setup-draft";
+    const targetRecordId = setupTab === "health" ? healthRecordId : ownershipRecord?.databaseId;
+    const recordReference = setupTab === "health" ? healthRecordReference : ownershipRecord?.recordId;
+    const key = recordReference ? `${recordReference}:setupSections` : "wbp-new-building-setup-draft";
     let localSetup = {};
     try { localSetup = JSON.parse(window.localStorage.getItem(key) || "{}"); } catch { /* Invalid local data is ignored. */ }
     const mergedLocal = { ...localSetup, ...section };
     window.localStorage.setItem(key, JSON.stringify(mergedLocal));
-    if (ownershipRecord?.databaseId) {
+    if (targetRecordId) {
       const { data: auth } = await supabase.auth.getUser();
       if (auth?.user) {
         const { data: existing, error: readError } = await supabase.from("WBPBuildingSetupDeclarations")
-          .select("setup_data").eq("building_record_id", ownershipRecord.databaseId).maybeSingle();
+          .select("setup_data").eq("building_record_id", targetRecordId).maybeSingle();
         if (readError) { setSectionSaveStatus(`Save failed: ${readError.message}`); return; }
         const savedSection = section.historicalStages ? { ...section, historicalStages: {
           ...(existing?.setup_data?.historicalStages || {}), ...section.historicalStages,
           design: { ...(existing?.setup_data?.historicalStages?.design || {}), ...section.historicalStages.design },
         } } : section;
         const { error } = await supabase.from("WBPBuildingSetupDeclarations").upsert({
-          building_record_id: ownershipRecord.databaseId,
+          building_record_id: targetRecordId,
           setup_data: { ...(existing?.setup_data || {}), ...savedSection },
           updated_by: auth.user.id,
           updated_at: new Date().toISOString(),
@@ -8810,8 +8858,8 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
         if (!error) {
           const savedSetup = { ...(existing?.setup_data || {}), ...savedSection };
           window.localStorage.setItem(key, JSON.stringify(savedSetup));
-          window.localStorage.removeItem("wbp-new-building-setup-draft");
-          window.dispatchEvent(new CustomEvent("wbp:setup-updated", { detail: { recordId: ownershipRecord.databaseId, setupData: savedSetup } }));
+          if (setupTab !== "health" || pendingLocalSensors.length === 0) window.localStorage.removeItem("wbp-new-building-setup-draft");
+          window.dispatchEvent(new CustomEvent("wbp:setup-updated", { detail: { recordId: targetRecordId, setupData: savedSetup } }));
           setSectionSaveStatus(`${setupTab} saved to account`);
           if (setupTab === "measurements") setModelAreaEdited(false);
           return;
@@ -8822,7 +8870,9 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       setSectionSaveStatus("Save failed: Sign in again to save this section to your account.");
       return;
     }
-    setSectionSaveStatus(`${setupTab} saved on this device`);
+    setSectionSaveStatus(setupTab === "health" && syncHomeProfile
+      ? "Saved only on this device. Sign in and create or select a home profile, then save again to sync it."
+      : `${setupTab} saved on this device`);
     if (setupTab === "measurements") setModelAreaEdited(false);
   };
 
@@ -9553,15 +9603,32 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   const scanSensorPhoto = async (file) => {
     if (!file) return;
     setSensorPhotoBusy(true);
-    setSensorScanStatus("");
+    setSensorScanStatus("Reading barcode and printed label...");
     const imageUrl = URL.createObjectURL(file);
     try {
       const [{ BrowserMultiFormatReader, BarcodeFormat }, { DecodeHintType }] = await Promise.all([import("@zxing/browser"), import("@zxing/library")]);
       const reader = new BrowserMultiFormatReader(new Map([[DecodeHintType.TRY_HARDER, true]]));
-      const result = await reader.decodeFromImageUrl(imageUrl);
-      acceptSensorCode(result.getText(), result.getBarcodeFormat() === BarcodeFormat.QR_CODE);
+      let barcodeDetails = null;
+      try {
+        const result = await reader.decodeFromImageUrl(imageUrl);
+        barcodeDetails = decodeSensorLabel(result.getText(), result.getBarcodeFormat() === BarcodeFormat.QR_CODE);
+      } catch { /* Printed text may still identify the sensor. */ }
+      let printedDetails = {};
+      try {
+        const { createWorker } = await import("tesseract.js");
+        const worker = await createWorker("eng");
+        try { printedDetails = parseSensorLabelText((await worker.recognize(file)).data.text); }
+        finally { await worker.terminate(); }
+      } catch { /* A readable barcode can still be used if OCR is unavailable. */ }
+      const details = { ...(barcodeDetails || {}), ...printedDetails };
+      if (Object.keys(details).length) {
+        setSensorDraft((current) => ({ ...current, ...details, identificationMethod: "label-photo" }));
+        setSensorScanStatus("Label details filled in. Check the model and serial against the printed label before adding the instrument.");
+      } else {
+        setSensorScanStatus("No readable label details found. Try a sharper photo in good light, or enter the printed details manually.");
+      }
     } catch {
-      setSensorScanStatus("No readable code found in that photo. Try a sharper, closer photo in good light, or enter the printed code manually.");
+      setSensorScanStatus("Could not read that photo. Try a sharper photo or enter the printed details manually.");
     } finally {
       URL.revokeObjectURL(imageUrl);
       setSensorPhotoBusy(false);
@@ -9599,8 +9666,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
     if (
       !sensorDraft.manufacturer.trim() ||
       !sensorDraft.model.trim() ||
-      !sensorDraft.location.trim() ||
-      sensorDraft.metrics.length === 0
+      !sensorDraft.location.trim()
     ) {
       return;
     }
@@ -9619,6 +9685,9 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       model: "",
       serialNumber: "",
       labelCode: "",
+      ratedPowerW: "",
+      ratedVoltage: "",
+      ratedFrequencyHz: "",
       location: "",
       evidenceGrade: "indicative",
       verificationStatus: "unverified",
@@ -10205,6 +10274,18 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                     placeholder="Scanned barcode or printed code, if available"
                   />
                 </label>
+                <label className="space-y-1 text-xs text-gray-600">Rated power (W)
+                  <input type="text" inputMode="numeric" className="border rounded p-2 w-full text-xs bg-white" value={sensorDraft.ratedPowerW || ""}
+                    onChange={(event) => handleSensorDraftChange("ratedPowerW", event.target.value)} placeholder="From device label" />
+                </label>
+                <label className="space-y-1 text-xs text-gray-600">Rated voltage (V)
+                  <input type="text" className="border rounded p-2 w-full text-xs bg-white" value={sensorDraft.ratedVoltage || ""}
+                    onChange={(event) => handleSensorDraftChange("ratedVoltage", event.target.value)} placeholder="From device label" />
+                </label>
+                <label className="space-y-1 text-xs text-gray-600">Rated frequency (Hz)
+                  <input type="text" inputMode="numeric" className="border rounded p-2 w-full text-xs bg-white" value={sensorDraft.ratedFrequencyHz || ""}
+                    onChange={(event) => handleSensorDraftChange("ratedFrequencyHz", event.target.value)} placeholder="From device label" />
+                </label>
                 <label className="space-y-1 text-xs text-gray-600">
                   Installed location
                   <input
@@ -10337,8 +10418,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                 disabled={
                   !sensorDraft.manufacturer.trim() ||
                   !sensorDraft.model.trim() ||
-                  !sensorDraft.location.trim() ||
-                  sensorDraft.metrics.length === 0
+                  !sensorDraft.location.trim()
                 }
                 onClick={addHealthSensor}
               >
@@ -10353,6 +10433,11 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                   {healthSensors.length} registered
                 </span>
               </div>
+              {pendingLocalSensors.length ? <button type="button" className="border border-amber-700 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-950" onClick={() => {
+                setHealthSensors((current) => Array.from(new Map([...current, ...pendingLocalSensors].map((sensor) => [sensor.id, sensor])).values()));
+                setPendingLocalSensors([]);
+                setSectionSaveStatus("Local sensor draft loaded. Review it, then save health monitoring to sync it to your account.");
+              }}>Load {pendingLocalSensors.length} sensor draft{pendingLocalSensors.length === 1 ? "" : "s"} from this device</button> : null}
               {healthSensors.length === 0 ? (
                 <div className="text-xs border rounded bg-gray-50 p-3 text-gray-600">
                   No health-data instruments registered yet.
@@ -10370,6 +10455,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                           {sensor.serialNumber ? ` | ${sensor.serialNumber}` : ""}
                         </p>
                         {sensor.labelCode ? <p className="text-gray-600 break-words">Label code: {sensor.labelCode}</p> : null}
+                        {sensor.ratedPowerW || sensor.ratedVoltage || sensor.ratedFrequencyHz ? <p className="text-gray-600">Label rating: {[sensor.ratedVoltage && `${sensor.ratedVoltage} V`, sensor.ratedFrequencyHz && `${sensor.ratedFrequencyHz} Hz`, sensor.ratedPowerW && `${sensor.ratedPowerW} W`].filter(Boolean).join(" · ")}</p> : null}
                       </div>
                       <span className="shrink-0 border rounded px-2 py-1 uppercase text-[10px] text-gray-600">
                         {sensor.evidenceGrade}
@@ -10377,16 +10463,16 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                     </div>
                     <p className="text-gray-700">
                       <strong>Metrics:</strong>{" "}
-                      {sensor.metrics
+                      {(sensor.metrics || []).length ? (sensor.metrics || [])
                         .map(
                           (metric) =>
                             healthMetricOptions.find(([value]) => value === metric)?.[1] ||
                             metric
                         )
-                        .join(", ")}
+                        .join(", ") : "Not specified"}
                     </p>
                     <p className="text-gray-700"><strong>Connection:</strong> {sensor.connectionMethod === "dyson" ? sensor.readingType || "Dyson stream not selected" : sensor.connectionMethod || "Not set"} · {sensor.connectionStatus || "not checked"}{sensor.lastSampleAt ? ` · ${new Date(sensor.lastSampleAt).toLocaleString()}` : ""}</p>
-                    {sensor.metrics.map((metric) => <p key={metric} className="text-gray-600">{healthMetricOptions.find(([value]) => value === metric)?.[1] || metric}: {sensor.metricStatus?.[metric] || "Not validated"}</p>)}
+                    {(sensor.metrics || []).map((metric) => <p key={metric} className="text-gray-600">{healthMetricOptions.find(([value]) => value === metric)?.[1] || metric}: {sensor.metricStatus?.[metric] || "Not validated"}</p>)}
                     {sensor.connectionMethod === "dyson" && sensor.readingType ? <button type="button" disabled={sensorCheckBusy === sensor.id} onClick={() => checkSensorReading(sensor)} className="border border-emerald-700 px-2 py-1 font-semibold text-emerald-900 disabled:opacity-50">{sensorCheckBusy === sensor.id ? "Checking..." : "Check recent sample"}</button> : null}
                     <p className="text-gray-600">
                       <strong>Assurance:</strong>{" "}
@@ -10492,7 +10578,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
 
       </div>
       </div>
-      {setupTab !== "ownership" ? <div className="mt-4 flex items-center justify-end gap-3 border-t border-gray-200 pt-4"><span role="status" className="text-xs text-gray-600">{sectionSaveStatus === `${setupTab} saved on this device` ? "Saved on this device" : sectionSaveStatus === `${setupTab} saved to account` ? "Saved to account" : sectionSaveStatus.startsWith("Save failed:") ? sectionSaveStatus : ""}</span><button type="button" onClick={() => saveSetupSection()} className="bg-emerald-700 px-4 py-2 text-sm font-bold text-white">Save {setupTab === "measurements" ? "3D model" : setupTab === "energy" ? "energy monitoring" : "health monitoring"}</button></div> : null}
+      {setupTab !== "ownership" ? <div className="mt-4 flex items-center justify-end gap-3 border-t border-gray-200 pt-4"><span role="status" className="text-xs text-gray-600">{sectionSaveStatus === `${setupTab} saved on this device` ? "Saved on this device" : sectionSaveStatus === `${setupTab} saved to account` ? "Saved to account" : sectionSaveStatus.startsWith("Save failed:") || setupTab === "health" && (sectionSaveStatus.startsWith("Saved only") || sectionSaveStatus.startsWith("Local sensor draft")) ? sectionSaveStatus : ""}</span><button type="button" onClick={() => saveSetupSection()} className="bg-emerald-700 px-4 py-2 text-sm font-bold text-white">Save {setupTab === "measurements" ? "3D model" : setupTab === "energy" ? "energy monitoring" : "health monitoring"}</button></div> : null}
       </div>
       </div>
       </> : <div ref={setupPanelRef} className="overflow-hidden"><div ref={setupContentRef}>
