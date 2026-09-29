@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { NewBuildingSetupPanel, OccupyHistoryTabs, ProfileSummaryColumns, decodeSensorLabel, parseSensorLabelText, findAccountHomeRecord, findHomeProfileForOverwrite } from "./BuildingDashboard";
+import { NewBuildingSetupPanel, OccupyHistoryTabs, ProfileSummaryColumns, decodeSensorLabel, parseSensorLabelText, mergeScannedSensor, findAccountHomeRecord, findHomeProfileForOverwrite } from "./BuildingDashboard";
 import supabase from "../../supabaseClient";
 
 beforeEach(() => window.localStorage.clear());
@@ -59,6 +59,16 @@ test("Dyson label text extracts identity and electrical rating without claiming 
   expect(parseSensorLabelText("dyson TP02 58W")).not.toHaveProperty("serialNumber");
   expect(parseSensorLabelText("DYSON -TPO2 NN6-UK-HDA1783A")).toMatchObject({
     manufacturer: "Dyson", model: "TP02", serialNumber: "NN6-UK-HDA1783A",
+  });
+});
+
+test("scanning another sensor clears the previous room and connection details", () => {
+  const previous = { labelCode: "DOWNSTAIRS-1", manufacturer: "Dyson", model: "TP02", location: "Downstairs living room", connectionMethod: "dyson", readingType: "living-room" };
+  expect(mergeScannedSensor(previous, { labelCode: "UPSTAIRS-2", manufacturer: "Dyson" })).toMatchObject({
+    labelCode: "UPSTAIRS-2", manufacturer: "Dyson", model: "", location: "", connectionMethod: "manual", readingType: "",
+  });
+  expect(mergeScannedSensor(previous, { labelCode: "DOWNSTAIRS-1", ratedPowerW: "58" })).toMatchObject({
+    location: "Downstairs living room", connectionMethod: "dyson", ratedPowerW: "58",
   });
 });
 
@@ -136,7 +146,16 @@ test("WBP profile summary shows saved instruments and an unregistered scan separ
   }} />);
   expect(screen.getByText("1 registered")).toBeInTheDocument();
   expect(screen.getByText("Dyson · TP02 · Upstairs")).toBeInTheDocument();
-  expect(screen.getByText("Awaiting model and room confirmation")).toBeInTheDocument();
+  expect(screen.getByText("Confirm model and room before adding this instrument")).toBeInTheDocument();
+});
+
+test("the WBP summary does not repeat a registered sensor as an unfinished scan", () => {
+  render(<ProfileSummaryColumns setup={{
+    healthSensors: [{ id: "sensor-1", labelCode: "NN6-UK-HDA1783A", manufacturer: "Dyson", model: "TP02", location: "Downstairs living room" }],
+    healthSensorDraft: { labelCode: "NN6-UK-HDA1783A", manufacturer: "Dyson", location: "Downstairs living room" },
+  }} />);
+  expect(screen.queryByText("Unregistered scan")).not.toBeInTheDocument();
+  expect(screen.getByText("Dyson · TP02 · Downstairs living room")).toBeInTheDocument();
 });
 
 test("3D Model displays property coordinates and accepts an area for Design", () => {

@@ -70,12 +70,30 @@ export const findHomeProfileForOverwrite = async (client, uprn) => {
   } : null;
 };
 
+const emptySensorDraft = () => ({
+  manufacturer: "", model: "", serialNumber: "", labelCode: "", ratedPowerW: "",
+  ratedVoltage: "", ratedFrequencyHz: "", location: "", evidenceGrade: "indicative",
+  verificationStatus: "unverified", verificationDate: "", placementNotes: "", metrics: [],
+  connectionMethod: "manual", readingType: "", identificationMethod: "manual",
+});
+const sensorIdentity = (sensor) => String(sensor?.labelCode || sensor?.serialNumber || "")
+  .replace(/[^a-z0-9]/gi, "").toUpperCase();
+export const mergeScannedSensor = (current, scanned) => {
+  const previousIdentity = sensorIdentity(current);
+  const nextIdentity = sensorIdentity(scanned);
+  return { ...(previousIdentity && nextIdentity && previousIdentity === nextIdentity ? current : emptySensorDraft()), ...scanned };
+};
+
 export const ProfileSummaryColumns = ({ record, property, setup = {} }) => {
   const carbon = setup.carbonSelections || {};
   const bill = normaliseBillReview(setup.billReview);
   const sensors = Array.isArray(setup.healthSensors) ? setup.healthSensors : [];
   const pendingSensor = setup.healthSensorDraft || {};
-  const hasPendingSensor = ["manufacturer", "model", "serialNumber", "labelCode", "location"].some((field) => pendingSensor[field]);
+  const pendingIdentity = sensorIdentity(pendingSensor);
+  const hasPendingSensor = ["manufacturer", "model", "serialNumber", "labelCode"].some((field) => pendingSensor[field])
+    && !(pendingIdentity && sensors.some((sensor) => sensorIdentity(sensor) === pendingIdentity));
+  const missingSensorDetails = [["manufacturer", "manufacturer"], ["model", "model"], ["location", "room"]]
+    .filter(([field]) => !pendingSensor[field]).map(([, label]) => label);
   const rows = [
     ["Ownership", [
       ["Property number (UPRN)", record?.uprn],
@@ -95,7 +113,6 @@ export const ProfileSummaryColumns = ({ record, property, setup = {} }) => {
     ["Health", [
       ["Sensors", sensors.length ? `${sensors.length} registered` : "Pending"],
       ...sensors.map((sensor, index) => [`Instrument ${index + 1}`, [sensor.manufacturer, sensor.model, sensor.location].filter(Boolean).join(" · ")]),
-      ...(hasPendingSensor ? [["Scanned device", [pendingSensor.manufacturer, pendingSensor.model, pendingSensor.location].filter(Boolean).join(" · ") || pendingSensor.labelCode || pendingSensor.serialNumber], ["Registration", "Awaiting model and room confirmation"]] : []),
       ["Selected sensor file", setup.sensorEvidenceFileName],
     ]],
   ];
@@ -116,7 +133,11 @@ export const ProfileSummaryColumns = ({ record, property, setup = {} }) => {
           <h4 className="mb-1 font-semibold text-emerald-950">Carbon context</h4>
           <div className="grid min-w-0 grid-cols-2 gap-x-2 sm:gap-x-3">{renderDetails(systems)}</div>
         </div>
-      </div> : renderDetails(details)}
+      </div> : <>{renderDetails(details)}{heading === "Health" && hasPendingSensor ? <div className="mt-2 border-t border-emerald-200 pt-2">
+        <h4 className="font-semibold text-emerald-950">Unregistered scan</h4>
+        <p className="break-words text-gray-800">{[pendingSensor.manufacturer, pendingSensor.model].filter(Boolean).join(" · ") || pendingIdentity}</p>
+        <p className="break-words text-gray-600">{missingSensorDetails.length ? `Confirm ${missingSensorDetails.join(" and ")} before adding this instrument` : "Ready to add as instrument"}</p>
+      </div> : null}</>}
     </div>)}
   </div>;
 };
@@ -8642,22 +8663,8 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   }, [syncHomeProfile, isolatedDraft]);
   const billRecordId = ownershipRecord?.databaseId || billTarget?.id;
   const healthRecordId = ownershipRecord?.databaseId || (syncHomeProfile ? billTarget?.id : null);
-  const [sensorDraft, setSensorDraft] = useState({
-    manufacturer: "",
-    model: "",
-    serialNumber: "",
-    labelCode: "",
-    ratedPowerW: "",
-    ratedVoltage: "",
-    ratedFrequencyHz: "",
-    location: "",
-    evidenceGrade: "indicative",
-    verificationStatus: "unverified",
-    verificationDate: "",
-    placementNotes: "",
-    metrics: [],
-    connectionMethod: "manual", readingType: "", identificationMethod: "manual",
-  });
+  const [sensorDraft, setSensorDraft] = useState(emptySensorDraft);
+  const sensorDraftTouchedRef = useRef(false);
   useEffect(() => {
     if (isolatedDraft) return;
     let active = true;
@@ -8781,7 +8788,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       setMeterIdentifiers((current) => ({ ...current, ...saved.meterIdentifiers }));
       setBillReview(normaliseBillReview(saved.billReview));
       setHealthSensors(Array.isArray(saved.healthSensors) ? saved.healthSensors : []);
-      if (saved.healthSensorDraft) setSensorDraft((current) => ({ ...current, ...saved.healthSensorDraft }));
+      if (saved.healthSensorDraft && !sensorDraftTouchedRef.current) setSensorDraft((current) => ({ ...current, ...saved.healthSensorDraft }));
       setCarbonSelections((current) => ({ ...current, ...saved.carbonSelections }));
       if (saved.modelInput) setModelInput(saved.modelInput);
       setSensorEvidenceFileName(saved.sensorEvidenceFileName || "");
@@ -8801,7 +8808,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
         setMeterIdentifiers((current) => ({ ...current, ...saved.meterIdentifiers }));
         setBillReview(normaliseBillReview(saved.billReview));
         setHealthSensors(Array.isArray(saved.healthSensors) ? saved.healthSensors : []);
-        if (saved.healthSensorDraft) setSensorDraft((current) => ({ ...current, ...saved.healthSensorDraft }));
+        if (saved.healthSensorDraft && !sensorDraftTouchedRef.current) setSensorDraft((current) => ({ ...current, ...saved.healthSensorDraft }));
         setCarbonSelections((current) => ({ ...current, ...saved.carbonSelections }));
         setSensorEvidenceFileName(saved.sensorEvidenceFileName || "");
         if (saved.modelInput) setModelInput(saved.modelInput);
@@ -8826,7 +8833,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
         if (Array.isArray(draft?.healthSensors)) localSensors = draft.healthSensors;
       } catch { /* Ignore a damaged browser draft. */ }
       const accountSensors = Array.isArray(data?.setup_data?.healthSensors) ? data.setup_data.healthSensors : [];
-      if (data?.setup_data?.healthSensorDraft) setSensorDraft((current) => ({ ...current, ...data.setup_data.healthSensorDraft }));
+      if (data?.setup_data?.healthSensorDraft && !sensorDraftTouchedRef.current) setSensorDraft((current) => ({ ...current, ...data.setup_data.healthSensorDraft }));
       const sameHome = cachedPassport?.ownerUserId === auth.user.id && cachedPassport.databaseId === healthRecordId;
       setHealthSensors((current) => Array.from(new Map([...accountSensors, ...(sameHome ? localSensors : []), ...current].map((sensor) => [sensor.id, sensor])).values()));
       if (localSensors.length && sameHome) setSectionSaveStatus("Local sensor draft ready to sync. Save health monitoring to add it to your account.");
@@ -9554,6 +9561,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   };
 
   const handleSensorDraftChange = (field, value) => {
+    sensorDraftTouchedRef.current = true;
     setSensorDraft((current) => ({ ...current, [field]: value }));
   };
 
@@ -9603,7 +9611,8 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       setSensorScanStatus(isQrCode ? "QR detected, but it does not expose a model or serial number WBP can read. Enter these manually; pairing codes are not stored." : "The barcode could not be read. Enter the label details manually.");
       return;
     }
-    setSensorDraft((current) => ({ ...current, ...Object.fromEntries(Object.entries(decoded).filter(([, value]) => value)) }));
+    sensorDraftTouchedRef.current = true;
+    setSensorDraft((current) => mergeScannedSensor(current, Object.fromEntries(Object.entries(decoded).filter(([, value]) => value))));
     setSensorScanStatus(isQrCode ? "Label details filled in. Check them against the device before registering." : "Barcode captured. Confirm the code on the label, then enter the manufacturer, model, serial number and location manually.");
   };
 
@@ -9731,7 +9740,8 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       }
       const details = { ...(barcodeDetails || {}), ...printedDetails };
       if (Object.keys(details).length) {
-        setSensorDraft((current) => ({ ...current, ...details, identificationMethod: Object.keys(printedDetails).length ? "label-photo" : barcodeDetails?.identificationMethod || "label-photo" }));
+        sensorDraftTouchedRef.current = true;
+        setSensorDraft((current) => mergeScannedSensor(current, { ...details, identificationMethod: Object.keys(printedDetails).length ? "label-photo" : barcodeDetails?.identificationMethod || "label-photo" }));
         setSensorScanStatus(Object.keys(printedDetails).length
           ? "Label details filled in. Check the model and serial against the printed label before adding the instrument."
           : ocrError ? `Barcode captured, but printed-text reading failed: ${ocrError}. Enter the model and serial manually.`
@@ -9767,6 +9777,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   };
 
   const toggleSensorMetric = (metric) => {
+    sensorDraftTouchedRef.current = true;
     setSensorDraft((current) => ({
       ...current,
       metrics: current.metrics.includes(metric)
@@ -9793,22 +9804,8 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
         connectionStatus: "not checked", metricStatus: {},
       },
     ]);
-    setSensorDraft({
-      manufacturer: "",
-      model: "",
-      serialNumber: "",
-      labelCode: "",
-      ratedPowerW: "",
-      ratedVoltage: "",
-      ratedFrequencyHz: "",
-      location: "",
-      evidenceGrade: "indicative",
-      verificationStatus: "unverified",
-      verificationDate: "",
-      placementNotes: "",
-      metrics: [],
-      connectionMethod: "manual", readingType: "", identificationMethod: "manual",
-    });
+    sensorDraftTouchedRef.current = true;
+    setSensorDraft(emptySensorDraft());
     setSensorEvidenceFileName("");
   };
 
@@ -10471,7 +10468,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                 <div className="grid gap-2 sm:grid-cols-2">
                   <label className="text-xs text-gray-600">Connection route
                     <select className="mt-1 w-full border bg-white p-2 text-xs" value={sensorDraft.connectionMethod}
-                      onChange={(event) => setSensorDraft((current) => ({ ...current, connectionMethod: event.target.value, readingType: "" }))}>
+                      onChange={(event) => { sensorDraftTouchedRef.current = true; setSensorDraft((current) => ({ ...current, connectionMethod: event.target.value, readingType: "" })); }}>
                       <option value="dyson">Existing Dyson collector</option>
                       <option value="bluetooth">Bluetooth integration needed</option>
                       <option value="manufacturer-api">Manufacturer integration needed</option>
