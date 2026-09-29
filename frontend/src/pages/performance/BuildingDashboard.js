@@ -38,12 +38,14 @@ const readSavedHomePassport = () => {
   catch { return null; }
 };
 
-export const findHomeProfileForOverwrite = async (client) => {
+export const findHomeProfileForOverwrite = async (client, uprn) => {
   const { data: auth, error: authError } = await client.auth.getUser();
   if (authError || !auth?.user) throw new Error("Sign in again before saving this home profile.");
+  if (!uprn) throw new Error("Confirm this home's UPRN before saving its profile.");
   const { data: saved, error } = await client.from("WBPBuildingRecords")
     .select("id,record_reference,created_at,genesis_hash")
     .eq("custodian_user_id", auth.user.id)
+    .eq("uprn", uprn)
     .order("updated_at", { ascending: false }).limit(1).maybeSingle();
   if (error) throw new Error(`Could not check the existing profile: ${error.message}`);
   return saved ? {
@@ -6644,8 +6646,6 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
               ["Internal area", homeSetup.manualData?.internalArea ? `${homeSetup.manualData.internalArea} m2` : matterportMetadata.internalArea !== "--" ? `${matterportMetadata.internalArea} m2` : "Pending"],
               ...(dataSourceBuildingId === "home" ? [
                 ["Energy supplier", normaliseBillReview(homeSetup.billReview).supplier],
-                ["Electricity tariff", normaliseBillReview(homeSetup.billReview).electricityTariff],
-                ["Gas tariff", normaliseBillReview(homeSetup.billReview).gasTariff],
               ] : []),
             ].map(([label, value]) => <div key={label} className={dataSourceBuildingId === "home" ? "min-w-0 py-0.5" : "min-w-0 border-b border-gray-100 py-1.5 last:border-0"}><dt className="text-gray-600">{label}</dt><dd className={`break-words font-semibold text-gray-900 ${dataSourceBuildingId === "home" && label === "Address" ? "text-base" : ""}`}>{value || "Pending"}</dd></div>)}
           </dl>
@@ -8520,6 +8520,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   const [meterIdentifiers, setMeterIdentifiers] = useState({ supplyId: "", displayId: "" });
   const [billReview, setBillReview] = useState(() => normaliseBillReview());
   const [billDraftFile, setBillDraftFile] = useState(null);
+  const [billExtracting, setBillExtracting] = useState(false);
   const billUploadRef = useRef(null);
   const [billStatus, setBillStatus] = useState("");
   const [billTarget, setBillTarget] = useState(null);
@@ -8864,6 +8865,11 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       return;
     }
     setBillDraftFile(file);
+    await readEnergyBill(file);
+  };
+
+  const readEnergyBill = async (file) => {
+    setBillExtracting(true);
     setBillStatus("Reading the bill for supplier and tariff details. Scanned pages may take a moment...");
     try {
       const extracted = file.type === "application/pdf" ? await extractEnergyBillPdf(file) : await extractEnergyBillImage(file);
@@ -8873,7 +8879,23 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
         : "No supplier or tariff details could be read. Enter them from the bill manually.");
     } catch {
       setBillStatus("This bill could not be read automatically. Enter the details manually.");
+    } finally {
+      setBillExtracting(false);
     }
+  };
+
+  const rereadSavedEnergyBill = async () => {
+    const evidence = carbonEvidence["energy-bill"];
+    if (!evidence?.storage_reference) return;
+    setBillExtracting(true);
+    setBillStatus("Opening the saved private bill...");
+    const { data, error } = await supabase.storage.from("wbp-private-evidence").download(evidence.storage_reference);
+    if (error || !data) {
+      setBillStatus(`Could not read the saved bill: ${error?.message || "File unavailable"}`);
+      setBillExtracting(false);
+      return;
+    }
+    await readEnergyBill(new File([data], evidence.original_file_name || "energy-bill.pdf", { type: data.type || "application/pdf" }));
   };
 
   const saveConfirmedBillDetails = async () => {
@@ -8899,7 +8921,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   };
 
   const confirmEnergyBill = async () => {
-    if (!billDraftFile) return;
+    if (!billDraftFile || billExtracting) return;
     const uploaded = await uploadCarbonEvidence("energy-bill", billDraftFile, billRecordId);
     if (!uploaded) return;
     setBillDraftFile(null);
@@ -9302,7 +9324,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
     let existing = editingOwnership ? ownershipRecord : null;
     if (syncHomeProfile && isolatedDraft && !existing) {
       try {
-        existing = await findHomeProfileForOverwrite(supabase);
+        existing = await findHomeProfileForOverwrite(supabase, ownershipDraft.uprn.trim());
       } catch (error) {
         setPassportSaveStatus("error");
         setPassportSaveError(error.message);
@@ -10001,9 +10023,10 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                   {[["supplier", "Supplier"], ["electricityTariff", "Electricity tariff"], ["mpan", "Electricity MPAN"], ["electricityUnitRatePence", "Electricity unit rate (p/kWh)"], ["electricityStandingChargePence", "Electricity standing charge (p/day)"], ["gasTariff", "Gas tariff"], ["mprn", "Gas MPRN"], ["gasUnitRatePence", "Gas unit rate (p/kWh)"], ["gasStandingChargePence", "Gas standing charge (p/day)"]].map(([field, label]) =>
                     <label key={field} className="space-y-1 text-xs text-gray-700">{label}<input type="text" className="w-full border bg-white p-2 text-xs" value={billReview[field] || ""} onChange={(event) => setBillReview((current) => ({ ...current, [field]: event.target.value }))} /></label>)}
                 </div> : null}
-                {billDraftFile ? <button type="button" disabled={Boolean(carbonEvidenceBusy)} onClick={confirmEnergyBill} className="bg-emerald-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Confirm details and upload bill</button> : null}
-                {!billDraftFile && carbonEvidence["energy-bill"] ? <button type="button" disabled={!billRecordId || Boolean(carbonEvidenceBusy)} onClick={saveConfirmedBillDetails} className="bg-emerald-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Save confirmed tariff details</button> : null}
+                {billDraftFile ? <button type="button" disabled={billExtracting || Boolean(carbonEvidenceBusy)} onClick={confirmEnergyBill} className="bg-emerald-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">{billExtracting ? "Reading bill..." : "Confirm details and upload bill"}</button> : null}
+                {!billDraftFile && carbonEvidence["energy-bill"] ? <button type="button" disabled={!billRecordId || billExtracting || Boolean(carbonEvidenceBusy)} onClick={saveConfirmedBillDetails} className="bg-emerald-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Save confirmed tariff details</button> : null}
                 {carbonEvidence["energy-bill"] ? <button type="button" className="block break-all text-left text-xs text-blue-700 underline" onClick={() => openCarbonEvidence(carbonEvidence["energy-bill"].storage_reference)}>{carbonEvidence["energy-bill"].original_file_name || "View uploaded bill"} (customer-confirmed)</button> : null}
+                {!billDraftFile && carbonEvidence["energy-bill"] ? <button type="button" disabled={billExtracting} onClick={rereadSavedEnergyBill} className="block text-left text-xs font-semibold text-emerald-800 underline disabled:opacity-50">Read saved bill again</button> : null}
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="space-y-1 text-xs text-gray-600">Electricity tariff
@@ -10372,7 +10395,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       </div>
       </> : <div ref={setupPanelRef} className="overflow-hidden"><div ref={setupContentRef}>
         <OccupyHistoryTabs key={historyStage} record={ownershipRecord} property={ownershipProperty}
-          setup={{ energyConsent, historicalDataFileName, healthSensors, sensorEvidenceFileName, carbonSelections, manualData }}
+          setup={{ energyConsent, historicalDataFileName, healthSensors, sensorEvidenceFileName, carbonSelections, manualData, billReview }}
           activeStage={historyStage} contentOnly addressDraft={propertySearch}
           onAddressDraftChange={(field, value) => { setPropertySearch((current) => ({ ...current, [field]: value })); if (!propertyDiscovery?.confirmedAt) setPropertyDiscovery(null); }}
           draftHistory={historyDraft} onDraftHistoryChange={setHistoryDraft} onPlanningLookup={setDesignPlanningLookup}

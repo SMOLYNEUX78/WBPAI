@@ -78,18 +78,19 @@ test("profile overwrite resolves the signed-in user's existing WBP reference", a
   }, error: null });
   const limit = jest.fn(() => ({ maybeSingle }));
   const order = jest.fn(() => ({ limit }));
-  const eq = jest.fn(() => ({ order }));
+  const eq = jest.fn(() => ({ eq, order }));
   const select = jest.fn(() => ({ eq }));
   const client = {
     auth: { getUser: jest.fn().mockResolvedValue({ data: { user: { id: "owner-1" } }, error: null }) },
     from: jest.fn(() => ({ select })),
   };
-  expect(await findHomeProfileForOverwrite(client)).toEqual({
+  expect(await findHomeProfileForOverwrite(client, "100091142492")).toEqual({
     recordId: "WBP-2026-P42TCE", databaseId: "record-1", ownerUserId: "owner-1",
     createdAt: "2026-09-01T00:00:00Z", genesisHash: "original-hash",
   });
   expect(client.from).toHaveBeenCalledWith("WBPBuildingRecords");
   expect(eq).toHaveBeenCalledWith("custodian_user_id", "owner-1");
+  expect(eq).toHaveBeenCalledWith("uprn", "100091142492");
 });
 
 test("step two displays a secure-save failure instead of appearing unresponsive", async () => {
@@ -374,6 +375,15 @@ test("audit summary shows the second owner across the full four-column banner", 
   const secondOwner = screen.getByText("Claire Hardaker");
   expect(secondOwner.closest("p")).toHaveTextContent("Other owner: Claire Hardaker");
   expect(secondOwner.closest(".grid-cols-4")).toHaveClass("w-full");
+});
+
+test("audit energy column shows confirmed bill details", () => {
+  render(<ProfileSummaryColumns setup={{ billReview: {
+    supplier: "Good Energy", electricityTariff: "Good Energy Fix Jan27", gasTariff: "Good Energy Fix Jan27",
+    electricityUnitRatePence: "20.61", gasUnitRatePence: "5.00",
+  } }} />);
+  expect(screen.getByText("Electricity tariff:").closest("p")).toHaveTextContent("Good Energy Fix Jan27");
+  expect(screen.getByText("Gas unit rate:").closest("p")).toHaveTextContent("5.00 p/kWh");
 });
 
 test("ownership declaration defers verification and keeps document uploads optional", () => {
