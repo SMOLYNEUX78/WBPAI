@@ -26,6 +26,16 @@ test("supports legacy confirmed fields without inventing gas prices", () => {
   }));
 });
 
+test("removes repeated end-date text from saved and newly parsed tariff names", () => {
+  const repeated = "Good Energy Fix Jan27 - End date: 31 January 2027 Good Energy Fix Jan27";
+  expect(normaliseBillReview({ electricityTariff: repeated, gasTariff: repeated })).toEqual(expect.objectContaining({
+    electricityTariff: "Good Energy Fix Jan27", gasTariff: "Good Energy Fix Jan27",
+  }));
+  expect(parseEnergyBillText(`Electricity\nTariff: ${repeated}\nGas\nTariff: ${repeated}`)).toEqual(expect.objectContaining({
+    electricityTariff: "Good Energy Fix Jan27", gasTariff: "Good Energy Fix Jan27",
+  }));
+});
+
 test("returns empty fields for unreadable scans", () => {
   expect(Object.values(parseEnergyBillText("scanned image without selectable text")).every((value) => value === "")).toBe(true);
 });

@@ -4,10 +4,15 @@ const emptyBill = {
   electricityStandingChargePence: "", gasStandingChargePence: "",
 };
 
+const normaliseTariffName = (value) => typeof value === "string"
+  ? value.trim().split(/\s+-\s*end date\s*:|\s+tariff name\b/i)[0].trim()
+  : "";
+
 export const normaliseBillReview = (saved = {}) => ({
   ...emptyBill,
   ...saved,
-  electricityTariff: saved.electricityTariff || saved.tariff || "",
+  electricityTariff: normaliseTariffName(saved.electricityTariff || saved.tariff),
+  gasTariff: normaliseTariffName(saved.gasTariff),
   electricityUnitRatePence: saved.electricityUnitRatePence || saved.unitRatePence || "",
   electricityStandingChargePence: saved.electricityStandingChargePence || saved.standingChargePence || "",
 });
@@ -55,7 +60,7 @@ export const parseEnergyBillText = (text) => {
     }
     if (!lineFuel && validTariff && !result.electricityTariff) result.electricityTariff = tariff;
   }
-  return result;
+  return normaliseBillReview(result);
 };
 
 const mergeBillFields = (primary, extra) => Object.fromEntries(
