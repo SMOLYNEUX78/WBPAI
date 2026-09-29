@@ -29,3 +29,17 @@ test("supports legacy confirmed fields without inventing gas prices", () => {
 test("returns empty fields for unreadable scans", () => {
   expect(Object.values(parseEnergyBillText("scanned image without selectable text")).every((value) => value === "")).toBe(true);
 });
+
+test("does not invent a tariff from the supplied Good Energy information page", () => {
+  const result = parseEnergyBillText(`Thank you for being part of Good Energy.
+We're working towards 100% renewable energy every single day.
+Simple green ways to pay for your bill.
+Your average electricity use during this bill period was 4.19 kWh/day.
+Your average gas use during this bill period was 3.47 kWh/day.
+Good Energy Registered address`);
+  expect(result.supplier).toBe("Good Energy");
+  expect(result.electricityTariff).toBe("");
+  expect(result.gasTariff).toBe("");
+  expect(result.mpan).toBe("");
+  expect(result.mprn).toBe("");
+});

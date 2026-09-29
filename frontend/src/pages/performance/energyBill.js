@@ -30,6 +30,7 @@ const priceFromLine = (line, label) => {
 export const parseEnergyBillText = (text) => {
   const lines = text.split(/\r?\n/).map((line) => line.replace(/\s+/g, " ").trim()).filter(Boolean);
   const result = { ...emptyBill };
+  if (/\bgood\s+energy\b|goodenergy\.co\.uk/i.test(text)) result.supplier = "Good Energy";
   let fuel = "";
   for (const line of lines) {
     if (/^(?:your\s+)?electricity\b/i.test(line)) fuel = "electricity";
@@ -41,7 +42,7 @@ export const parseEnergyBillText = (text) => {
     }
     if (!result.mpan) result.mpan = numberAfterLabel(line, "MPAN|electricity supply number", 13, 13);
     if (!result.mprn) result.mprn = numberAfterLabel(line, "MPRN|gas supply number", 6, 10);
-    const tariff = line.match(/(?:tariff(?: name)?|product)\s*:\s*(.+?)(?=\s+(?:account|unit rate|standing charge|electricity|gas|bill)\b|$)/i)?.[1]?.trim();
+    const tariff = line.match(/^(?:(?:electricity|gas)\s+)?tariff(?: name)?\s*:\s*(.+)$/i)?.[1]?.trim();
     if (tariff && lineFuel && !result[`${lineFuel}Tariff`]) result[`${lineFuel}Tariff`] = tariff;
     if (lineFuel && /unit\s+rate/i.test(line) && !result[`${lineFuel}UnitRatePence`]) {
       result[`${lineFuel}UnitRatePence`] = priceFromLine(line, /unit\s+rate\s*:?/i);
@@ -73,15 +74,40 @@ const pdfPageLines = (items) => {
 export const extractEnergyBillPdf = async (file) => {
   const pdfjs = await import("pdfjs-dist/webpack");
   const document = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+  let worker;
   try {
     const pages = [];
     for (let pageNumber = 1; pageNumber <= Math.min(document.numPages, 5); pageNumber += 1) {
       const page = await document.getPage(pageNumber);
       const content = await page.getTextContent();
-      pages.push(pdfPageLines(content.items));
+      const text = pdfPageLines(content.items);
+      if (text.length > 80) { pages.push(text); continue; }
+      if (!worker) {
+        const { createWorker } = await import("tesseract.js");
+        worker = await createWorker("eng");
+      }
+      const viewport = page.getViewport({ scale: Math.min(2, 2000 / page.getViewport({ scale: 1 }).width) });
+      const canvas = window.document.createElement("canvas");
+      canvas.width = Math.ceil(viewport.width);
+      canvas.height = Math.ceil(viewport.height);
+      await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
+      pages.push((await worker.recognize(canvas)).data.text);
+      canvas.width = 0;
+      canvas.height = 0;
     }
     return parseEnergyBillText(pages.join("\n"));
   } finally {
+    if (worker) await worker.terminate();
     await document.destroy();
+  }
+};
+
+export const extractEnergyBillImage = async (file) => {
+  const { createWorker } = await import("tesseract.js");
+  const worker = await createWorker("eng");
+  try {
+    return parseEnergyBillText((await worker.recognize(file)).data.text);
+  } finally {
+    await worker.terminate();
   }
 };

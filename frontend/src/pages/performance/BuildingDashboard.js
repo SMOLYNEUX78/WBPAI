@@ -8,7 +8,7 @@ import matterportMark from "../../assets/matterport-mark.png";
 import PrototypeTabs from "../../PrototypeTabs";
 import { getReadinessGates } from "./readinessGates";
 import { mergeMonthlyHlaRows } from "./monthlyHla";
-import { extractEnergyBillPdf, normaliseBillReview } from "./energyBill";
+import { extractEnergyBillImage, extractEnergyBillPdf, normaliseBillReview } from "./energyBill";
 import "./occupyScreen.css";
 
 export const DetailSurface = ({ children, title, onClose, modal, headerExtra }) => {
@@ -8864,19 +8864,15 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       return;
     }
     setBillDraftFile(file);
-    if (file.type !== "application/pdf") {
-      setBillStatus("Image selected. Enter the tariff details from the bill, then confirm the private upload.");
-      return;
-    }
-    setBillStatus("Reading the PDF for tariff details...");
+    setBillStatus("Reading the bill for supplier and tariff details. Scanned pages may take a moment...");
     try {
-      const extracted = await extractEnergyBillPdf(file);
+      const extracted = file.type === "application/pdf" ? await extractEnergyBillPdf(file) : await extractEnergyBillImage(file);
       setBillReview(normaliseBillReview(extracted));
       setBillStatus(Object.values(extracted).some(Boolean)
-        ? "Possible details found. Check every field against the bill before confirming."
-        : "No readable tariff text found. Enter the details from the bill manually.");
+        ? "Details found on this page are shown below. Missing tariff or meter details may be on another page; check the bill before confirming."
+        : "No supplier or tariff details could be read. Enter them from the bill manually.");
     } catch {
-      setBillStatus("This PDF could not be read automatically. Enter the details from the bill manually.");
+      setBillStatus("This bill could not be read automatically. Enter the details manually.");
     }
   };
 
