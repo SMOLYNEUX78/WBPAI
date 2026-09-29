@@ -33,23 +33,21 @@ export const DetailSurface = ({ children, title, onClose, modal, headerExtra }) 
 const PortalWhen = ({ active, children }) => active ? createPortal(children, document.body) : children;
 
 const DEFAULT_MATTERPORT_URL = "https://my.matterport.com/show/?m=zHm8SwWeHiN";
-const HOME_UPRN = "100091142492";
 const readSavedHomePassport = () => {
   try { return JSON.parse(window.localStorage.getItem("wbp-new-building-passport") || "null"); }
   catch { return null; }
 };
 
 export const findAccountHomeRecord = async (client, userId, cached = null) => {
-  const cachedId = cached?.uprn === HOME_UPRN && cached?.ownerUserId === userId
-    ? cached.databaseId : null;
+  const cachedId = cached?.ownerUserId === userId ? cached.databaseId : null;
   if (cachedId) {
     const { data, error } = await client.from("WBPBuildingRecords").select("*")
-      .eq("id", cachedId).eq("custodian_user_id", userId).eq("uprn", HOME_UPRN).maybeSingle();
+      .eq("id", cachedId).eq("custodian_user_id", userId).eq("lifecycle_stage", "occupy").maybeSingle();
     if (error) return { data: null, error };
     if (data) return { data, error: null };
   }
   return client.from("WBPBuildingRecords").select("*")
-    .eq("custodian_user_id", userId).eq("uprn", HOME_UPRN)
+    .eq("custodian_user_id", userId).eq("lifecycle_stage", "occupy")
     .order("updated_at", { ascending: false }).limit(1).maybeSingle();
 };
 
@@ -60,6 +58,7 @@ export const findHomeProfileForOverwrite = async (client, uprn) => {
   const { data: saved, error } = await client.from("WBPBuildingRecords")
     .select("id,record_reference,created_at,genesis_hash")
     .eq("custodian_user_id", auth.user.id)
+    .eq("lifecycle_stage", "occupy")
     .eq("uprn", uprn)
     .order("updated_at", { ascending: false }).limit(1).maybeSingle();
   if (error) throw new Error(`Could not check the existing profile: ${error.message}`);
@@ -6645,20 +6644,21 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
                     <span className="block">{homePassport?.propertyDiscovery?.address || matterportMetadata.address || "Pending"}</span>
                     <span className="block">{homePassport?.propertyDiscovery?.postcode || ""}</span>
                   </dd>
+                  <p className="mt-1 break-words text-[10px] text-gray-700 sm:text-xs">UPRN: <span className="font-semibold">{homePassport?.uprn || "Pending"}</span></p>
                 </div>
                 <button type="button" disabled title="Home-profile sales are not available yet" className="max-w-full justify-self-start break-words border border-emerald-300 bg-white/60 px-1.5 py-1 text-left text-[9px] font-semibold leading-tight text-emerald-900 opacity-70 sm:px-2 sm:text-[10px]">
                   {homePassportId || "WBP-2026-P42TCE"}
                 </button>
               </div>
             ) : null}
-            {[
-              ...(dataSourceBuildingId === "home" ? [] : [["Address", [homePassport?.propertyDiscovery?.address, homePassport?.propertyDiscovery?.postcode].filter(Boolean).join(", ") || matterportMetadata.address]]),
-              ["Coordinates", (homePassport?.propertyDiscovery?.latitude != null && homePassport?.propertyDiscovery?.longitude != null) ? `${homePassport.propertyDiscovery.latitude}, ${homePassport.propertyDiscovery.longitude}` : dataSourceBuildingId === "home" ? "Pending matched UPRN location" : [matterportMetadata.latitude, matterportMetadata.longitude].join(", ")],
-              ["Internal area", homeSetup.manualData?.internalArea ? `${homeSetup.manualData.internalArea} m2` : matterportMetadata.internalArea !== "--" ? `${matterportMetadata.internalArea} m2` : "Pending"],
-              ...(dataSourceBuildingId === "home" ? [
-                ["Energy supplier", normaliseBillReview(homeSetup.billReview).supplier],
-              ] : []),
-            ].map(([label, value]) => <div key={label} className={dataSourceBuildingId === "home" ? "min-w-0 py-0.5" : "min-w-0 border-b border-gray-100 py-1.5 last:border-0"}><dt className="text-gray-600">{label}</dt><dd className={`break-words font-semibold text-gray-900 ${dataSourceBuildingId === "home" && label === "Address" ? "text-base" : ""}`}>{value || "Pending"}</dd></div>)}
+            <div className={dataSourceBuildingId === "home" ? "grid min-w-0 grid-cols-2 gap-x-2 sm:gap-x-4" : "contents"}>
+              {[
+                ...(dataSourceBuildingId === "home" ? [] : [["Address", [homePassport?.propertyDiscovery?.address, homePassport?.propertyDiscovery?.postcode].filter(Boolean).join(", ") || matterportMetadata.address]]),
+                ["Coordinates", (homePassport?.propertyDiscovery?.latitude != null && homePassport?.propertyDiscovery?.longitude != null) ? `${homePassport.propertyDiscovery.latitude}, ${homePassport.propertyDiscovery.longitude}` : dataSourceBuildingId === "home" ? "Pending matched UPRN location" : [matterportMetadata.latitude, matterportMetadata.longitude].join(", ")],
+                ...(dataSourceBuildingId === "home" ? [["Energy supplier", normaliseBillReview(homeSetup.billReview).supplier]] : []),
+                ["Internal area", homeSetup.manualData?.internalArea ? `${homeSetup.manualData.internalArea} m2` : matterportMetadata.internalArea !== "--" ? `${matterportMetadata.internalArea} m2` : "Pending"],
+              ].map(([label, value]) => <div key={label} className={dataSourceBuildingId === "home" ? "min-w-0 py-0.5" : "min-w-0 border-b border-gray-100 py-1.5 last:border-0"}><dt className="text-gray-600">{label}</dt><dd className="break-words font-semibold text-gray-900">{value || "Pending"}</dd></div>)}
+            </div>
           </dl>
 
           <div className={dataSourceBuildingId === "home" ? "relative order-1 min-w-0" : "flex min-w-0 flex-col border border-gray-200 bg-white p-2"}>
@@ -8583,6 +8583,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       if (!active || authError || !auth.user) return;
       const { data: record, error } = await supabase.from("WBPBuildingRecords")
         .select("*").eq("custodian_user_id", auth.user.id)
+        .eq("lifecycle_stage", "occupy")
         .order("updated_at", { ascending: false }).limit(1).maybeSingle();
       if (!active) return;
       if (error) { setPassportSaveError("Could not load your saved home profile from your account."); return; }
