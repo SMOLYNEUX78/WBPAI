@@ -59,3 +59,21 @@ Standing charge 32.26p/day`)).toEqual(expect.objectContaining({
     gasUnitRatePence: "5.00", gasStandingChargePence: "32.26",
   }));
 });
+
+test("reads supply reference on a cover page and split tariff labels", () => {
+  const cover = parseEnergyBillText("For your electricity supply (1012905988160)\nYour estimated annual cost");
+  expect(cover.mpan).toBe("1012905988160");
+  const panel = parseEnergyBillText(`Electricity
+Tariff name
+Good Energy Fix Jan27
+Unit rate 20.61p/kWh
+Gas
+Tariff name
+Good Energy Fix Jan27`);
+  expect(panel.electricityTariff).toBe("Good Energy Fix Jan27");
+  expect(panel.gasTariff).toBe("Good Energy Fix Jan27");
+});
+
+test("rejects stray prose as a tariff", () => {
+  expect(parseEnergyBillText("Electricity\nTariff name For you").electricityTariff).toBe("");
+});

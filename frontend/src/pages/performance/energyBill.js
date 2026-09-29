@@ -32,7 +32,7 @@ export const parseEnergyBillText = (text) => {
   const result = { ...emptyBill };
   if (/\bgood\s+energy\b|goodenergy\.co\.uk/i.test(text)) result.supplier = "Good Energy";
   let fuel = "";
-  for (const line of lines) {
+  for (const [index, line] of lines.entries()) {
     if (/\belectricity\s+(?:supply\s+number|charges)\b|^(?:your\s+)?electricity\b/i.test(line)) fuel = "electricity";
     else if (/\bgas\s+(?:meter\s+point\s+reference|charges)\b|^(?:your\s+)?gas\b/i.test(line)) fuel = "gas";
     const lineFuel = fuel;
@@ -40,21 +40,27 @@ export const parseEnergyBillText = (text) => {
       const found = line.match(/(?:supplier|energy provider)\s*:\s*(.+?)(?=\s+(?:account|tariff|electricity|gas|bill)\b|$)/i);
       if (found) result.supplier = found[1].trim();
     }
-    if (!result.mpan) result.mpan = numberAfterLabel(line, "MPAN|electricity supply number", 13, 13);
+    if (!result.mpan) result.mpan = numberAfterLabel(line, "MPAN|electricity supply number|electricity supply|supply number", 13, 13);
     if (!result.mprn) result.mprn = numberAfterLabel(line, "MPRN|gas supply number|meter point reference", 6, 10);
-    const tariff = line.match(/\btariff name\s*:?[ \t]+(.+?)(?=\s+(?:product type|payment method|unit rate|standing charge)\b|$)/i)?.[1]?.trim()
+    const tariffLine = line.match(/\btariff name\s*:?[ \t]*(.*)$/i)?.[1]?.trim();
+    const tariff = (tariffLine || (tariffLine === "" ? lines[index + 1] : ""))?.split(/\s+(?:product type|payment method|unit rate|standing charge)\b/i)[0]?.trim()
       || line.match(/^tariff\s*:\s*(.+)$/i)?.[1]?.trim();
-    if (tariff && lineFuel && !result[`${lineFuel}Tariff`]) result[`${lineFuel}Tariff`] = tariff;
+    const validTariff = tariff && !/^(?:for you|product type|payment method|unit rate|standing charge|electricity|gas)$/i.test(tariff);
+    if (validTariff && lineFuel && !result[`${lineFuel}Tariff`]) result[`${lineFuel}Tariff`] = tariff;
     if (lineFuel && /unit\s+rate/i.test(line) && !result[`${lineFuel}UnitRatePence`]) {
       result[`${lineFuel}UnitRatePence`] = priceFromLine(line, /unit\s+rate\s*:?/i);
     }
     if (lineFuel && /standing\s+charge/i.test(line) && !result[`${lineFuel}StandingChargePence`]) {
       result[`${lineFuel}StandingChargePence`] = priceFromLine(line, /standing\s+charge\s*:?/i);
     }
-    if (!lineFuel && tariff && !result.electricityTariff) result.electricityTariff = tariff;
+    if (!lineFuel && validTariff && !result.electricityTariff) result.electricityTariff = tariff;
   }
   return result;
 };
+
+const mergeBillFields = (primary, extra) => Object.fromEntries(
+  Object.keys(emptyBill).map((field) => [field, primary[field] || extra[field] || ""]),
+);
 
 const pdfPageLines = (items) => {
   const lines = [];
@@ -92,11 +98,21 @@ export const extractEnergyBillPdf = async (file) => {
       canvas.width = Math.ceil(viewport.width);
       canvas.height = Math.ceil(viewport.height);
       await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
-      pages.push((await worker.recognize(canvas)).data.text);
+      const fullText = (await worker.recognize(canvas)).data.text;
+      const rightCanvas = window.document.createElement("canvas");
+      rightCanvas.width = Math.ceil(canvas.width * 0.48);
+      rightCanvas.height = canvas.height;
+      rightCanvas.getContext("2d").drawImage(canvas, Math.floor(canvas.width * 0.52), 0,
+        rightCanvas.width, canvas.height, 0, 0, rightCanvas.width, rightCanvas.height);
+      const rightText = (await worker.recognize(rightCanvas)).data.text;
+      pages.push(fullText);
+      pages.push(rightText);
+      rightCanvas.width = 0;
+      rightCanvas.height = 0;
       canvas.width = 0;
       canvas.height = 0;
     }
-    return parseEnergyBillText(pages.join("\n"));
+    return pages.reduce((found, text) => mergeBillFields(found, parseEnergyBillText(text)), { ...emptyBill });
   } finally {
     if (worker) await worker.terminate();
     await document.destroy();
