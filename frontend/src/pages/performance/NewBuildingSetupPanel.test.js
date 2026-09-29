@@ -97,14 +97,15 @@ test("profile overwrite resolves the signed-in user's existing WBP reference", a
 test("bill upload and WBP-001 select the same saved occupy record", async () => {
   const chosen = { id: "saved-home", uprn: "another-home", record_reference: "WBP-2026-P42TCE" };
   const maybeSingle = jest.fn().mockResolvedValue({ data: chosen, error: null });
-  const eq = jest.fn(() => ({ eq, maybeSingle }));
+  const limit = jest.fn(() => ({ maybeSingle }));
+  const order = jest.fn(() => ({ limit }));
+  const eq = jest.fn(() => ({ eq, order }));
   const client = { from: jest.fn(() => ({ select: () => ({ eq }) })) };
-  const result = await findAccountHomeRecord(client, "owner-1", {
-    databaseId: "saved-home", ownerUserId: "owner-1", uprn: "another-home",
-  });
+  const result = await findAccountHomeRecord(client, "owner-1");
   expect(result.data).toEqual(chosen);
-  expect(eq).toHaveBeenCalledWith("id", "saved-home");
+  expect(eq).toHaveBeenCalledWith("custodian_user_id", "owner-1");
   expect(eq).toHaveBeenCalledWith("lifecycle_stage", "occupy");
+  expect(order).toHaveBeenCalledWith("updated_at", { ascending: false });
   expect(client.from).toHaveBeenCalledTimes(1);
 });
 

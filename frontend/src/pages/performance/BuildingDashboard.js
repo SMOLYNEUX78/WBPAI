@@ -38,14 +38,7 @@ const readSavedHomePassport = () => {
   catch { return null; }
 };
 
-export const findAccountHomeRecord = async (client, userId, cached = null) => {
-  const cachedId = cached?.ownerUserId === userId ? cached.databaseId : null;
-  if (cachedId) {
-    const { data, error } = await client.from("WBPBuildingRecords").select("*")
-      .eq("id", cachedId).eq("custodian_user_id", userId).eq("lifecycle_stage", "occupy").maybeSingle();
-    if (error) return { data: null, error };
-    if (data) return { data, error: null };
-  }
+export const findAccountHomeRecord = async (client, userId) => {
   return client.from("WBPBuildingRecords").select("*")
     .eq("custodian_user_id", userId).eq("lifecycle_stage", "occupy")
     .order("updated_at", { ascending: false }).limit(1).maybeSingle();
@@ -763,7 +756,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
     const loadPassportId = async () => {
       const { data: auth } = await supabase.auth.getUser();
       if (!active || !auth?.user) return;
-      const { data, error } = await findAccountHomeRecord(supabase, auth.user.id, readSavedHomePassport());
+      const { data, error } = await findAccountHomeRecord(supabase, auth.user.id);
       if (active && !error && data?.record_reference) {
         const { data: snapshot } = await supabase.from("WBPPropertyDiscoverySnapshots")
           .select("latitude, longitude, local_authority")
@@ -8595,7 +8588,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
     const loadBillTarget = async () => {
       const { data: auth } = await supabase.auth.getUser();
       if (!active || !auth?.user) return;
-      const { data, error } = await findAccountHomeRecord(supabase, auth.user.id, readSavedHomePassport());
+      const { data, error } = await findAccountHomeRecord(supabase, auth.user.id);
       if (active && !error) setBillTarget(data || null);
     };
     loadBillTarget();
@@ -8765,7 +8758,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   }, [isolatedDraft, ownershipRecord?.databaseId, ownershipRecord?.recordId]);
   const saveSetupSection = async (overrides = {}) => {
     const section = setupTab === "measurements" ? { manualData, modelInput }
-      : setupTab === "performance" ? { energyConsent, meterIdentifiers, billReview, historicalDataFileName, healthSensors, sensorEvidenceFileName, carbonSelections }
+      : setupTab === "performance" ? { energyConsent, meterIdentifiers, historicalDataFileName, healthSensors, sensorEvidenceFileName, carbonSelections }
       : { carbonSelections };
     Object.assign(section, overrides);
     const key = ownershipRecord?.recordId ? `${ownershipRecord.recordId}:setupSections` : "wbp-new-building-setup-draft";
@@ -8786,12 +8779,18 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
           updated_at: new Date().toISOString(),
         }, { onConflict: "building_record_id" });
         if (!error) {
-          window.localStorage.setItem(key, JSON.stringify({ ...(existing?.setup_data || {}), ...section }));
+          const savedSetup = { ...(existing?.setup_data || {}), ...section };
+          window.localStorage.setItem(key, JSON.stringify(savedSetup));
           window.localStorage.removeItem("wbp-new-building-setup-draft");
+          window.dispatchEvent(new CustomEvent("wbp:setup-updated", { detail: { recordId: ownershipRecord.databaseId, setupData: savedSetup } }));
           setSectionSaveStatus(`${setupTab} saved to account`);
           return;
         }
+        setSectionSaveStatus(`Save failed: ${error.message}`);
+        return;
       }
+      setSectionSaveStatus("Save failed: Sign in again to save this section to your account.");
+      return;
     }
     setSectionSaveStatus(`${setupTab} saved on this device`);
   };
@@ -8961,10 +8960,16 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       updated_at: new Date().toISOString(),
     }, { onConflict: "building_record_id" });
     if (error) { setBillStatus(`Tariff details could not be saved: ${error.message}`); return false; }
+    const { data: verified, error: verifyError } = await supabase.from("WBPBuildingSetupDeclarations")
+      .select("setup_data").eq("building_record_id", billRecordId).maybeSingle();
+    if (verifyError || !verified?.setup_data?.billReview) {
+      setBillStatus(`Tariff details could not be verified in your account${verifyError ? `: ${verifyError.message}` : ". Please try again."}`);
+      return false;
+    }
     const recordRef = ownershipRecord?.recordId || billTarget?.record_reference;
-    if (recordRef) window.localStorage.setItem(`${recordRef}:setupSections`, JSON.stringify(setupData));
-    window.dispatchEvent(new CustomEvent("wbp:setup-updated", { detail: { recordId: billRecordId, setupData } }));
-    setBillStatus("Tariff details saved to WBP-001 and WBP-001cc as customer-confirmed data.");
+    if (recordRef) window.localStorage.setItem(`${recordRef}:setupSections`, JSON.stringify(verified.setup_data));
+    window.dispatchEvent(new CustomEvent("wbp:setup-updated", { detail: { recordId: billRecordId, setupData: verified.setup_data } }));
+    setBillStatus(`Tariff details verified in your secure account for ${recordRef || "this home"}.`);
     return true;
   };
 
@@ -10438,7 +10443,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
 
       </div>
       </div>
-      {setupTab !== "ownership" ? <div className="mt-4 flex items-center justify-end gap-3 border-t border-gray-200 pt-4"><span role="status" className="text-xs text-gray-600">{sectionSaveStatus === `${setupTab} saved on this device` ? "Saved on this device" : sectionSaveStatus === `${setupTab} saved to account` ? "Saved to account" : ""}</span><button type="button" onClick={() => saveSetupSection()} className="bg-emerald-700 px-4 py-2 text-sm font-bold text-white">Save {setupTab === "carbon" ? "carbon context" : setupTab === "measurements" ? "3D model" : "monitoring"}</button></div> : null}
+      {setupTab !== "ownership" ? <div className="mt-4 flex items-center justify-end gap-3 border-t border-gray-200 pt-4"><span role="status" className="text-xs text-gray-600">{sectionSaveStatus === `${setupTab} saved on this device` ? "Saved on this device" : sectionSaveStatus === `${setupTab} saved to account` ? "Saved to account" : sectionSaveStatus.startsWith("Save failed:") ? sectionSaveStatus : ""}</span><button type="button" onClick={() => saveSetupSection()} className="bg-emerald-700 px-4 py-2 text-sm font-bold text-white">Save {setupTab === "carbon" ? "carbon context" : setupTab === "measurements" ? "3D model" : "monitoring"}</button></div> : null}
       </div>
       </div>
       </> : <div ref={setupPanelRef} className="overflow-hidden"><div ref={setupContentRef}>
