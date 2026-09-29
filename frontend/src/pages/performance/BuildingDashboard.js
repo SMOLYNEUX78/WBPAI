@@ -87,14 +87,16 @@ export const registerSensorDraft = (sensors, draft, evidenceFileName) => {
   const complete = ["manufacturer", "model", "location"].every((field) => String(draft?.[field] || "").trim());
   if (!complete) return { healthSensors: sensors, healthSensorDraft: draft, sensorEvidenceFileName: evidenceFileName };
   const identity = sensorIdentity(draft);
-  const alreadyRegistered = identity && sensors.some((sensor) => sensorIdentity(sensor) === identity);
+  const matchingSensor = sensors.find((sensor) => sensor.id === draft.id || (identity && sensorIdentity(sensor) === identity));
+  const updatedSensor = matchingSensor ? { ...matchingSensor, ...draft, id: matchingSensor.id,
+    ...(evidenceFileName || matchingSensor.evidenceFileName ? { evidenceFileName: evidenceFileName || matchingSensor.evidenceFileName } : {}) } : null;
   return {
-    healthSensors: alreadyRegistered ? sensors : [...sensors, {
+    healthSensors: updatedSensor ? sensors.map((sensor) => sensor.id === matchingSensor.id ? updatedSensor : sensor) : [...sensors, {
       ...draft, id: `health-sensor-${Date.now()}`, evidenceFileName,
       connectionStatus: "not checked", metricStatus: {},
     }],
     healthSensorDraft: emptySensorDraft(),
-    sensorEvidenceFileName: alreadyRegistered ? evidenceFileName : "",
+    sensorEvidenceFileName: "",
   };
 };
 
@@ -10549,7 +10551,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                 }
                 onClick={addHealthSensor}
               >
-                Add Instrument
+                {sensorDraft.id ? "Update Instrument" : "Add Instrument"}
               </button>
             </div>
 
@@ -10609,6 +10611,12 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                         ? ` | Evidence: ${sensor.evidenceFileName}`
                         : ""}
                     </p>
+                    <button type="button" className="mr-3 font-semibold text-emerald-800 underline" onClick={() => {
+                      sensorDraftTouchedRef.current = true;
+                      setSensorDraft({ ...emptySensorDraft(), ...sensor });
+                      setSensorEvidenceFileName(sensor.evidenceFileName || "");
+                      setSectionSaveStatus("");
+                    }}>Edit</button>
                     <button
                       type="button"
                       className="text-red-700 underline"

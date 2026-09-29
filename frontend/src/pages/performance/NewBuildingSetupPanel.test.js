@@ -81,6 +81,13 @@ test("complete scans register once while incomplete scans remain drafts", () => 
   expect(registerSensorDraft([], { ...draft, location: "" }, "").healthSensorDraft).toEqual({ ...draft, location: "" });
 });
 
+test("editing a registered instrument updates its metrics without creating another", () => {
+  const original = { id: "sensor-1", manufacturer: "Dyson", model: "Pure Cool Link", location: "Upstairs", labelCode: "NN6", metrics: ["temperature"], connectionStatus: "checked" };
+  const saved = registerSensorDraft([original], { ...original, metrics: ["temperature", "humidity"] }, "");
+  expect(saved.healthSensors).toEqual([{ ...original, metrics: ["temperature", "humidity"] }]);
+  expect(saved.healthSensorDraft.manufacturer).toBe("");
+});
+
 test("fresh New tab loads and saves health instruments through the existing home account", async () => {
   const storedSensor = {
     id: "sensor-1", manufacturer: "Dyson", model: "TP02", location: "Upstairs",
