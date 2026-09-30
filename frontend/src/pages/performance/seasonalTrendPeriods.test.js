@@ -1,4 +1,18 @@
-import { aggregateCalendarTrend } from "./BuildingDashboard";
+import { aggregateCalendarTrend, averageCalendarMetric, comfortTemperatureDomain, buildOneDayTrend } from "./BuildingDashboard";
+
+test("one day shows recorded hourly values without leaking neighbouring dates", () => {
+  const points = buildOneDayTrend("2026-07-10",
+    [{ timestamp: "2026-07-10T14:00:00Z", fuel_type: "electricity", usage_kwh: 0.3 },
+      { timestamp: "2026-07-10T14:30:00Z", fuel_type: "electricity", usage_kwh: 0.4 },
+      { timestamp: "2026-07-11T14:00:00Z", fuel_type: "electricity", usage_kwh: 5 }],
+    [{ timestamp: "2026-07-10T14:05:00Z", reading_type: "dyson:upstairs",
+      temperature_inside: 25, humidity: 52, pm25: 4 }],
+    [{ timestamp: "2026-07-10T14:10:00Z", temperature_outside: 34 }]);
+  expect(points).toHaveLength(24);
+  expect(points[14]).toMatchObject({ electricity: 0.7, internalTemp: 25,
+    externalTemp: 34, externalTempPeak: 34, warmthBuffer: -9, upstairsHumidity: 52 });
+  expect(points[13].electricity).toBeNull();
+});
 
 test("weekly view groups measured days by Monday without filling a missing week", () => {
   const rows = [
@@ -43,4 +57,29 @@ test("summer monthly view averages dated health readings in June, July and Augus
   expect(points[0]).toMatchObject({ upstairsHumidity: 52, downstairsHumidity: 62, upstairsPm25: 5 });
   expect(points[1]).toMatchObject({ upstairsHumidity: 56, downstairsHumidity: 66, upstairsPm25: null });
   expect(points[2]).toMatchObject({ upstairsHumidity: 58, downstairsHumidity: 68, upstairsPm25: 8 });
+});
+
+test("calendar comfort uses paired days and preserves daily temperature ranges", () => {
+  const rows = [
+    { date: "2026-06-10", internalTemp: 25, externalTemp: 30, externalTempPeak: 35 },
+    { date: "2026-06-11", internalTemp: 24, externalTemp: 20, externalTempPeak: 31 },
+    { date: "2026-06-12", internalTemp: 28 },
+  ];
+  const [june] = aggregateCalendarTrend(rows, "monthly", "2026-06-01", "2026-06-30");
+  expect(june).toMatchObject({ internalTempMin: 24, internalTempMax: 28,
+    externalTempMin: 20, externalTempMax: 30, externalTempPeak: 35,
+    warmthBuffer: -0.5, metricDayCounts: { internalTemp: 3, externalTemp: 2, warmthBuffer: 2 } });
+});
+
+test("seasonal summaries weight weekly or monthly averages by measured days", () => {
+  const points = [
+    { internalTemp: 20, metricDayCounts: { internalTemp: 1 } },
+    { internalTemp: 25, metricDayCounts: { internalTemp: 9 } },
+  ];
+  expect(averageCalendarMetric(points, "internalTemp")).toBe(24.5);
+});
+
+test("comfort scale includes hot outdoor peaks rather than clipping at 35 degrees", () => {
+  expect(comfortTemperatureDomain([{ internalTemp: 25, externalTemp: 27, externalTempPeak: 37.4 }]))
+    .toEqual({ min: -5, max: 39 });
 });
