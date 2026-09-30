@@ -1,9 +1,14 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { NewBuildingSetupPanel, OccupyHistoryTabs, ProfileSummaryColumns, decodeSensorLabel, parseSensorLabelText, mergeScannedSensor, registerSensorDraft, findAccountHomeRecord, findHomeProfileForOverwrite } from "./BuildingDashboard";
+import { NewBuildingSetupPanel, OccupyHistoryTabs, ProfileSummaryColumns, addressLines, decodeSensorLabel, parseSensorLabelText, mergeScannedSensor, registerSensorDraft, findAccountHomeRecord, findHomeProfileForOverwrite } from "./BuildingDashboard";
 import supabase from "../../supabaseClient";
 
 beforeEach(() => window.localStorage.clear());
+
+test("profile addresses keep street, locality and postcode on separate lines", () => {
+  expect(addressLines("14 Bridgewood Road, Woodbridge, Suffolk IP12 4HA", "IP12 4HA"))
+    .toEqual(["14 Bridgewood Road", "Woodbridge, Suffolk", "IP12 4HA"]);
+});
 
 test("building history banner labels its audit stage Occupy", () => {
   render(<OccupyHistoryTabs record={null} property={null} />);

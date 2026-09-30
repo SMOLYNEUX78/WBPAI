@@ -80,9 +80,12 @@ const sensorIdentity = (sensor) => String(sensor?.labelCode || sensor?.serialNum
   .replace(/[^a-z0-9]/gi, "").toUpperCase();
 const canRegisterSensor = (sensor) => Boolean(String(sensor?.manufacturer || "").trim()
   && (String(sensor?.model || "").trim() || sensorIdentity(sensor)));
-const addressLines = (address, postcode) => {
-  const parts = String(address || "").split(",").map((part) => part.trim()).filter(Boolean);
-  return [parts[0] || "Pending", parts.slice(1).join(", ") || "\u00a0", postcode || "\u00a0"];
+export const addressLines = (address, postcode) => {
+  const postcodeText = String(postcode || "").trim();
+  const postcodePattern = postcodeText && new RegExp(postcodeText.replace(/\s+/g, "\\s*"), "i");
+  const withoutPostcode = postcodePattern ? String(address || "").replace(postcodePattern, "") : String(address || "");
+  const parts = withoutPostcode.split(",").map((part) => part.trim()).filter(Boolean);
+  return [parts[0] || "Pending", parts.slice(1).join(", ") || "\u00a0", postcodeText || "\u00a0"];
 };
 export const mergeScannedSensor = (current, scanned) => {
   const previousIdentity = sensorIdentity(current);
@@ -6757,7 +6760,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
                 <div className="order-2 min-w-0 sm:order-1">
                   <p className="text-[10px] text-gray-600 sm:text-xs">Address:</p>
                   <p className="break-words text-xs font-semibold leading-tight text-gray-900 sm:text-base sm:leading-normal">
-                    {addressLines(homePassport?.propertyDiscovery?.address || matterportMetadata.address, homePassport?.propertyDiscovery?.postcode).map((line, index) => <span key={index} className="block min-h-[1em]">{line}</span>)}
+                    {addressLines(homePassport?.propertyDiscovery?.address || matterportMetadata.address, homePassport?.propertyDiscovery?.postcode).map((line, index) => <span key={index} className={`block min-h-[1em] ${index === 0 ? "truncate whitespace-nowrap text-[11px] sm:text-base" : ""}`} title={index === 0 ? line : undefined}>{line}</span>)}
                   </p>
                   <p className="mt-1 break-words text-[10px] text-gray-700 sm:text-xs">UPRN: <span className="font-semibold">{homePassport?.uprn || "Pending"}</span></p>
                 </div>
@@ -9891,7 +9894,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
           <div className="min-w-0 px-3 py-2 sm:px-5">
             <p className="text-xs font-semibold text-emerald-900">Address:</p>
             <h3 aria-label="Home address" className="break-words text-base font-bold text-gray-950">
-              {addressLines(ownershipProperty?.address, ownershipProperty?.postcode).map((line, index) => <span key={index} className="block min-h-[1em]">{line}</span>)}
+              {addressLines(ownershipProperty?.address, ownershipProperty?.postcode).map((line, index) => <span key={index} className={`block min-h-[1em] ${index === 0 ? "truncate whitespace-nowrap text-[11px] sm:text-base" : ""}`} title={index === 0 ? line : undefined}>{line}</span>)}
             </h3>
             <p className="mt-1 break-words text-xs text-gray-700">UPRN: <span className="font-semibold">{ownershipRecord?.uprn || ownershipProperty?.uprn || "Pending"}</span></p>
             <p className="mt-1 break-words text-xs text-gray-700">Coordinates: {[buildingLatitude, buildingLongitude].filter((value) => value !== "" && value !== null && value !== undefined).join(", ") || "Pending"}</p>
