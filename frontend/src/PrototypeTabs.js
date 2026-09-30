@@ -8,6 +8,7 @@ const OCCUPY_TABS = [
   { label: "Museum", path: "/dashboard/museum" },
 ];
 const DESIGN_TABS = [
+  { label: "New", path: "/login?role=architect&mode=signup" },
   { label: "Portfolio", path: "/dashboard/portfolio?role=architect" },
   { label: "Exchange", path: "/dashboard/exchange?role=architect" },
 ];

@@ -123,8 +123,11 @@ const SplashScreen = () => {
 
 const RoleGateway = () => {
   const navigate = useNavigate();
-  const [selectedRole, setSelectedRole] = useState("");
-  const [authMode, setAuthMode] = useState("signin");
+  const location = useLocation();
+  const designSignup = new URLSearchParams(location.search).get("role") === "architect"
+    && new URLSearchParams(location.search).get("mode") === "signup";
+  const [selectedRole, setSelectedRole] = useState(designSignup ? "architect" : "");
+  const [authMode, setAuthMode] = useState(designSignup ? "signup" : "signin");
   const [occupyMode, setOccupyMode] = useState("new");
   const [email, setEmail] = useState("");
   const [authStatus, setAuthStatus] = useState("idle");
@@ -338,6 +341,7 @@ const RoleGateway = () => {
 
   return (
     <main className="wbp-access-shell">
+      {designSignup ? <div className="border-b bg-white px-4 py-3"><PrototypeTabs scope="design" activePath="/login" /></div> : null}
       <section className="wbp-access-header">
         <span className="wbp-access-mark">Whole Build Profile</span>
         {testSession && <button type="button" className="wbp-test-password-trigger" onClick={() => { setPasswordSetupOpen(true); setPasswordSetupStatus(""); }}>Set test password</button>}
