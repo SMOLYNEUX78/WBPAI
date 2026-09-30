@@ -655,6 +655,7 @@ const ProfessionalWorkspace = () => {
   const [isTestAccount, setIsTestAccount] = useState(false);
   const [organisationAccess, setOrganisationAccess] = useState(null);
   const [pendingRequests, setPendingRequests] = useState([]);
+  const [historicalProjectCount, setHistoricalProjectCount] = useState(null);
   const refreshRequests = useCallback(async (organisationId) => {
     const { data, error } = await supabase.rpc("wbp_pending_organisation_requests", { p_organisation_id: organisationId });
     if (!error) setPendingRequests(data || []);
@@ -671,6 +672,12 @@ const ProfessionalWorkspace = () => {
           const approved = (accessResult.data || []).find((item) => item.request_status === "approved");
           setOrganisationAccess(approved || null);
           if (approved?.access_role === "admin") refreshRequests(approved.organisation_id);
+          if (approved?.organisation_id) {
+            const { data: count, error: countError } = await supabase.rpc("wbp_provisional_project_count", {
+              p_organisation_id: approved.organisation_id, p_stage: role === "builder" ? "build" : "design",
+            });
+            if (active && !countError) setHistoricalProjectCount(count);
+          }
         }
       }
       let cached = {};
@@ -781,6 +788,10 @@ const ProfessionalWorkspace = () => {
       </section>
 
       {profileStatus ? <p className="wbp-profile-save-status" role="status">{profileStatus}</p> : null}
+      {historicalProjectCount > 0 ? <section className="mx-5 mt-5 border border-emerald-200 bg-emerald-50 p-4 text-sm sm:mx-8">
+        <h2 className="font-semibold">Historical projects mentioning your organisation</h2>
+        <p className="mt-1">{historicalProjectCount} owner-supplied {isBuilder ? "build" : "design"} record{historicalProjectCount === 1 ? "" : "s"} may match your verified organisation. These are not claimed projects; an owner-approved review is needed before details or evidence can be shared.</p>
+      </section> : null}
 
       {organisationAccess?.access_role === "admin" ? <section className="mx-5 mt-5 border border-gray-200 bg-white p-4 sm:mx-8" aria-label="Staff access requests">
         <h2 className="font-semibold">Staff access requests</h2>

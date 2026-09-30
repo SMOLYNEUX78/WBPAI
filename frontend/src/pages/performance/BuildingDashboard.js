@@ -172,6 +172,7 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
   const [houseNumber, setHouseNumber] = useState("");
   const [postcode, setPostcode] = useState("");
   const [history, setHistory] = useState({ design: {}, build: {} });
+  const [savedHistory, setSavedHistory] = useState(setup?.historicalStages || { design: {}, build: {} });
   const [saveStatus, setSaveStatus] = useState("");
   const [searchStatus, setSearchStatus] = useState("");
   const [uploadStatus, setUploadStatus] = useState("");
@@ -192,7 +193,7 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
   const resolvedCouncil = property?.localAuthority || designCouncil;
   const isEastSuffolk = /east suffolk/i.test(resolvedCouncil || "");
   const councilRouteOpen = ecosystemStatus === "missing" || ecosystemStatus === "error" || useCouncilRoute;
-  const showHistoryInputs = councilRouteOpen || selectedEcosystemRecord;
+  const showHistoryInputs = councilRouteOpen || selectedEcosystemRecord || Boolean(savedHistory[contentStage]?.savedAt);
   const designAddress = property?.address || addressDraft?.address || "";
   const designPostcode = property?.postcode || addressDraft?.postcode || "";
   const designUprn = property?.uprn || record?.uprn || addressDraft?.uprn || "";
@@ -219,7 +220,10 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
     let active = true;
     supabase.from("WBPBuildingSetupDeclarations").select("setup_data")
       .eq("building_record_id", recordId).maybeSingle().then(({ data, error }) => {
-        if (active && !error && data?.setup_data?.historicalStages) changeHistory(data.setup_data.historicalStages);
+        if (active && !error && data?.setup_data?.historicalStages) {
+          changeHistory(data.setup_data.historicalStages);
+          setSavedHistory(data.setup_data.historicalStages);
+        }
       });
     return () => { active = false; };
   }, [recordId, onDraftHistoryChange, changeHistory]);
@@ -360,8 +364,9 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
     const { data: existing, error: readError } = await supabase.from("WBPBuildingSetupDeclarations")
       .select("setup_data").eq("building_record_id", recordId).maybeSingle();
     if (readError) { setSaveStatus(`Save failed: ${readError.message}`); return; }
+    const savedStage = { ...(shownHistory[stage] || {}), savedAt: new Date().toISOString(), source: "owner-supplied-council-record" };
     const setupData = { ...(existing?.setup_data || {}), historicalStages: {
-      ...(existing?.setup_data?.historicalStages || {}), [stage]: shownHistory[stage],
+      ...(existing?.setup_data?.historicalStages || {}), [stage]: savedStage,
     } };
     if (stage === "design") {
       setupData.manualData = { ...(setupData.manualData || {}), internalArea: designArea };
@@ -370,7 +375,29 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
       building_record_id: recordId, setup_data: setupData, updated_by: auth.user.id,
       updated_at: new Date().toISOString(),
     }, { onConflict: "building_record_id" });
-    setSaveStatus(error ? `Save failed: ${error.message}` : "Saved to your secure account as unverified historical information.");
+    if (error) { setSaveStatus(`Save failed: ${error.message}`); return; }
+    setSavedHistory(setupData.historicalStages);
+    changeHistory((current) => ({ ...current, [stage]: savedStage }));
+    const companies = stage === "design"
+      ? [["architect", savedStage.architectPractice]]
+      : [["builder", savedStage.mainContractor], ["developer", savedStage.developer]];
+    const names = companies.filter(([, name]) => name?.trim());
+    if (names.length) {
+      const results = await Promise.all(names.map(async ([role, name]) => supabase
+        .from("WBPProvisionalOrganisationProjects").upsert({
+          building_record_id: recordId, stage, role, organisation_name: name.trim(),
+          added_by: auth.user.id, updated_at: new Date().toISOString(),
+        }, { onConflict: "building_record_id,stage,role" })));
+      const indexError = results.find((result) => result.error)?.error;
+      if (indexError) { setSaveStatus(`Building history saved, but company discovery needs the Provisional Organisation Projects migration: ${indexError.message}`); return; }
+    }
+    for (const [role, name] of companies) {
+      if (name?.trim()) continue;
+      const { error: removeError } = await supabase.from("WBPProvisionalOrganisationProjects").delete()
+        .eq("building_record_id", recordId).eq("stage", stage).eq("role", role);
+      if (removeError) { setSaveStatus(`Building history saved, but an old company match could not be removed: ${removeError.message}`); return; }
+    }
+    setSaveStatus("Saved to this building as owner-supplied history. Company attribution is awaiting verification.");
   };
 
   const uploadDocument = async (file) => {
@@ -423,6 +450,11 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
     <div role="tabpanel" className="min-h-0 overflow-hidden pb-2">
       {contentStage === "audit" ? <ProfileSummaryColumns record={record} property={property} setup={setup} /> :
         <div className={isAddressHistory ? "grid gap-3 px-3 py-2 text-xs sm:px-5" : "grid gap-2 px-3 py-2 text-xs sm:grid-cols-2 sm:px-5"}>
+          {savedHistory[contentStage]?.savedAt ? <div className="border border-emerald-300 bg-emerald-50 p-3 text-gray-800">
+            <strong className="block text-emerald-950">{isDesign ? "Design" : "Build"} history recorded</strong>
+            <p className="mt-1">{(isDesign ? [savedHistory.design?.architectPractice, savedHistory.design?.leadDesigner, savedHistory.design?.planningReference] : [savedHistory.build?.mainContractor, savedHistory.build?.developer, savedHistory.build?.completionDate]).filter(Boolean).join(" · ") || "Details saved"}</p>
+            <p className="mt-1 text-gray-600">Owner-supplied from historical records. The named organisation has not claimed or verified this project.</p>
+          </div> : null}
           {isAddressHistory ? <div className="min-w-0">
             <h3 className="font-bold text-gray-900">Find an existing {contentStage} record</h3>
             <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,2fr)_minmax(130px,1fr)]">
