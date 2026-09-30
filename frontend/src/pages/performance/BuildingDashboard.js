@@ -8,6 +8,7 @@ import matterportMark from "../../assets/matterport-mark.png";
 import PrototypeTabs from "../../PrototypeTabs";
 import { getReadinessGates } from "./readinessGates";
 import { mergeMonthlyHlaRows } from "./monthlyHla";
+import { liveRedReadings } from "./liveRedReadings";
 import { extractEnergyBillImage, extractEnergyBillPdf, normaliseBillReview } from "./energyBill";
 import "./occupyScreen.css";
 
@@ -920,6 +921,7 @@ const getEstimatedInternalArea = (modelId, building) => {
 };
 
 const BuildingDashboardPanel = ({ building, isActive = false }) => {
+  const navigate = useNavigate();
   const dataSourceBuildingId = building.dataSourceId || building.id;
   const isCarbonCreditTab = building.id === "cc";
   const [homePassport, setHomePassport] = useState(() => {
@@ -1038,6 +1040,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
   const activeSeasonInfo = useMemo(() => getMeteorologicalSeason(), []);
   const [deepDivePanel, setDeepDivePanel] = useState(null);
   const [occupyDetail, setOccupyDetail] = useState(null);
+  const [ccStage, setCcStage] = useState("before");
   const [activeMrvEvidenceField, setActiveMrvEvidenceField] = useState(null);
 
   useEffect(() => {
@@ -1341,6 +1344,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
   const [roomIaqData, setRoomIaqData] = useState(() =>
     readCachedDashboardState(`${dataSourceBuildingId}:roomIaq`, [])
   );
+  const [alertClock, setAlertClock] = useState(() => Date.now());
   const supportsExtendedIaqColumns = useRef(true);
 
   const [performanceValue, setPerformanceValue] = useState(() => {
@@ -3827,6 +3831,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
             ]
           : null;
       const { data, error } = await fetchScopedIaqRows({
+        includeTimestamp: true,
         includeReadingType: true,
         indoorOnly: true,
         limit: dataSourceBuildingId === "home" ? 60 : 30,
@@ -3853,6 +3858,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
           rooms.push({
             key: row.reading_type,
             label: normaliseRoomLabel(row.reading_type),
+            timestamp: row.timestamp,
             internalTemp: numericOrNull(row.temperature_inside),
             humidity: numericOrNull(row.humidity),
             co2: numericOrNull(row.co2),
@@ -3935,6 +3941,36 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
       console.error("Error fetching IAQ data:", err.message);
     }
   };
+
+  useEffect(() => {
+    if (!isActive || dataSourceBuildingId !== "home") return undefined;
+    const channel = supabase.channel(`wbp-live-iaq-${building.id}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "Readings", filter: `building_id=eq.${dataSourceBuildingId}` }, ({ new: row }) => {
+        if (!String(row.reading_type || "").startsWith("dyson:") || row.reading_type === "dyson:whole_home") return;
+        setRoomIaqData((current) => {
+          const room = {
+            key: row.reading_type,
+            label: normaliseRoomLabel(row.reading_type),
+            timestamp: row.timestamp,
+            internalTemp: numericOrNull(row.temperature_inside),
+            humidity: numericOrNull(row.humidity),
+            vocs: dysonAppDisplayValue(row.reading_type, "vocs", row.vocs),
+            pm25: numericOrNull(row.pm25),
+            pm10: isDownstairsDysonReading(row.reading_type) ? null : numericOrNull(row.pm10),
+            hcho: isDownstairsDysonReading(row.reading_type) ? null : numericOrNull(row.hcho),
+            no2: isDownstairsDysonReading(row.reading_type) ? null : dysonAppDisplayValue(row.reading_type, "no2", row.no2),
+          };
+          const next = [...current.filter((item) => item.key !== room.key), room];
+          localStorage.setItem(`${dataSourceBuildingId}:roomIaq`, JSON.stringify(next));
+          return next;
+        });
+        setAlertClock(Date.now());
+      }).subscribe();
+    const freshnessTimer = window.setInterval(() => setAlertClock(Date.now()), 60 * 1000);
+    return () => { window.clearInterval(freshnessTimer); supabase.removeChannel(channel); };
+    // The subscription follows only the active home slide; normal snapshot polling remains the fallback.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isActive, dataSourceBuildingId, building.id]);
 
   const fetchLongTermBuildingPerformance = async (overrides = {}) => {
     try {
@@ -6676,8 +6712,20 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
     ? "good"
     : nightCooldownStatus;
   const shouldShowDeepDive = Boolean(occupyDetail);
+  const redReadings = dataSourceBuildingId === "home" ? liveRedReadings(roomIaqData, alertClock) : [];
+  const openCcPerformance = () => {
+    setCcStage("before");
+    setDeepDivePanel("baseline");
+    const archivedSeason = seasonalTrendRecords.find((record) => record.status === "complete");
+    setSelectedTrendSeason(archivedSeason?.name || activeSeasonInfo.name);
+    setOccupyDetail("trends");
+  };
   const occupyPerformanceTabs = dataSourceBuildingId === "home" ? (
     <div className="wbp-detail-header-controls">
+      {isCarbonCreditTab ? <div className="wbp-detail-tabs" role="tablist" aria-label="Building stage">
+        <button type="button" role="tab" aria-selected={ccStage === "before"} onClick={() => { setCcStage("before"); setDeepDivePanel("baseline"); setSelectedTrendSeason(seasonalTrendRecords.find((record) => record.status === "complete")?.name || activeSeasonInfo.name); }}>Before</button>
+        <button type="button" role="tab" aria-selected={ccStage === "live"} onClick={() => { setCcStage("live"); setDeepDivePanel("baseline"); setSelectedTrendSeason(activeSeasonInfo.name); }}>Live</button>
+      </div> : null}
       <div className="wbp-detail-tabs" role="tablist" aria-label="Performance views">
         <button type="button" role="tab" aria-selected={occupyDetail === "trends"} onClick={() => setOccupyDetail("trends")}>Seasonal Charts</button>
         <button type="button" role="tab" aria-selected={occupyDetail === "performance"} onClick={() => setOccupyDetail("performance")}>Deep Dive</button>
@@ -6901,7 +6949,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
                 type="button"
                 className="wbp-linear-performance-track"
                 onClick={() => setOccupyDetail("trends")}
-                aria-label={Number.isFinite(performanceValue) ? `Building performance ${Math.round(performanceValue)} out of 100. Open deep dive` : "Building performance pending. Open deep dive"}
+                aria-label={Number.isFinite(performanceValue) ? `Building performance ${Math.round(performanceValue)} out of 100. Open building details` : "Building performance pending. Open building details"}
               >
                 {Number.isFinite(performanceValue) ? (
                   <div className="wbp-linear-performance-marker" style={{ left: `${Math.max(0, Math.min(100, performanceValue))}%` }}>
@@ -6927,18 +6975,13 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
               </div>
             </div>
           ) : isCarbonCreditTab ? (
-            <div className="wbp-linear-performance wbp-linear-performance--comparison">
+            <div className="wbp-linear-performance">
               <button type="button" className="wbp-linear-performance-track"
-                onClick={() => setOccupyDetail("trends")}
-                aria-label={`EnerPHit performance ${enerphitPerformance.value} out of 100${Number.isFinite(performanceValue) ? `; baseline ${Math.round(performanceValue)} out of 100` : ""}. Open EnerPHit deep dive`}>
-                {Number.isFinite(performanceValue) ? <span className="wbp-linear-performance-marker wbp-linear-performance-marker--baseline"
-                  style={{ left: `${Math.max(0, Math.min(100, performanceValue))}%` }} aria-hidden="true"><span>Baseline</span></span> : null}
-                <span className="wbp-linear-performance-marker wbp-linear-performance-marker--right-edge" style={{ left: `${enerphitPerformance.value}%` }} aria-hidden="true"><span>EnerPHit</span></span>
+                onClick={openCcPerformance}
+                aria-label={Number.isFinite(performanceValue) ? `Measured building performance ${Math.round(performanceValue)} out of 100. Open building details` : "Measured building performance pending. Open building details"}>
+                {Number.isFinite(performanceValue) ? <span className="wbp-linear-performance-marker"
+                  style={{ left: `${Math.max(0, Math.min(100, performanceValue))}%` }} aria-hidden="true"><span>{Math.round(performanceValue)}</span></span> : <span className="wbp-linear-performance-pending">Pending</span>}
               </button>
-              <div className="flex justify-between gap-3 px-2 text-xs sm:px-4">
-                <button type="button" className="font-semibold text-gray-700 underline-offset-2 hover:underline" onClick={() => { setDeepDivePanel("baseline"); setOccupyDetail("performance"); }}>Baseline deep dive</button>
-                <button type="button" className="font-semibold text-emerald-800 underline-offset-2 hover:underline" onClick={() => { setDeepDivePanel("new"); setOccupyDetail("performance"); }}>EnerPHit deep dive</button>
-              </div>
             </div>
           ) : (
             renderPerformanceCard({
@@ -6948,6 +6991,12 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
               showStandardDeepDiveToggle: true,
             })
           )}
+
+          {redReadings.length > 0 ? <div className="flex flex-wrap gap-2 px-3 pb-2" role="status" aria-label="Live readings in the red band">
+            {redReadings.map((reading) => <span key={reading.key} className="border-l-2 border-red-600 bg-red-50 px-2 py-1 text-xs font-semibold text-red-900">
+              {reading.label}: {reading.value} {reading.unit}
+            </span>)}
+          </div> : null}
 
           {!isCarbonCreditTab && building.id !== "home" ? (
             <nav className="wbp-occupy-actions" aria-label="Home detail">
@@ -6962,14 +7011,12 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
             {isCarbonCreditTab ? (
               <div className="mb-3 border-b border-gray-100 pb-2 text-xs text-gray-600">
                 <h3 className="font-semibold text-gray-900">
-                  {deepDivePanel === "new"
-                    ? "After EnerPHit Performance Deep Dive"
-                    : "Before Performance Deep Dive"}
+                  {ccStage === "before" ? "Before: baseline in progress" : "Live: latest measured performance"}
                 </h3>
                 <p>
-                  {deepDivePanel === "new"
-                    ? "Projected post-upgrade view using EnerPHit certified retrofit comfort and energy performance."
-                    : "Measured current building view from the live Home data baseline."}
+                  {ccStage === "before"
+                    ? "Historical readings inform this rolling baseline; it has not been locked as a verified snapshot."
+                    : "Current measured view from the home feed. Figures update as new readings are collected."}
                 </p>
               </div>
             ) : null}
@@ -7478,6 +7525,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
         {!shouldShowDeepDive || occupyDetail !== "trends" ? null : (
         <DetailSurface modal={Boolean(occupyPerformanceTabs)} title={occupyPerformanceTabs ? "" : "Seasonal performance trends"} onClose={() => setOccupyDetail(null)} headerExtra={occupyPerformanceTabs}>
         <div className="mt-4 bg-white rounded border p-3 sm:p-4 space-y-3 overflow-hidden">
+          {isCarbonCreditTab ? <p className="text-xs text-gray-600">{ccStage === "before" ? "Historical seasonal readings; the before baseline is still being gathered, not locked." : "Current monitored season. New readings update this view as they arrive."}</p> : null}
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="font-semibold">Seasonal Performance Trends</h3>
             <div className="flex flex-wrap gap-1 text-xs">
@@ -7960,6 +8008,9 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
             <p className="text-sm text-gray-600">Illustrative annual licence value</p>
             <p className="mt-2 text-xs text-gray-600">Subject to audit, consent and buyer agreement; not accrued proceeds.</p>
           </div>
+        </div>
+        <div className="mt-5 flex justify-end">
+          <button type="button" className="border border-emerald-700 bg-emerald-700 px-6 py-2 text-sm font-semibold text-white hover:bg-emerald-800" onClick={() => navigate("/dashboard/exchange?offer=wbp-001")}>Sell</button>
         </div>
       </section>}
 
@@ -10813,12 +10864,15 @@ const readCachedBridgewoodValue = () => {
       credits: Number.isFinite(Number(cached?.carbonCredits))
         ? Number(cached.carbonCredits)
         : null,
+      savedKwh: Number.isFinite(Number(cached?.totalSavedKwh))
+        ? Number(cached.totalSavedKwh)
+        : null,
       energyValue: Number.isFinite(Number(cached?.energyCostSavedGbp))
         ? Number(cached.energyCostSavedGbp)
         : null,
     };
   } catch (error) {
-    return { credits: null, energyValue: null };
+    return { credits: null, savedKwh: null, energyValue: null };
   }
 };
 
@@ -11163,7 +11217,10 @@ export const PortfolioDashboardPanel = ({
 
 const ExchangeDashboardPanel = ({
   bridgewoodTokens,
+  bridgewoodSummary,
+  singleBuildingOffer = false,
 }) => {
+  const navigate = useNavigate();
   const [marketView, setMarketView] = useState("carbon");
   const [tradeTimeframe, setTradeTimeframe] = useState("1D");
   const [salePanelOpen, setSalePanelOpen] = useState(false);
@@ -11310,6 +11367,21 @@ const ExchangeDashboardPanel = ({
     });
     return () => window.cancelAnimationFrame(animationFrame);
   }, []);
+
+  if (singleBuildingOffer) {
+    return <main className="min-h-screen bg-white p-4 sm:p-8">
+      <div className="mx-auto max-w-5xl">
+        <button type="button" className="mb-5 text-sm font-semibold text-emerald-800 underline" onClick={() => navigate("/dashboard/cc")}>Back to WBP-001cc</button>
+        <h1 className="text-2xl font-bold">WBP-001 value preview</h1>
+        <p className="mt-2 text-sm text-gray-600">This property is not listed for sale. Carbon rights and data licences require completed evidence, consent, verification and a buyer.</p>
+        <div className="mt-6 grid gap-5 border-y border-gray-200 py-6 sm:grid-cols-3">
+          <div><h2 className="text-xs font-semibold uppercase text-gray-600">Credits</h2><p className="mt-2 text-2xl font-bold">{Number.isFinite(bridgewoodTokens) ? bridgewoodTokens.toFixed(4) : "Pending"}</p><p className="text-sm text-gray-600">WBP-C</p></div>
+          <div><h2 className="text-xs font-semibold uppercase text-gray-600">Energy saved</h2><p className="mt-2 text-2xl font-bold">{Number.isFinite(bridgewoodSummary?.savedKwh) ? bridgewoodSummary.savedKwh.toFixed(1) : "Pending"}</p><p className="text-sm text-gray-600">kWh{Number.isFinite(bridgewoodSummary?.energyValue) ? ` · £${bridgewoodSummary.energyValue.toFixed(2)} estimated savings` : ""}</p></div>
+          <div><h2 className="text-xs font-semibold uppercase text-gray-600">Potential data value</h2><p className="mt-2 text-2xl font-bold">£{MODELLED_DATA_VALUE_PER_PROPERTY_GBP}</p><p className="text-sm text-gray-600">Illustrative annual licence value, not accrued proceeds</p></div>
+        </div>
+      </div>
+    </main>;
+  }
 
   return (
     <main className="min-h-screen bg-white p-3 sm:p-5">
@@ -11884,7 +11956,7 @@ const BuildingDashboard = () => {
   const goToBuilding = (nextIndex) => {
     const wrappedIndex = (nextIndex + BUILDINGS.length) % BUILDINGS.length;
     setActiveIndex(wrappedIndex);
-    const nextPath = `/dashboard/${BUILDINGS[wrappedIndex].id}`;
+    const nextPath = `/dashboard/${BUILDINGS[wrappedIndex].id}${accessRole === "architect" ? "?role=architect" : ""}`;
     if (location.pathname !== nextPath) {
       navigate(nextPath);
     }
@@ -11924,7 +11996,7 @@ const BuildingDashboard = () => {
     const loadBridgewoodTokens = async () => {
       const { data, error } = await supabase
         .from("CarbonSavingsSummary")
-        .select("carbon_credits, total_energy_cost_saved_gbp, calculated_at")
+        .select("carbon_credits, total_saved_kwh, total_energy_cost_saved_gbp, calculated_at")
         .eq("building_id", "home")
         .eq("scenario", CARBON_SAVINGS_SCENARIO)
         .order("calculated_at", { ascending: false })
@@ -11934,6 +12006,7 @@ const BuildingDashboard = () => {
         const energyValue = Number(data?.[0]?.total_energy_cost_saved_gbp);
         setBridgewoodValue({
           credits,
+          savedKwh: Number.isFinite(Number(data?.[0]?.total_saved_kwh)) ? Number(data[0].total_saved_kwh) : null,
           energyValue: Number.isFinite(energyValue) && energyValue >= 0
             ? energyValue
             : null,
@@ -11989,7 +12062,7 @@ const BuildingDashboard = () => {
       <div className="sticky top-0 z-20">
       <div className="border-b bg-white px-4 py-3">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-          {accessRole === "homeowner" ? <PrototypeTabs activePath={`/dashboard/${activeBuilding.id}`} onDashboardTab={openBuildingById} /> : <strong className="text-lg">WBP Prototype</strong>}
+          {accessRole === "homeowner" ? <PrototypeTabs activePath={`/dashboard/${activeBuilding.id}`} onDashboardTab={openBuildingById} /> : accessRole === "architect" ? <PrototypeTabs scope="design" activePath={`/dashboard/${activeBuilding.id}`} onDashboardTab={openBuildingById} /> : <strong className="text-lg">WBP Prototype</strong>}
 
           <div className="flex shrink-0 items-center gap-3">
             <button type="button" onClick={() => navigate("/login")} className="border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-900 hover:bg-gray-100">Switch workspace</button>
@@ -12048,6 +12121,8 @@ const BuildingDashboard = () => {
                 ) : building.exchangeOnly ? (
                   <ExchangeDashboardPanel
                     bridgewoodTokens={bridgewoodTokens}
+                    bridgewoodSummary={bridgewoodValue}
+                    singleBuildingOffer={new URLSearchParams(location.search).get("offer") === "wbp-001"}
                     onOpenPortfolio={() => openSectionById("portfolio")}
                   />
                 ) : (

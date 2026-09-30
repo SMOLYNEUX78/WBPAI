@@ -8,6 +8,7 @@ import {
   useParams,
 } from "react-router-dom";
 import BuildingDashboard from "./pages/performance/BuildingDashboard";
+import PrototypeTabs from "./PrototypeTabs";
 import DesignProject from "./DesignProject";
 import BuildHandover from "./BuildHandover";
 import supabase from "./supabaseClient";
@@ -750,7 +751,7 @@ const ProfessionalWorkspace = () => {
     <main className={`wbp-professional-shell is-${isBuilder ? "build" : "design"}`}>
       <div className="wbp-professional-sticky">
       <header className="wbp-professional-nav">
-        <strong>WBP Prototype</strong>
+        {isBuilder ? <strong>WBP Prototype</strong> : <PrototypeTabs scope="design" activePath={location.pathname} />}
         <div className="wbp-professional-nav-actions">
           <button type="button" onClick={() => navigate("/login")}>Switch workspace</button>
         </div>
