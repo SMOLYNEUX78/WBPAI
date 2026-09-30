@@ -1,9 +1,17 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { NewBuildingSetupPanel, OccupyHistoryTabs, ProfileSummaryColumns, addressLines, decodeSensorLabel, parseSensorLabelText, mergeScannedSensor, registerSensorDraft, findAccountHomeRecord, findHomeProfileForOverwrite } from "./BuildingDashboard";
+import { NewBuildingSetupPanel, OccupyHistoryTabs, ProfileSummaryColumns, addressLines, decodeSensorLabel, parseSensorLabelText, mergeScannedSensor, registerSensorDraft, findAccountHomeRecord, findHomeProfileForOverwrite, readCachedBridgewoodValue } from "./BuildingDashboard";
 import supabase from "../../supabaseClient";
 
 beforeEach(() => window.localStorage.clear());
+
+test("single-home exchange cache uses the CC summary and leaves missing values pending", () => {
+  expect(readCachedBridgewoodValue()).toEqual({ credits: null, savedKwh: null, energyValue: null, savedKgCo2e: null });
+  window.localStorage.setItem("home:carbonIntervalSavingsSummary:v4", JSON.stringify({
+    carbonCredits: 0.2443, totalSavedKwh: 1318.7, totalSavedKgCo2e: 244.3, energyCostSavedGbp: 137.06,
+  }));
+  expect(readCachedBridgewoodValue()).toEqual({ credits: 0.2443, savedKwh: 1318.7, energyValue: 137.06, savedKgCo2e: 244.3 });
+});
 
 test("profile addresses keep street, locality and postcode on separate lines", () => {
   expect(addressLines("14 Bridgewood Road, Woodbridge, Suffolk IP12 4HA", "IP12 4HA"))

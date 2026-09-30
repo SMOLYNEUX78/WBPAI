@@ -8147,7 +8147,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
           </div>
         </div>
         <div className="mt-5 flex justify-end">
-          <button type="button" className="border border-emerald-700 bg-emerald-700 px-6 py-2 text-sm font-semibold text-white hover:bg-emerald-800" onClick={() => navigate("/dashboard/exchange?role=architect")}>Sell</button>
+          <button type="button" className="border border-emerald-700 bg-emerald-700 px-6 py-2 text-sm font-semibold text-white hover:bg-emerald-800" onClick={() => navigate("/dashboard/exchange?source=cc")}>Sell</button>
         </div>
       </section>}
 
@@ -10992,24 +10992,27 @@ const PORTFOLIO_SUPPLIERS = [
   { name: "EastBuild Retrofit", projects: 2, verified: 0, outcome: 62, defects: 3 },
 ];
 
-const readCachedBridgewoodValue = () => {
+export const readCachedBridgewoodValue = () => {
   try {
     const cached = JSON.parse(
       localStorage.getItem(`home:${CARBON_INTERVAL_SAVINGS_CACHE_KEY}`) || "null"
     );
     return {
-      credits: Number.isFinite(Number(cached?.carbonCredits))
+      credits: cached?.carbonCredits != null && Number.isFinite(Number(cached.carbonCredits))
         ? Number(cached.carbonCredits)
         : null,
-      savedKwh: Number.isFinite(Number(cached?.totalSavedKwh))
+      savedKwh: cached?.totalSavedKwh != null && Number.isFinite(Number(cached.totalSavedKwh))
         ? Number(cached.totalSavedKwh)
         : null,
-      energyValue: Number.isFinite(Number(cached?.energyCostSavedGbp))
+      energyValue: cached?.energyCostSavedGbp != null && Number.isFinite(Number(cached.energyCostSavedGbp))
         ? Number(cached.energyCostSavedGbp)
+        : null,
+      savedKgCo2e: cached?.totalSavedKgCo2e != null && Number.isFinite(Number(cached.totalSavedKgCo2e))
+        ? Number(cached.totalSavedKgCo2e)
         : null,
     };
   } catch (error) {
-    return { credits: null, savedKwh: null, energyValue: null };
+    return { credits: null, savedKwh: null, energyValue: null, savedKgCo2e: null };
   }
 };
 
@@ -11352,7 +11355,8 @@ export const PortfolioDashboardPanel = ({
   );
 };
 
-const ExchangeDashboardPanel = () => {
+const ExchangeDashboardPanel = ({ homeValue = null }) => {
+  const isHomeExchange = homeValue !== null;
   const [marketView, setMarketView] = useState("carbon");
   const [tradeTimeframe, setTradeTimeframe] = useState("1D");
   const [salePanelOpen, setSalePanelOpen] = useState(false);
@@ -11370,14 +11374,16 @@ const ExchangeDashboardPanel = () => {
   const bestAskPrice = 88;
   const bidAskSpread = bestAskPrice - bestBidPrice;
   const marketMidPrice = (bestBidPrice + bestAskPrice) / 2;
-  const projectedLots = PORTFOLIO_EXCHANGE_PROPERTIES;
-  const projectedAnnualCredits = PORTFOLIO_EXCHANGE_SUMMARY.carbonCredits;
-  const annualCarbonValue = PORTFOLIO_EXCHANGE_SUMMARY.carbonValue;
-  const annualMonitoringValue = PORTFOLIO_EXCHANGE_SUMMARY.monitoringValue;
-  const annualHealthDataValue = PORTFOLIO_EXCHANGE_SUMMARY.healthValue;
-  const annualGridDataValue = PORTFOLIO_EXCHANGE_SUMMARY.gridValue;
-  const annualEvidenceValue = PORTFOLIO_EXCHANGE_SUMMARY.evidenceValue;
-  const annualPortfolioValue = PORTFOLIO_EXCHANGE_SUMMARY.totalValue;
+  const projectedLots = isHomeExchange ? [] : PORTFOLIO_EXCHANGE_PROPERTIES;
+  const projectedAnnualCredits = isHomeExchange ? (homeValue.credits || 0) : PORTFOLIO_EXCHANGE_SUMMARY.carbonCredits;
+  const annualCarbonValue = isHomeExchange
+    ? (homeValue.savedKgCo2e === null ? projectedAnnualCredits : homeValue.savedKgCo2e / 1000) * carbonPrice
+    : PORTFOLIO_EXCHANGE_SUMMARY.carbonValue;
+  const annualMonitoringValue = isHomeExchange ? 144 : PORTFOLIO_EXCHANGE_SUMMARY.monitoringValue;
+  const annualHealthDataValue = isHomeExchange ? 120 : PORTFOLIO_EXCHANGE_SUMMARY.healthValue;
+  const annualGridDataValue = isHomeExchange ? 180 : PORTFOLIO_EXCHANGE_SUMMARY.gridValue;
+  const annualEvidenceValue = isHomeExchange ? 300 : PORTFOLIO_EXCHANGE_SUMMARY.evidenceValue;
+  const annualPortfolioValue = annualCarbonValue + annualMonitoringValue + annualHealthDataValue + annualGridDataValue + annualEvidenceValue;
   const carbonValueShare = annualPortfolioValue > 0 ? annualCarbonValue / annualPortfolioValue * 100 : 0;
   const monitoringValueShare = annualPortfolioValue > 0 ? annualMonitoringValue / annualPortfolioValue * 100 : 0;
   const healthDataValueShare = annualPortfolioValue > 0 ? annualHealthDataValue / annualPortfolioValue * 100 : 0;
@@ -11386,11 +11392,11 @@ const ExchangeDashboardPanel = () => {
   const healthShareEnd = monitoringShareEnd + healthDataValueShare;
   const gridShareEnd = healthShareEnd + gridDataValueShare;
   const basketLots = [
-    { name: "Carbon", target: annualCarbonValue, coverage: 1, status: "1 of 1 transfer settled", rights: "Finite right", colour: "#047857" },
-    { name: "Monitoring", target: annualMonitoringValue, coverage: 0.72, status: "3 buyers matched · still available", rights: "Repeatable licence", colour: "#2563eb" },
-    { name: "Health", target: annualHealthDataValue, coverage: 0.41, status: "2 buyers matched · still available", rights: "Repeatable licence", colour: "#be123c" },
-    { name: "Grid", target: annualGridDataValue, coverage: 1, status: "1 buyer matched · renewal open", rights: "Repeatable licence", colour: "#0891b2" },
-    { name: "Evidence", target: annualEvidenceValue, coverage: 0.22, status: "1 service engagement · open", rights: "Repeatable service", colour: "#d97706" },
+    { name: "Carbon", target: annualCarbonValue, coverage: isHomeExchange ? 0 : 1, status: isHomeExchange ? "Not issued or sold" : "1 of 1 transfer settled", rights: "Finite right", colour: "#047857" },
+    { name: "Monitoring", target: annualMonitoringValue, coverage: isHomeExchange ? 0 : 0.72, status: isHomeExchange ? "No buyer matched" : "3 buyers matched · still available", rights: "Repeatable licence", colour: "#2563eb" },
+    { name: "Health", target: annualHealthDataValue, coverage: isHomeExchange ? 0 : 0.41, status: isHomeExchange ? "No buyer matched" : "2 buyers matched · still available", rights: "Repeatable licence", colour: "#be123c" },
+    { name: "Grid", target: annualGridDataValue, coverage: isHomeExchange ? 0 : 1, status: isHomeExchange ? "No buyer matched" : "1 buyer matched · renewal open", rights: "Repeatable licence", colour: "#0891b2" },
+    { name: "Evidence", target: annualEvidenceValue, coverage: isHomeExchange ? 0 : 0.22, status: isHomeExchange ? "No buyer matched" : "1 service engagement · open", rights: "Repeatable service", colour: "#d97706" },
   ];
   const basketSecuredValue = basketLots.reduce(
     (sum, lot) => sum + lot.target * lot.coverage,
@@ -11502,10 +11508,10 @@ const ExchangeDashboardPanel = () => {
       <section className="border-b border-gray-200">
         <div className="grid grid-cols-[minmax(0,0.85fr)_96px_minmax(112px,1fr)] items-start gap-2 px-3 py-5 sm:grid-cols-[minmax(150px,0.9fr)_160px_minmax(180px,1fr)] sm:gap-5 sm:px-5 sm:py-7 lg:grid-cols-[minmax(220px,1fr)_176px_minmax(240px,1fr)] lg:gap-8">
           <div className="min-w-0">
-            <p className="mb-1 text-[9px] font-semibold uppercase text-gray-500 sm:text-xs">East Suffolk Social Housing</p>
-            <h1 className="text-sm font-bold sm:text-lg lg:text-2xl">Portfolio Value</h1>
-            <p className="mt-1 break-words text-2xl font-bold sm:text-3xl lg:text-4xl">£{annualPortfolioValue.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-            <p className="mt-1 text-[10px] text-gray-600 sm:text-xs">{projectedLots.length} Good / Verified homes · modelled</p>
+            <p className="mb-1 text-[9px] font-semibold uppercase text-gray-500 sm:text-xs">{isHomeExchange ? "WBP-001cc · 14 Bridgewood Road" : "East Suffolk Social Housing"}</p>
+            <h1 className="text-sm font-bold sm:text-lg lg:text-2xl">{isHomeExchange ? "Potential exchange value" : "Portfolio Value"}</h1>
+            <p className="mt-1 break-words text-2xl font-bold sm:text-3xl lg:text-4xl">{isHomeExchange && homeValue.credits === null ? "Pending CC summary" : `£${annualPortfolioValue.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}</p>
+            <p className="mt-1 text-[10px] text-gray-600 sm:text-xs">{isHomeExchange ? `${homeValue.credits === null ? "Pending" : homeValue.credits.toFixed(4)} WBP-C · ${homeValue.savedKwh === null ? "Pending" : homeValue.savedKwh.toFixed(1)} kWh saved · ${homeValue.energyValue === null ? "Pending" : `£${homeValue.energyValue.toFixed(2)}`} energy cost saved (not saleable)` : `${projectedLots.length} Good / Verified homes · modelled`}</p>
           </div>
           <div
             className="relative h-24 w-24 rounded-full sm:h-40 sm:w-40 lg:h-44 lg:w-44"
@@ -11517,7 +11523,7 @@ const ExchangeDashboardPanel = () => {
           </div>
           <div className="min-w-0 space-y-2 border-l border-gray-200 pl-2 sm:pl-4">
             {[
-              ["Carbon", annualCarbonValue, "bg-emerald-700", `Portfolio model · ref £${carbonPrice}/t`],
+              ["Carbon", annualCarbonValue, "bg-emerald-700", isHomeExchange ? `WBP-001cc savings · ref £${carbonPrice}/t` : `Portfolio model · ref £${carbonPrice}/t`],
               ["Monitoring data", annualMonitoringValue, "bg-blue-600", "Repeatable annual licences"],
               ["Health data", annualHealthDataValue, "bg-rose-700", "Repeatable outcomes licences"],
               ["Grid data", annualGridDataValue, "bg-cyan-600", "Repeatable planning licences"],
@@ -11533,6 +11539,7 @@ const ExchangeDashboardPanel = () => {
             ))}
           </div>
         </div>
+        {isHomeExchange ? <p className="border-t border-gray-200 px-3 py-2 text-xs text-gray-600 sm:px-5">Carbon is a measured candidate, not an issued credit. Data prices are illustrative annual licence estimates. No sale is live.</p> : null}
         <div className="grid grid-cols-2 gap-2 border-t border-gray-200 px-3 py-3 sm:px-5">
           <button type="button" aria-pressed={salePanelOpen && saleMode === "simple"} onClick={() => openSalePanel("simple", "market")} className="min-h-11 border border-lime-500 bg-lime-400 px-3 py-2.5 text-sm font-semibold text-gray-950 hover:bg-lime-500">Sell</button>
           <button type="button" aria-pressed={salePanelOpen && saleMode === "advanced"} onClick={() => openSalePanel("advanced")} className="min-h-11 border border-lime-500 bg-lime-400 px-3 py-2.5 text-sm font-semibold text-gray-950 hover:bg-lime-500">Managed sale</button>
@@ -11543,7 +11550,7 @@ const ExchangeDashboardPanel = () => {
         <div className="mb-4 flex items-end justify-between gap-3">
           <div>
             <p className="text-[10px] font-semibold uppercase text-gray-500 sm:text-xs">Divisible rights basket</p>
-            <h2 className="mt-1 text-lg font-bold">£{basketSecuredValue.toFixed(2)} secured <span className="font-normal text-gray-500">/ £{annualPortfolioValue.toFixed(2)} target</span></h2>
+            <h2 className="mt-1 text-lg font-bold">{isHomeExchange ? "No rights sold" : `£${basketSecuredValue.toFixed(2)} secured`} <span className="font-normal text-gray-500">/ £{annualPortfolioValue.toFixed(2)} {isHomeExchange ? "illustrative potential" : "target"}</span></h2>
           </div>
           <p className="max-w-sm text-right text-[10px] text-gray-500 sm:text-xs">One offer. Carbon settles once; each data buyer receives a separate controlled licence.</p>
         </div>
@@ -11579,7 +11586,7 @@ const ExchangeDashboardPanel = () => {
         </div>
         <p className="mt-4 border-t border-gray-200 pt-3 text-[10px] text-gray-500 sm:text-xs">The carbon lot closes when transferred and retired. A data match does not exhaust that right: further purpose-bound licences can be issued to other approved buyers, subject to consent, aggregation and permitted-use controls.</p>
 
-        <div className="mt-5 border-t border-gray-200 pt-4">
+        {!isHomeExchange ? <div className="mt-5 border-t border-gray-200 pt-4">
           <div className="mb-3 flex items-end justify-between gap-3">
             <div>
               <h3 className="text-sm font-bold sm:text-base">Theoretical sales</h3>
@@ -11624,7 +11631,7 @@ const ExchangeDashboardPanel = () => {
               </tbody>
             </table>
           </div>
-        </div>
+        </div> : null}
       </section>
 
       {false ? <>
@@ -11852,7 +11859,7 @@ const ExchangeDashboardPanel = () => {
               <div>
                 <p className="text-[10px] font-semibold uppercase text-emerald-700">Prototype order ticket</p>
                 <h2 id="sale-panel-title" className="mt-1 text-xl font-bold">{saleMode === "simple" ? "Sell available value" : "Manage sale"}</h2>
-                <p className="mt-1 text-xs text-gray-600">Current portfolio vintage · independently settling rights</p>
+                <p className="mt-1 text-xs text-gray-600">{isHomeExchange ? "WBP-001cc candidate rights · no issued credits or approved listings" : "Current portfolio vintage · independently settling rights"}</p>
               </div>
               <button type="button" onClick={() => setSalePanelOpen(false)} className="h-9 w-9 shrink-0 rounded border border-gray-300 text-xl leading-none text-gray-600 hover:bg-gray-50" aria-label="Close sale ticket">×</button>
             </header>
@@ -11882,7 +11889,7 @@ const ExchangeDashboardPanel = () => {
                         <div className="border border-blue-200 bg-blue-50 p-4">
                           <p className="text-xs font-semibold uppercase text-blue-800">Data and evidence</p>
                           <p className="mt-1 text-base font-bold">Offer non-exclusive licences</p>
-                          <p className="mt-1 text-xs text-blue-900">Match approved buyers to monitoring, health, grid and evidence rights. Source data stays with the portfolio.</p>
+                        <p className="mt-1 text-xs text-blue-900">Match approved buyers to monitoring, health, grid and evidence rights. Source data stays with the {isHomeExchange ? "homeowner" : "portfolio"}.</p>
                         </div>
                         <button type="button" onClick={() => setSaleMode("advanced")} className="w-full border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50">Change sale options</button>
                       </div>
@@ -12018,7 +12025,7 @@ const ExchangeDashboardPanel = () => {
                     <div className="mt-5 border border-amber-200 bg-amber-50 p-3 text-[10px] leading-relaxed text-amber-950">Carbon may produce immediate proceeds when an eligible bid exists. Data values remain modelled until an approved buyer accepts a licence; they are not guaranteed sale proceeds.</div>
                     <div className="mt-4 border-t border-gray-200 pt-4">
                       <p className="text-[10px] font-semibold uppercase text-gray-500">Included vintage</p>
-                      <p className="mt-1 text-xs text-gray-700">All currently eligible portfolio evidence accrued to date. Future readings remain outside this offer unless recurring licensing is enabled.</p>
+                        <p className="mt-1 text-xs text-gray-700">{isHomeExchange ? "Measured WBP-001cc savings to date. Verification and consent are required before any rights can be listed." : "All currently eligible portfolio evidence accrued to date. Future readings remain outside this offer unless recurring licensing is enabled."}</p>
                     </div>
                   </aside>
                 </div>
@@ -12110,7 +12117,7 @@ const BuildingDashboard = () => {
     const loadBridgewoodTokens = async () => {
       const { data, error } = await supabase
         .from("CarbonSavingsSummary")
-        .select("carbon_credits, total_saved_kwh, total_energy_cost_saved_gbp, calculated_at")
+        .select("carbon_credits, total_saved_kwh, total_saved_kgco2e, total_energy_cost_saved_gbp, calculated_at")
         .eq("building_id", "home")
         .eq("scenario", CARBON_SAVINGS_SCENARIO)
         .order("calculated_at", { ascending: false })
@@ -12123,6 +12130,9 @@ const BuildingDashboard = () => {
           savedKwh: Number.isFinite(Number(data?.[0]?.total_saved_kwh)) ? Number(data[0].total_saved_kwh) : null,
           energyValue: Number.isFinite(energyValue) && energyValue >= 0
             ? energyValue
+            : null,
+          savedKgCo2e: Number.isFinite(Number(data[0].total_saved_kgco2e))
+            ? Number(data[0].total_saved_kgco2e)
             : null,
         });
       }
@@ -12233,7 +12243,7 @@ const BuildingDashboard = () => {
                     onOpenExchange={() => openSectionById("exchange")}
                   />
                 ) : building.exchangeOnly ? (
-                  <ExchangeDashboardPanel />
+                  <ExchangeDashboardPanel homeValue={new URLSearchParams(location.search).get("source") === "cc" ? bridgewoodValue : null} />
                 ) : (
                   <BuildingDashboardPanel building={building} isActive={isActiveSlide} />
                 )}
