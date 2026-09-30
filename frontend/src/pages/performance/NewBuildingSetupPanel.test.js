@@ -78,7 +78,10 @@ test("complete scans register once while incomplete scans remain drafts", () => 
   expect(registered.healthSensors).toEqual([expect.objectContaining({ ...draft, evidenceFileName: "label.jpg" })]);
   expect(registered.healthSensorDraft.manufacturer).toBe("");
   expect(registerSensorDraft(registered.healthSensors, draft, "").healthSensors).toHaveLength(1);
-  expect(registerSensorDraft([], { ...draft, location: "" }, "").healthSensorDraft).toEqual({ ...draft, location: "" });
+  expect(registerSensorDraft([], { manufacturer: "Dyson", model: "", labelCode: "" }, "").healthSensorDraft)
+    .toEqual({ manufacturer: "Dyson", model: "", labelCode: "" });
+  expect(registerSensorDraft([], { ...draft, location: "", model: "" }, "").healthSensors)
+    .toEqual([expect.objectContaining({ labelCode: draft.labelCode, location: "", model: "" })]);
 });
 
 test("editing a registered instrument updates its metrics without creating another", () => {
@@ -143,11 +146,11 @@ test("saving health monitoring keeps a scanned but incomplete instrument on the 
     render(<MemoryRouter><NewBuildingSetupPanel freshStart syncHomeProfile /></MemoryRouter>);
     fireEvent.click(screen.getByRole("tab", { name: "Health Monitoring" }));
     fireEvent.change(screen.getByRole("textbox", { name: "Manufacturer" }), { target: { value: "Dyson" } });
-    fireEvent.change(screen.getByRole("textbox", { name: "Label code" }), { target: { value: "NN6-UK-HDA1783A" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Label code" }), { target: { value: "" } });
     fireEvent.click(screen.getByRole("button", { name: "Save health monitoring" }));
     await waitFor(() => expect(upsert).toHaveBeenCalledWith(expect.objectContaining({
       building_record_id: "home-id",
-      setup_data: expect.objectContaining({ healthSensors: [storedSensor], healthSensorDraft: expect.objectContaining({ manufacturer: "Dyson", labelCode: "NN6-UK-HDA1783A" }) }),
+      setup_data: expect.objectContaining({ healthSensors: [storedSensor], healthSensorDraft: expect.objectContaining({ manufacturer: "Dyson", labelCode: "" }) }),
     }), expect.anything()));
   } finally {
     from.mockRestore();
@@ -181,6 +184,37 @@ test("saving a complete scanned instrument registers it on the home account", as
         healthSensors: [expect.objectContaining({ manufacturer: "Dyson", model: "Pure Cool Link", location: "Upstairs", labelCode: "NN6-UK-HDA1783A" })],
         healthSensorDraft: expect.objectContaining({ manufacturer: "" }),
       }),
+    }), expect.anything()));
+  } finally {
+    from.mockRestore();
+    getUser.mockRestore();
+  }
+});
+
+test("a second identified sensor can be saved before its room is confirmed", async () => {
+  const first = { id: "sensor-1", manufacturer: "Dyson", model: "TP02", location: "Downstairs", labelCode: "FIRST-001", metrics: [] };
+  const upsert = jest.fn().mockResolvedValue({ error: null });
+  const getUser = jest.spyOn(supabase.auth, "getUser").mockResolvedValue({ data: { user: { id: "owner-1" } }, error: null });
+  const from = jest.spyOn(supabase, "from").mockImplementation((table) => {
+    const chain = {
+      eq: () => chain, order: () => chain, limit: () => chain,
+      then: (resolve) => Promise.resolve({ data: [], error: null }).then(resolve),
+      maybeSingle: async () => ({ data: table === "WBPBuildingRecords"
+        ? { id: "home-id", record_reference: "WBP-001", custodian_user_id: "owner-1" }
+        : { setup_data: { healthSensors: [first] } }, error: null }),
+    };
+    return { select: () => chain, upsert };
+  });
+  try {
+    render(<MemoryRouter><NewBuildingSetupPanel freshStart syncHomeProfile /></MemoryRouter>);
+    fireEvent.click(screen.getByRole("tab", { name: "Health Monitoring" }));
+    expect(await screen.findByText("Dyson TP02")).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("textbox", { name: "Manufacturer" }), { target: { value: "Dyson" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Label code" }), { target: { value: "SECOND-002" } });
+    expect(screen.getByRole("button", { name: "Add Instrument" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "Save health monitoring" }));
+    await waitFor(() => expect(upsert).toHaveBeenCalledWith(expect.objectContaining({
+      setup_data: expect.objectContaining({ healthSensors: [first, expect.objectContaining({ labelCode: "SECOND-002", location: "" })] }),
     }), expect.anything()));
   } finally {
     from.mockRestore();

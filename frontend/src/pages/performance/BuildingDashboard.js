@@ -78,6 +78,8 @@ const emptySensorDraft = () => ({
 });
 const sensorIdentity = (sensor) => String(sensor?.labelCode || sensor?.serialNumber || "")
   .replace(/[^a-z0-9]/gi, "").toUpperCase();
+const canRegisterSensor = (sensor) => Boolean(String(sensor?.manufacturer || "").trim()
+  && (String(sensor?.model || "").trim() || sensorIdentity(sensor)));
 const addressLines = (address, postcode) => {
   const parts = String(address || "").split(",").map((part) => part.trim()).filter(Boolean);
   return [parts[0] || "Pending", parts.slice(1).join(", ") || "\u00a0", postcode || "\u00a0"];
@@ -88,8 +90,7 @@ export const mergeScannedSensor = (current, scanned) => {
   return { ...(previousIdentity && nextIdentity && previousIdentity === nextIdentity ? current : emptySensorDraft()), ...scanned };
 };
 export const registerSensorDraft = (sensors, draft, evidenceFileName) => {
-  const complete = ["manufacturer", "model", "location"].every((field) => String(draft?.[field] || "").trim());
-  if (!complete) return { healthSensors: sensors, healthSensorDraft: draft, sensorEvidenceFileName: evidenceFileName };
+  if (!canRegisterSensor(draft)) return { healthSensors: sensors, healthSensorDraft: draft, sensorEvidenceFileName: evidenceFileName };
   const identity = sensorIdentity(draft);
   const matchingSensor = sensors.find((sensor) => sensor.id === draft.id || (identity && sensorIdentity(sensor) === identity));
   const updatedSensor = matchingSensor ? { ...matchingSensor, ...draft, id: matchingSensor.id,
@@ -130,7 +131,7 @@ export const ProfileSummaryColumns = ({ record, property, setup = {} }) => {
     ]],
     ["Health", [
       ["Sensors", sensors.length ? `${sensors.length} registered` : "Pending"],
-      ...sensors.map((sensor, index) => [`Instrument ${index + 1}`, [sensor.manufacturer, sensor.model, sensor.location].filter(Boolean).join(" · ")]),
+      ...sensors.map((sensor, index) => [`Instrument ${index + 1}`, [sensor.manufacturer, sensor.model || "Model pending", sensor.location || "Room pending"].filter(Boolean).join(" · ")]),
     ]],
   ];
   const fuelDetails = [
@@ -9644,7 +9645,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
     }
     sensorDraftTouchedRef.current = true;
     setSensorDraft((current) => mergeScannedSensor(current, Object.fromEntries(Object.entries(decoded).filter(([, value]) => value))));
-    setSensorScanStatus(isQrCode ? "Label details filled in. Check them against the device before registering." : "Barcode captured. Confirm the code on the label, then enter the manufacturer, model, serial number and location manually.");
+      setSensorScanStatus(isQrCode ? "Label details filled in. Check them against the device before registering." : "Barcode captured. Confirm the manufacturer and label code; model and room can be added later.");
   };
 
   useEffect(() => {
@@ -10542,15 +10543,11 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                 />
               </label>
 
-              <p className="text-xs text-gray-600">Metric availability is checked against a recent sample after registration. Physical and calibration checks remain separate from a live connection.</p>
+              <p className="text-xs text-gray-600">A manufacturer and model or unique label code are needed to register. Missing model and room details can be added with Edit. Metric availability is checked against a recent sample after registration.</p>
               <button
                 type="button"
                 className="bg-blue-600 disabled:bg-gray-300 disabled:text-gray-500 text-white px-4 py-2 rounded text-sm font-semibold"
-                disabled={
-                  !sensorDraft.manufacturer.trim() ||
-                  !sensorDraft.model.trim() ||
-                  !sensorDraft.location.trim()
-                }
+                disabled={!canRegisterSensor(sensorDraft)}
                 onClick={addHealthSensor}
               >
                 {sensorDraft.id ? "Update Instrument" : "Add Instrument"}
@@ -10582,7 +10579,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                           {sensor.manufacturer} {sensor.model}
                         </p>
                         <p className="text-gray-600 break-words">
-                          {sensor.location}
+                          {sensor.location || "Room pending"}
                           {sensor.serialNumber ? ` | ${sensor.serialNumber}` : ""}
                         </p>
                         {sensor.labelCode ? <p className="text-gray-600 break-words">Label code: {sensor.labelCode}</p> : null}
@@ -10607,7 +10604,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                     {sensor.connectionMethod === "dyson" && sensor.readingType ? <button type="button" disabled={sensorCheckBusy === sensor.id} onClick={() => checkSensorReading(sensor)} className="border border-emerald-700 px-2 py-1 font-semibold text-emerald-900 disabled:opacity-50">{sensorCheckBusy === sensor.id ? "Checking..." : "Check recent sample"}</button> : null}
                     <p className="text-gray-600">
                       <strong>Assurance:</strong>{" "}
-                      {sensor.verificationStatus.replaceAll("-", " ")}
+                      {(sensor.verificationStatus || "unverified").replaceAll("-", " ")}
                       {sensor.verificationDate ? ` on ${sensor.verificationDate}` : ""}
                       {sensor.evidenceFileName
                         ? ` | Evidence: ${sensor.evidenceFileName}`
