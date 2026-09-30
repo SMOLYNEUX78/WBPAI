@@ -211,22 +211,6 @@
   border: 1px solid rgba(55, 65, 81, 0.35);
 }
 
-.wbp-linear-performance-marker--enerphit {
-  z-index: 0;
-  width: 0;
-  border-left: 3px dashed #fff;
-  background: transparent;
-}
-
-.wbp-linear-performance-marker--enerphit span {
-  top: auto;
-  bottom: -20px;
-  min-width: max-content;
-  border: 1px solid #17212b;
-  background: #fff;
-  color: #17212b;
-}
-
 .wbp-linear-performance-marker--right-edge span {
   left: auto;
   right: 0;

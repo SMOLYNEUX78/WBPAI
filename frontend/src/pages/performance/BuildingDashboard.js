@@ -7043,10 +7043,10 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
             <div className="wbp-linear-performance">
               <button type="button" className="wbp-linear-performance-track"
                 onClick={openCcPerformance}
-                aria-label={Number.isFinite(performanceValue) ? `Measured building performance ${Math.round(performanceValue)} out of 100; EnerPHit retrofit scenario 93 out of 100. Open building details` : "Measured building performance pending; EnerPHit retrofit scenario 93 out of 100. Open building details"}>
-                <span className="wbp-linear-performance-marker wbp-linear-performance-marker--enerphit" style={{ left: "93%" }} aria-hidden="true"><span>EnerPHit retrofit 93</span></span>
-                {Number.isFinite(performanceValue) ? <span className="wbp-linear-performance-marker"
-                  style={{ left: `${Math.max(0, Math.min(100, performanceValue))}%` }} aria-hidden="true"><span>{Math.round(performanceValue)}</span></span> : <span className="wbp-linear-performance-pending">Pending</span>}
+                aria-label={Number.isFinite(performanceValue) ? `Measured baseline ${Math.round(performanceValue)} out of 100; EnerPHit live performance 93 out of 100. Open building details` : "Measured baseline pending; EnerPHit live performance 93 out of 100. Open building details"}>
+                {Number.isFinite(performanceValue) ? <span className="wbp-linear-performance-marker wbp-linear-performance-marker--baseline"
+                  style={{ left: `${Math.max(0, Math.min(100, performanceValue))}%` }} aria-hidden="true"><span>Baseline {Math.round(performanceValue)}</span></span> : null}
+                <span className="wbp-linear-performance-marker" style={{ left: "93%" }} aria-hidden="true"><span>EnerPHit live 93</span></span>
               </button>
             </div>
           ) : (
