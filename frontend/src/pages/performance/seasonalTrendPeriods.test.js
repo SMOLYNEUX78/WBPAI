@@ -1,16 +1,15 @@
-import { aggregateCalendarTrend, averageCalendarMetric, comfortTemperatureDomain, buildOneDayTrend } from "./BuildingDashboard";
+import { aggregateCalendarTrend, averageCalendarMetric, comfortTemperatureDomain, aggregateTypicalDay } from "./BuildingDashboard";
 
-test("one day shows recorded hourly values without leaking neighbouring dates", () => {
-  const points = buildOneDayTrend("2026-07-10",
-    [{ timestamp: "2026-07-10T14:00:00Z", fuel_type: "electricity", usage_kwh: 0.3 },
-      { timestamp: "2026-07-10T14:30:00Z", fuel_type: "electricity", usage_kwh: 0.4 },
-      { timestamp: "2026-07-11T14:00:00Z", fuel_type: "electricity", usage_kwh: 5 }],
-    [{ timestamp: "2026-07-10T14:05:00Z", reading_type: "dyson:upstairs",
-      temperature_inside: 25, humidity: 52, pm25: 4 }],
-    [{ timestamp: "2026-07-10T14:10:00Z", temperature_outside: 34 }]);
+test("typical day averages matching hours across the available week and retains energy", () => {
+  const points = aggregateTypicalDay([
+    { slot: 14, hour: 14, electricity: 0.7, internalTemp: 25,
+      externalTemp: 34, upstairsHumidity: 52 },
+    { slot: 38, hour: 14, electricity: 0.9, internalTemp: 23,
+      externalTemp: 32, upstairsHumidity: 48 },
+  ]);
   expect(points).toHaveLength(24);
-  expect(points[14]).toMatchObject({ electricity: 0.7, internalTemp: 25,
-    externalTemp: 34, externalTempPeak: 34, warmthBuffer: -9, upstairsHumidity: 52 });
+  expect(points[14]).toMatchObject({ electricity: 0.8, internalTemp: 24,
+    externalTemp: 33, warmthBuffer: -9, upstairsHumidity: 50 });
   expect(points[13].electricity).toBeNull();
 });
 

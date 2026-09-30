@@ -586,52 +586,24 @@ export const aggregateCalendarTrend = (dailyRows, period, startDate, endDate) =>
   });
 };
 
-export const buildOneDayTrend = (date, energyRows = [], iaqRows = [], outdoorRows = []) => {
-  const metricKeys = [...DATED_TREND_KEYS, "humidity"];
-  const buckets = Array.from({ length: 24 }, () => Object.fromEntries(metricKeys.map((key) => [key, []])));
-  const hourOf = (row) => {
-    const timestamp = new Date(row.timestamp);
-    return Number.isNaN(timestamp.getTime()) || timestamp.toISOString().slice(0, 10) !== date
-      ? null : timestamp.getUTCHours();
-  };
-  const add = (hour, key, raw, allowZero = false) => {
-    const value = Number(raw);
-    if (hour !== null && raw !== null && raw !== undefined && Number.isFinite(value) && (allowZero || value !== 0)) {
-      buckets[hour][key].push(value);
-    }
-  };
-  energyRows.forEach((row) => {
-    if (["electricity", "gas"].includes(row.fuel_type)) add(hourOf(row), row.fuel_type, row.usage_kwh, true);
-  });
-  iaqRows.forEach((row) => {
-    const hour = hourOf(row);
-    add(hour, "internalTemp", row.temperature_inside);
-    add(hour, "humidity", row.humidity);
-    const prefix = row.reading_type === "dyson:upstairs" ? "upstairs"
-      : ["dyson:downstairs", "dyson:living_room"].includes(row.reading_type) ? "downstairs" : null;
-    if (!prefix) return;
-    add(hour, `${prefix}Humidity`, row.humidity);
-    add(hour, `${prefix}Pm25`, row.pm25);
-    add(hour, `${prefix}Vocs`, row.vocs);
-    if (prefix === "upstairs") {
-      add(hour, "upstairsPm10", row.pm10);
-      add(hour, "upstairsHcho", row.hcho);
-      add(hour, "upstairsNo2", row.no2);
-    }
-  });
-  outdoorRows.forEach((row) => add(hourOf(row), "externalTemp", row.temperature_outside));
-  return buckets.map((bucket, hour) => {
-    const point = { slot: hour, hour, label: `${date} ${String(hour).padStart(2, "0")}:00`,
-      hourLabel: `${String(hour).padStart(2, "0")}:00` };
+export const aggregateTypicalDay = (weeklyRows = []) => {
+  if (!weeklyRows.length) return [];
+  const metricKeys = [...new Set([...DATED_TREND_KEYS, "humidity", "warmthBuffer",
+    "electricityRegulated", "electricityUnregulated", "gasRegulated", "gasUnregulated"])];
+  return Array.from({ length: 24 }, (_, hour) => {
+    const rows = weeklyRows.filter((row) => row.hour === hour);
+    const point = { slot: hour, hour, hourLabel: `${String(hour).padStart(2, "0")}:00`,
+      label: `${String(hour).padStart(2, "0")}:00`, metricDayCounts: {} };
     metricKeys.forEach((key) => {
-      const values = bucket[key];
-      point[key] = values.length ? (key === "electricity" || key === "gas"
-        ? values.reduce((sum, value) => sum + value, 0)
-        : values.reduce((sum, value) => sum + value, 0) / values.length) : null;
+      const values = rows.map((row) => row[key]).filter(Number.isFinite);
+      point.metricDayCounts[key] = values.length;
+      point[key] = values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
     });
-    point.externalTempPeak = bucket.externalTemp.length ? Math.max(...bucket.externalTemp) : null;
-    point.warmthBuffer = Number.isFinite(point.internalTemp) && Number.isFinite(point.externalTemp)
-      ? point.internalTemp - point.externalTemp : null;
+    const peaks = rows.map((row) => row.externalTempPeak).filter(Number.isFinite);
+    point.externalTempPeak = peaks.length ? Math.max(...peaks) : null;
+    if (Number.isFinite(point.internalTemp) && Number.isFinite(point.externalTemp)) {
+      point.warmthBuffer = point.internalTemp - point.externalTemp;
+    }
     return point;
   });
 };
@@ -1396,10 +1368,6 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
     activeSeasonInfo.name
   );
   const [trendPeriod, setTrendPeriod] = useState("week");
-  const [selectedTrendDate, setSelectedTrendDate] = useState("");
-  const [oneDayTrend, setOneDayTrend] = useState({});
-  const oneDayTrendCache = useRef(new Map());
-  const [oneDayTrendError, setOneDayTrendError] = useState("");
   const loadedDatedEnergyRef = useRef(new Set());
   const loadedDatedHealthRef = useRef(new Set());
   const [datedTrendError, setDatedTrendError] = useState("");
@@ -5995,7 +5963,9 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
   const dateTrendSeason = selectedSeasonRecord ||
     (selectedTrendSeason === activeSeasonInfo.name ? activeSeasonInfo : null);
   const selectedSeasonTrendData = Array.isArray(selectedSeasonRecord?.data)
-    ? selectedSeasonRecord.data
+    ? (selectedTrendSeason === activeSeasonInfo.name
+      ? preserveTrendEnergy(selectedSeasonRecord.data, weeklyTrendData)
+      : selectedSeasonRecord.data)
     : selectedTrendSeason === activeSeasonInfo.name
     ? weeklyTrendData
     : [];
@@ -6086,51 +6056,8 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trendPeriod, selectedTrendSeason, isActive, dataSourceBuildingId, dateTrendSeason?.key]);
   const datedTrendRows = selectedSeasonRecord?.dailyData || [];
-  const latestDatedTrendDay = [...datedTrendRows].reverse().find((row) =>
-    row.date <= new Date().toISOString().slice(0, 10) &&
-    DATED_TREND_KEYS.some((key) => Number.isFinite(row[key])))?.date;
-  const effectiveTrendDate = selectedTrendDate >= selectedSeasonRecord?.startDate &&
-    selectedTrendDate <= selectedSeasonRecord?.endDate ? selectedTrendDate
-    : latestDatedTrendDay || selectedSeasonRecord?.startDate;
-  useEffect(() => {
-    if (trendPeriod !== "day" || !isActive || !effectiveTrendDate) return;
-    const key = `${dataSourceBuildingId}:${effectiveTrendDate}`;
-    if (oneDayTrendCache.current.has(key)) {
-      setOneDayTrend({ key, data: oneDayTrendCache.current.get(key) });
-      return;
-    }
-    let cancelled = false;
-    setOneDayTrendError("");
-    const from = `${effectiveTrendDate}T00:00:00.000Z`;
-    const to = new Date(Date.parse(from) + 86400000).toISOString();
-    const energy = supabase.from("EnergyReadings")
-      .select("timestamp,fuel_type,usage_kwh")
-      .eq("building_id", dataSourceBuildingId).eq("reading_type", "interval_30m")
-      .not("usage_kwh", "is", null).gte("timestamp", from).lt("timestamp", to)
-      .order("timestamp", { ascending: true }).limit(200);
-    const iaq = fetchScopedIaqRows({ includeTimestamp: true, includeReadingType: true,
-      readingTypes: dataSourceBuildingId === "home"
-        ? ["dyson:whole_home", "dyson:upstairs", "dyson:living_room", "dyson:downstairs"] : null,
-      timestampFrom: from, timestampTo: to, limit: 1500 });
-    const outdoor = applyBuildingScope(supabase.from("Readings")
-      .select("timestamp,temperature_outside").not("temperature_outside", "is", null)
-      .gte("timestamp", from).lt("timestamp", to).order("timestamp", { ascending: true }).limit(500));
-    Promise.all([energy, iaq, outdoor]).then((results) => {
-      if (cancelled) return;
-      const error = results.find((result) => result.error)?.error;
-      if (error) throw error;
-      const data = buildOneDayTrend(effectiveTrendDate, ...results.map((result) => result.data || []));
-      oneDayTrendCache.current.set(key, data);
-      setOneDayTrend({ key, data });
-    }).catch((error) => {
-      if (!cancelled) setOneDayTrendError(`Day readings unavailable: ${error.message}`);
-    });
-    return () => { cancelled = true; };
-    // The fetch is keyed by building and date, not by archive updates.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trendPeriod, isActive, dataSourceBuildingId, effectiveTrendDate]);
   const chartTrendData = trendPeriod === "week" ? selectedSeasonTrendData
-    : trendPeriod === "day" ? (oneDayTrend.key === `${dataSourceBuildingId}:${effectiveTrendDate}` ? oneDayTrend.data : [])
+    : trendPeriod === "day" ? aggregateTypicalDay(selectedSeasonTrendData)
     : aggregateCalendarTrend(datedTrendRows, "monthly",
       selectedSeasonRecord?.startDate, selectedSeasonRecord?.endDate);
   const comfortDomain = comfortTemperatureDomain(chartTrendData);
@@ -6145,7 +6072,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
   const seasonalTrendLabel = selectedSeasonRecord
     ? `${selectedSeasonRecord.name} ${
         selectedSeasonRecord.status === "complete" ? "snapshot" : "season so far"
-      }: ${trendPeriod === "day" ? `measured hours on ${effectiveTrendDate}` : trendPeriod === "week" ? "typical hourly pattern, Monday to Sunday" : "calendar month averages from measured weeks"}`
+      }: ${trendPeriod === "day" ? "typical 24-hour pattern from available seasonal readings" : trendPeriod === "week" ? "typical hourly pattern, Monday to Sunday" : "calendar month averages from measured weeks"}`
     : `${selectedTrendSeason} data will appear once that season has readings`;
   const activeTrendMetrics = trendMetrics.filter((metric) =>
     chartTrendData.some((day) => Number.isFinite(day[metric.key]))
@@ -6566,10 +6493,6 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
   };
   const averageMetricValue = (data, metric) => {
     const meanValue = averageCalendarMetric(data, metric.key);
-    if (trendPeriod === "day" && metric.energyStatus) {
-      const measured = data.map((point) => point[metric.key]).filter(Number.isFinite);
-      return measured.length ? measured.reduce((sum, value) => sum + value, 0) : null;
-    }
     return trendPeriod !== "month" && Number.isFinite(meanValue) && Number.isFinite(metric.summaryMultiplier)
       ? meanValue * metric.summaryMultiplier
       : meanValue;
@@ -6597,7 +6520,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
         </span>
         <span className="flex-none font-semibold">
           {Number.isFinite(averageValue)
-            ? `${formatMeasurement(averageValue)} ${trendPeriod === "day" && metric.energyStatus ? "kWh recorded" : trendPeriod === "month" && metric.energyStatus ? "kWh/day" : metric.summaryUnit || metric.unit}`
+            ? `${formatMeasurement(averageValue)} ${trendPeriod === "month" && metric.energyStatus ? "kWh/day" : metric.summaryUnit || metric.unit}`
             : "No Data"}
         </span>
       </button>
@@ -7600,19 +7523,10 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
               </button>
             ))}
           </div>
-          {trendPeriod === "day" && selectedSeasonRecord ? <label className="flex items-center gap-2 text-xs text-gray-700">
-            Date
-            <input type="date" value={effectiveTrendDate || ""} min={selectedSeasonRecord.startDate}
-              max={selectedSeasonRecord.endDate < new Date().toISOString().slice(0, 10)
-                ? selectedSeasonRecord.endDate : new Date().toISOString().slice(0, 10)}
-              onChange={(event) => { setSelectedTrendDate(event.target.value); setHoveredTrendSlot(null); }}
-              className="rounded border border-gray-300 px-2 py-1" />
-          </label> : null}
           {trendPeriod === "month" && selectedSeasonRecord ? <p className="text-xs text-gray-600">
             {selectedSeasonRecord.dailyData?.length || 0} dated day(s) available. Each month uses measured-day-weighted weekly averages; missing months remain blank.
           </p> : null}
           {datedTrendError && trendPeriod !== "week" ? <p className="text-xs text-red-700">{datedTrendError}</p> : null}
-          {oneDayTrendError && trendPeriod === "day" ? <p className="text-xs text-red-700">{oneDayTrendError}</p> : null}
 
           {activeTrendMetrics.length > 0 ? (
             <>
@@ -7686,7 +7600,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
                   onPointerLeave={clearHoveredTrendSlot}
                   style={{ touchAction: "none" }}
                 >
-                  {!calendarEnergyAxis && (comfortTemperatureAxis ? [
+                  {!calendarEnergyAxis && selectedTrendMetricGroupKey !== "all" && (comfortTemperatureAxis ? [
                     { min: temperatureScore(26), max: 100, color: "#fecaca", label: "Hot" },
                     { min: temperatureScore(24), max: temperatureScore(26), color: "#fde68a", label: "Warm" },
                     { min: temperatureScore(18), max: temperatureScore(24), color: "#bbf7d0", label: "Comfort" },
@@ -8029,6 +7943,8 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
                   ? "Energy lines show average kWh per measured day, starting at zero."
                   : comfortTemperatureAxis
                   ? "Comfort lines use one °C scale; faint vertical marks show the range of daily averages within each week or month. The indoor–outdoor difference is listed below."
+                  : selectedTrendMetricGroupKey === "all"
+                  ? "Full Picture places unlike units on a common deviation scale, so no single comfort band applies to every line. Hover for measured values; select Comfort for indoor and outdoor temperatures on one °C scale."
                   : "Lines use a shared deviation scale for unlike units: 0 is fine, positive is high and negative is low. Hover values show measured units; select Comfort to compare temperatures directly."}
               </p>
             </>
@@ -8037,7 +7953,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
               {trendPeriod === "week"
                 ? "The typical weekly pattern will appear once this season has hourly readings."
                 : trendPeriod === "day"
-                ? "No hourly readings are available for this day yet. Choose another measured date."
+                ? "No hourly seasonal readings are available yet."
                 : "No dated readings are available for this season yet."}
             </div>
           )}
