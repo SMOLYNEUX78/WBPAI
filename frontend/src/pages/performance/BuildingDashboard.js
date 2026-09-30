@@ -201,7 +201,7 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
   const shownHistory = draftHistory || history;
   const changeHistory = onDraftHistoryChange || setHistory;
   const fields = contentStage === "design" ? [
-    ["architectPractice", "Architect / practice"], ["leadDesigner", "Lead designer"],
+    ["architectPractice", "Architect / practice"], ["designerOfficeAddress", "Address"],
     ["planningReference", "Planning application reference"], ["planningDecisionDate", "Planning decision date"],
     ["originalUse", "Original building use"], ["planningPortalUrl", "Planning portal record URL"],
   ] : [
@@ -481,7 +481,7 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
           {hasRecordedStage ? <div className="min-w-0 border-t border-emerald-200 pt-2 text-gray-800">
             {isDesign ? <div className="mt-1 grid min-w-0 grid-cols-4 gap-2 text-[10px] leading-tight [overflow-wrap:anywhere] sm:gap-3 sm:text-xs">
               {[
-                [["architectPractice", "Architect / practice"], ["leadDesigner", "Lead designer"]],
+                [["architectPractice", "Architect / practice"], ["designerOfficeAddress", "Address"]],
                 [["planningReference", "Planning application reference"], ["planningDecisionDate", "Planning decision date"]],
                 [["originalUse", "Original building use"], ["internalArea", "Internal floor area"]],
               ].map((column, index) => <dl key={index} className="min-w-0 border-r border-emerald-200 pr-2">
@@ -510,7 +510,7 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
             <p role="status" className="mt-2 text-gray-700">{ecosystemStatus === "checking" ? `Searching accessible WBP ${contentStage} records...` : ecosystemStatus === "found" ? `${ecosystemMatches.length} accessible ${contentStage} record(s) found.` : ecosystemStatus === "missing" ? `No accessible WBP ${contentStage} record found for this address. Continue with council records below.` : ecosystemStatus === "error" ? "WBP search unavailable. Continue with council records below." : "Enter the address and postcode to search WBP."}</p>
             {ecosystemMatches.length ? <div className="mt-2 space-y-1">{ecosystemMatches.map((item) => <div key={`${item.detail}-${item.id}`} className="flex flex-wrap items-center justify-between gap-2 border border-gray-300 bg-white px-2 py-1.5">
               <span><strong>{item.label}</strong> <span className="text-gray-600">{item.detail}</span></span>
-              <button type="button" onClick={() => { setSelectedEcosystemRecord(true); if (item.detail.startsWith("Design project")) changeHistory((current) => ({ ...current, design: { ...current.design, planningReference: item.reference || current.design?.planningReference || "", leadDesigner: item.designTeam || current.design?.leadDesigner || "" } })); }} className="font-semibold text-emerald-800 underline">Use record details</button>
+              <button type="button" onClick={() => { setSelectedEcosystemRecord(true); if (item.detail.startsWith("Design project")) changeHistory((current) => ({ ...current, design: { ...current.design, planningReference: item.reference || current.design?.planningReference || "" } })); }} className="font-semibold text-emerald-800 underline">Use record details</button>
             </div>)}</div> : null}
             {ecosystemStatus === "found" && !useCouncilRoute ? <button type="button" onClick={() => setUseCouncilRoute(true)} className="mt-2 font-semibold text-emerald-800 underline">Use council records instead</button> : null}
             {councilRouteOpen && resolvedCouncil ? <p className="mt-2 text-gray-700">Local authority: <strong>{resolvedCouncil}</strong></p> : null}

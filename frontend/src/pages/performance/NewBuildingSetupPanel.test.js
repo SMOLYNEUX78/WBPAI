@@ -20,12 +20,14 @@ test("building history banner labels its audit stage Occupy", () => {
 
 test("saved design history is presented as a record until explicitly edited", () => {
   render(<OccupyHistoryTabs record={null} property={null} activeStage="design" contentOnly
-    setup={{ historicalStages: { design: { architectPractice: "A. W. J. Mullins", planningReference: "E8026/3" } } }} />);
-  expect(screen.getByText("Design history recorded")).toBeInTheDocument();
+    setup={{ historicalStages: { design: { architectPractice: "A. W. J. Mullins", designerOfficeAddress: "Woodbridge, Suffolk", planningReference: "E8026/3" } } }} />);
   expect(screen.getByText("A. W. J. Mullins")).toBeInTheDocument();
+  expect(screen.getByText("Woodbridge, Suffolk")).toBeInTheDocument();
   expect(screen.queryByRole("textbox", { name: "Architect / practice" })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Edit details" }));
   expect(screen.getByRole("textbox", { name: "Architect / practice" })).toHaveValue("A. W. J. Mullins");
+  expect(within(screen.getByRole("button", { name: "Save design" }).closest("form"))
+    .getByRole("textbox", { name: "Address" })).toHaveValue("Woodbridge, Suffolk");
 });
 
 test("saved design documents open through a short-lived private link", async () => {
