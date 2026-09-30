@@ -47,6 +47,17 @@ test("designer office address warns when an existing Design profile may match", 
   } finally { rpc.mockRestore(); }
 });
 
+test("practice name checks a distinctive part against existing Design accounts", async () => {
+  const rpc = jest.spyOn(supabase, "rpc").mockResolvedValue({ data: true, error: null });
+  try {
+    render(<OccupyHistoryTabs record={null} property={null} activeStage="design" contentOnly
+      setup={{ historicalStages: { design: { architectPractice: "A. W. J. Mullins", savedAt: "2026-01-01" } } }} />);
+    fireEvent.click(screen.getByRole("button", { name: "Edit details" }));
+    expect(await screen.findByText(/Possible match: a Design account already uses this name/, {}, { timeout: 2000 })).toBeInTheDocument();
+    expect(rpc).toHaveBeenCalledWith("wbp_design_profile_name_exists", { p_name: "A. W. J. Mullins" });
+  } finally { rpc.mockRestore(); }
+});
+
 test("saved design documents open through a short-lived private link", async () => {
   const evidence = { id: "evidence-1", original_file_name: "planning.pdf", storage_reference: "owner/home/planning.pdf" };
   const query = { eq: () => query, order: () => query, limit: () => Promise.resolve({ data: [evidence], error: null }),

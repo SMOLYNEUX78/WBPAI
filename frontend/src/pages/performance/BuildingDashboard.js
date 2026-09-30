@@ -176,6 +176,7 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
   const [editingStage, setEditingStage] = useState(null);
   const [saveStatus, setSaveStatus] = useState("");
   const [officeAddressStatus, setOfficeAddressStatus] = useState("idle");
+  const [practiceNameStatus, setPracticeNameStatus] = useState("idle");
   const [searchStatus, setSearchStatus] = useState("");
   const [uploadStatus, setUploadStatus] = useState("");
   const [busy, setBusy] = useState(false);
@@ -215,6 +216,27 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
   const showEditor = !hasRecordedStage || editingStage === contentStage;
   const designArea = internalArea ?? shownHistory.design?.internalArea ?? setup?.manualData?.internalArea ?? "";
   const designerOfficeAddress = String(shownHistory.design?.designerOfficeAddress || "").trim();
+  const practiceName = String(shownHistory.design?.architectPractice || "").trim();
+
+  useEffect(() => {
+    if (!isDesign || !showEditor || !practiceName) {
+      setPracticeNameStatus("idle");
+      return;
+    }
+    const generic = new Set(["architect", "architects", "architecture", "design", "designers", "studio", "limited", "company", "group"]);
+    const distinctive = practiceName.toLowerCase().split(/[^a-z0-9]+/).some((part) => part.length >= 5 && !generic.has(part));
+    if (!distinctive) {
+      setPracticeNameStatus("incomplete");
+      return;
+    }
+    let active = true;
+    setPracticeNameStatus("checking");
+    const timer = setTimeout(async () => {
+      const { data, error } = await supabase.rpc("wbp_design_profile_name_exists", { p_name: practiceName });
+      if (active) setPracticeNameStatus(error ? "unavailable" : data ? "matched" : "clear");
+    }, 700);
+    return () => { active = false; clearTimeout(timer); };
+  }, [isDesign, showEditor, practiceName]);
 
   useEffect(() => {
     if (!isDesign || !showEditor || !designerOfficeAddress) {
@@ -571,6 +593,9 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
           </div> : null}
           {(showHistoryInputs || editingStage === contentStage) ? <form onSubmit={saveHistory} className="grid gap-2 border-t border-emerald-200 pt-2 sm:grid-cols-3">
             {fields.map(([key, label]) => <label key={key} className="min-w-0 font-semibold text-emerald-950">{label}<input aria-label={label} value={shownHistory[stage]?.[key] || ""} onChange={(event) => changeHistory((current) => ({ ...current, [stage]: { ...current[stage], [key]: event.target.value } }))} className="mt-1 block w-full min-w-0 border border-emerald-300 bg-white px-2 py-1.5 font-normal text-gray-900" />
+              {key === "architectPractice" && practiceName ? <span role="status" className={`mt-1 block text-xs font-normal ${practiceNameStatus === "matched" ? "text-amber-800" : "text-gray-600"}`}>
+                {{ incomplete: "Enter a distinctive part of the practice name to check for a match.", checking: "Checking existing Design accounts...", matched: "Possible match: a Design account already uses this name. Confirm the practice before linking records.", clear: "No matching Design account name found.", unavailable: "Name check unavailable. The Design Profile Name Check SQL may need to be applied." }[practiceNameStatus] || ""}
+              </span> : null}
               {key === "designerOfficeAddress" && designerOfficeAddress ? <span role="status" className={`mt-1 block text-xs font-normal ${officeAddressStatus === "matched" ? "text-amber-800" : "text-gray-600"}`}>
                 {{ incomplete: "Include the full office address and postcode to check for a match.", checking: "Checking existing Design profiles...", matched: "Possible match: a Design profile already uses this office address. Confirm the practice before linking records.", clear: "No matching Design office address found.", unavailable: "Address check unavailable. The Design Profile Address Check SQL may need to be applied." }[officeAddressStatus] || ""}
               </span> : null}
