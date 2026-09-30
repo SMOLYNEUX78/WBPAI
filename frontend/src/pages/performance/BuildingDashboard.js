@@ -17,11 +17,11 @@ export const DetailSurface = ({ children, title, onClose, modal, headerExtra }) 
     <div className="wbp-detail-backdrop" onMouseDown={(event) => {
       if (event.target === event.currentTarget) onClose();
     }}>
-      <section className="wbp-detail-dialog" role="dialog" aria-modal="true" aria-label={title}>
+      <section className="wbp-detail-dialog" role="dialog" aria-modal="true" aria-label={title || "Building performance details"}>
         <header className="wbp-detail-header">
-          <h2>{title}</h2>
+          {title ? <h2>{title}</h2> : null}
           {headerExtra}
-          <button type="button" onClick={onClose} aria-label={`Close ${title}`}>Close</button>
+          <button type="button" onClick={onClose} aria-label={title ? `Close ${title}` : "Close building performance details"}>Close</button>
         </header>
         <div className="wbp-detail-body">{children}</div>
       </section>
@@ -1039,7 +1039,6 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
   const [deepDivePanel, setDeepDivePanel] = useState(null);
   const [occupyDetail, setOccupyDetail] = useState(null);
   const [activeMrvEvidenceField, setActiveMrvEvidenceField] = useState(null);
-  const deepDiveOpen = Boolean(deepDivePanel);
 
   useEffect(() => {
     if (!isCarbonCreditTab) {
@@ -6681,19 +6680,17 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
   const displayedNightCooldownStatus = isNewPerformanceDeepDive
     ? "good"
     : nightCooldownStatus;
-  const shouldShowDeepDive = isCarbonCreditTab
-    ? deepDiveOpen
-    : Boolean(occupyDetail);
-  const occupyPerformanceTabs = !isCarbonCreditTab && building.id === "home" ? (
+  const shouldShowDeepDive = Boolean(occupyDetail);
+  const occupyPerformanceTabs = dataSourceBuildingId === "home" ? (
     <div className="wbp-detail-header-controls">
       <div className="wbp-detail-tabs" role="tablist" aria-label="Performance views">
+        <button type="button" role="tab" aria-selected={occupyDetail === "trends"} onClick={() => setOccupyDetail("trends")}>Seasonal Charts</button>
         <button type="button" role="tab" aria-selected={occupyDetail === "performance"} onClick={() => setOccupyDetail("performance")}>Deep Dive</button>
-        <button type="button" role="tab" aria-selected={occupyDetail === "trends"} onClick={() => setOccupyDetail("trends")}>Trends</button>
       </div>
-      <div className="wbp-detail-header-scores">
+      {!isCarbonCreditTab ? <div className="wbp-detail-header-scores">
         <span><strong>Health</strong> {formatScore(performanceBreakdown.health)}</span>
         <span><strong>Energy</strong> {formatScore(performanceBreakdown.energy)}</span>
-      </div>
+      </div> : null}
     </div>
   ) : null;
   const toggleDeepDivePanel = (panelKey) => {
@@ -6908,7 +6905,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
               <button
                 type="button"
                 className="wbp-linear-performance-track"
-                onClick={() => setOccupyDetail("performance")}
+                onClick={() => setOccupyDetail("trends")}
                 aria-label={Number.isFinite(performanceValue) ? `Building performance ${Math.round(performanceValue)} out of 100. Open deep dive` : "Building performance pending. Open deep dive"}
               >
                 {Number.isFinite(performanceValue) ? (
@@ -6937,15 +6934,15 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
           ) : isCarbonCreditTab ? (
             <div className="wbp-linear-performance wbp-linear-performance--comparison">
               <button type="button" className="wbp-linear-performance-track"
-                onClick={() => toggleDeepDivePanel("new")}
+                onClick={() => setOccupyDetail("trends")}
                 aria-label={`EnerPHit performance ${enerphitPerformance.value} out of 100${Number.isFinite(performanceValue) ? `; baseline ${Math.round(performanceValue)} out of 100` : ""}. Open EnerPHit deep dive`}>
                 {Number.isFinite(performanceValue) ? <span className="wbp-linear-performance-marker wbp-linear-performance-marker--baseline"
                   style={{ left: `${Math.max(0, Math.min(100, performanceValue))}%` }} aria-hidden="true"><span>Baseline</span></span> : null}
                 <span className="wbp-linear-performance-marker wbp-linear-performance-marker--right-edge" style={{ left: `${enerphitPerformance.value}%` }} aria-hidden="true"><span>EnerPHit</span></span>
               </button>
               <div className="flex justify-between gap-3 px-2 text-xs sm:px-4">
-                <button type="button" className="font-semibold text-gray-700 underline-offset-2 hover:underline" onClick={() => toggleDeepDivePanel("baseline")} aria-expanded={deepDivePanel === "baseline"}>Baseline deep dive</button>
-                <button type="button" className="font-semibold text-emerald-800 underline-offset-2 hover:underline" onClick={() => toggleDeepDivePanel("new")} aria-expanded={deepDivePanel === "new"}>EnerPHit deep dive</button>
+                <button type="button" className="font-semibold text-gray-700 underline-offset-2 hover:underline" onClick={() => { setDeepDivePanel("baseline"); setOccupyDetail("performance"); }}>Baseline deep dive</button>
+                <button type="button" className="font-semibold text-emerald-800 underline-offset-2 hover:underline" onClick={() => { setDeepDivePanel("new"); setOccupyDetail("performance"); }}>EnerPHit deep dive</button>
               </div>
             </div>
           ) : (
@@ -6964,8 +6961,8 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
             </nav>
           ) : null}
 
-          {!shouldShowDeepDive || (!isCarbonCreditTab && occupyDetail !== "performance") ? null : (
-          <DetailSurface modal={!isCarbonCreditTab} title={occupyPerformanceTabs ? "Performance" : "Performance deep dive"} onClose={() => setOccupyDetail(null)} headerExtra={occupyPerformanceTabs}>
+          {!shouldShowDeepDive || occupyDetail !== "performance" ? null : (
+          <DetailSurface modal={Boolean(occupyPerformanceTabs)} title={occupyPerformanceTabs ? "" : "Performance deep dive"} onClose={() => setOccupyDetail(null)} headerExtra={occupyPerformanceTabs}>
           <div className="bg-white rounded border p-2.5 sm:p-4 min-w-0 overflow-hidden">
             {isCarbonCreditTab ? (
               <div className="mb-3 border-b border-gray-100 pb-2 text-xs text-gray-600">
@@ -7483,8 +7480,8 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
           )}
         </div>
 
-        {!shouldShowDeepDive || (!isCarbonCreditTab && occupyDetail !== "trends") ? null : (
-        <DetailSurface modal={!isCarbonCreditTab} title={occupyPerformanceTabs ? "Performance" : "Seasonal performance trends"} onClose={() => setOccupyDetail(null)} headerExtra={occupyPerformanceTabs}>
+        {!shouldShowDeepDive || occupyDetail !== "trends" ? null : (
+        <DetailSurface modal={Boolean(occupyPerformanceTabs)} title={occupyPerformanceTabs ? "" : "Seasonal performance trends"} onClose={() => setOccupyDetail(null)} headerExtra={occupyPerformanceTabs}>
         <div className="mt-4 bg-white rounded border p-3 sm:p-4 space-y-3 overflow-hidden">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
