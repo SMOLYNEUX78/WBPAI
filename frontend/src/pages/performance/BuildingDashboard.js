@@ -171,8 +171,9 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
   const [reference, setReference] = useState("");
   const [houseNumber, setHouseNumber] = useState("");
   const [postcode, setPostcode] = useState("");
-  const [history, setHistory] = useState({ design: {}, build: {} });
+  const [history, setHistory] = useState(setup?.historicalStages || { design: {}, build: {} });
   const [savedHistory, setSavedHistory] = useState(setup?.historicalStages || { design: {}, build: {} });
+  const [editingStage, setEditingStage] = useState(null);
   const [saveStatus, setSaveStatus] = useState("");
   const [searchStatus, setSearchStatus] = useState("");
   const [uploadStatus, setUploadStatus] = useState("");
@@ -208,6 +209,9 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
     ["constructionStart", "Construction start"], ["completionDate", "Completion year / date"],
     ["buildingControlReference", "Building control / completion reference"], ["evidenceSourceUrl", "Building record URL"],
   ];
+  const recordedStage = savedHistory[contentStage] || {};
+  const hasRecordedStage = Boolean(recordedStage.savedAt || fields.some(([key]) => String(recordedStage[key] || "").trim()));
+  const showEditor = !hasRecordedStage || editingStage === contentStage;
   const designArea = internalArea ?? shownHistory.design?.internalArea ?? setup?.manualData?.internalArea ?? "";
 
   useEffect(() => {
@@ -216,7 +220,7 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
   }, [initiallyCollapsed]);
 
   useEffect(() => {
-    if (!recordId) { if (!onDraftHistoryChange) setHistory({ design: {}, build: {} }); return; }
+    if (!recordId) return;
     let active = true;
     supabase.from("WBPBuildingSetupDeclarations").select("setup_data")
       .eq("building_record_id", recordId).maybeSingle().then(({ data, error }) => {
@@ -319,7 +323,7 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
     if (stage === "audit" || !recordId) return;
     let active = true;
     supabase.from("WBPEvidenceVersions")
-      .select("id,evidence_type,original_file_name,created_at")
+      .select("id,evidence_type,original_file_name,storage_reference,created_at")
       .eq("building_record_id", recordId).eq("lifecycle_stage", stage)
       .order("created_at", { ascending: false }).limit(20)
       .then(({ data, error }) => {
@@ -378,6 +382,7 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
     if (error) { setSaveStatus(`Save failed: ${error.message}`); return; }
     setSavedHistory(setupData.historicalStages);
     changeHistory((current) => ({ ...current, [stage]: savedStage }));
+    setEditingStage(null);
     const companies = stage === "design"
       ? [["architect", savedStage.architectPractice]]
       : [["builder", savedStage.mainContractor], ["developer", savedStage.developer]];
@@ -430,7 +435,7 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
         evidence_hash: evidenceHash, original_file_name: file.name, mime_type: file.type,
         byte_size: file.size, classification: "verifier-access", assurance_status: "self-declared",
         submitted_by: auth.user.id,
-      }).select("id,evidence_type,original_file_name,created_at").single();
+      }).select("id,evidence_type,original_file_name,storage_reference,created_at").single();
       if (metadataError) throw metadataError;
       setDocuments((current) => [data, ...current]);
       setUploadStatus(`${file.name} stored privately. Origin and contents are not yet verified.`);
@@ -439,6 +444,29 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
       setUploadStatus(`Upload failed: ${error.message}`);
     } finally { setBusy(false); }
   };
+
+  const openHistoricalDocument = async (document) => {
+    if (!document.storage_reference) { setUploadStatus("This document has no stored file to open."); return; }
+    const viewer = window.open("", "_blank");
+    if (!viewer) { setUploadStatus("Allow pop-ups for WBP to open this private document."); return; }
+    viewer.opener = null;
+    const { data, error } = await supabase.storage.from("wbp-private-evidence")
+      .createSignedUrl(document.storage_reference, 60);
+    if (error || !data?.signedUrl) {
+      viewer.close();
+      setUploadStatus(`Could not open document: ${error?.message || "Private link unavailable"}`);
+      return;
+    }
+    viewer.location.replace(data.signedUrl);
+  };
+
+  const documentList = documents.length ? <div className="min-w-0">
+    <h4 className="font-semibold text-emerald-950">Historical documents</h4>
+    <ul className="mt-1 divide-y divide-emerald-200">{documents.map((item) => <li key={item.id} className="flex min-w-0 items-center justify-between gap-3 py-1.5">
+      <span className="min-w-0 break-all text-gray-800">{item.original_file_name} <span className="text-gray-500">(unverified)</span></span>
+      <button type="button" onClick={() => openHistoricalDocument(item)} className="shrink-0 font-semibold text-emerald-800 underline">Open</button>
+    </li>)}</ul>
+  </div> : null;
 
   return <div className={contentOnly ? "min-w-0" : "order-2 mt-2 w-full min-w-0 border-t border-emerald-200"}>
     {!contentOnly ? <div className="flex border-b border-emerald-200 px-3 sm:px-5" role="tablist" aria-label="Building history">
@@ -450,11 +478,18 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
     <div role="tabpanel" className="min-h-0 overflow-hidden pb-2">
       {contentStage === "audit" ? <ProfileSummaryColumns record={record} property={property} setup={setup} /> :
         <div className={isAddressHistory ? "grid gap-3 px-3 py-2 text-xs sm:px-5" : "grid gap-2 px-3 py-2 text-xs sm:grid-cols-2 sm:px-5"}>
-          {savedHistory[contentStage]?.savedAt ? <div className="border border-emerald-300 bg-emerald-50 p-3 text-gray-800">
-            <strong className="block text-emerald-950">{isDesign ? "Design" : "Build"} history recorded</strong>
-            <p className="mt-1">{(isDesign ? [savedHistory.design?.architectPractice, savedHistory.design?.leadDesigner, savedHistory.design?.planningReference] : [savedHistory.build?.mainContractor, savedHistory.build?.developer, savedHistory.build?.completionDate]).filter(Boolean).join(" · ") || "Details saved"}</p>
-            <p className="mt-1 text-gray-600">Owner-supplied from historical records. The named organisation has not claimed or verified this project.</p>
+          {hasRecordedStage ? <div className="border border-emerald-300 bg-emerald-50 p-3 text-gray-800">
+            <div className="flex items-start justify-between gap-3">
+              <strong className="block text-emerald-950">{isDesign ? "Design" : "Build"} history recorded</strong>
+              <button type="button" onClick={() => { if (showEditor) changeHistory((current) => ({ ...current, [contentStage]: recordedStage })); setEditingStage(showEditor ? null : contentStage); }} className="shrink-0 border border-emerald-700 px-3 py-1 font-semibold text-emerald-950">{showEditor ? "Cancel" : "Edit details"}</button>
+            </div>
+            <dl className="mt-2 grid gap-x-4 gap-y-2 sm:grid-cols-3">{fields.filter(([key]) => recordedStage[key]).map(([key, label]) => <div key={key} className="min-w-0"><dt className="text-gray-600">{label}</dt><dd className="break-words font-semibold">{recordedStage[key]}</dd></div>)}
+              {isDesign && recordedStage.internalArea ? <div><dt className="text-gray-600">Internal floor area</dt><dd className="font-semibold">{recordedStage.internalArea} m2</dd></div> : null}
+            </dl>
+            <p className="mt-2 text-gray-600">Owner-supplied from historical records. The named organisation has not claimed or verified this project.</p>
           </div> : null}
+          {saveStatus && !showEditor ? <p role="status" className="text-gray-700">{saveStatus}</p> : null}
+          {showEditor ? <>
           {isAddressHistory ? <div className="min-w-0">
             <h3 className="font-bold text-gray-900">Find an existing {contentStage} record</h3>
             <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,2fr)_minmax(130px,1fr)]">
@@ -496,7 +531,7 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
                 } }))} className="shrink-0 border border-emerald-700 px-2 py-1 font-semibold text-emerald-900">Use reference</button> : null}
               </div>)}</div> : null}
           </div> : null}
-          {showHistoryInputs ? <form onSubmit={saveHistory} className="grid gap-2 border-t border-emerald-200 pt-2 sm:grid-cols-3">
+          {(showHistoryInputs || editingStage === contentStage) ? <form onSubmit={saveHistory} className="grid gap-2 border-t border-emerald-200 pt-2 sm:grid-cols-3">
             {fields.map(([key, label]) => <label key={key} className="min-w-0 font-semibold text-emerald-950">{label}<input value={shownHistory[stage]?.[key] || ""} onChange={(event) => changeHistory((current) => ({ ...current, [stage]: { ...current[stage], [key]: event.target.value } }))} className="mt-1 block w-full min-w-0 border border-emerald-300 bg-white px-2 py-1.5 font-normal text-gray-900" /></label>)}
             {isDesign ? <>
               <label className="min-w-0 font-semibold text-emerald-950">Internal floor area (m2)
@@ -515,14 +550,15 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
             </> : null}
             <div className="flex items-end gap-2"><button type="submit" disabled={!recordId} className="bg-emerald-700 px-3 py-1.5 font-semibold text-white disabled:opacity-50">Save {stage}</button>{saveStatus ? <span role="status" className="text-gray-700">{saveStatus}</span> : null}</div>
           </form> : null}
-          {showHistoryInputs ? <div className="min-w-0">
+          {(showHistoryInputs || editingStage === contentStage) ? <div className="min-w-0">
             <label className="block font-semibold text-emerald-950" htmlFor={`wbp-${stage}-file`}>Upload historical {stage} documents</label>
             <input id={`wbp-${stage}-file`} type="file" accept=".pdf,.jpg,.jpeg,.png" disabled={busy || !recordId}
               onChange={(event) => { uploadDocument(event.target.files?.[0]); event.target.value = ""; }} className="mt-1 block w-full min-w-0 text-xs" />
             {!recordId ? <p className="mt-1 text-gray-700">Save this home before uploading.</p> : null}
             {uploadStatus ? <p role="status" className="mt-1 text-gray-700">{uploadStatus}</p> : null}
-            {documents.length ? <ul className="mt-1 space-y-0.5 text-gray-700">{documents.map((item) => <li key={item.id} className="break-all">{item.original_file_name} <span className="text-gray-500">(unverified)</span></li>)}</ul> : null}
+            {documentList}
           </div> : null}
+          </> : documentList}
         </div>}
     </div>
     </div>

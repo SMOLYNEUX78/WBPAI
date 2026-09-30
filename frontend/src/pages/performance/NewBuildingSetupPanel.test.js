@@ -18,6 +18,34 @@ test("building history banner labels its audit stage Occupy", () => {
   expect(screen.queryByRole("tab", { name: "Audit" })).not.toBeInTheDocument();
 });
 
+test("saved design history is presented as a record until explicitly edited", () => {
+  render(<OccupyHistoryTabs record={null} property={null} activeStage="design" contentOnly
+    setup={{ historicalStages: { design: { architectPractice: "A. W. J. Mullins", planningReference: "E8026/3" } } }} />);
+  expect(screen.getByText("Design history recorded")).toBeInTheDocument();
+  expect(screen.getByText("A. W. J. Mullins")).toBeInTheDocument();
+  expect(screen.queryByRole("textbox", { name: "Architect / practice" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Edit details" }));
+  expect(screen.getByRole("textbox", { name: "Architect / practice" })).toHaveValue("A. W. J. Mullins");
+});
+
+test("saved design documents open through a short-lived private link", async () => {
+  const evidence = { id: "evidence-1", original_file_name: "planning.pdf", storage_reference: "owner/home/planning.pdf" };
+  const query = { eq: () => query, order: () => query, limit: () => Promise.resolve({ data: [evidence], error: null }),
+    maybeSingle: () => Promise.resolve({ data: null, error: null }) };
+  const from = jest.spyOn(supabase, "from").mockImplementation(() => ({ select: () => query }));
+  const createSignedUrl = jest.fn().mockResolvedValue({ data: { signedUrl: "https://private.example/planning" }, error: null });
+  const storage = jest.spyOn(supabase, "storage", "get").mockReturnValue({ from: () => ({ createSignedUrl }) });
+  const viewer = { opener: {}, location: { replace: jest.fn() }, close: jest.fn() };
+  const open = jest.spyOn(window, "open").mockReturnValue(viewer);
+  try {
+    render(<OccupyHistoryTabs record={{ databaseId: "home-1" }} property={null} activeStage="design" contentOnly
+      setup={{ historicalStages: { design: { architectPractice: "A. W. J. Mullins" } } }} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Open" }));
+    await waitFor(() => expect(viewer.location.replace).toHaveBeenCalledWith("https://private.example/planning"));
+    expect(createSignedUrl).toHaveBeenCalledWith(evidence.storage_reference, 60);
+  } finally { from.mockRestore(); storage.mockRestore(); open.mockRestore(); }
+});
+
 test("energy monitoring contains bill and carbon context while health has its own tab", () => {
   render(<MemoryRouter><NewBuildingSetupPanel /></MemoryRouter>);
   expect(screen.getByRole("tab", { name: "Ownership" })).toBeInTheDocument();
