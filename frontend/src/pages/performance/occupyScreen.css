@@ -172,8 +172,8 @@
 
 .wbp-linear-performance-marker {
   position: absolute;
-  top: -17px;
-  bottom: -8px;
+  top: 0;
+  bottom: 0;
   width: 3px;
   transform: translateX(-50%);
   background: #17212b;

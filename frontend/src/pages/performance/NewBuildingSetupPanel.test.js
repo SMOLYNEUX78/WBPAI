@@ -8,6 +8,8 @@ beforeEach(() => window.localStorage.clear());
 test("profile addresses keep street, locality and postcode on separate lines", () => {
   expect(addressLines("14 Bridgewood Road, Woodbridge, Suffolk IP12 4HA", "IP12 4HA"))
     .toEqual(["14 Bridgewood Road", "Woodbridge, Suffolk", "IP12 4HA"]);
+  expect(addressLines("14, Bridgewood Road, Woodbridge, Suffolk, IP12 4HA", "IP12 4HA"))
+    .toEqual(["14 Bridgewood Road", "Woodbridge, Suffolk", "IP12 4HA"]);
 });
 
 test("building history banner labels its audit stage Occupy", () => {

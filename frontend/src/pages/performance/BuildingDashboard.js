@@ -85,6 +85,9 @@ export const addressLines = (address, postcode) => {
   const postcodePattern = postcodeText && new RegExp(postcodeText.replace(/\s+/g, "\\s*"), "i");
   const withoutPostcode = postcodePattern ? String(address || "").replace(postcodePattern, "") : String(address || "");
   const parts = withoutPostcode.split(",").map((part) => part.trim()).filter(Boolean);
+  if (parts.length > 1 && /^\d+[a-z]?(?:-\d+[a-z]?)?$/i.test(parts[0])) {
+    parts.splice(0, 2, `${parts[0]} ${parts[1]}`);
+  }
   return [parts[0] || "Pending", parts.slice(1).join(", ") || "\u00a0", postcodeText || "\u00a0"];
 };
 export const mergeScannedSensor = (current, scanned) => {
@@ -6817,7 +6820,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
   );
   return (
     <div
-      className={`bg-white p-4 flex flex-col ${!isCarbonCreditTab && building.id === "home" ? "wbp-occupy-panel--linear space-y-0" : "space-y-6"} ${
+      className={`bg-white p-4 flex flex-col ${building.id === "home" ? "wbp-occupy-panel--linear space-y-0" : "space-y-6"} ${
         isCarbonCreditTab ? "min-h-0" : "wbp-occupy-panel min-h-screen"
       }`}
     >
@@ -6907,12 +6910,12 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
           </div>
         </div>
         {dataSourceBuildingId === "home" ? (
-          <OccupyHistoryTabs record={homePassport} property={homePassport?.propertyDiscovery} setup={homeSetup} initiallyCollapsed={!isCarbonCreditTab && building.id === "home"} />
+          <OccupyHistoryTabs record={homePassport} property={homePassport?.propertyDiscovery} setup={homeSetup} initiallyCollapsed />
         ) : null}
       </div>
 
-      <div className={!isCarbonCreditTab && building.id === "home" ? "wbp-performance-stage wbp-performance-stage--linear -mx-4" : "wbp-performance-stage bg-gray-100 p-3 sm:p-4 rounded shadow"}>
-        {isCarbonCreditTab || building.id !== "home" ? <h2 className="mb-2 text-lg font-bold">Performance</h2> : null}
+      <div className={building.id === "home" ? "wbp-performance-stage wbp-performance-stage--linear -mx-4" : "wbp-performance-stage bg-gray-100 p-3 sm:p-4 rounded shadow"}>
+        {building.id !== "home" ? <h2 className="mb-2 text-lg font-bold">Performance</h2> : null}
 
         <div className="wbp-performance-content space-y-2.5 sm:space-y-4">
           {!isCarbonCreditTab && building.id === "home" ? (
