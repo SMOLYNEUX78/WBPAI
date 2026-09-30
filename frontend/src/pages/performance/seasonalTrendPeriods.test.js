@@ -1,4 +1,10 @@
-import { aggregateCalendarTrend, averageCalendarMetric, comfortTemperatureDomain, aggregateTypicalDay } from "./BuildingDashboard";
+import { aggregateCalendarTrend, averageCalendarMetric, comfortTemperatureDomain, aggregateTypicalDay, energyTrendScore } from "./BuildingDashboard";
+
+test("energy has the same band for equivalent hourly and daily values", () => {
+  expect(energyTrendScore(0.5, 1)).toBe(energyTrendScore(12, 1, true));
+  expect(energyTrendScore(0.5, 1)).toBeGreaterThanOrEqual(70);
+  expect(energyTrendScore(0, 0)).toBe(30);
+});
 
 test("typical day averages matching hours across the available week and retains energy", () => {
   const points = aggregateTypicalDay([
@@ -27,6 +33,21 @@ test("weekly view groups measured days by Monday without filling a missing week"
   expect(points[0]).toMatchObject({ electricity: 5, internalTemp: 21, warmthBuffer: 10, dayCount: 2 });
   expect(points[1]).toMatchObject({ electricity: null, internalTemp: null, dayCount: 0 });
   expect(points[2]).toMatchObject({ electricity: 8, dayCount: 1 });
+});
+
+test("seasonal Month view shows weekly averages within each of the three months", () => {
+  const rows = [
+    { date: "2026-06-29", gas: 2 },
+    { date: "2026-06-30", gas: 4 },
+    { date: "2026-07-01", gas: 6 },
+    { date: "2026-07-02", gas: 8 },
+    { date: "2026-08-03", gas: 10 },
+  ];
+  const points = aggregateCalendarTrend(rows, "seasonal-weekly", "2026-06-01", "2026-08-31");
+  expect(points.find((point) => point.date === "2026-06-29")).toMatchObject({ gas: 3, dayCount: 2 });
+  expect(points.find((point) => point.date === "2026-07-01")).toMatchObject({ gas: 7, dayCount: 2 });
+  expect(points.find((point) => point.date === "2026-08-03")).toMatchObject({ gas: 10, dayCount: 1 });
+  expect(points.find((point) => point.date === "2026-07-06")).toMatchObject({ gas: null, dayCount: 0 });
 });
 
 test("monthly view retains gaps and uses a recorded peak rather than an average peak", () => {
