@@ -7045,8 +7045,8 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
                 onClick={openCcPerformance}
                 aria-label={Number.isFinite(performanceValue) ? `Measured baseline ${Math.round(performanceValue)} out of 100; EnerPHit live performance 93 out of 100. Open building details` : "Measured baseline pending; EnerPHit live performance 93 out of 100. Open building details"}>
                 {Number.isFinite(performanceValue) ? <span className="wbp-linear-performance-marker wbp-linear-performance-marker--baseline"
-                  style={{ left: `${Math.max(0, Math.min(100, performanceValue))}%` }} aria-hidden="true"><span>Baseline {Math.round(performanceValue)}</span></span> : null}
-                <span className="wbp-linear-performance-marker" style={{ left: "93%" }} aria-hidden="true"><span>EnerPHit live 93</span></span>
+                  style={{ left: `${Math.max(0, Math.min(100, performanceValue))}%` }} aria-hidden="true" /> : null}
+                <span className="wbp-linear-performance-marker" style={{ left: "93%" }} aria-hidden="true" />
               </button>
             </div>
           ) : (
