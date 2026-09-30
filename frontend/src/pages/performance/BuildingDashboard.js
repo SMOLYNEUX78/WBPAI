@@ -5739,7 +5739,6 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
     carbonEvidenceReady: evidencePackExportReady,
     verifierApproved: verifierApprovalComplete,
   });
-  const sellCreditsAvailable = readinessGates.carbon.ready;
   const verifierRoutingStatus = evidencePackExportReady
     ? "Ready to route to selected verifier on export"
     : "Verifier routing unlocks when the evidence pack reaches 100%";
@@ -5853,20 +5852,6 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
     Number.isFinite(carbonMarketPrice.gbpPerTonne)
       ? intervalCarbonSavedTonnes * carbonMarketPrice.gbpPerTonne
       : null;
-  const carbonCalculationWindow =
-    carbonIntervalSavingsSummary.fromDate && carbonIntervalSavingsSummary.toDate
-      ? `${carbonIntervalSavingsSummary.dailyRows || "--"} metered days / ${
-          carbonIntervalSavingsSummary.fromDate
-        } to ${carbonIntervalSavingsSummary.toDate}`
-      : "Awaiting persisted carbon summary";
-  const carbonCalculationStatus =
-    carbonIntervalSavingsSummary.calculationStatus === "stale"
-      ? `stale ${
-          carbonIntervalSavingsSummary.calculationVersion || "legacy"
-        } summary`
-      : carbonIntervalSavingsSummary.calculationVersion
-      ? `${carbonIntervalSavingsSummary.calculationVersion} summary`
-      : "awaiting summary";
   const trendMetrics = [
     {
       key: "electricity",
@@ -6932,7 +6917,6 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
                   </div>
                 ) : <span className="wbp-linear-performance-pending">Pending</span>}
               </button>
-              <div className="wbp-linear-performance-scale" aria-hidden="true"><span>Low</span><span>Moderate</span><span>High</span></div>
               <div className="wbp-linear-performance-baseline">
                 <div className="flex flex-wrap items-center justify-between gap-1 text-xs font-semibold text-gray-700">
                   <span>Baseline confidence: {baselineConfidence.label}</span>
@@ -6956,23 +6940,12 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
                 onClick={() => toggleDeepDivePanel("new")}
                 aria-label={`EnerPHit performance ${enerphitPerformance.value} out of 100${Number.isFinite(performanceValue) ? `; baseline ${Math.round(performanceValue)} out of 100` : ""}. Open EnerPHit deep dive`}>
                 {Number.isFinite(performanceValue) ? <span className="wbp-linear-performance-marker wbp-linear-performance-marker--baseline"
-                  style={{ left: `${Math.max(0, Math.min(100, performanceValue))}%` }} aria-hidden="true"><span>Baseline {Math.round(performanceValue)}</span></span> : null}
-                <span className="wbp-linear-performance-marker wbp-linear-performance-marker--right-edge" style={{ left: `${enerphitPerformance.value}%` }} aria-hidden="true"><span>EnerPHit {enerphitPerformance.value}</span></span>
+                  style={{ left: `${Math.max(0, Math.min(100, performanceValue))}%` }} aria-hidden="true"><span>Baseline</span></span> : null}
+                <span className="wbp-linear-performance-marker wbp-linear-performance-marker--right-edge" style={{ left: `${enerphitPerformance.value}%` }} aria-hidden="true"><span>EnerPHit</span></span>
               </button>
-              <div className="wbp-linear-performance-scale" aria-hidden="true"><span>Low</span><span>Moderate</span><span>High</span></div>
-              <div className="grid grid-cols-2 gap-3 px-2 text-xs sm:px-4 sm:text-sm">
-                <div className="min-w-0 border-r border-gray-200 pr-3">
-                  <p className="font-semibold text-gray-600">Baseline</p>
-                  <p>Health: {formatScore(performanceBreakdown.health)}</p>
-                  <p>Energy: {formatScore(performanceBreakdown.energy)}</p>
-                  <button type="button" className="mt-2 border border-gray-300 bg-white px-2 py-1 text-xs font-semibold" onClick={() => toggleDeepDivePanel("baseline")} aria-expanded={deepDivePanel === "baseline"}>Deep Dive</button>
-                </div>
-                <div className="min-w-0">
-                  <p className="font-semibold text-emerald-800">EnerPHit</p>
-                  <p>Health: {formatScore(enerphitPerformance.health)}</p>
-                  <p>Energy: {formatScore(enerphitPerformance.energy)}</p>
-                  <button type="button" className="mt-2 border border-gray-300 bg-white px-2 py-1 text-xs font-semibold" onClick={() => toggleDeepDivePanel("new")} aria-expanded={deepDivePanel === "new"}>Deep Dive</button>
-                </div>
+              <div className="flex justify-between gap-3 px-2 text-xs sm:px-4">
+                <button type="button" className="font-semibold text-gray-700 underline-offset-2 hover:underline" onClick={() => toggleDeepDivePanel("baseline")} aria-expanded={deepDivePanel === "baseline"}>Baseline deep dive</button>
+                <button type="button" className="font-semibold text-emerald-800 underline-offset-2 hover:underline" onClick={() => toggleDeepDivePanel("new")} aria-expanded={deepDivePanel === "new"}>EnerPHit deep dive</button>
               </div>
             </div>
           ) : (
@@ -7999,90 +7972,30 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
         )}
       </div>
 
-      {isCarbonCreditTab && <div className="bg-gray-100 p-4 rounded shadow">
-        <h2 className="mb-3 text-lg font-bold">WBP Carbon Credit</h2>
-
-        <div className="relative bg-white rounded border p-4 space-y-4">
-          <div className="absolute right-4 top-4">
-            <div
-              className="text-gray-500"
-              aria-label="Carbon credit actions locked"
-              title="Carbon credit actions locked"
-            >
-              <span className="relative inline-block h-4 w-4 rounded-sm border-2 border-current">
-                <span className="absolute -top-3 left-1/2 h-3 w-3 -translate-x-1/2 rounded-t-full border-2 border-b-0 border-current" />
-              </span>
-            </div>
+      {isCarbonCreditTab && <section className="-mx-4 border-t border-gray-200 px-4 py-5">
+        <div className="grid gap-5 sm:grid-cols-3 sm:gap-0">
+          <div className="min-w-0 sm:pr-5">
+            <p className="text-xs font-semibold uppercase text-gray-600">Credits</p>
+            <p className="mt-1 text-2xl font-bold leading-tight min-[390px]:text-3xl">{formatNumber(carbonCredits, 4)}</p>
+            <p className="text-sm text-gray-600">WBP-C</p>
+            <p className="mt-2 text-sm text-gray-600">Value: {Number.isFinite(intervalCarbonMarketValue) ? formatCurrency(intervalCarbonMarketValue) : "Pending price"}</p>
           </div>
-
-          <div className="opacity-35 pr-8">
-            <div className="grid grid-cols-2 gap-3 sm:gap-4">
-              <div>
-                <p className="text-xs uppercase text-gray-500">Credits</p>
-                <p className="text-2xl font-bold leading-tight min-[390px]:text-3xl">
-                  {formatNumber(carbonCredits, 4)}
-                </p>
-                <p className="text-sm font-semibold text-gray-700">WBP-C</p>
-                <p className="mt-2 text-sm text-gray-600">
-                  <strong>Value:</strong>{" "}
-                  {Number.isFinite(intervalCarbonMarketValue)
-                    ? formatCurrency(intervalCarbonMarketValue)
-                    : "Pending price"}
-                </p>
-              </div>
-
-              <div className="border-l pl-4">
-                <p className="text-xs uppercase text-gray-500">Energy saved</p>
-                <p className="text-2xl font-bold leading-tight">
-                  {Number.isFinite(carbonIntervalSavingsSummary.totalSavedKwh)
-                    ? formatNumber(
-                        carbonIntervalSavingsSummary.totalSavedKwh,
-                        1
-                      )
-                    : "--"}
-                </p>
-                <p className="text-sm font-semibold text-gray-700">kWh</p>
-                <p className="mt-2 text-sm text-gray-600">
-                  <strong>Value:</strong>{" "}
-                  {Number.isFinite(
-                    carbonIntervalSavingsSummary.energyCostSavedGbp
-                  )
-                    ? formatCurrency(
-                        carbonIntervalSavingsSummary.energyCostSavedGbp
-                      )
-                    : "Pending calculation"}
-                </p>
-              </div>
-            </div>
-            <div className="mt-4 sm:flex sm:justify-end">
-              <button
-                type="button"
-                disabled={!sellCreditsAvailable}
-                className={`w-full rounded border px-3 py-2 text-sm font-semibold sm:w-40 ${
-                  sellCreditsAvailable
-                    ? "border-emerald-600 bg-emerald-600 text-white"
-                    : "border-emerald-200 bg-emerald-50/60 text-emerald-700 cursor-not-allowed"
-                }`}
-              >
-                SELL CREDITS
-              </button>
-            </div>
-            <p className="mt-3 text-xs font-medium text-gray-600">
-              Calculation: {carbonCalculationWindow} / {carbonCalculationStatus}
-              {carbonIntervalSavingsSummary.calculatedAt
-                ? ` / updated ${new Date(
-                    carbonIntervalSavingsSummary.calculatedAt
-                  ).toLocaleString("en-GB", {
-                    day: "2-digit",
-                    month: "short",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}`
-                : ""}
+          <div className="min-w-0 border-t border-gray-200 pt-4 sm:border-l sm:border-t-0 sm:px-5 sm:pt-0">
+            <p className="text-xs font-semibold uppercase text-gray-600">Energy saved</p>
+            <p className="mt-1 text-2xl font-bold leading-tight min-[390px]:text-3xl">
+              {Number.isFinite(carbonIntervalSavingsSummary.totalSavedKwh) ? formatNumber(carbonIntervalSavingsSummary.totalSavedKwh, 1) : "--"}
             </p>
+            <p className="text-sm text-gray-600">kWh</p>
+            <p className="mt-2 text-sm text-gray-600">Value: {Number.isFinite(carbonIntervalSavingsSummary.energyCostSavedGbp) ? formatCurrency(carbonIntervalSavingsSummary.energyCostSavedGbp) : "Pending calculation"}</p>
+          </div>
+          <div className="min-w-0 border-t border-gray-200 pt-4 sm:border-l sm:border-t-0 sm:pl-5 sm:pt-0">
+            <p className="text-xs font-semibold uppercase text-gray-600">Potential data value</p>
+            <p className="mt-1 text-2xl font-bold leading-tight min-[390px]:text-3xl">{formatCurrency(MODELLED_DATA_VALUE_PER_PROPERTY_GBP)}</p>
+            <p className="text-sm text-gray-600">Illustrative annual licence value</p>
+            <p className="mt-2 text-xs text-gray-600">Subject to audit, consent and buyer agreement; not accrued proceeds.</p>
           </div>
         </div>
-      </div>}
+      </section>}
 
       {building.id === "home" && activeMrvEvidenceField && typeof document !== "undefined"
         ? createPortal(
@@ -10883,6 +10796,7 @@ const PORTFOLIO_PROPERTIES = [
 ];
 
 const PORTFOLIO_SELLER_RESERVE_PRICE = 85;
+const MODELLED_DATA_VALUE_PER_PROPERTY_GBP = 144 + 120 + 180 + 300;
 const PORTFOLIO_EXCHANGE_PROPERTIES = PORTFOLIO_PROPERTIES.filter(
   (property) =>
     property.qa === "Verified" &&
