@@ -8090,7 +8090,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
           </div>
         </div>
         <div className="mt-5 flex justify-end">
-          <button type="button" className="border border-emerald-700 bg-emerald-700 px-6 py-2 text-sm font-semibold text-white hover:bg-emerald-800" onClick={() => navigate("/dashboard/exchange?offer=wbp-001")}>Sell</button>
+          <button type="button" className="border border-emerald-700 bg-emerald-700 px-6 py-2 text-sm font-semibold text-white hover:bg-emerald-800" onClick={() => navigate("/dashboard/exchange?role=architect")}>Sell</button>
         </div>
       </section>}
 
@@ -11297,10 +11297,7 @@ export const PortfolioDashboardPanel = ({
 
 const ExchangeDashboardPanel = ({
   bridgewoodTokens,
-  bridgewoodSummary,
-  singleBuildingOffer = false,
 }) => {
-  const navigate = useNavigate();
   const [marketView, setMarketView] = useState("carbon");
   const [tradeTimeframe, setTradeTimeframe] = useState("1D");
   const [salePanelOpen, setSalePanelOpen] = useState(false);
@@ -11447,21 +11444,6 @@ const ExchangeDashboardPanel = ({
     });
     return () => window.cancelAnimationFrame(animationFrame);
   }, []);
-
-  if (singleBuildingOffer) {
-    return <main className="min-h-screen bg-white p-4 sm:p-8">
-      <div className="mx-auto max-w-5xl">
-        <button type="button" className="mb-5 text-sm font-semibold text-emerald-800 underline" onClick={() => navigate("/dashboard/cc")}>Back to WBP-001cc</button>
-        <h1 className="text-2xl font-bold">WBP-001 value preview</h1>
-        <p className="mt-2 text-sm text-gray-600">This property is not listed for sale. Carbon rights and data licences require completed evidence, consent, verification and a buyer.</p>
-        <div className="mt-6 grid gap-5 border-y border-gray-200 py-6 sm:grid-cols-3">
-          <div><h2 className="text-xs font-semibold uppercase text-gray-600">Credits</h2><p className="mt-2 text-2xl font-bold">{Number.isFinite(bridgewoodTokens) ? bridgewoodTokens.toFixed(4) : "Pending"}</p><p className="text-sm text-gray-600">WBP-C</p></div>
-          <div><h2 className="text-xs font-semibold uppercase text-gray-600">Energy saved</h2><p className="mt-2 text-2xl font-bold">{Number.isFinite(bridgewoodSummary?.savedKwh) ? bridgewoodSummary.savedKwh.toFixed(1) : "Pending"}</p><p className="text-sm text-gray-600">kWh{Number.isFinite(bridgewoodSummary?.energyValue) ? ` · £${bridgewoodSummary.energyValue.toFixed(2)} estimated savings` : ""}</p></div>
-          <div><h2 className="text-xs font-semibold uppercase text-gray-600">Potential data value</h2><p className="mt-2 text-2xl font-bold">£{MODELLED_DATA_VALUE_PER_PROPERTY_GBP}</p><p className="text-sm text-gray-600">Illustrative annual licence value, not accrued proceeds</p></div>
-        </div>
-      </div>
-    </main>;
-  }
 
   return (
     <main className="min-h-screen bg-white p-3 sm:p-5">
@@ -12201,8 +12183,6 @@ const BuildingDashboard = () => {
                 ) : building.exchangeOnly ? (
                   <ExchangeDashboardPanel
                     bridgewoodTokens={bridgewoodTokens}
-                    bridgewoodSummary={bridgewoodValue}
-                    singleBuildingOffer={new URLSearchParams(location.search).get("offer") === "wbp-001"}
                     onOpenPortfolio={() => openSectionById("portfolio")}
                   />
                 ) : (
