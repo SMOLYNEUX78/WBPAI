@@ -6836,27 +6836,29 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
               </div>
             </div>
           ) : isCarbonCreditTab ? (
-            <div className="grid grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] sm:gap-3">
-              {renderPerformanceCard({
-                title: "Before",
-                healthScore: performanceBreakdown.health,
-                energyScore: performanceBreakdown.energy,
-                gaugeValue: performanceValue,
-                diveKey: "baseline",
-                compact: true,
-                tone: "locked",
-                statusLabel: "Locked in",
-                activeBandOnly: true,
-              })}
-              {renderPerformanceCard({
-                title: "After",
-                healthScore: enerphitPerformance.health,
-                energyScore: enerphitPerformance.energy,
-                gaugeValue: enerphitPerformance.value,
-                diveKey: "new",
-                tone: "primary",
-                statusLabel: "Enerphit",
-              })}
+            <div className="wbp-linear-performance wbp-linear-performance--comparison">
+              <button type="button" className="wbp-linear-performance-track"
+                onClick={() => toggleDeepDivePanel("new")}
+                aria-label={`EnerPHit performance ${enerphitPerformance.value} out of 100${Number.isFinite(performanceValue) ? `; baseline ${Math.round(performanceValue)} out of 100` : ""}. Open EnerPHit deep dive`}>
+                {Number.isFinite(performanceValue) ? <span className="wbp-linear-performance-marker wbp-linear-performance-marker--baseline"
+                  style={{ left: `${Math.max(0, Math.min(100, performanceValue))}%` }} aria-hidden="true"><span>Baseline {Math.round(performanceValue)}</span></span> : null}
+                <span className="wbp-linear-performance-marker wbp-linear-performance-marker--right-edge" style={{ left: `${enerphitPerformance.value}%` }} aria-hidden="true"><span>EnerPHit {enerphitPerformance.value}</span></span>
+              </button>
+              <div className="wbp-linear-performance-scale" aria-hidden="true"><span>Low</span><span>Moderate</span><span>High</span></div>
+              <div className="grid grid-cols-2 gap-3 px-2 text-xs sm:px-4 sm:text-sm">
+                <div className="min-w-0 border-r border-gray-200 pr-3">
+                  <p className="font-semibold text-gray-600">Baseline</p>
+                  <p>Health: {formatScore(performanceBreakdown.health)}</p>
+                  <p>Energy: {formatScore(performanceBreakdown.energy)}</p>
+                  <button type="button" className="mt-2 border border-gray-300 bg-white px-2 py-1 text-xs font-semibold" onClick={() => toggleDeepDivePanel("baseline")} aria-expanded={deepDivePanel === "baseline"}>Deep Dive</button>
+                </div>
+                <div className="min-w-0">
+                  <p className="font-semibold text-emerald-800">EnerPHit</p>
+                  <p>Health: {formatScore(enerphitPerformance.health)}</p>
+                  <p>Energy: {formatScore(enerphitPerformance.energy)}</p>
+                  <button type="button" className="mt-2 border border-gray-300 bg-white px-2 py-1 text-xs font-semibold" onClick={() => toggleDeepDivePanel("new")} aria-expanded={deepDivePanel === "new"}>Deep Dive</button>
+                </div>
+              </div>
             </div>
           ) : (
             renderPerformanceCard({

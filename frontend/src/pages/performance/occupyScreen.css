@@ -195,6 +195,36 @@
   text-align: center;
 }
 
+.wbp-linear-performance-marker--baseline {
+  z-index: 0;
+  width: 0;
+  border-left: 3px dashed rgba(23, 33, 43, 0.48);
+  background: transparent;
+}
+
+.wbp-linear-performance-marker--baseline span {
+  top: auto;
+  bottom: -20px;
+  min-width: max-content;
+  background: rgba(255, 255, 255, 0.86);
+  color: #374151;
+  border: 1px solid rgba(55, 65, 81, 0.35);
+}
+
+.wbp-linear-performance-marker--right-edge span {
+  left: auto;
+  right: 0;
+  transform: none;
+}
+
+.wbp-linear-performance--comparison .wbp-linear-performance-marker:not(.wbp-linear-performance-marker--baseline) {
+  z-index: 1;
+}
+
+.wbp-linear-performance--comparison .wbp-linear-performance-scale {
+  margin-top: 17px;
+}
+
 .wbp-linear-performance-pending {
   width: 100%;
   color: #17212b;
