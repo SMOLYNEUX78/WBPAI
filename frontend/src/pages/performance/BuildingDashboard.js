@@ -482,11 +482,18 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
             <div className="flex items-start justify-end gap-3">
               <button type="button" onClick={() => { if (showEditor) changeHistory((current) => ({ ...current, [contentStage]: recordedStage })); setEditingStage(showEditor ? null : contentStage); }} className="shrink-0 border border-emerald-700 px-3 py-1 font-semibold text-emerald-950">{showEditor ? "Cancel" : "Edit details"}</button>
             </div>
-            <dl className="mt-1 grid min-w-0 grid-cols-4 gap-2 text-[10px] leading-tight [overflow-wrap:anywhere] sm:gap-3 sm:text-xs">{fields.filter(([key]) => recordedStage[key]).map(([key, label]) => <div key={key} className="min-w-0 border-r border-emerald-200 pr-2 last:border-0"><dt className="text-gray-600">{label}</dt><dd className="break-words font-semibold">{isDesign && key === "architectPractice" && recordId
-                ? <a href={`/workspace/provisional/architect/${encodeURIComponent(recordId)}`} className="text-emerald-900 underline underline-offset-2">{recordedStage[key]}</a>
-                : recordedStage[key]}</dd></div>)}
-              {isDesign && recordedStage.internalArea ? <div className="min-w-0"><dt className="text-gray-600">Internal floor area</dt><dd className="font-semibold">{recordedStage.internalArea} m2</dd></div> : null}
-            </dl>
+            {isDesign ? <div className="mt-1 grid min-w-0 grid-cols-4 gap-2 text-[10px] leading-tight [overflow-wrap:anywhere] sm:gap-3 sm:text-xs">
+              {[
+                [["architectPractice", "Architect / practice"], ["leadDesigner", "Lead designer"]],
+                [["planningReference", "Planning application reference"], ["planningDecisionDate", "Planning decision date"]],
+                [["originalUse", "Original building use"], ["planningPortalUrl", "Planning portal record URL"], ["internalArea", "Internal floor area"]],
+              ].map((column, index) => <dl key={index} className="min-w-0 border-r border-emerald-200 pr-2">
+                {column.filter(([key]) => recordedStage[key]).map(([key, label]) => <div key={key} className="mb-2 min-w-0"><dt className="text-gray-600">{label}</dt><dd className="break-words font-semibold">{key === "architectPractice" && recordId
+                  ? <a href={`/workspace/provisional/architect/${encodeURIComponent(recordId)}`} className="text-emerald-900 underline underline-offset-2">{recordedStage[key]}</a>
+                  : key === "internalArea" ? `${recordedStage[key]} m2` : recordedStage[key]}</dd></div>)}
+              </dl>)}
+              <div className="min-w-0">{documentList || <><h4 className="font-semibold text-emerald-950">Historical documents</h4><p className="mt-1 text-gray-600">None uploaded</p></>}</div>
+            </div> : <dl className="mt-1 grid min-w-0 grid-cols-4 gap-2 text-[10px] leading-tight [overflow-wrap:anywhere] sm:gap-3 sm:text-xs">{fields.filter(([key]) => recordedStage[key]).map(([key, label]) => <div key={key} className="min-w-0 border-r border-emerald-200 pr-2 last:border-0"><dt className="text-gray-600">{label}</dt><dd className="break-words font-semibold">{recordedStage[key]}</dd></div>)}</dl>}
             <p className="mt-2 text-gray-600">Owner-supplied historical record; organisation attribution is unverified.</p>
           </div> : null}
           {saveStatus && !showEditor ? <p role="status" className="text-gray-700">{saveStatus}</p> : null}
@@ -557,9 +564,9 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
               onChange={(event) => { uploadDocument(event.target.files?.[0]); event.target.value = ""; }} className="mt-1 block w-full min-w-0 text-xs" />
             {!recordId ? <p className="mt-1 text-gray-700">Save this home before uploading.</p> : null}
             {uploadStatus ? <p role="status" className="mt-1 text-gray-700">{uploadStatus}</p> : null}
-            {documentList}
+            {(!hasRecordedStage || !isDesign) ? documentList : null}
           </div> : null}
-          </> : documentList}
+          </> : (!hasRecordedStage || !isDesign) ? documentList : null}
         </div>}
     </div>
     </div>
@@ -6678,8 +6685,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
            )
         )
       : null;
-  const isNewPerformanceDeepDive =
-    isCarbonCreditTab && deepDivePanel === "new";
+  const isNewPerformanceDeepDive = isCarbonCreditTab && ccStage === "live";
   const projectedPerformanceDeepDive = {
     annualEui: 25,
     electricityDailyAverage: 6.8,
@@ -6786,10 +6792,10 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
     setOccupyDetail("trends");
   };
   const occupyPerformanceTabs = dataSourceBuildingId === "home" ? (
-    <div className="wbp-detail-header-controls">
+    <div className={`wbp-detail-header-controls ${isCarbonCreditTab ? "wbp-detail-header-controls--staged" : ""}`}>
       {isCarbonCreditTab ? <div className="wbp-detail-tabs" role="tablist" aria-label="Building stage">
-        <button type="button" role="tab" aria-selected={ccStage === "before"} onClick={() => { setCcStage("before"); setDeepDivePanel("baseline"); setSelectedTrendSeason(seasonalTrendRecords.find((record) => record.status === "complete")?.name || activeSeasonInfo.name); }}>Before</button>
-        <button type="button" role="tab" aria-selected={ccStage === "live"} onClick={() => { setCcStage("live"); setDeepDivePanel("baseline"); setSelectedTrendSeason(activeSeasonInfo.name); }}>Live</button>
+        <button type="button" role="tab" aria-selected={ccStage === "before"} onClick={() => { setCcStage("before"); setSelectedTrendSeason(seasonalTrendRecords.find((record) => record.status === "complete")?.name || activeSeasonInfo.name); }}>Before</button>
+        <button type="button" role="tab" aria-selected={ccStage === "live"} onClick={() => { setCcStage("live"); setSelectedTrendSeason(activeSeasonInfo.name); }}>Live</button>
       </div> : null}
       <div className="wbp-detail-tabs" role="tablist" aria-label="Performance views">
         <button type="button" role="tab" aria-selected={occupyDetail === "trends"} onClick={() => setOccupyDetail("trends")}>Seasonal Charts</button>
@@ -7077,12 +7083,12 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
             {isCarbonCreditTab ? (
               <div className="mb-3 border-b border-gray-100 pb-2 text-xs text-gray-600">
                 <h3 className="font-semibold text-gray-900">
-                  {ccStage === "before" ? "Before: baseline in progress" : "Live: latest measured performance"}
+                  {ccStage === "before" ? "Before: baseline in progress" : "Live: projected EnerPHit retrofit"}
                 </h3>
                 <p>
                   {ccStage === "before"
                     ? "Historical readings inform this rolling baseline; it has not been locked as a verified snapshot."
-                    : "Current measured view from the home feed. Figures update as new readings are collected."}
+                    : "Illustrative EnerPHit scenario, not measured post-retrofit data."}
                 </p>
               </div>
             ) : null}
@@ -7357,7 +7363,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
                 <div className="space-y-0.5">
                   <p>
                     <strong>HLA Score:</strong>{" "}
-                    {Number.isFinite(performanceBreakdown.hla)
+                    {isNewPerformanceDeepDive ? "Scenario, not scored" : Number.isFinite(performanceBreakdown.hla)
                       ? `${formatScore(performanceBreakdown.hla)}/100`
                       : "Pending"}
                   </p>
@@ -7591,7 +7597,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
         {!shouldShowDeepDive || occupyDetail !== "trends" ? null : (
         <DetailSurface modal={Boolean(occupyPerformanceTabs)} title={occupyPerformanceTabs ? "" : "Seasonal performance trends"} onClose={() => setOccupyDetail(null)} headerExtra={occupyPerformanceTabs}>
         <div className="mt-4 bg-white rounded border p-3 sm:p-4 space-y-3 overflow-hidden">
-          {isCarbonCreditTab ? <p className="text-xs text-gray-600">{ccStage === "before" ? "Historical seasonal readings; the before baseline is still being gathered, not locked." : "Current monitored season. New readings update this view as they arrive."}</p> : null}
+          {isCarbonCreditTab ? <p className="text-xs text-gray-600">{ccStage === "before" ? "Historical seasonal readings; the before baseline is still being gathered, not locked." : "Measured seasonal readings for context; these are not a forecast of the EnerPHit retrofit."}</p> : null}
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="font-semibold">Seasonal Performance Trends</h3>
             <div className="flex flex-wrap gap-1 text-xs">
