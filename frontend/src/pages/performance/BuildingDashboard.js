@@ -11295,9 +11295,7 @@ export const PortfolioDashboardPanel = ({
   );
 };
 
-const ExchangeDashboardPanel = ({
-  bridgewoodTokens,
-}) => {
+const ExchangeDashboardPanel = () => {
   const [marketView, setMarketView] = useState("carbon");
   const [tradeTimeframe, setTradeTimeframe] = useState("1D");
   const [salePanelOpen, setSalePanelOpen] = useState(false);
@@ -11330,9 +11328,6 @@ const ExchangeDashboardPanel = ({
   const monitoringShareEnd = carbonValueShare + monitoringValueShare;
   const healthShareEnd = monitoringShareEnd + healthDataValueShare;
   const gridShareEnd = healthShareEnd + gridDataValueShare;
-  const bridgewoodValue = Number.isFinite(bridgewoodTokens)
-    ? bridgewoodTokens * carbonPrice
-    : null;
   const basketLots = [
     { name: "Carbon", target: annualCarbonValue, coverage: 1, status: "1 of 1 transfer settled", rights: "Finite right", colour: "#047857" },
     { name: "Monitoring", target: annualMonitoringValue, coverage: 0.72, status: "3 buyers matched · still available", rights: "Repeatable licence", colour: "#2563eb" },
@@ -11465,7 +11460,7 @@ const ExchangeDashboardPanel = ({
           </div>
           <div className="min-w-0 space-y-2 border-l border-gray-200 pl-2 sm:pl-4">
             {[
-              ["Carbon", annualCarbonValue, "bg-emerald-700", Number.isFinite(bridgewoodValue) ? `Live £${bridgewoodValue.toFixed(2)} · ref £${carbonPrice}/t` : `Ref £${carbonPrice}/t`],
+              ["Carbon", annualCarbonValue, "bg-emerald-700", `Portfolio model · ref £${carbonPrice}/t`],
               ["Monitoring data", annualMonitoringValue, "bg-blue-600", "Repeatable annual licences"],
               ["Health data", annualHealthDataValue, "bg-rose-700", "Repeatable outcomes licences"],
               ["Grid data", annualGridDataValue, "bg-cyan-600", "Repeatable planning licences"],
@@ -12181,10 +12176,7 @@ const BuildingDashboard = () => {
                     onOpenExchange={() => openSectionById("exchange")}
                   />
                 ) : building.exchangeOnly ? (
-                  <ExchangeDashboardPanel
-                    bridgewoodTokens={bridgewoodTokens}
-                    onOpenPortfolio={() => openSectionById("portfolio")}
-                  />
+                  <ExchangeDashboardPanel />
                 ) : (
                   <BuildingDashboardPanel building={building} isActive={isActiveSlide} />
                 )}
