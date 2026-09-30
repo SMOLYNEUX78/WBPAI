@@ -6100,11 +6100,6 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
       (seasonName === "Spring") ||
       seasonalTrendRecords.some((record) => record.name === seasonName)
   );
-  const seasonalTrendLabel = selectedSeasonRecord
-    ? `${selectedSeasonRecord.name} ${
-        selectedSeasonRecord.status === "complete" ? "snapshot" : "season so far"
-      }: ${trendPeriod === "day" ? "typical 24-hour pattern from available seasonal readings" : trendPeriod === "week" ? "typical hourly pattern, Monday to Sunday" : "measured weekly averages across the three-month season"}`
-    : `${selectedTrendSeason} data will appear once that season has readings`;
   const activeTrendMetrics = trendMetrics.filter((metric) =>
     chartTrendData.some((day) => Number.isFinite(day[metric.key]))
   );
@@ -7484,12 +7479,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
         <DetailSurface modal={Boolean(occupyPerformanceTabs)} title={occupyPerformanceTabs ? "" : "Seasonal performance trends"} onClose={() => setOccupyDetail(null)} headerExtra={occupyPerformanceTabs}>
         <div className="mt-4 bg-white rounded border p-3 sm:p-4 space-y-3 overflow-hidden">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <h3 className="font-semibold">Seasonal Performance Trends</h3>
-              <p className="text-xs text-gray-600">
-                {seasonalTrendLabel}
-              </p>
-            </div>
+            <h3 className="font-semibold">Seasonal Performance Trends</h3>
             <div className="flex flex-wrap gap-1 text-xs">
               {SEASON_NAMES.map((season) => {
                 const seasonAvailable = availableSeasonNames.includes(season);
@@ -7533,14 +7523,8 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
               </button>
             ))}
           </div>
-          {trendPeriod === "month" && selectedSeasonRecord ? <p className="text-xs text-gray-600">
-            {selectedSeasonRecord.dailyData?.length || 0} dated day(s) available. Each point averages the measured days in one calendar week across this season; missing weeks remain blank.
-          </p> : null}
           {datedTrendError && (trendPeriod !== "week" || selectedTrendSeason !== activeSeasonInfo.name)
             ? <p className="text-xs text-red-700">{datedTrendError}</p> : null}
-          {trendPeriod !== "month" && dailyMeanFallbackMetrics.size > 0 ? <p className="text-xs text-gray-600">
-            Health metrics marked “daily mean” use the recorded daily averages where an older hourly snapshot has no series. Their flat within-day shape does not imply hourly readings.
-          </p> : null}
 
           {activeTrendMetrics.length > 0 ? (
             <>
@@ -7591,18 +7575,6 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
               ) : null}
 
               <div className="w-full overflow-x-auto">
-                {selectedTrendSeason === "Summer" && comfortTemperatureAxis ? (
-                  <p className="text-xs text-gray-600 mb-1">
-                    Indoor and outdoor lines share one temperature scale. Heat exclusion ({Number.isFinite(heatExclusionSummary.averageBuffer) ? `${heatExclusionSummary.averageBuffer.toFixed(1)} deg C cooler` : "pending"}) uses matched hours above 24 deg C outside; the seasonal lines average all measured days, including cooler nights.
-                  </p>
-                ) : null}
-                {plottedTrendMetrics.some((metric) => metric.key === "externalTemp") &&
-                chartTrendData.some((point) => Number.isFinite(point.externalTempPeak)) ? (
-                  <p className="text-xs text-gray-600 mb-1">
-                    Indigo line: average outdoor temperature. Indigo dots: hottest recorded outdoor reading
-                    (peak {Math.max(...chartTrendData.map((point) => point.externalTempPeak).filter(Number.isFinite)).toFixed(1)} deg C).
-                  </p>
-                ) : null}
                 <svg
                   viewBox={`0 0 ${chartWidth} ${chartHeight}`}
                   className="w-full h-auto"
@@ -7951,9 +7923,6 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
                     .map(renderTrendMetricButton)}
                 </div>
               )}
-              <p className="text-xs text-gray-600">
-                All views use the same red, amber and green bands for comfort and health. Energy lines show relative usage within the neutral band, not a pass/fail score: a short peak alone is not poor performance. Sustained consumption and floor area belong in the longer-term energy assessment. Hover or read below for measured values.
-              </p>
             </>
           ) : (
             <div className="rounded border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
