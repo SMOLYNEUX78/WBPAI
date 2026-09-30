@@ -679,6 +679,16 @@ code {
 .wbp-organisation-edit-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 8px; }
 .wbp-organisation-edit-actions button { padding: 8px 14px; border: 1px solid #047857; background: white; color: #065f46; font-weight: 700; }
 .wbp-organisation-edit-actions button[type="submit"] { background: #047857; color: white; }
+.wbp-organisation-edit-image, .wbp-organisation-edit-stages { grid-column: span 2; min-width: 0; }
+.wbp-organisation-edit-image > label, .wbp-organisation-edit-stages legend { display: block; font-size: 12px; font-weight: 700; color: #064e3b; }
+.wbp-organisation-edit-image-preview { display: grid; place-items: center; width: 68px; height: 68px; margin: 6px 0; overflow: hidden; background: #d1fae5; font-weight: 800; }
+.wbp-organisation-edit-image-preview img { width: 100%; height: 100%; object-fit: cover; }
+.wbp-organisation-edit-image input[type="file"] { width: 100%; }
+.wbp-organisation-edit-image [role="alert"] { display: block; margin-top: 4px; color: #b91c1c; font-size: 12px; }
+.wbp-organisation-edit-stages { display: flex; flex-wrap: wrap; align-content: start; gap: 8px 14px; }
+.wbp-organisation-edit-stages legend, .wbp-organisation-edit-stages small { width: 100%; }
+.wbp-organisation-edit-stages label { display: flex; align-items: center; gap: 5px; }
+.wbp-organisation-edit-stages input[type="checkbox"] { width: auto; margin: 0; }
 @media (max-width: 700px) { .wbp-organisation-edit { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 16px; } }
 .wbp-profile-save-status { margin: 12px clamp(20px, 4vw, 58px) 0; color: #047857; font-size: 13px; font-weight: 700; }
 .wbp-design-project { min-height: 100vh; background: #f8fafc; color: #111827; }

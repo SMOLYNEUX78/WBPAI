@@ -657,6 +657,7 @@ const ProfessionalWorkspace = () => {
   const [editingProfile, setEditingProfile] = useState(false);
   const [profileDraft, setProfileDraft] = useState({});
   const [savingProfile, setSavingProfile] = useState(false);
+  const [profileImageError, setProfileImageError] = useState("");
   const [designProjects, setDesignProjects] = useState([]);
   const [buildInvitations, setBuildInvitations] = useState([]);
   const [isTestAccount, setIsTestAccount] = useState(false);
@@ -738,8 +739,19 @@ const ProfessionalWorkspace = () => {
     return () => { active = false; };
   }, [isBuilder]);
   const organisationName = profile.organisationName || (isBuilder ? "Build organisation" : "Design organisation");
+  const changeProfileImage = async (file) => {
+    if (!file) return;
+    try {
+      const logoDataUrl = await readProfileImage(file);
+      setProfileDraft((current) => ({ ...current, logoDataUrl, logoName: file.name }));
+      setProfileImageError("");
+    } catch (error) {
+      setProfileImageError(error.message);
+    }
+  };
   const saveProfile = async (event) => {
     event.preventDefault();
+    if (profileImageError) return;
     setSavingProfile(true);
     setProfileStatus("");
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -813,13 +825,24 @@ const ProfessionalWorkspace = () => {
         </div>
         <div className="wbp-organisation-meta">
           <span>{isTestAccount ? "Test account · Organisation not verified" : organisationAccess ? `Verified organisation · ${organisationAccess.access_role}` : "Self-declared · Organisation not verified"}</span>
-          {!isBuilder ? <button type="button" onClick={() => { setProfileDraft(profile); setEditingProfile((current) => !current); }} className="border border-emerald-700 bg-white px-3 py-1 font-semibold text-emerald-900">{editingProfile ? "Cancel" : "Edit"}</button> : null}
+          {!isBuilder ? <button type="button" onClick={() => { setProfileDraft(profile); setProfileImageError(""); setEditingProfile((current) => !current); }} className="border border-emerald-700 bg-white px-3 py-1 font-semibold text-emerald-900">{editingProfile ? "Cancel" : "Edit"}</button> : null}
         </div>
         <dl className="wbp-organisation-details">{profileDetails.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{label === "Website" && /^https:\/\//i.test(value) ? <a href={value} target="_blank" rel="noopener noreferrer">{value}</a> : value}</dd></div>)}</dl>
       </section>
 
       {!isBuilder && editingProfile ? <form onSubmit={saveProfile} className="wbp-organisation-edit" aria-label="Edit Design profile">
         {[["organisationName", "Organisation name"], ["organisationType", "Organisation type"], ["registrationNumber", "Registration number"], ["professionalRegistration", "Professional registration"], ["vatNumber", "VAT number"], ["contactName", "Contact name"], ["jobTitle", "Contact role"], ["phone", "Telephone"], ["website", "Website"], ["address", "Head office address"], ["city", "Town / city"], ["postcode", "Postcode"], ["serviceArea", "Operating area"]].map(([key, label]) => <label key={key}>{label}<input value={profileDraft[key] || ""} onChange={(event) => setProfileDraft((current) => ({ ...current, [key]: event.target.value }))} required={["organisationName", "address", "city", "postcode"].includes(key)} /></label>)}
+        <label>Company email<input type="email" value={profileEmail} readOnly /></label>
+        <div className="wbp-organisation-edit-image">
+          <label htmlFor="design-profile-image">Company logo / profile image</label>
+          <div className="wbp-organisation-edit-image-preview">{profileDraft.logoDataUrl ? <img src={profileDraft.logoDataUrl} alt="Current profile" /> : <span>{organisationName.slice(0, 2).toUpperCase()}</span>}</div>
+          <input id="design-profile-image" type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => changeProfileImage(event.target.files?.[0])} />
+          {profileImageError ? <span role="alert">{profileImageError}</span> : null}
+        </div>
+        <fieldset className="wbp-organisation-edit-stages"><legend>Stages requested by your organisation</legend>
+          {[{ value: "architect", label: "Design" }, { value: "builder", label: "Build" }, { value: "homeowner", label: "Occupy" }].map(({ value, label }) => <label key={value}><input type="checkbox" checked={(profileDraft.requestedStages || []).includes(value)} onChange={(event) => setProfileDraft((current) => ({ ...current, requestedStages: event.target.checked ? [...new Set([...(current.requestedStages || []), value])] : (current.requestedStages || []).filter((stage) => stage !== value) }))} />{label}</label>)}
+          <small>Stage requests do not grant access until organisation approval.</small>
+        </fieldset>
         <div className="wbp-organisation-edit-actions"><button type="button" onClick={() => setEditingProfile(false)}>Cancel</button><button type="submit" disabled={savingProfile}>{savingProfile ? "Saving..." : "Save profile"}</button></div>
       </form> : null}
 

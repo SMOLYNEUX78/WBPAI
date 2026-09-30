@@ -69,6 +69,26 @@ test("Design banner edits are saved to the account profile", async () => {
   expect(upsert).toHaveBeenCalledWith(expect.objectContaining({ user_id: "edit-user", workspace_role: "architect", profile: expect.objectContaining({ organisationName: "New Studio" }) }), { onConflict: "user_id,workspace_role" });
 });
 
+test("Design profile image and requested stages can be changed", async () => {
+  const session = { user: { id: "image-edit-user", email: "wbpai25@gmail.com" } };
+  supabase.auth.getSession.mockResolvedValue({ data: { session } });
+  supabase.auth.getUser.mockResolvedValue({ data: { user: session.user } });
+  supabase.auth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: jest.fn() } } });
+  const upsert = jest.fn().mockResolvedValue({ error: null });
+  supabase.from.mockImplementation((table) => table === "WBPWorkspaceProfiles"
+    ? { select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { profile: { organisationName: "Old Studio", requestedStages: ["architect"] } }, error: null }) }) }) }), upsert }
+    : { select: () => ({ order: async () => ({ data: [], error: null }) }) });
+  window.history.pushState({}, "", "/workspace/architect");
+  render(<App />);
+  fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+  const form = screen.getByRole("form", { name: "Edit Design profile" });
+  fireEvent.change(within(form).getByLabelText("Company logo / profile image"), { target: { files: [new File(["image"], "logo.png", { type: "image/png" })] } });
+  fireEvent.click(within(form).getByLabelText("Build"));
+  await waitFor(() => expect(within(form).getByAltText("Current profile")).toBeInTheDocument());
+  fireEvent.click(within(form).getByRole("button", { name: "Save profile" }));
+  await waitFor(() => expect(upsert).toHaveBeenCalledWith(expect.objectContaining({ profile: expect.objectContaining({ logoName: "logo.png", logoDataUrl: expect.stringContaining("data:image/png;base64,"), requestedStages: ["architect", "builder"] }) }), { onConflict: "user_id,workspace_role" }));
+});
+
 test("architect profile loads from the account without browser cache", async () => {
   const session = { user: { id: "cloud-user", email: "wbpai25@gmail.com" } };
   supabase.auth.getSession.mockResolvedValue({ data: { session } });
