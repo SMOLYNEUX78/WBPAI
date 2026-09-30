@@ -917,6 +917,39 @@ const AuthenticatedRoute = ({ children, requireProfessionalEmail = false }) => {
   return children;
 };
 
+const ProvisionalArchitectProfile = () => {
+  const { buildingId } = useParams();
+  const navigate = useNavigate();
+  const [profile, setProfile] = useState(null);
+  const [status, setStatus] = useState("Loading provisional profile...");
+
+  useEffect(() => {
+    let active = true;
+    supabase.from("WBPProvisionalOrganisationProjects")
+      .select("organisation_name,stage,role,updated_at")
+      .eq("building_record_id", buildingId).eq("stage", "design").eq("role", "architect")
+      .maybeSingle().then(({ data, error }) => {
+        if (!active) return;
+        setProfile(data || null);
+        setStatus(error ? `Could not load this profile: ${error.message}` : data ? "" : "No provisional architect profile is linked to this home.");
+      });
+    return () => { active = false; };
+  }, [buildingId]);
+
+  return <main className="mx-auto max-w-3xl px-4 py-8 text-gray-900">
+    <button type="button" onClick={() => navigate(-1)} className="mb-6 border border-gray-300 px-3 py-2 text-sm">Back to building</button>
+    {profile ? <>
+      <p className="text-sm font-semibold uppercase text-emerald-800">Provisional Design Profile</p>
+      <h1 className="mt-2 text-2xl font-bold">{profile.organisation_name}</h1>
+      <div className="mt-5 border-t border-gray-200 pt-4 text-sm">
+        <p><strong>Status:</strong> Unclaimed</p>
+        <p className="mt-2">This practice was named in owner-supplied historical records. WBP has not verified its involvement or granted it access to the building record.</p>
+        <p className="mt-2">A verified organisation can request a reviewed link before this project appears in its portfolio. Private documents remain with the homeowner until access is approved.</p>
+      </div>
+    </> : <p role="status" className="text-sm">{status}</p>}
+  </main>;
+};
+
 const App = () => (
   <Router>
     <Routes>
@@ -924,6 +957,7 @@ const App = () => (
       <Route path="/login" element={<RoleGateway />} />
       <Route path="/workspaces" element={<AuthenticatedRoute><WorkspaceSwitcher /></AuthenticatedRoute>} />
       <Route path="/workspace/history" element={<AuthenticatedRoute><WorkspaceSwitcher historicalOnly /></AuthenticatedRoute>} />
+      <Route path="/workspace/provisional/architect/:buildingId" element={<AuthenticatedRoute><ProvisionalArchitectProfile /></AuthenticatedRoute>} />
       <Route path="/workspace/:role" element={<AuthenticatedRoute requireProfessionalEmail><ProfessionalWorkspace /></AuthenticatedRoute>} />
       <Route path="/workspace/architect/project/:projectId" element={<AuthenticatedRoute requireProfessionalEmail><DesignProject /></AuthenticatedRoute>} />
       <Route path="/workspace/builder/handover/:handoverId" element={<AuthenticatedRoute requireProfessionalEmail><BuildHandover /></AuthenticatedRoute>} />

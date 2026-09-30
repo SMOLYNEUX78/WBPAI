@@ -478,15 +478,16 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
     <div role="tabpanel" className="min-h-0 overflow-hidden pb-2">
       {contentStage === "audit" ? <ProfileSummaryColumns record={record} property={property} setup={setup} /> :
         <div className={isAddressHistory ? "grid gap-3 px-3 py-2 text-xs sm:px-5" : "grid gap-2 px-3 py-2 text-xs sm:grid-cols-2 sm:px-5"}>
-          {hasRecordedStage ? <div className="border border-emerald-300 bg-emerald-50 p-3 text-gray-800">
-            <div className="flex items-start justify-between gap-3">
-              <strong className="block text-emerald-950">{isDesign ? "Design" : "Build"} history recorded</strong>
+          {hasRecordedStage ? <div className="min-w-0 border-t border-emerald-200 pt-2 text-gray-800">
+            <div className="flex items-start justify-end gap-3">
               <button type="button" onClick={() => { if (showEditor) changeHistory((current) => ({ ...current, [contentStage]: recordedStage })); setEditingStage(showEditor ? null : contentStage); }} className="shrink-0 border border-emerald-700 px-3 py-1 font-semibold text-emerald-950">{showEditor ? "Cancel" : "Edit details"}</button>
             </div>
-            <dl className="mt-2 grid gap-x-4 gap-y-2 sm:grid-cols-3">{fields.filter(([key]) => recordedStage[key]).map(([key, label]) => <div key={key} className="min-w-0"><dt className="text-gray-600">{label}</dt><dd className="break-words font-semibold">{recordedStage[key]}</dd></div>)}
-              {isDesign && recordedStage.internalArea ? <div><dt className="text-gray-600">Internal floor area</dt><dd className="font-semibold">{recordedStage.internalArea} m2</dd></div> : null}
+            <dl className="mt-1 grid min-w-0 grid-cols-4 gap-2 text-[10px] leading-tight [overflow-wrap:anywhere] sm:gap-3 sm:text-xs">{fields.filter(([key]) => recordedStage[key]).map(([key, label]) => <div key={key} className="min-w-0 border-r border-emerald-200 pr-2 last:border-0"><dt className="text-gray-600">{label}</dt><dd className="break-words font-semibold">{isDesign && key === "architectPractice" && recordId
+                ? <a href={`/workspace/provisional/architect/${encodeURIComponent(recordId)}`} className="text-emerald-900 underline underline-offset-2">{recordedStage[key]}</a>
+                : recordedStage[key]}</dd></div>)}
+              {isDesign && recordedStage.internalArea ? <div className="min-w-0"><dt className="text-gray-600">Internal floor area</dt><dd className="font-semibold">{recordedStage.internalArea} m2</dd></div> : null}
             </dl>
-            <p className="mt-2 text-gray-600">Owner-supplied from historical records. The named organisation has not claimed or verified this project.</p>
+            <p className="mt-2 text-gray-600">Owner-supplied historical record; organisation attribution is unverified.</p>
           </div> : null}
           {saveStatus && !showEditor ? <p role="status" className="text-gray-700">{saveStatus}</p> : null}
           {showEditor ? <>
@@ -1135,11 +1136,12 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
     if (!isActive) setOccupyDetail(null);
   }, [isActive]);
   const matterportInput = useMemo(() => {
-    return (
-      (dataSourceBuildingId === "home" && homeSetup.modelInput) ||
-      localStorage.getItem(`${dataSourceBuildingId}:matterportModelInput`) ||
-      building.defaultMatterportUrl
-    );
+    const candidates = [
+      dataSourceBuildingId === "home" && homeSetup.modelInput,
+      localStorage.getItem(`${dataSourceBuildingId}:matterportModelInput`),
+      building.defaultMatterportUrl,
+    ];
+    return candidates.find((candidate) => extractMatterportModelId(candidate)) || "";
   }, [dataSourceBuildingId, building.defaultMatterportUrl, homeSetup.modelInput]);
   const manualMatterportData = useMemo(() => {
     const savedData = localStorage.getItem(`${dataSourceBuildingId}:matterportManualData`);
@@ -7041,7 +7043,8 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
             <div className="wbp-linear-performance">
               <button type="button" className="wbp-linear-performance-track"
                 onClick={openCcPerformance}
-                aria-label={Number.isFinite(performanceValue) ? `Measured building performance ${Math.round(performanceValue)} out of 100. Open building details` : "Measured building performance pending. Open building details"}>
+                aria-label={Number.isFinite(performanceValue) ? `Measured building performance ${Math.round(performanceValue)} out of 100; EnerPHit retrofit scenario 93 out of 100. Open building details` : "Measured building performance pending; EnerPHit retrofit scenario 93 out of 100. Open building details"}>
+                <span className="wbp-linear-performance-marker wbp-linear-performance-marker--enerphit" style={{ left: "93%" }} aria-hidden="true"><span>EnerPHit retrofit 93</span></span>
                 {Number.isFinite(performanceValue) ? <span className="wbp-linear-performance-marker"
                   style={{ left: `${Math.max(0, Math.min(100, performanceValue))}%` }} aria-hidden="true"><span>{Math.round(performanceValue)}</span></span> : <span className="wbp-linear-performance-pending">Pending</span>}
               </button>
