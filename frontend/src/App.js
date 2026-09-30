@@ -654,6 +654,9 @@ const ProfessionalWorkspace = () => {
   const [profile, setProfile] = useState(location.state?.profile?.organisationName ? location.state.profile : {});
   const [profileEmail, setProfileEmail] = useState("");
   const [profileStatus, setProfileStatus] = useState("");
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [profileDraft, setProfileDraft] = useState({});
+  const [savingProfile, setSavingProfile] = useState(false);
   const [designProjects, setDesignProjects] = useState([]);
   const [buildInvitations, setBuildInvitations] = useState([]);
   const [isTestAccount, setIsTestAccount] = useState(false);
@@ -735,6 +738,29 @@ const ProfessionalWorkspace = () => {
     return () => { active = false; };
   }, [isBuilder]);
   const organisationName = profile.organisationName || (isBuilder ? "Build organisation" : "Design organisation");
+  const saveProfile = async (event) => {
+    event.preventDefault();
+    setSavingProfile(true);
+    setProfileStatus("");
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      setProfileStatus("Sign in again before saving this profile.");
+      setSavingProfile(false);
+      return;
+    }
+    const updated = { ...profile, ...profileDraft };
+    const { error } = await supabase.from("WBPWorkspaceProfiles").upsert({
+      user_id: user.id, workspace_role: role, profile: updated, updated_at: new Date().toISOString(),
+    }, { onConflict: "user_id,workspace_role" });
+    if (error) setProfileStatus(`Could not save profile: ${error.message}`);
+    else {
+      setProfile(updated);
+      window.localStorage.setItem(`wbp-${role}-profile-${user.id}`, JSON.stringify(updated));
+      setEditingProfile(false);
+      setProfileStatus("Profile saved.");
+    }
+    setSavingProfile(false);
+  };
   const profileDetails = [
     ["Registration", profile.registrationNumber],
     ["Professional body", profile.professionalRegistration],
@@ -787,9 +813,15 @@ const ProfessionalWorkspace = () => {
         </div>
         <div className="wbp-organisation-meta">
           <span>{isTestAccount ? "Test account · Organisation not verified" : organisationAccess ? `Verified organisation · ${organisationAccess.access_role}` : "Self-declared · Organisation not verified"}</span>
+          {!isBuilder ? <button type="button" onClick={() => { setProfileDraft(profile); setEditingProfile((current) => !current); }} className="border border-emerald-700 bg-white px-3 py-1 font-semibold text-emerald-900">{editingProfile ? "Cancel" : "Edit"}</button> : null}
         </div>
         <dl className="wbp-organisation-details">{profileDetails.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{label === "Website" && /^https:\/\//i.test(value) ? <a href={value} target="_blank" rel="noopener noreferrer">{value}</a> : value}</dd></div>)}</dl>
       </section>
+
+      {!isBuilder && editingProfile ? <form onSubmit={saveProfile} className="wbp-organisation-edit" aria-label="Edit Design profile">
+        {[["organisationName", "Organisation name"], ["organisationType", "Organisation type"], ["registrationNumber", "Registration number"], ["professionalRegistration", "Professional registration"], ["vatNumber", "VAT number"], ["contactName", "Contact name"], ["jobTitle", "Contact role"], ["phone", "Telephone"], ["website", "Website"], ["address", "Head office address"], ["city", "Town / city"], ["postcode", "Postcode"], ["serviceArea", "Operating area"]].map(([key, label]) => <label key={key}>{label}<input value={profileDraft[key] || ""} onChange={(event) => setProfileDraft((current) => ({ ...current, [key]: event.target.value }))} required={["organisationName", "address", "city", "postcode"].includes(key)} /></label>)}
+        <div className="wbp-organisation-edit-actions"><button type="button" onClick={() => setEditingProfile(false)}>Cancel</button><button type="submit" disabled={savingProfile}>{savingProfile ? "Saving..." : "Save profile"}</button></div>
+      </form> : null}
 
       {profileStatus ? <p className="wbp-profile-save-status" role="status">{profileStatus}</p> : null}
       {historicalProjectCount > 0 ? <section className="mx-5 mt-5 border border-emerald-200 bg-emerald-50 p-4 text-sm sm:mx-8">

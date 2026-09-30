@@ -28,7 +28,7 @@ beforeEach(() => {
   supabase.rpc.mockResolvedValue({ data: [], error: null });
 });
 
-test.each(["architect", "builder"])("%s portfolio shows saved organisation details without an edit control", async (role) => {
+test.each(["architect", "builder"])("%s portfolio shows saved organisation details", async (role) => {
   const session = { user: { id: "profile-test-user", email: "wbpai25@gmail.com" } };
   supabase.auth.getSession.mockResolvedValue({ data: { session } });
   supabase.auth.getUser.mockResolvedValue({ data: { user: session.user } });
@@ -38,15 +38,35 @@ test.each(["architect", "builder"])("%s portfolio shows saved organisation detai
 
   render(<App />);
   expect(await screen.findByRole("heading", { name: "Original organisation" })).toBeInTheDocument();
-  expect(screen.queryByRole("navigation", { name: "Prototype pages" })).not.toBeInTheDocument();
-  expect(screen.getByText("WBP Prototype").closest(".wbp-professional-sticky")).toContainElement(screen.getByText(role === "architect" ? "Design intent and specification" : "Delivery, quality and commissioning"));
+  if (role === "builder") expect(screen.getByText("WBP Prototype").closest(".wbp-professional-sticky")).toContainElement(screen.getByText("Delivery, quality and commissioning"));
+  else expect(screen.getByRole("navigation", { name: "Prototype pages" })).toBeInTheDocument();
   expect(screen.getByText(role === "architect" ? "Design intent and specification" : "Delivery, quality and commissioning").closest(".wbp-professional-stage-banner")).toHaveClass(role === "architect" ? "is-design" : "is-build");
   expect(screen.queryByText(role === "architect" ? "Design portfolio" : "Build portfolio")).not.toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: "Edit profile" })).not.toBeInTheDocument();
+  if (role === "builder") expect(screen.queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
+  else expect(screen.getByRole("button", { name: "Edit" })).toBeInTheDocument();
   expect(screen.getByText("01234 567890")).toBeInTheDocument();
   expect(screen.getByText("1 High Street, Woodbridge, IP12 1AA")).toBeInTheDocument();
   expect(screen.getByText("Suffolk")).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: "Original organisation" })).toBeInTheDocument();
+});
+
+test("Design banner edits are saved to the account profile", async () => {
+  const session = { user: { id: "edit-user", email: "wbpai25@gmail.com" } };
+  supabase.auth.getSession.mockResolvedValue({ data: { session } });
+  supabase.auth.getUser.mockResolvedValue({ data: { user: session.user } });
+  supabase.auth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: jest.fn() } } });
+  const upsert = jest.fn().mockResolvedValue({ error: null });
+  supabase.from.mockImplementation((table) => table === "WBPWorkspaceProfiles"
+    ? { select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { profile: { organisationName: "Old Studio", address: "1 High Street", city: "Woodbridge", postcode: "IP12 1AA" } }, error: null }) }) }) }), upsert }
+    : { select: () => ({ order: async () => ({ data: [], error: null }) }) });
+  window.history.pushState({}, "", "/workspace/architect");
+  render(<App />);
+  fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+  const form = screen.getByRole("form", { name: "Edit Design profile" });
+  fireEvent.change(within(form).getByLabelText("Organisation name"), { target: { value: "New Studio" } });
+  fireEvent.click(within(form).getByRole("button", { name: "Save profile" }));
+  expect(await screen.findByRole("heading", { name: "New Studio" })).toBeInTheDocument();
+  expect(upsert).toHaveBeenCalledWith(expect.objectContaining({ user_id: "edit-user", workspace_role: "architect", profile: expect.objectContaining({ organisationName: "New Studio" }) }), { onConflict: "user_id,workspace_role" });
 });
 
 test("architect profile loads from the account without browser cache", async () => {

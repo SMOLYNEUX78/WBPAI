@@ -673,6 +673,13 @@ code {
 .wbp-organisation-details dt { margin-bottom: 3px; color: #4b5563; font-size: 11px; font-weight: 800; text-transform: uppercase; }
 .wbp-organisation-details dd { margin: 0; overflow-wrap: anywhere; font-size: 13px; font-weight: 650; }
 .wbp-organisation-details a { color: #1d4ed8; text-decoration: underline; }
+.wbp-organisation-edit { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; padding: 20px 32px; background: #f7fcf9; border-bottom: 1px solid #a7e4c4; }
+.wbp-organisation-edit label { min-width: 0; font-size: 12px; font-weight: 700; color: #064e3b; }
+.wbp-organisation-edit input { display: block; width: 100%; margin-top: 5px; padding: 8px; border: 1px solid #a7e4c4; background: white; color: #111827; }
+.wbp-organisation-edit-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 8px; }
+.wbp-organisation-edit-actions button { padding: 8px 14px; border: 1px solid #047857; background: white; color: #065f46; font-weight: 700; }
+.wbp-organisation-edit-actions button[type="submit"] { background: #047857; color: white; }
+@media (max-width: 700px) { .wbp-organisation-edit { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 16px; } }
 .wbp-profile-save-status { margin: 12px clamp(20px, 4vw, 58px) 0; color: #047857; font-size: 13px; font-weight: 700; }
 .wbp-design-project { min-height: 100vh; background: #f8fafc; color: #111827; }
 .wbp-design-project-header { display: flex; align-items: end; justify-content: space-between; gap: 18px; padding: 26px clamp(18px, 4vw, 58px); border-bottom: 1px solid #bfdbfe; background: #dbeafe; }
