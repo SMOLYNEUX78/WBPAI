@@ -6820,7 +6820,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
   );
   return (
     <div
-      className={`bg-white p-4 flex flex-col ${building.id === "home" ? "wbp-occupy-panel--linear space-y-0" : "space-y-6"} ${
+      className={`bg-white p-4 flex flex-col ${dataSourceBuildingId === "home" ? "wbp-occupy-panel--linear space-y-0" : "space-y-6"} ${
         isCarbonCreditTab ? "min-h-0" : "wbp-occupy-panel min-h-screen"
       }`}
     >
@@ -6914,8 +6914,8 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
         ) : null}
       </div>
 
-      <div className={building.id === "home" ? "wbp-performance-stage wbp-performance-stage--linear -mx-4" : "wbp-performance-stage bg-gray-100 p-3 sm:p-4 rounded shadow"}>
-        {building.id !== "home" ? <h2 className="mb-2 text-lg font-bold">Performance</h2> : null}
+      <div className={dataSourceBuildingId === "home" ? "wbp-performance-stage wbp-performance-stage--linear -mx-4" : "wbp-performance-stage bg-gray-100 p-3 sm:p-4 rounded shadow"}>
+        {dataSourceBuildingId !== "home" ? <h2 className="mb-2 text-lg font-bold">Performance</h2> : null}
 
         <div className="wbp-performance-content space-y-2.5 sm:space-y-4">
           {!isCarbonCreditTab && building.id === "home" ? (
