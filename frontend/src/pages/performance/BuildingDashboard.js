@@ -6676,11 +6676,6 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
            )
         )
       : null;
-  const enerphitPerformance = {
-    health: 94,
-    energy: 92,
-    value: 93,
-  };
   const isNewPerformanceDeepDive =
     isCarbonCreditTab && deepDivePanel === "new";
   const projectedPerformanceDeepDive = {
