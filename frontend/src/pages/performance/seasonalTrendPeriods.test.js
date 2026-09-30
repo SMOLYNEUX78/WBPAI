@@ -1,9 +1,26 @@
-import { aggregateCalendarTrend, averageCalendarMetric, comfortTemperatureDomain, aggregateTypicalDay, energyTrendScore } from "./BuildingDashboard";
+import { aggregateCalendarTrend, averageCalendarMetric, comfortTemperatureDomain, aggregateTypicalDay, energyUsagePosition, fillHistoricalHealthTrend } from "./BuildingDashboard";
 
 test("energy has the same band for equivalent hourly and daily values", () => {
-  expect(energyTrendScore(0.5, 1)).toBe(energyTrendScore(12, 1, true));
-  expect(energyTrendScore(0.5, 1)).toBeGreaterThanOrEqual(70);
-  expect(energyTrendScore(0, 0)).toBe(30);
+  expect(energyUsagePosition(0.5, 1)).toBe(energyUsagePosition(12, 1, true));
+  expect(energyUsagePosition(0.5, 1)).toBeGreaterThanOrEqual(30);
+  expect(energyUsagePosition(1, 1)).toBeLessThan(70);
+  expect(energyUsagePosition(0, 0)).toBe(35);
+});
+
+test("historical health fills only absent hourly series and flags daily means", () => {
+  const hourly = [
+    { slot: 0, dayIndex: 0, hour: 0, upstairsHumidity: 51, downstairsHumidity: null },
+    { slot: 1, dayIndex: 0, hour: 1, upstairsHumidity: 52, downstairsHumidity: null },
+  ];
+  const daily = [
+    { date: "2026-06-01", upstairsHumidity: 40, downstairsHumidity: 62, upstairsPm25: 5 },
+    { date: "2026-06-08", upstairsHumidity: 42, downstairsHumidity: 64, upstairsPm25: 7 },
+  ];
+  const result = fillHistoricalHealthTrend(hourly, daily);
+  expect(result[0]).toMatchObject({ upstairsHumidity: 51, downstairsHumidity: 63,
+    upstairsPm25: 6, dailyMeanFallbackKeys: ["downstairsHumidity", "upstairsPm25"] });
+  expect(result[1].downstairsHumidity).toBe(63);
+  expect(aggregateTypicalDay(result)[0].dailyMeanFallbackKeys).toContain("upstairsPm25");
 });
 
 test("typical day averages matching hours across the available week and retains energy", () => {

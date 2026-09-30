@@ -595,7 +595,8 @@ export const aggregateTypicalDay = (weeklyRows = []) => {
   return Array.from({ length: 24 }, (_, hour) => {
     const rows = weeklyRows.filter((row) => row.hour === hour);
     const point = { slot: hour, hour, hourLabel: `${String(hour).padStart(2, "0")}:00`,
-      label: `${String(hour).padStart(2, "0")}:00`, metricDayCounts: {} };
+      label: `${String(hour).padStart(2, "0")}:00`, metricDayCounts: {},
+      dailyMeanFallbackKeys: [...new Set(rows.flatMap((row) => row.dailyMeanFallbackKeys || []))] };
     metricKeys.forEach((key) => {
       const values = rows.map((row) => row[key]).filter(Number.isFinite);
       point.metricDayCounts[key] = values.length;
@@ -630,13 +631,36 @@ export const comfortTemperatureDomain = (points) => {
   };
 };
 
-export const energyTrendScore = (value, referenceHourly, dailyTotal = false) => {
+export const energyUsagePosition = (value, referenceHourly, dailyTotal = false) => {
   if (!Number.isFinite(value) || !Number.isFinite(referenceHourly)) return null;
-  if (referenceHourly <= 0) return value === 0 ? 30 : null;
+  if (referenceHourly <= 0) return value === 0 ? 35 : null;
   const fraction = Math.max(0, Math.min(1, (dailyTotal ? value / 24 : value) / referenceHourly));
-  if (fraction <= 0.35) return 30 + fraction / 0.35 * 40;
-  if (fraction <= 0.7) return 70 + (fraction - 0.35) / 0.35 * 15;
-  return 85 + (fraction - 0.7) / 0.3 * 15;
+  return 35 + fraction * 30;
+};
+
+export const fillHistoricalHealthTrend = (hourlyRows = [], dailyRows = []) => {
+  if (!hourlyRows.length || !dailyRows.length) return hourlyRows;
+  const missingKeys = HEALTH_TREND_KEYS.filter((key) =>
+    !hourlyRows.some((row) => Number.isFinite(row[key])) &&
+    dailyRows.some((row) => Number.isFinite(row[key])));
+  if (!missingKeys.length) return hourlyRows;
+  const weekdayMeans = Array.from({ length: 7 }, (_, dayIndex) => {
+    const days = dailyRows.filter((row) => {
+      const date = new Date(`${row.date}T00:00:00.000Z`);
+      return !Number.isNaN(date.getTime()) && (date.getUTCDay() + 6) % 7 === dayIndex;
+    });
+    return Object.fromEntries(missingKeys.map((key) => {
+      const values = days.map((row) => row[key]).filter(Number.isFinite);
+      return [key, values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null];
+    }));
+  });
+  return hourlyRows.map((row, slot) => {
+    const dailyMeans = weekdayMeans[row.dayIndex ?? Math.floor(slot / 24)];
+    const fallbackKeys = missingKeys.filter((key) => Number.isFinite(dailyMeans[key]));
+    return { ...row,
+      ...Object.fromEntries(fallbackKeys.map((key) => [key, dailyMeans[key]])),
+      dailyMeanFallbackKeys: fallbackKeys };
+  });
 };
 
 const preserveTrendEnergy = (incoming, previous) => {
@@ -5973,15 +5997,17 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
     (selectedTrendSeason === "Spring" ? springTrendSeason : null);
   const dateTrendSeason = selectedSeasonRecord ||
     (selectedTrendSeason === activeSeasonInfo.name ? activeSeasonInfo : null);
-  const selectedSeasonTrendData = Array.isArray(selectedSeasonRecord?.data)
+  const datedTrendRows = selectedSeasonRecord?.dailyData || [];
+  const archivedSeasonTrendData = Array.isArray(selectedSeasonRecord?.data)
     ? (selectedTrendSeason === activeSeasonInfo.name
       ? preserveTrendEnergy(selectedSeasonRecord.data, weeklyTrendData)
       : selectedSeasonRecord.data)
     : selectedTrendSeason === activeSeasonInfo.name
     ? weeklyTrendData
     : [];
+  const selectedSeasonTrendData = fillHistoricalHealthTrend(archivedSeasonTrendData, datedTrendRows);
   useEffect(() => {
-    if (trendPeriod === "week" || !isActive) return;
+    if (!isActive || (trendPeriod === "week" && selectedTrendSeason === activeSeasonInfo.name)) return;
     const season = dateTrendSeason;
     if (!season?.startDate || !season?.endDate) return;
     const key = `${dataSourceBuildingId}:${season.key}`;
@@ -6066,11 +6092,12 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
     // The request is keyed by season; archive refreshes must not cancel it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trendPeriod, selectedTrendSeason, isActive, dataSourceBuildingId, dateTrendSeason?.key]);
-  const datedTrendRows = selectedSeasonRecord?.dailyData || [];
   const chartTrendData = trendPeriod === "week" ? selectedSeasonTrendData
     : trendPeriod === "day" ? aggregateTypicalDay(selectedSeasonTrendData)
     : aggregateCalendarTrend(datedTrendRows, "seasonal-weekly",
       selectedSeasonRecord?.startDate, selectedSeasonRecord?.endDate);
+  const dailyMeanFallbackMetrics = new Set(selectedSeasonTrendData.flatMap(
+    (point) => point.dailyMeanFallbackKeys || []));
   const seasonMonthGroups = trendPeriod === "month" ? chartTrendData.reduce((groups, point, index) => {
     const inSeasonDate = point.date < selectedSeasonRecord.startDate
       ? selectedSeasonRecord.startDate : point.date;
@@ -6432,7 +6459,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
     }
 
     if (metric.energyStatus) {
-      return energyTrendScore(value, energyReferenceHourly[metric.key], trendPeriod === "month");
+      return energyUsagePosition(value, energyReferenceHourly[metric.key], trendPeriod === "month");
     }
 
     const normalised = (value - range.min) / (range.max - range.min);
@@ -6525,7 +6552,8 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
           <span className="inline-block h-2.5 w-2.5 flex-none rounded-full"
             style={{ backgroundColor: metricSelected ? metric.color : "#d1d5db" }} />
           <span className="break-words">{metric.key === "warmthBuffer" && selectedTrendSeason === "Summer"
-            ? "Indoor–outdoor" : metric.label}</span>
+            ? "Indoor–outdoor" : metric.label}{trendPeriod !== "month" && dailyMeanFallbackMetrics.has(metric.key)
+              ? " (daily mean)" : ""}</span>
         </span>
         <span className="flex-none font-semibold">
           {Number.isFinite(averageValue)
@@ -7535,7 +7563,11 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
           {trendPeriod === "month" && selectedSeasonRecord ? <p className="text-xs text-gray-600">
             {selectedSeasonRecord.dailyData?.length || 0} dated day(s) available. Each point averages the measured days in one calendar week across this season; missing weeks remain blank.
           </p> : null}
-          {datedTrendError && trendPeriod !== "week" ? <p className="text-xs text-red-700">{datedTrendError}</p> : null}
+          {datedTrendError && (trendPeriod !== "week" || selectedTrendSeason !== activeSeasonInfo.name)
+            ? <p className="text-xs text-red-700">{datedTrendError}</p> : null}
+          {trendPeriod !== "month" && dailyMeanFallbackMetrics.size > 0 ? <p className="text-xs text-gray-600">
+            Health metrics marked “daily mean” use the recorded daily averages where an older hourly snapshot has no series. Their flat within-day shape does not imply hourly readings.
+          </p> : null}
 
           {activeTrendMetrics.length > 0 ? (
             <>
@@ -7947,7 +7979,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
                 </div>
               )}
               <p className="text-xs text-gray-600">
-                All views use the same red, amber and green deviation bands. A line's position shows its metric-specific status, not its physical unit; hover or read below for measured values. Energy status is relative to the observed seasonal range, not a certification benchmark.
+                All views use the same red, amber and green bands for comfort and health. Energy lines show relative usage within the neutral band, not a pass/fail score: a short peak alone is not poor performance. Sustained consumption and floor area belong in the longer-term energy assessment. Hover or read below for measured values.
               </p>
             </>
           ) : (
