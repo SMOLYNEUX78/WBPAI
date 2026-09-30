@@ -9,6 +9,7 @@ const OCCUPY_TABS = [
 ];
 const DESIGN_TABS = [
   { label: "New", path: "/login?role=architect&mode=signup" },
+  { label: "Profile", path: "/workspace/architect" },
   { label: "Portfolio", path: "/dashboard/portfolio?role=architect" },
   { label: "Exchange", path: "/dashboard/exchange?role=architect" },
 ];
