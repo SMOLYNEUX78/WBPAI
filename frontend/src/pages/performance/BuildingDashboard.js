@@ -175,6 +175,7 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
   const [savedHistory, setSavedHistory] = useState(setup?.historicalStages || { design: {}, build: {} });
   const [editingStage, setEditingStage] = useState(null);
   const [saveStatus, setSaveStatus] = useState("");
+  const [officeAddressStatus, setOfficeAddressStatus] = useState("idle");
   const [searchStatus, setSearchStatus] = useState("");
   const [uploadStatus, setUploadStatus] = useState("");
   const [busy, setBusy] = useState(false);
@@ -213,6 +214,33 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
   const hasRecordedStage = Boolean(recordedStage.savedAt || fields.some(([key]) => String(recordedStage[key] || "").trim()));
   const showEditor = !hasRecordedStage || editingStage === contentStage;
   const designArea = internalArea ?? shownHistory.design?.internalArea ?? setup?.manualData?.internalArea ?? "";
+  const designerOfficeAddress = String(shownHistory.design?.designerOfficeAddress || "").trim();
+
+  useEffect(() => {
+    if (!isDesign || !showEditor || !designerOfficeAddress) {
+      setOfficeAddressStatus("idle");
+      return;
+    }
+    const postcode = designerOfficeAddress.match(/(?:^|[\s,])([A-Z]{1,2}[0-9][A-Z0-9]?\s?[0-9][A-Z]{2})\s*$/i)?.[1];
+    if (!postcode) {
+      setOfficeAddressStatus("incomplete");
+      return;
+    }
+    const streetAddress = designerOfficeAddress.slice(0, -postcode.length).replace(/[\s,]+$/, "");
+    if (streetAddress.length < 6) {
+      setOfficeAddressStatus("incomplete");
+      return;
+    }
+    let active = true;
+    setOfficeAddressStatus("checking");
+    const timer = setTimeout(async () => {
+      const { data, error } = await supabase.rpc("wbp_design_profile_address_exists", {
+        p_address_line: streetAddress, p_postcode: postcode,
+      });
+      if (active) setOfficeAddressStatus(error ? "unavailable" : data ? "matched" : "clear");
+    }, 700);
+    return () => { active = false; clearTimeout(timer); };
+  }, [isDesign, showEditor, designerOfficeAddress]);
 
   useEffect(() => {
     setLocalStage(initiallyCollapsed ? null : "audit");
@@ -542,7 +570,11 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
               </div>)}</div> : null}
           </div> : null}
           {(showHistoryInputs || editingStage === contentStage) ? <form onSubmit={saveHistory} className="grid gap-2 border-t border-emerald-200 pt-2 sm:grid-cols-3">
-            {fields.map(([key, label]) => <label key={key} className="min-w-0 font-semibold text-emerald-950">{label}<input value={shownHistory[stage]?.[key] || ""} onChange={(event) => changeHistory((current) => ({ ...current, [stage]: { ...current[stage], [key]: event.target.value } }))} className="mt-1 block w-full min-w-0 border border-emerald-300 bg-white px-2 py-1.5 font-normal text-gray-900" /></label>)}
+            {fields.map(([key, label]) => <label key={key} className="min-w-0 font-semibold text-emerald-950">{label}<input aria-label={label} value={shownHistory[stage]?.[key] || ""} onChange={(event) => changeHistory((current) => ({ ...current, [stage]: { ...current[stage], [key]: event.target.value } }))} className="mt-1 block w-full min-w-0 border border-emerald-300 bg-white px-2 py-1.5 font-normal text-gray-900" />
+              {key === "designerOfficeAddress" && designerOfficeAddress ? <span role="status" className={`mt-1 block text-xs font-normal ${officeAddressStatus === "matched" ? "text-amber-800" : "text-gray-600"}`}>
+                {{ incomplete: "Include the full office address and postcode to check for a match.", checking: "Checking existing Design profiles...", matched: "Possible match: a Design profile already uses this office address. Confirm the practice before linking records.", clear: "No matching Design office address found.", unavailable: "Address check unavailable. The Design Profile Address Check SQL may need to be applied." }[officeAddressStatus] || ""}
+              </span> : null}
+            </label>)}
             {isDesign ? <>
               <label className="min-w-0 font-semibold text-emerald-950">Internal floor area (m2)
                 <input type="number" min="1" step="0.1" value={designArea} onChange={(event) => {

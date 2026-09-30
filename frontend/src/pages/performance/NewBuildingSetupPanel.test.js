@@ -30,6 +30,23 @@ test("saved design history is presented as a record until explicitly edited", ()
     .getByRole("textbox", { name: "Address" })).toHaveValue("Woodbridge, Suffolk");
 });
 
+test("designer office address warns when an existing Design profile may match", async () => {
+  const rpc = jest.spyOn(supabase, "rpc").mockResolvedValue({ data: true, error: null });
+  try {
+    render(<OccupyHistoryTabs record={null} property={null} activeStage="design" contentOnly
+      setup={{ historicalStages: { design: { architectPractice: "A. W. J. Mullins", savedAt: "2026-01-01" } } }} />);
+    fireEvent.click(screen.getByRole("button", { name: "Edit details" }));
+    const form = screen.getByRole("button", { name: "Save design" }).closest("form");
+    fireEvent.change(within(form).getByRole("textbox", { name: "Address" }), {
+      target: { value: "10 Market Street, Woodbridge, IP12 4HA" },
+    });
+    expect(await screen.findByText(/Possible match: a Design profile already uses this office address/, {}, { timeout: 2000 })).toBeInTheDocument();
+    expect(rpc).toHaveBeenCalledWith("wbp_design_profile_address_exists", {
+      p_address_line: "10 Market Street, Woodbridge", p_postcode: "IP12 4HA",
+    });
+  } finally { rpc.mockRestore(); }
+});
+
 test("saved design documents open through a short-lived private link", async () => {
   const evidence = { id: "evidence-1", original_file_name: "planning.pdf", storage_reference: "owner/home/planning.pdf" };
   const query = { eq: () => query, order: () => query, limit: () => Promise.resolve({ data: [evidence], error: null }),
