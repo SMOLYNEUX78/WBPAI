@@ -479,22 +479,24 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
       {contentStage === "audit" ? <ProfileSummaryColumns record={record} property={property} setup={setup} /> :
         <div className={isAddressHistory ? "grid gap-3 px-3 py-2 text-xs sm:px-5" : "grid gap-2 px-3 py-2 text-xs sm:grid-cols-2 sm:px-5"}>
           {hasRecordedStage ? <div className="min-w-0 border-t border-emerald-200 pt-2 text-gray-800">
-            <div className="flex items-start justify-end gap-3">
-              <button type="button" onClick={() => { if (showEditor) changeHistory((current) => ({ ...current, [contentStage]: recordedStage })); setEditingStage(showEditor ? null : contentStage); }} className="shrink-0 border border-emerald-700 px-3 py-1 font-semibold text-emerald-950">{showEditor ? "Cancel" : "Edit details"}</button>
-            </div>
             {isDesign ? <div className="mt-1 grid min-w-0 grid-cols-4 gap-2 text-[10px] leading-tight [overflow-wrap:anywhere] sm:gap-3 sm:text-xs">
               {[
                 [["architectPractice", "Architect / practice"], ["leadDesigner", "Lead designer"]],
                 [["planningReference", "Planning application reference"], ["planningDecisionDate", "Planning decision date"]],
-                [["originalUse", "Original building use"], ["planningPortalUrl", "Planning portal record URL"], ["internalArea", "Internal floor area"]],
+                [["originalUse", "Original building use"], ["internalArea", "Internal floor area"]],
               ].map((column, index) => <dl key={index} className="min-w-0 border-r border-emerald-200 pr-2">
                 {column.filter(([key]) => recordedStage[key]).map(([key, label]) => <div key={key} className="mb-2 min-w-0"><dt className="text-gray-600">{label}</dt><dd className="break-words font-semibold">{key === "architectPractice" && recordId
                   ? <a href={`/workspace/provisional/architect/${encodeURIComponent(recordId)}`} className="text-emerald-900 underline underline-offset-2">{recordedStage[key]}</a>
                   : key === "internalArea" ? `${recordedStage[key]} m2` : recordedStage[key]}</dd></div>)}
               </dl>)}
-              <div className="min-w-0">{documentList || <><h4 className="font-semibold text-emerald-950">Historical documents</h4><p className="mt-1 text-gray-600">None uploaded</p></>}</div>
+              <div className="min-w-0">{documentList || <><h4 className="font-semibold text-emerald-950">Historical documents</h4><p className="mt-1 text-gray-600">None uploaded</p></>}
+                {/^https?:\/\//i.test(recordedStage.planningPortalUrl || "") ? <a href={recordedStage.planningPortalUrl} target="_blank" rel="noopener noreferrer" className="mt-2 block font-semibold text-emerald-900 underline underline-offset-2">Planning portal record URL</a> : null}
+              </div>
             </div> : <dl className="mt-1 grid min-w-0 grid-cols-4 gap-2 text-[10px] leading-tight [overflow-wrap:anywhere] sm:gap-3 sm:text-xs">{fields.filter(([key]) => recordedStage[key]).map(([key, label]) => <div key={key} className="min-w-0 border-r border-emerald-200 pr-2 last:border-0"><dt className="text-gray-600">{label}</dt><dd className="break-words font-semibold">{recordedStage[key]}</dd></div>)}</dl>}
-            <p className="mt-2 text-gray-600">Owner-supplied historical record; organisation attribution is unverified.</p>
+            <div className="mt-2 flex flex-wrap items-end justify-between gap-2">
+              <p className="text-gray-600">Owner-supplied historical record; organisation attribution is unverified.</p>
+              <button type="button" onClick={() => { if (showEditor) changeHistory((current) => ({ ...current, [contentStage]: recordedStage })); setEditingStage(showEditor ? null : contentStage); }} className="shrink-0 border border-emerald-700 px-3 py-1 font-semibold text-emerald-950">{showEditor ? "Cancel" : "Edit details"}</button>
+            </div>
           </div> : null}
           {saveStatus && !showEditor ? <p role="status" className="text-gray-700">{saveStatus}</p> : null}
           {showEditor ? <>
@@ -7043,6 +7045,12 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
                     {baselineConfidenceSteps.map((step) => <li key={step.label} className="list-disc">{step.complete ? "Complete" : "Needed"}: {step.label} - {step.detail}</li>)}
                   </ul>
                 </details>
+                <button type="button" onClick={() => setActiveMrvEvidenceField("overview")} className="mt-3 block w-full border-t border-gray-200 pt-2 text-left text-xs font-semibold text-gray-700" aria-label={`Audit evidence ${evidencePackScore} percent complete. Open audit evidence pack`}>
+                  <span className="flex justify-between"><span>Audit evidence</span><span>{evidencePackScore}%</span></span>
+                  <span role="progressbar" aria-label="Audit evidence readiness" aria-valuenow={evidencePackScore} aria-valuemin={0} aria-valuemax={100} className="mt-1 block h-2 overflow-hidden bg-gray-200">
+                    <span className={`block h-full transition-[width] duration-300 ${evidencePackScore >= 80 ? "bg-emerald-500" : evidencePackScore >= 50 ? "bg-amber-500" : "bg-red-500"}`} style={{ width: `${evidencePackScore}%` }} />
+                  </span>
+                </button>
               </div>
             </div>
           ) : isCarbonCreditTab ? (
