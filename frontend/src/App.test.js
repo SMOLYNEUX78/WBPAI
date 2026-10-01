@@ -61,6 +61,7 @@ test("Design banner edits are saved to the account profile", async () => {
     : { select: () => ({ order: async () => ({ data: [], error: null }) }) });
   window.history.pushState({}, "", "/workspace/architect");
   render(<App />);
+  await screen.findByRole("heading", { name: "Old Studio" });
   fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
   const form = screen.getByRole("form", { name: "Edit Design profile" });
   fireEvent.change(within(form).getByLabelText("Organisation name"), { target: { value: "New Studio" } });
@@ -80,6 +81,7 @@ test("Design profile image and requested stages can be changed", async () => {
     : { select: () => ({ order: async () => ({ data: [], error: null }) }) });
   window.history.pushState({}, "", "/workspace/architect");
   render(<App />);
+  await screen.findByRole("heading", { name: "Old Studio" });
   fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
   const form = screen.getByRole("form", { name: "Edit Design profile" });
   fireEvent.change(within(form).getByLabelText("Company logo / profile image"), { target: { files: [new File(["image"], "logo.png", { type: "image/png" })] } });
@@ -87,6 +89,26 @@ test("Design profile image and requested stages can be changed", async () => {
   await waitFor(() => expect(within(form).getByAltText("Current profile")).toBeInTheDocument());
   fireEvent.click(within(form).getByRole("button", { name: "Save profile" }));
   await waitFor(() => expect(upsert).toHaveBeenCalledWith(expect.objectContaining({ profile: expect.objectContaining({ logoName: "logo.png", logoDataUrl: expect.stringContaining("data:image/png;base64,"), requestedStages: ["architect", "builder"] }) }), { onConflict: "user_id,workspace_role" }));
+});
+
+test("saved provisional designer shows account matches and records an owner selection", async () => {
+  const session = { user: { id: "home-owner", email: "owner@example.com" } };
+  supabase.auth.getSession.mockResolvedValue({ data: { session } });
+  supabase.auth.getUser.mockResolvedValue({ data: { user: session.user } });
+  supabase.auth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: jest.fn() } } });
+  const candidate = { profile_ref: "00000000-0000-0000-0000-000000000001", organisation_name: "A. W. J. Mullins", city: "Woodbridge", postcode: "IP12 1AA", registration_number: "12345" };
+  supabase.rpc.mockResolvedValue({ data: [candidate], error: null });
+  const upsert = jest.fn().mockResolvedValue({ error: null });
+  supabase.from.mockImplementation((table) => table === "WBPProvisionalOrganisationProjects"
+    ? { select: () => ({ eq: () => ({ eq: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { organisation_name: "A. W. J. Mullins" }, error: null }) }) }) }) }) }
+    : { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { setup_data: { historicalStages: { design: { architectPractice: "A. W. J. Mullins" } } } }, error: null }) }) }), upsert });
+  window.history.pushState({}, "", "/workspace/provisional/architect/00000000-0000-0000-0000-000000000002");
+  render(<App />);
+  expect(await screen.findByRole("heading", { name: "Potential Design account matches" })).toBeInTheDocument();
+  expect(await screen.findByRole("link", { name: "View account profile" })).toHaveAttribute("href", "/workspace/design-profile/00000000-0000-0000-0000-000000000001");
+  fireEvent.click(screen.getByRole("button", { name: "Use this practice" }));
+  await waitFor(() => expect(upsert).toHaveBeenCalledWith(expect.objectContaining({ setup_data: expect.objectContaining({ historicalStages: expect.objectContaining({ design: expect.objectContaining({ designProfileRef: candidate.profile_ref }) }) }) }), { onConflict: "building_record_id" }));
+  expect(await screen.findByText(/Its involvement is still unverified/)).toBeInTheDocument();
 });
 
 test("architect profile loads from the account without browser cache", async () => {

@@ -825,7 +825,7 @@ const ProfessionalWorkspace = () => {
         </div>
         <div className="wbp-organisation-meta">
           <span>{isTestAccount ? "Test account · Organisation not verified" : organisationAccess ? `Verified organisation · ${organisationAccess.access_role}` : "Self-declared · Organisation not verified"}</span>
-          {!isBuilder ? <button type="button" onClick={() => { setProfileDraft(profile); setProfileImageError(""); setEditingProfile((current) => !current); }} className="border border-emerald-700 bg-white px-3 py-1 font-semibold text-emerald-900">{editingProfile ? "Cancel" : "Edit"}</button> : null}
+          {!isBuilder && profile.organisationName ? <button type="button" onClick={() => { setProfileDraft(profile); setProfileImageError(""); setEditingProfile((current) => !current); }} className="border border-emerald-700 bg-white px-3 py-1 font-semibold text-emerald-900">{editingProfile ? "Cancel" : "Edit"}</button> : null}
         </div>
         <dl className="wbp-organisation-details">{profileDetails.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{label === "Website" && /^https:\/\//i.test(value) ? <a href={value} target="_blank" rel="noopener noreferrer">{value}</a> : value}</dd></div>)}</dl>
       </section>
@@ -981,6 +981,10 @@ const ProvisionalArchitectProfile = () => {
   const navigate = useNavigate();
   const [profile, setProfile] = useState(null);
   const [status, setStatus] = useState("Loading provisional profile...");
+  const [matches, setMatches] = useState([]);
+  const [matchStatus, setMatchStatus] = useState("");
+  const [selectedRef, setSelectedRef] = useState(null);
+  const [selectionStatus, setSelectionStatus] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -991,9 +995,38 @@ const ProvisionalArchitectProfile = () => {
         if (!active) return;
         setProfile(data || null);
         setStatus(error ? `Could not load this profile: ${error.message}` : data ? "" : "No provisional architect profile is linked to this home.");
+        if (data?.organisation_name) {
+          setMatchStatus("Searching Design accounts...");
+          supabase.rpc("wbp_design_profile_candidates", { p_name: data.organisation_name }).then(({ data: candidates, error: lookupError }) => {
+            if (!active) return;
+            setMatches(lookupError ? [] : candidates || []);
+            setMatchStatus(lookupError ? "Account lookup unavailable. Apply Design Profile Preview.sql in Supabase." : candidates?.length ? "These self-declared Design accounts may match. Compare their details with your records before selecting one." : "No Design account match found yet.");
+          });
+        }
       });
     return () => { active = false; };
   }, [buildingId]);
+
+  const selectPractice = async (match) => {
+    setSelectionStatus("Saving your selection...");
+    const { data: auth, error: authError } = await supabase.auth.getUser();
+    if (authError || !auth.user) { setSelectionStatus("Sign in again before selecting a practice."); return; }
+    const { data: existing, error: readError } = await supabase.from("WBPBuildingSetupDeclarations")
+      .select("setup_data").eq("building_record_id", buildingId).maybeSingle();
+    if (readError || !existing) { setSelectionStatus("Could not load this home's saved Design record."); return; }
+    const design = existing.setup_data?.historicalStages?.design;
+    if (!design) { setSelectionStatus("Add the historical Design details to this home before selecting a practice."); return; }
+    const setupData = { ...existing.setup_data, historicalStages: { ...existing.setup_data.historicalStages,
+      design: { ...design, architectPractice: match.organisation_name, designProfileRef: match.profile_ref, designProfileConfirmedByOwnerAt: new Date().toISOString() },
+    } };
+    const { error } = await supabase.from("WBPBuildingSetupDeclarations").upsert({
+      building_record_id: buildingId, setup_data: setupData, updated_by: auth.user.id,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "building_record_id" });
+    if (error) { setSelectionStatus(`Could not save selection: ${error.message}`); return; }
+    setSelectedRef(match.profile_ref);
+    setSelectionStatus("Design account selected for this home. Its involvement is still unverified.");
+  };
 
   return <main className="mx-auto max-w-3xl px-4 py-8 text-gray-900">
     <button type="button" onClick={() => navigate(-1)} className="mb-6 border border-gray-300 px-3 py-2 text-sm">Back to building</button>
@@ -1005,6 +1038,15 @@ const ProvisionalArchitectProfile = () => {
         <p className="mt-2">This practice was named in owner-supplied historical records. WBP has not verified its involvement or granted it access to the building record.</p>
         <p className="mt-2">A verified organisation can request a reviewed link before this project appears in its portfolio. Private documents remain with the homeowner until access is approved.</p>
       </div>
+      <section className="mt-6 border-t border-gray-200 pt-5">
+        <h2 className="text-lg font-bold">Potential Design account matches</h2>
+        <p role="status" className="mt-1 text-sm text-gray-600">{matchStatus}</p>
+        {matches.map((match) => <div key={match.profile_ref} className="mt-3 flex flex-wrap items-center justify-between gap-3 border border-gray-200 p-3 text-sm">
+          <div><strong className="block">{match.organisation_name}</strong><span className="text-gray-600">{[match.city, match.postcode, match.registration_number && `Registration ${match.registration_number}`].filter(Boolean).join(" · ")}</span></div>
+          <div className="flex gap-3"><a href={`/workspace/design-profile/${encodeURIComponent(match.profile_ref)}`} className="font-semibold text-emerald-800 underline">View account profile</a><button type="button" onClick={() => selectPractice(match)} disabled={selectedRef === match.profile_ref} className="border border-emerald-700 px-3 py-2 font-semibold text-emerald-900 disabled:opacity-60">{selectedRef === match.profile_ref ? "Selected" : "Use this practice"}</button></div>
+        </div>)}
+        {selectionStatus ? <p role="status" className="mt-3 text-sm">{selectionStatus}</p> : null}
+      </section>
     </> : <p role="status" className="text-sm">{status}</p>}
   </main>;
 };
@@ -1033,7 +1075,7 @@ const DesignAccountPreview = () => {
       <dl className="mt-5 grid gap-4 border-t border-gray-200 pt-4 text-sm sm:grid-cols-2">
         {[["Organisation type", profile.organisation_type], ["Office", [profile.office_address, profile.city, profile.postcode].filter(Boolean).join(", ")], ["Registration", profile.registration_number], ["Professional registration", profile.professional_registration], ["Website", profile.website]].filter(([, value]) => value).map(([label, value]) => <div key={label}><dt className="text-gray-600">{label}</dt><dd className="font-semibold break-words">{value}</dd></div>)}
       </dl>
-      <p className="mt-6 border border-amber-200 bg-amber-50 p-3 text-sm">These are self-declared account details. A matching name or address does not verify the practice, its involvement in this project, or permission to access private evidence. Return to the Design form and select “Use this practice” only if the details match your records.</p>
+      <p className="mt-6 border border-amber-200 bg-amber-50 p-3 text-sm">These are self-declared account details. A matching name or address does not verify the practice, its involvement in this project, or permission to access private evidence. Return to the matching page or Design form and select “Use this practice” only if the details match your records.</p>
     </> : <p role="status" className="text-sm">{status}</p>}
   </main>;
 };
