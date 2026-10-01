@@ -15,7 +15,7 @@ as $$
       where p.user_id = auth.uid() and p.workspace_role = 'architect')
     and s.setup_data #>> '{historicalStages,design,designProfileRef}' = auth.uid()::text
     and s.setup_data #>> '{historicalStages,design,designProfileConfirmedByOwnerAt}' is not null
-  order by linked_at desc;
+  order by 4 desc;
 $$;
 
 revoke all on function public.wbp_design_linked_projects() from public, anon;
