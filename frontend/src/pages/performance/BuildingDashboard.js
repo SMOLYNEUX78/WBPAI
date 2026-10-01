@@ -178,6 +178,8 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
   const [officeAddressStatus, setOfficeAddressStatus] = useState("idle");
   const [practiceNameStatus, setPracticeNameStatus] = useState("idle");
   const [practiceMatches, setPracticeMatches] = useState([]);
+  const [builderNameStatus, setBuilderNameStatus] = useState("idle");
+  const [builderMatches, setBuilderMatches] = useState([]);
   const [searchStatus, setSearchStatus] = useState("");
   const [uploadStatus, setUploadStatus] = useState("");
   const [busy, setBusy] = useState(false);
@@ -218,6 +220,33 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
   const designArea = internalArea ?? shownHistory.design?.internalArea ?? setup?.manualData?.internalArea ?? "";
   const designerOfficeAddress = String(shownHistory.design?.designerOfficeAddress || "").trim();
   const practiceName = String(shownHistory.design?.architectPractice || "").trim();
+  const builderName = String(shownHistory.build?.mainContractor || "").trim();
+
+  useEffect(() => {
+    if (!isBuild || !showEditor || !builderName) {
+      setBuilderNameStatus("idle");
+      setBuilderMatches([]);
+      return;
+    }
+    const generic = new Set(["builder", "builders", "building", "construction", "contractor", "contractors", "limited", "company", "group"]);
+    const distinctive = builderName.toLowerCase().split(/[^a-z0-9]+/).some((part) => part.length >= 5 && !generic.has(part));
+    if (!distinctive) {
+      setBuilderNameStatus("incomplete");
+      setBuilderMatches([]);
+      return;
+    }
+    let active = true;
+    setBuilderNameStatus("checking");
+    setBuilderMatches([]);
+    const timer = setTimeout(async () => {
+      const { data, error } = await supabase.rpc("wbp_build_profile_candidates", { p_name: builderName });
+      if (active) {
+        setBuilderMatches(error ? [] : data || []);
+        setBuilderNameStatus(error ? "unavailable" : data?.length ? "matched" : "clear");
+      }
+    }, 700);
+    return () => { active = false; clearTimeout(timer); };
+  }, [isBuild, showEditor, builderName]);
 
   useEffect(() => {
     if (!isDesign || !showEditor || !practiceName) {
@@ -550,9 +579,9 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
               <div className="min-w-0">{documentList || <><h4 className="font-semibold text-emerald-950">Historical documents</h4><p className="mt-1 text-gray-600">None uploaded</p></>}
                 {/^https?:\/\//i.test(recordedStage.planningPortalUrl || "") ? <a href={recordedStage.planningPortalUrl} target="_blank" rel="noopener noreferrer" className="mt-2 block font-semibold text-emerald-900 underline underline-offset-2">Planning portal record URL</a> : null}
               </div>
-            </div> : <dl className="mt-1 grid min-w-0 grid-cols-4 gap-2 text-[10px] leading-tight [overflow-wrap:anywhere] sm:gap-3 sm:text-xs">{fields.filter(([key]) => recordedStage[key]).map(([key, label]) => <div key={key} className="min-w-0 border-r border-emerald-200 pr-2 last:border-0"><dt className="text-gray-600">{label}</dt><dd className="break-words font-semibold">{recordedStage[key]}</dd></div>)}</dl>}
+            </div> : <dl className="mt-1 grid min-w-0 grid-cols-4 gap-2 text-[10px] leading-tight [overflow-wrap:anywhere] sm:gap-3 sm:text-xs">{fields.filter(([key]) => recordedStage[key]).map(([key, label]) => <div key={key} className="min-w-0 border-r border-emerald-200 pr-2 last:border-0"><dt className="text-gray-600">{label}</dt><dd className="break-words font-semibold">{key === "mainContractor" && recordedStage.buildProfileRef ? <a href={`/workspace/build-profile/${encodeURIComponent(recordedStage.buildProfileRef)}`} className="text-emerald-900 underline underline-offset-2">{recordedStage[key]}</a> : recordedStage[key]}</dd></div>)}</dl>}
             <div className="mt-2 flex flex-wrap items-end justify-between gap-2">
-              <p className="text-gray-600">{recordedStage.designProfileRef ? "Owner-selected Design account; project attribution remains unverified." : "Owner-supplied historical record; organisation attribution is unverified."}</p>
+              <p className="text-gray-600">{recordedStage.designProfileRef || recordedStage.buildProfileRef ? `Owner-selected ${isBuild ? "Build" : "Design"} account; project attribution remains unverified.` : "Owner-supplied historical record; organisation attribution is unverified."}</p>
               <button type="button" onClick={() => { if (showEditor) changeHistory((current) => ({ ...current, [contentStage]: recordedStage })); setEditingStage(showEditor ? null : contentStage); }} className="shrink-0 border border-emerald-700 px-3 py-1 font-semibold text-emerald-950">{showEditor ? "Cancel" : "Edit details"}</button>
             </div>
           </div> : null}
@@ -600,14 +629,24 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
               </div>)}</div> : null}
           </div> : null}
           {(showHistoryInputs || editingStage === contentStage) ? <form onSubmit={saveHistory} className="grid gap-2 border-t border-emerald-200 pt-2 sm:grid-cols-3">
-            {fields.map(([key, label]) => <React.Fragment key={key}><label className="min-w-0 font-semibold text-emerald-950">{label}<input aria-label={label} value={shownHistory[stage]?.[key] || ""} onChange={(event) => changeHistory((current) => ({ ...current, [stage]: { ...current[stage], [key]: event.target.value, ...(key === "architectPractice" || key === "designerOfficeAddress" ? { designProfileRef: null, designProfileConfirmedByOwnerAt: null } : {}) } }))} className="mt-1 block w-full min-w-0 border border-emerald-300 bg-white px-2 py-1.5 font-normal text-gray-900" />
+            {fields.map(([key, label]) => <React.Fragment key={key}><label className="min-w-0 font-semibold text-emerald-950">{label}<input aria-label={label} value={shownHistory[stage]?.[key] || ""} onChange={(event) => changeHistory((current) => ({ ...current, [stage]: { ...current[stage], [key]: event.target.value, ...(key === "architectPractice" || key === "designerOfficeAddress" ? { designProfileRef: null, designProfileConfirmedByOwnerAt: null } : {}), ...(key === "mainContractor" ? { buildProfileRef: null, buildProfileConfirmedByOwnerAt: null } : {}) } }))} className="mt-1 block w-full min-w-0 border border-emerald-300 bg-white px-2 py-1.5 font-normal text-gray-900" />
               {key === "architectPractice" && practiceName ? <span role="status" className={`mt-1 block text-xs font-normal ${practiceNameStatus === "matched" ? "text-amber-800" : "text-gray-600"}`}>
                 {{ incomplete: "Enter a distinctive part of the practice name to check for a match.", checking: "Checking existing Design accounts...", matched: "Possible Design account matches found. Review the profile before selecting one.", clear: "No matching Design account name found.", unavailable: "Profile lookup unavailable. Apply Design Profile Preview.sql in Supabase." }[practiceNameStatus] || ""}
               </span> : null}
               {key === "designerOfficeAddress" && designerOfficeAddress ? <span role="status" className={`mt-1 block text-xs font-normal ${officeAddressStatus === "matched" ? "text-amber-800" : "text-gray-600"}`}>
                 {{ incomplete: "Include the full office address and postcode to check for a match.", checking: "Checking existing Design profiles...", matched: "Possible match: a Design profile already uses this office address. Confirm the practice before linking records.", clear: "No matching Design office address found.", unavailable: "Address check unavailable. The Design Profile Address Check SQL may need to be applied." }[officeAddressStatus] || ""}
               </span> : null}
+              {key === "mainContractor" && builderName ? <span role="status" className={`mt-1 block text-xs font-normal ${builderNameStatus === "matched" ? "text-amber-800" : "text-gray-600"}`}>
+                {{ incomplete: "Enter a distinctive part of the builder name to check for a match.", checking: "Checking existing Build accounts...", matched: "Possible Build account matches found. Review the profile before selecting one.", clear: "No matching Build account name found.", unavailable: "Profile lookup unavailable. Apply Build Profile Preview.sql in Supabase." }[builderNameStatus] || ""}
+              </span> : null}
             </label>
+            {isBuild && key === "mainContractor" && builderMatches.length ? <div className="sm:col-span-3" aria-label="Matching Build profiles">
+              {builderMatches.map((match) => <div key={match.profile_ref} className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-200 bg-white px-3 py-2 text-xs">
+                <span><strong>{match.organisation_name}</strong> · {[match.city, match.postcode, match.registration_number && `Registration ${match.registration_number}`].filter(Boolean).join(" · ")}</span>
+                <span className="flex gap-3"><a href={`/workspace/build-profile/${encodeURIComponent(match.profile_ref)}`} target="_blank" rel="noopener noreferrer" className="font-semibold text-emerald-800 underline">View profile</a><button type="button" onClick={() => changeHistory((current) => ({ ...current, build: { ...current.build, mainContractor: match.organisation_name, buildProfileRef: match.profile_ref, buildProfileConfirmedByOwnerAt: new Date().toISOString() } }))} className="font-semibold text-emerald-800 underline">Use this builder</button></span>
+              </div>)}
+              {shownHistory.build?.buildProfileRef ? <p className="mt-1 text-emerald-900">Builder selected. Save Build to record your choice; this does not verify its involvement or grant access.</p> : null}
+            </div> : null}
             {isDesign && key === "designerOfficeAddress" && practiceMatches.length ? <div className="sm:col-span-3" aria-label="Matching Design profiles">
               {practiceMatches.map((match) => <div key={match.profile_ref} className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-200 bg-white px-3 py-2 text-xs">
                 <span><strong>{match.organisation_name}</strong> · {[match.city, match.postcode, match.registration_number && `Registration ${match.registration_number}`].filter(Boolean).join(" · ")}</span>

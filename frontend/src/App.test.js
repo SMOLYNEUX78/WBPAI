@@ -102,6 +102,19 @@ test("Build sign-up asks only for contact and company email", async () => {
   expect(JSON.parse(window.localStorage.getItem("wbp-auth-intent:v1")).profile.contactName).toBe("Alex Builder");
 });
 
+test("owner can preview a matching Build account without private contact details", async () => {
+  const session = { user: { id: "homeowner", email: "owner@example.com" } };
+  supabase.auth.getSession.mockResolvedValue({ data: { session } });
+  supabase.auth.getUser.mockResolvedValue({ data: { user: session.user } });
+  supabase.auth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: jest.fn() } } });
+  supabase.rpc.mockResolvedValue({ data: [{ organisation_name: "Example Builders", organisation_type: "Main contractor", city: "Woodbridge", registration_number: "12345678", professional_registrations: "CIOB 12345" }], error: null });
+  window.history.pushState({}, "", "/workspace/build-profile/builder-id");
+  render(<App />);
+  expect(await screen.findByRole("heading", { name: "Example Builders" })).toBeInTheDocument();
+  expect(screen.getByText("CIOB 12345")).toBeInTheDocument();
+  expect(supabase.rpc).toHaveBeenCalledWith("wbp_build_profile_preview", { p_profile_ref: "builder-id" });
+});
+
 test("test account can create a Build profile in the workspace", async () => {
   const session = { user: { id: "fresh-builder", email: "wbpai25@gmail.com" } };
   supabase.auth.getSession.mockResolvedValue({ data: { session } });

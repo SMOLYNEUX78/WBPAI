@@ -1066,38 +1066,39 @@ const DesignPracticeMatch = () => {
   </main>;
 };
 
-const DesignAccountPreview = () => {
+const OrganisationAccountPreview = ({ role = "architect" }) => {
   const { profileId } = useParams();
   const navigate = useNavigate();
   const [profile, setProfile] = useState(null);
-  const [status, setStatus] = useState("Loading Design profile...");
+  const isBuilder = role === "builder";
+  const [status, setStatus] = useState(`Loading ${isBuilder ? "Build" : "Design"} profile...`);
 
   useEffect(() => {
     let active = true;
     supabase.auth.getUser().then(({ data: auth, error: authError }) => {
       if (!active) return;
       if (!authError && auth?.user?.id === profileId) {
-        navigate("/workspace/architect", { replace: true });
+        navigate(`/workspace/${role}`, { replace: true });
         return;
       }
-      supabase.rpc("wbp_design_profile_preview", { p_profile_ref: profileId }).then(({ data, error }) => {
+      supabase.rpc(isBuilder ? "wbp_build_profile_preview" : "wbp_design_profile_preview", { p_profile_ref: profileId }).then(({ data, error }) => {
         if (!active) return;
         setProfile(data?.[0] || null);
-        setStatus(error ? "Profile preview unavailable. Apply Design Profile Preview.sql in Supabase." : data?.length ? "" : "This Design profile is no longer available.");
+        setStatus(error ? `Profile preview unavailable. Apply ${isBuilder ? "Build" : "Design"} Profile Preview.sql in Supabase.` : data?.length ? "" : `This ${isBuilder ? "Build" : "Design"} profile is no longer available.`);
       });
     });
     return () => { active = false; };
-  }, [profileId, navigate]);
+  }, [profileId, navigate, role, isBuilder]);
 
   return <main className="mx-auto max-w-3xl px-4 py-8 text-gray-900">
     <button type="button" onClick={() => navigate(-1)} className="mb-6 border border-gray-300 px-3 py-2 text-sm">Back to building</button>
     {profile ? <>
-      <p className="text-sm font-semibold uppercase text-emerald-800">Design account preview</p>
+      <p className="text-sm font-semibold uppercase text-emerald-800">{isBuilder ? "Build" : "Design"} account preview</p>
       <h1 className="mt-2 text-2xl font-bold">{profile.organisation_name}</h1>
       <dl className="mt-5 grid gap-4 border-t border-gray-200 pt-4 text-sm sm:grid-cols-2">
-        {[["Organisation type", profile.organisation_type], ["Office", [profile.office_address, profile.city, profile.postcode].filter(Boolean).join(", ")], ["Registration", profile.registration_number], ["Professional registration", profile.professional_registration], ["Website", profile.website]].filter(([, value]) => value).map(([label, value]) => <div key={label}><dt className="text-gray-600">{label}</dt><dd className="font-semibold break-words">{value}</dd></div>)}
+        {[["Organisation type", profile.organisation_type], ["Office", [profile.office_address, profile.city, profile.postcode].filter(Boolean).join(", ")], ["Registration", profile.registration_number], [isBuilder ? "Professional registrations" : "Professional registration", isBuilder ? profile.professional_registrations : profile.professional_registration], ["Website", profile.website]].filter(([, value]) => value).map(([label, value]) => <div key={label}><dt className="text-gray-600">{label}</dt><dd className="font-semibold break-words">{value}</dd></div>)}
       </dl>
-      <p className="mt-6 border border-amber-200 bg-amber-50 p-3 text-sm">These are self-declared account details. A matching name or address does not verify the practice, its involvement in this project, or permission to access private evidence. Return to the matching page or Design form and select “Use this practice” only if the details match your records.</p>
+      <p className="mt-6 border border-amber-200 bg-amber-50 p-3 text-sm">These are self-declared account details. A matching name or address does not verify the {isBuilder ? "builder" : "practice"}, its involvement in this project, or permission to access private evidence. Return to the {isBuilder ? "Build" : "Design"} form and select the organisation only if the details match your records.</p>
     </> : <p role="status" className="text-sm">{status}</p>}
   </main>;
 };
@@ -1112,7 +1113,8 @@ const App = () => (
       <Route path="/workspace/occupy-profile/:buildingId" element={<AuthenticatedRoute><LinkedOccupyProfile /></AuthenticatedRoute>} />
       <Route path="/workspace/design-match/:buildingId" element={<AuthenticatedRoute><DesignPracticeMatch /></AuthenticatedRoute>} />
       <Route path="/workspace/provisional/architect/:buildingId" element={<AuthenticatedRoute><DesignPracticeMatch /></AuthenticatedRoute>} />
-      <Route path="/workspace/design-profile/:profileId" element={<AuthenticatedRoute><DesignAccountPreview /></AuthenticatedRoute>} />
+      <Route path="/workspace/design-profile/:profileId" element={<AuthenticatedRoute><OrganisationAccountPreview /></AuthenticatedRoute>} />
+      <Route path="/workspace/build-profile/:profileId" element={<AuthenticatedRoute><OrganisationAccountPreview role="builder" /></AuthenticatedRoute>} />
       <Route path="/workspace/:role" element={<AuthenticatedRoute requireProfessionalEmail><ProfessionalWorkspace /></AuthenticatedRoute>} />
       <Route path="/workspace/architect/project/:projectId" element={<AuthenticatedRoute requireProfessionalEmail><DesignProject /></AuthenticatedRoute>} />
       <Route path="/workspace/builder/new" element={<AuthenticatedRoute requireProfessionalEmail><BuildProject /></AuthenticatedRoute>} />
