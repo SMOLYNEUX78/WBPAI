@@ -132,6 +132,7 @@ const RoleGateway = () => {
   const [selectedRole, setSelectedRole] = useState(designSignup ? "architect" : occupySignup ? "homeowner" : "");
   const [authMode, setAuthMode] = useState(designSignup || occupySignup ? "signup" : "signin");
   const [occupyMode, setOccupyMode] = useState("new");
+  const [builderRegistrations, setBuilderRegistrations] = useState([""]);
   const [email, setEmail] = useState("");
   const [authStatus, setAuthStatus] = useState("idle");
   const [authMessage, setAuthMessage] = useState("");
@@ -262,7 +263,8 @@ const RoleGateway = () => {
       organisationName: formData.get("organisationName") || "",
       organisationType: formData.get("organisationType") || "",
       registrationNumber: formData.get("registrationNumber") || "",
-      professionalRegistration: formData.get("professionalRegistration") || "",
+      professionalRegistration: selectedRole === "architect" ? formData.get("professionalRegistration") || "" : "",
+      professionalRegistrations: selectedRole === "builder" ? formData.getAll("professionalRegistration").map((value) => String(value).trim()).filter(Boolean) : [],
       vatNumber: formData.get("vatNumber") || "",
       contactName: formData.get("fullName") || "",
       jobTitle: formData.get("jobTitle") || "",
@@ -493,10 +495,17 @@ const RoleGateway = () => {
                     <span>Companies House / statutory registration</span>
                     <input name="registrationNumber" type="text" placeholder="Registration number" required />
                   </label>
-                  <label className="wbp-access-field">
-                    <span>{selectedRole === "architect" ? "ARB / RIBA / professional registration" : "CIOB / FMB / professional registration"}</span>
+                  {selectedRole === "architect" ? <label className="wbp-access-field">
+                    <span>ARB / RIBA / professional registration</span>
                     <input name="professionalRegistration" type="text" placeholder="Body and membership number" />
-                  </label>
+                  </label> : <fieldset className="wbp-access-field wbp-field-wide">
+                    <legend>Professional registrations</legend>
+                    {builderRegistrations.map((value, index) => <div key={index} className="mt-2 flex gap-2">
+                      <input name="professionalRegistration" aria-label={`Professional registration ${index + 1}`} type="text" value={value} onChange={(event) => setBuilderRegistrations((current) => current.map((item, itemIndex) => itemIndex === index ? event.target.value : item))} placeholder="Body and membership number, e.g. CIOB 12345" />
+                      {builderRegistrations.length > 1 ? <button type="button" onClick={() => setBuilderRegistrations((current) => current.filter((_, itemIndex) => itemIndex !== index))} aria-label={`Remove registration ${index + 1}`}>Remove</button> : null}
+                    </div>)}
+                    <button type="button" className="mt-2 text-sm font-semibold underline" onClick={() => setBuilderRegistrations((current) => [...current, ""])}>Add registration</button>
+                  </fieldset>}
                   <label className="wbp-access-field">
                     <span>VAT number</span>
                     <input name="vatNumber" type="text" placeholder="Optional" />
@@ -790,7 +799,7 @@ const ProfessionalWorkspace = () => {
   };
   const profileDetails = [
     ["Registration", profile.registrationNumber],
-    ["Professional body", profile.professionalRegistration],
+    [isBuilder ? "Professional registrations" : "Professional body", isBuilder && profile.professionalRegistrations?.length ? profile.professionalRegistrations.join(" · ") : profile.professionalRegistration],
     ["VAT", profile.vatNumber],
     ["Contact", [profile.contactName, profile.jobTitle].filter(Boolean).join(" · ")],
     ["Email", profileEmail],

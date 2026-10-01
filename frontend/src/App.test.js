@@ -34,7 +34,7 @@ test.each(["architect", "builder"])("%s portfolio shows saved organisation detai
   supabase.auth.getSession.mockResolvedValue({ data: { session } });
   supabase.auth.getUser.mockResolvedValue({ data: { user: session.user } });
   supabase.auth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: jest.fn() } } });
-  window.localStorage.setItem(`wbp-${role}-profile-${session.user.id}`, JSON.stringify({ organisationName: "Original organisation", registrationNumber: "12345", contactName: "Alex Designer", phone: "01234 567890", website: "https://studio.example", address: "1 High Street", city: "Woodbridge", postcode: "IP12 1AA", serviceArea: "Suffolk" }));
+  window.localStorage.setItem(`wbp-${role}-profile-${session.user.id}`, JSON.stringify({ organisationName: "Original organisation", registrationNumber: "12345", professionalRegistrations: role === "builder" ? ["CIOB 12345", "FMB 67890"] : [], contactName: "Alex Designer", phone: "01234 567890", website: "https://studio.example", address: "1 High Street", city: "Woodbridge", postcode: "IP12 1AA", serviceArea: "Suffolk" }));
   window.history.pushState({}, "", `/workspace/${role}`);
 
   render(<App />);
@@ -47,6 +47,7 @@ test.each(["architect", "builder"])("%s portfolio shows saved organisation detai
   expect(screen.getByText("01234 567890")).toBeInTheDocument();
   expect(screen.getByText("1 High Street, Woodbridge, IP12 1AA")).toBeInTheDocument();
   expect(screen.getByText("Suffolk")).toBeInTheDocument();
+  if (role === "builder") expect(screen.getByText("CIOB 12345 · FMB 67890")).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: "Original organisation" })).toBeInTheDocument();
   if (role === "architect") {
     const groups = screen.getByRole("heading", { name: "Original organisation" }).closest(".wbp-professional-hero").querySelectorAll(".wbp-organisation-detail-group");
@@ -78,6 +79,26 @@ test("Build New tab opens and saves a build-specific record", async () => {
   fireEvent.change(screen.getByRole("textbox", { name: "Site address" }), { target: { value: "14 Bridgewood Road" } });
   fireEvent.click(screen.getByRole("button", { name: "Save build record" }));
   await waitFor(() => expect(insert).toHaveBeenCalledWith(expect.objectContaining({ created_by: "builder-user", title: "Bridgewood retrofit", site_address: "14 Bridgewood Road" })));
+});
+
+test("Build sign-up saves multiple professional registrations", async () => {
+  supabase.auth.getSession.mockResolvedValue({ data: { session: null } });
+  supabase.auth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: jest.fn() } } });
+  supabase.auth.signInWithOtp.mockResolvedValue({ error: null });
+  window.history.pushState({}, "", "/login");
+  render(<App />);
+  const build = await screen.findByRole("button", { name: /Build/ });
+  await waitFor(() => expect(build).toBeEnabled());
+  fireEvent.click(build);
+  const dialog = screen.getByRole("dialog");
+  fireEvent.click(within(dialog).getByRole("button", { name: "Sign up" }));
+  fireEvent.change(within(dialog).getByRole("textbox", { name: "Professional registration 1" }), { target: { value: "CIOB 12345" } });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Add registration" }));
+  fireEvent.change(within(dialog).getByRole("textbox", { name: "Professional registration 2" }), { target: { value: "FMB 67890" } });
+  fireEvent.change(within(dialog).getByRole("textbox", { name: "Company email address" }), { target: { value: "builder@company.co.uk" } });
+  fireEvent.submit(within(dialog).getByRole("button", { name: "Create account" }).closest("form"));
+  await waitFor(() => expect(supabase.auth.signInWithOtp).toHaveBeenCalled());
+  expect(JSON.parse(window.localStorage.getItem("wbp-auth-intent:v1")).profile.professionalRegistrations).toEqual(["CIOB 12345", "FMB 67890"]);
 });
 
 test("Design banner edits are saved to the account profile", async () => {
