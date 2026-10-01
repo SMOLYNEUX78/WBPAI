@@ -837,7 +837,6 @@ const preserveTrendEnergy = (incoming, previous) => {
 };
 
 const PROPERTY_DISCOVERY_CACHE_KEY = "wbp-property-discovery-draft:v1";
-const OCCUPY_PROPERTY_DRAFT_KEY = "wbp-occupy-property-draft:v1";
 const CARBON_EVIDENCE_TYPES = [
   { id: "energy-bill", section: "monitoring", label: "Energy bill", help: "Supplier bill for customer-confirmed tariff details. Usage still comes from the meter feed." },
   { id: "heating-system", section: "carbon", label: "Heating system", help: "Installation or commissioning record for the main heating system." },
@@ -8834,12 +8833,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
     }
   };
   const [propertySearch, setPropertySearch] = useState(() => {
-    if (isolatedDraft) {
-      let draft = {};
-      try { draft = JSON.parse(window.sessionStorage.getItem(OCCUPY_PROPERTY_DRAFT_KEY) || "{}"); } catch { /* Ignore invalid draft. */ }
-      window.sessionStorage.removeItem(OCCUPY_PROPERTY_DRAFT_KEY);
-      return { address: draft.address || "", postcode: draft.postcode || "", uprn: "", latitude: "", longitude: "" };
-    }
+    if (isolatedDraft) return { address: "", postcode: "", uprn: "", latitude: "", longitude: "" };
     try {
       const cached = JSON.parse(window.localStorage.getItem(PROPERTY_DISCOVERY_CACHE_KEY) || "null");
       return cached?.search || {
