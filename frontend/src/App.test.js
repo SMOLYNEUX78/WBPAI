@@ -69,12 +69,14 @@ test("Build New tab opens and saves a build-specific record", async () => {
   const insert = jest.fn().mockResolvedValue({ error: null });
   supabase.from.mockImplementation((table) => table === "WBPBuildProjects"
     ? { select: () => ({ order: async () => ({ data: [], error: null }) }), insert }
-    : { select: () => ({ order: async () => ({ data: [], error: null }), eq: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }) }) });
+    : { select: () => ({ order: async () => ({ data: [], error: null }), eq: () => ({ eq: () => ({ maybeSingle: async () => ({ data: table === "WBPWorkspaceProfiles" ? { profile: { organisationName: "Example Builders", professionalRegistrations: ["CIOB 12345"], phone: "01234 567890" } } : null, error: null }) }) }) }) });
   window.history.pushState({}, "", "/workspace/builder");
   render(<App />);
   fireEvent.click(await screen.findByRole("button", { name: "New" }));
   expect(await screen.findByRole("heading", { name: "New build record" })).toBeInTheDocument();
   expect(window.location.pathname).toBe("/workspace/builder/new");
+  expect(await screen.findByRole("region", { name: "Build organisation details" })).toHaveTextContent("CIOB 12345");
+  expect(screen.getByRole("textbox", { name: "Contractor / build team" })).toHaveValue("Example Builders");
   fireEvent.change(screen.getByRole("textbox", { name: "Project name" }), { target: { value: "Bridgewood retrofit" } });
   fireEvent.change(screen.getByRole("textbox", { name: "Site address" }), { target: { value: "14 Bridgewood Road" } });
   fireEvent.click(screen.getByRole("button", { name: "Save build record" }));

@@ -690,6 +690,14 @@ code {
 .wbp-profile-setup-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
 .wbp-profile-setup-actions button { border: 1px solid #047857; padding: 8px 14px; font-weight: 700; }
 .wbp-profile-setup-actions button[type="submit"] { background: #047857; color: white; }
+.wbp-build-organisation-summary { margin: 16px 0 22px; padding: 16px; border: 1px solid #c7d9e9; background: #f2f8ff; }
+.wbp-build-organisation-summary-heading { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
+.wbp-build-organisation-summary-heading strong, .wbp-build-organisation-summary-heading span { display: block; }
+.wbp-build-organisation-summary-heading button { flex: none; border: 1px solid #7c9bb9; padding: 5px 10px; font-size: 12px; }
+.wbp-build-organisation-summary dl { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
+.wbp-build-organisation-summary dt { color: #4b6478; font-size: 11px; }
+.wbp-build-organisation-summary dd { overflow-wrap: anywhere; font-size: 13px; font-weight: 600; }
+@media (max-width: 700px) { .wbp-build-organisation-summary dl { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .wbp-organisation-edit label { min-width: 0; font-size: 12px; font-weight: 700; color: #064e3b; }
 .wbp-organisation-edit input { display: block; width: 100%; margin-top: 5px; padding: 8px; border: 1px solid #a7e4c4; background: white; color: #111827; }
 .wbp-organisation-edit-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 8px; }

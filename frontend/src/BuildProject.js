@@ -12,6 +12,25 @@ export default function BuildProject() {
   const [invitations, setInvitations] = useState([]);
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
+  const [organisation, setOrganisation] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    const loadOrganisation = async () => {
+      const { data: auth } = await supabase.auth.getUser();
+      if (!active || !auth?.user) return;
+      const { data, error } = await supabase.from("WBPWorkspaceProfiles").select("profile")
+        .eq("user_id", auth.user.id).eq("workspace_role", "builder").maybeSingle();
+      if (!active) return;
+      if (error) { setStatus("Could not load your Build organisation profile."); return; }
+      const saved = data?.profile;
+      if (!saved?.organisationName) return;
+      setOrganisation(saved);
+      if (!projectId) setRecord((current) => ({ ...current, contractor_name: current.contractor_name || saved.organisationName }));
+    };
+    loadOrganisation();
+    return () => { active = false; };
+  }, [projectId]);
 
   useEffect(() => {
     let active = true;
@@ -52,7 +71,7 @@ export default function BuildProject() {
       ? await supabase.from("WBPBuildProjects").update(payload).eq("id", projectId)
       : await supabase.from("WBPBuildProjects").insert({ ...payload, created_by: auth.user.id });
     if (error) setStatus(`Could not save build record: ${error.message}. Apply Build Projects.sql in Supabase if the table is missing.`);
-    else { setStatus("Build record saved to your account. Appointment and work remain unverified."); if (!projectId) setRecord(emptyRecord); }
+    else { setStatus("Build record saved to your account. Appointment and work remain unverified."); if (!projectId) setRecord({ ...emptyRecord, contractor_name: organisation?.organisationName || "" }); }
     setBusy(false);
   };
 
@@ -61,6 +80,19 @@ export default function BuildProject() {
       <section className="wbp-professional-stage-banner is-build"><div><strong>Build</strong><span>Delivery, quality and commissioning</span></div><button type="button" onClick={() => navigate("/workspace/builder")}>Build profile</button></section></div>
     <section className="wbp-design-fields">
       <h1 className="text-xl font-bold">{projectId ? "Build record" : "New build record"}</h1>
+      {organisation ? <section className="wbp-build-organisation-summary" aria-label="Build organisation details">
+        <div className="wbp-build-organisation-summary-heading"><div><strong>{organisation.organisationName}</strong><span>{organisation.organisationType}</span></div><button type="button" onClick={() => navigate("/workspace/builder")}>View profile</button></div>
+        <dl>{[
+          ["Registration", organisation.registrationNumber],
+          ["Professional registrations", (organisation.professionalRegistrations || []).filter(Boolean).join(" · ") || organisation.professionalRegistration],
+          ["VAT", organisation.vatNumber],
+          ["Contact", [organisation.contactName, organisation.jobTitle].filter(Boolean).join(" · ")],
+          ["Phone", organisation.phone],
+          ["Website", organisation.website],
+          ["Head office", [organisation.address, organisation.city, organisation.postcode].filter(Boolean).join(", ")],
+          ["Operating area", organisation.serviceArea],
+        ].filter(([, value]) => value).map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
+      </section> : null}
       <form onSubmit={save} className="wbp-design-grid">
         {[["title", "Project name"], ["site_address", "Site address"], ["wbp_reference", "WBP reference"], ["contractor_name", "Contractor / build team"]].map(([key, label]) => <label key={key} className="wbp-access-field"><span>{label}</span><input value={record[key]} onChange={(event) => change(key, event.target.value)} required={key === "title"} /></label>)}
         <label className="wbp-access-field"><span>Construction start</span><input type="date" value={record.construction_start} onChange={(event) => change("construction_start", event.target.value)} /></label>
