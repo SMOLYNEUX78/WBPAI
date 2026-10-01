@@ -576,9 +576,9 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
     {!contentOnly ? <div className="flex border-b border-emerald-200 px-3 sm:px-5" role="tablist" aria-label="Building history">
       {["design", "build", "audit"].map((item) => <button key={item} type="button" role="tab"
         aria-selected={stage === item} aria-expanded={stage === item} onClick={() => { setDisplayStage(item); setLocalStage((current) => current === item ? null : item); setSearchStatus(""); setUploadStatus(""); setSaveStatus(""); }}
-        className={`min-w-0 flex-1 px-2 py-2 text-xs font-semibold capitalize transition-colors ${stage === item ? "border-b-2 border-emerald-800 text-emerald-950" : "text-emerald-800 hover:bg-emerald-50"}`}>{item === "audit" ? "Occupy" : item}</button>)}
+        className={`min-w-0 flex-1 border-b-2 px-2 py-2 text-xs font-semibold capitalize transition-colors ${stage === item ? "border-emerald-700 bg-emerald-50 text-emerald-950" : "border-transparent text-emerald-800 hover:bg-emerald-50"}`}>{item === "audit" ? "Occupy" : item}</button>)}
     </div> : null}
-    <div className={`wbp-history-panel ${stage ? "wbp-history-panel--open" : ""}`} aria-hidden={!stage}>
+    <div className={`wbp-history-panel ${stage ? "wbp-history-panel--open bg-emerald-50" : ""}`} aria-hidden={!stage}>
     <div role="tabpanel" className="min-h-0 overflow-hidden pb-2">
       {contentStage === "audit" ? <ProfileSummaryColumns record={record} property={property} setup={setup} /> :
         <div className={isAddressHistory ? "grid gap-3 px-3 py-2 text-xs sm:px-5" : "grid gap-2 px-3 py-2 text-xs sm:grid-cols-2 sm:px-5"}>
