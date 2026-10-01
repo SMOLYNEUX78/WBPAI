@@ -249,6 +249,24 @@ test("owner-linked home appears in the Design project register without private a
   expect(window.location.pathname).toBe("/workspace/occupy-profile/home-1");
 });
 
+test("owner-linked home appears in the Build project register without private access", async () => {
+  const session = { user: { id: "linked-builder", email: "wbpai25@gmail.com" } };
+  supabase.auth.getSession.mockResolvedValue({ data: { session } });
+  supabase.auth.getUser.mockResolvedValue({ data: { user: session.user } });
+  supabase.auth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: jest.fn() } } });
+  supabase.rpc.mockImplementation((name) => Promise.resolve({ data: name === "wbp_build_linked_projects"
+    ? [{ building_record_id: "home-1", record_reference: "WBP-001", site_address: "14 Bridgewood Road" }] : [], error: null }));
+  window.localStorage.setItem(`wbp-builder-profile-${session.user.id}`, JSON.stringify({ organisationName: "Example Builders" }));
+  window.history.pushState({}, "", "/workspace/builder");
+
+  render(<App />);
+  const register = await screen.findByRole("table", { name: "Build projects" });
+  expect(await within(register).findByText("14 Bridgewood Road")).toBeInTheDocument();
+  expect(within(register).getByText("Owner linked · unverified")).toBeInTheDocument();
+  fireEvent.click(within(register).getByText("14 Bridgewood Road"));
+  expect(window.location.pathname).toBe("/workspace/build-linked-home/home-1");
+});
+
 test("Occupy sign-up collects account details before property setup", async () => {
   supabase.auth.getSession.mockResolvedValue({ data: { session: null } });
   supabase.auth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: jest.fn() } } });

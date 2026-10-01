@@ -582,6 +582,7 @@ const ProfessionalWorkspace = () => {
   const [profileImageError, setProfileImageError] = useState("");
   const [designProjects, setDesignProjects] = useState([]);
   const [linkedDesignProjects, setLinkedDesignProjects] = useState([]);
+  const [linkedBuildProjects, setLinkedBuildProjects] = useState([]);
   const [buildInvitations, setBuildInvitations] = useState([]);
   const [buildProjects, setBuildProjects] = useState([]);
   const [isTestAccount, setIsTestAccount] = useState(false);
@@ -670,6 +671,11 @@ const ProfessionalWorkspace = () => {
       if (active) setBuildInvitations(data || []);
       if (active && error) setProfileStatus("Build handovers are not enabled yet. Run Design Build Handover.sql in Supabase.");
     });
+    supabase.rpc("wbp_build_linked_projects").then(({ data, error }) => {
+      if (!active) return;
+      if (!error) setLinkedBuildProjects(data || []);
+      else setProfileStatus((current) => current || "Owner-linked homes are unavailable. Apply Build Linked Projects.sql in Supabase.");
+    });
     return () => { active = false; };
   }, [isBuilder]);
   const organisationName = profile.organisationName || (isBuilder ? "Build organisation" : "Design organisation");
@@ -734,7 +740,8 @@ const ProfessionalWorkspace = () => {
   ];
   const projects = isBuilder
     ? [...buildProjects.map((item) => ({ id: item.wbp_reference || item.id.slice(0, 8), key: item.id, name: item.title, stage: "Build record", status: "Draft", route: `/workspace/builder/project/${item.id}` })),
-      ...buildInvitations.map((item) => ({ id: item.id.slice(0, 8), name: item.project_title, stage: `Revision ${item.revision}`, status: item.status, route: `/workspace/builder/handover/${item.id}` }))]
+      ...buildInvitations.map((item) => ({ id: item.id.slice(0, 8), name: item.project_title, stage: `Revision ${item.revision}`, status: item.status, route: `/workspace/builder/handover/${item.id}` })),
+      ...linkedBuildProjects.map((item) => ({ id: item.record_reference, key: `linked-${item.building_record_id}`, name: item.site_address || item.record_reference, stage: "Historic Build", status: "Owner linked · unverified", route: `/workspace/build-linked-home/${encodeURIComponent(item.building_record_id)}` }))]
     : [
       ...designProjects.map((item) => ({ id: item.id, name: item.title, stage: item.design_stage, status: "Design record", route: `/workspace/architect/project/${item.id}` })),
       ...linkedDesignProjects.map((item) => ({ id: item.record_reference, key: `linked-${item.building_record_id}`, name: item.site_address || item.record_reference, stage: "Historic Design", status: "Owner linked · unverified", route: `/workspace/occupy-profile/${encodeURIComponent(item.building_record_id)}` })),
@@ -849,10 +856,10 @@ const ProfessionalWorkspace = () => {
 
       <section className="wbp-project-register">
         <div className="wbp-register-heading">
-          <div><p>{isBuilder ? "Design handovers" : "Design projects"}</p><h2>{projects.length} {isBuilder ? "received" : "saved"} record{projects.length === 1 ? "" : "s"}</h2></div>
+          <div><p>{isBuilder ? "Build projects" : "Design projects"}</p><h2>{projects.length} saved record{projects.length === 1 ? "" : "s"}</h2></div>
           <input type="search" placeholder="Search projects" aria-label="Search projects" />
         </div>
-        <div className="wbp-project-table" role="table" aria-label={isBuilder ? "Design handovers" : "Design projects"}>
+        <div className="wbp-project-table" role="table" aria-label={isBuilder ? "Build projects" : "Design projects"}>
           <div className="wbp-project-row is-heading" role="row">
             <span>WBP ID</span><span>Project</span><span>Stage</span><span>Status</span><span aria-hidden="true" />
           </div>
@@ -956,19 +963,20 @@ const AuthenticatedRoute = ({ children, requireProfessionalEmail = false }) => {
   return children;
 };
 
-const LinkedOccupyProfile = () => {
+const LinkedOccupyProfile = ({ role = "architect" }) => {
   const { buildingId } = useParams();
   const navigate = useNavigate();
+  const isBuilder = role === "builder";
   const [home, setHome] = useState(null);
   const [status, setStatus] = useState("Loading linked home...");
 
   useEffect(() => {
     let active = true;
     const load = async () => {
-      const { data: linked, error } = await supabase.rpc("wbp_design_linked_projects");
+      const { data: linked, error } = await supabase.rpc(isBuilder ? "wbp_build_linked_projects" : "wbp_design_linked_projects");
       if (!active) return;
       const match = !error && (linked || []).find((item) => item.building_record_id === buildingId);
-      if (!match) { setStatus("This home is not linked to your Design account."); return; }
+      if (!match) { setStatus(`This home is not linked to your ${isBuilder ? "Build" : "Design"} account.`); return; }
       const { data: auth } = await supabase.auth.getUser();
       if (!active) return;
       const { data: ownRecord } = await supabase.from("WBPBuildingRecords")
@@ -980,15 +988,15 @@ const LinkedOccupyProfile = () => {
     };
     load();
     return () => { active = false; };
-  }, [buildingId, navigate]);
+  }, [buildingId, navigate, isBuilder]);
 
   return <main className="mx-auto max-w-3xl px-4 py-8 text-gray-900">
-    <button type="button" onClick={() => navigate(-1)} className="mb-6 border border-gray-300 px-3 py-2 text-sm">Back to Design portfolio</button>
+    <button type="button" onClick={() => navigate(-1)} className="mb-6 border border-gray-300 px-3 py-2 text-sm">Back to {isBuilder ? "Build" : "Design"} portfolio</button>
     {home ? <>
       <p className="text-sm font-semibold uppercase text-emerald-800">Occupy profile · owner linked</p>
       <h1 className="mt-2 text-2xl font-bold">{home.site_address || home.record_reference}</h1>
       <p className="mt-2 text-sm text-gray-600">{home.record_reference}</p>
-      <p className="mt-6 border border-amber-200 bg-amber-50 p-3 text-sm">The homeowner selected this Design account. The practice has not confirmed its involvement, and the building record and private evidence remain inaccessible until access is approved.</p>
+      <p className="mt-6 border border-amber-200 bg-amber-50 p-3 text-sm">The homeowner selected this {isBuilder ? "Build" : "Design"} account. The {isBuilder ? "builder" : "practice"} has not confirmed its involvement, and the building record and private evidence remain inaccessible until access is approved.</p>
     </> : <p role="status" className="text-sm">{status}</p>}
   </main>;
 };
@@ -1111,6 +1119,7 @@ const App = () => (
       <Route path="/workspaces" element={<AuthenticatedRoute><WorkspaceSwitcher /></AuthenticatedRoute>} />
       <Route path="/workspace/history" element={<AuthenticatedRoute><WorkspaceSwitcher historicalOnly /></AuthenticatedRoute>} />
       <Route path="/workspace/occupy-profile/:buildingId" element={<AuthenticatedRoute><LinkedOccupyProfile /></AuthenticatedRoute>} />
+      <Route path="/workspace/build-linked-home/:buildingId" element={<AuthenticatedRoute><LinkedOccupyProfile role="builder" /></AuthenticatedRoute>} />
       <Route path="/workspace/design-match/:buildingId" element={<AuthenticatedRoute><DesignPracticeMatch /></AuthenticatedRoute>} />
       <Route path="/workspace/provisional/architect/:buildingId" element={<AuthenticatedRoute><DesignPracticeMatch /></AuthenticatedRoute>} />
       <Route path="/workspace/design-profile/:profileId" element={<AuthenticatedRoute><OrganisationAccountPreview /></AuthenticatedRoute>} />
