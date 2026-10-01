@@ -1057,13 +1057,20 @@ const DesignAccountPreview = () => {
 
   useEffect(() => {
     let active = true;
-    supabase.rpc("wbp_design_profile_preview", { p_profile_ref: profileId }).then(({ data, error }) => {
+    supabase.auth.getUser().then(({ data: auth, error: authError }) => {
       if (!active) return;
-      setProfile(data?.[0] || null);
-      setStatus(error ? "Profile preview unavailable. Apply Design Profile Preview.sql in Supabase." : data?.length ? "" : "This Design profile is no longer available.");
+      if (!authError && auth?.user?.id === profileId) {
+        navigate("/workspace/architect", { replace: true });
+        return;
+      }
+      supabase.rpc("wbp_design_profile_preview", { p_profile_ref: profileId }).then(({ data, error }) => {
+        if (!active) return;
+        setProfile(data?.[0] || null);
+        setStatus(error ? "Profile preview unavailable. Apply Design Profile Preview.sql in Supabase." : data?.length ? "" : "This Design profile is no longer available.");
+      });
     });
     return () => { active = false; };
-  }, [profileId]);
+  }, [profileId, navigate]);
 
   return <main className="mx-auto max-w-3xl px-4 py-8 text-gray-900">
     <button type="button" onClick={() => navigate(-1)} className="mb-6 border border-gray-300 px-3 py-2 text-sm">Back to building</button>

@@ -111,6 +111,20 @@ test("saved provisional designer shows account matches and records an owner sele
   expect(await screen.findByText(/Its involvement is still unverified/)).toBeInTheDocument();
 });
 
+test("opening your own matched Design profile goes to the full portfolio", async () => {
+  const session = { user: { id: "00000000-0000-0000-0000-000000000001", email: "wbpai25@gmail.com" } };
+  supabase.auth.getSession.mockResolvedValue({ data: { session } });
+  supabase.auth.getUser.mockResolvedValue({ data: { user: session.user } });
+  supabase.auth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: jest.fn() } } });
+  window.localStorage.setItem(`wbp-architect-profile-${session.user.id}`, JSON.stringify({ organisationName: "Mullins Dowse" }));
+  window.history.pushState({}, "", `/workspace/design-profile/${session.user.id}`);
+
+  render(<App />);
+  expect(await screen.findByRole("heading", { name: "Mullins Dowse" })).toBeInTheDocument();
+  expect(window.location.pathname).toBe("/workspace/architect");
+  expect(supabase.rpc).not.toHaveBeenCalledWith("wbp_design_profile_preview", expect.anything());
+});
+
 test("architect profile loads from the account without browser cache", async () => {
   const session = { user: { id: "cloud-user", email: "wbpai25@gmail.com" } };
   supabase.auth.getSession.mockResolvedValue({ data: { session } });
