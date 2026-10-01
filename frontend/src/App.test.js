@@ -140,6 +140,23 @@ test("architect profile loads from the account without browser cache", async () 
   expect(screen.getByText("01234 000000")).toBeInTheDocument();
 });
 
+test("owner-linked home appears in the Design project register without private access", async () => {
+  const session = { user: { id: "linked-designer", email: "wbpai25@gmail.com" } };
+  supabase.auth.getSession.mockResolvedValue({ data: { session } });
+  supabase.auth.getUser.mockResolvedValue({ data: { user: session.user } });
+  supabase.auth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: jest.fn() } } });
+  supabase.rpc.mockImplementation((name) => Promise.resolve({ data: name === "wbp_design_linked_projects"
+    ? [{ building_record_id: "home-1", record_reference: "WBP-001", site_address: "14 Bridgewood Road" }] : [], error: null }));
+  window.localStorage.setItem(`wbp-architect-profile-${session.user.id}`, JSON.stringify({ organisationName: "Mullins Dowse" }));
+  window.history.pushState({}, "", "/workspace/architect");
+
+  render(<App />);
+  const register = await screen.findByRole("table", { name: "Design projects" });
+  expect(await within(register).findByText("14 Bridgewood Road")).toBeInTheDocument();
+  expect(within(register).getByText("Owner linked · unverified")).toBeInTheDocument();
+  expect(within(register).getByText("14 Bridgewood Road").closest('[role="row"]')).not.toHaveAttribute("type", "button");
+});
+
 test("saved portfolio image appears in the banner", async () => {
   const session = { user: { id: "logo-test-user", email: "wbpai25@gmail.com" } };
   supabase.auth.getSession.mockResolvedValue({ data: { session } });

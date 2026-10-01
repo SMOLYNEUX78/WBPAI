@@ -659,6 +659,7 @@ const ProfessionalWorkspace = () => {
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileImageError, setProfileImageError] = useState("");
   const [designProjects, setDesignProjects] = useState([]);
+  const [linkedDesignProjects, setLinkedDesignProjects] = useState([]);
   const [buildInvitations, setBuildInvitations] = useState([]);
   const [isTestAccount, setIsTestAccount] = useState(false);
   const [organisationAccess, setOrganisationAccess] = useState(null);
@@ -727,6 +728,11 @@ const ProfessionalWorkspace = () => {
       .order("updated_at", { ascending: false }).then(({ data }) => {
         if (active) setDesignProjects(data || []);
       });
+    supabase.rpc("wbp_design_linked_projects").then(({ data, error }) => {
+      if (!active) return;
+      if (!error) setLinkedDesignProjects(data || []);
+      else setProfileStatus((current) => current || "Linked homes are unavailable. Apply Design Linked Projects.sql in Supabase.");
+    });
     return () => { active = false; };
   }, [isBuilder]);
   useEffect(() => {
@@ -787,7 +793,10 @@ const ProfessionalWorkspace = () => {
   ].filter(([, value]) => value);
   const projects = isBuilder
     ? buildInvitations.map((item) => ({ id: item.id.slice(0, 8), name: item.project_title, stage: `Revision ${item.revision}`, status: item.status, route: `/workspace/builder/handover/${item.id}` }))
-    : designProjects.map((item) => ({ id: item.id, name: item.title, stage: item.design_stage, status: "Design record", route: `/workspace/architect/project/${item.id}` }));
+    : [
+      ...designProjects.map((item) => ({ id: item.id, name: item.title, stage: item.design_stage, status: "Design record", route: `/workspace/architect/project/${item.id}` })),
+      ...linkedDesignProjects.map((item) => ({ id: item.record_reference, key: `linked-${item.building_record_id}`, name: item.site_address || item.record_reference, stage: "Historic Design", status: "Owner linked · unverified" })),
+    ];
 
   const logOut = async () => {
     await supabase.auth.signOut();
@@ -878,11 +887,13 @@ const ProfessionalWorkspace = () => {
           <div className="wbp-project-row is-heading" role="row">
             <span>WBP ID</span><span>Project</span><span>Stage</span><span>Status</span><span aria-hidden="true" />
           </div>
-          {projects.map((project) => (
-            <button className="wbp-project-row" type="button" role="row" key={project.id} onClick={() => navigate(project.route || "/dashboard/new")}>
+          {projects.map((project) => project.route ? (
+            <button className="wbp-project-row" type="button" role="row" key={project.key || project.id} onClick={() => navigate(project.route)}>
               <span>{project.id}</span><strong>{project.name}</strong><span>{project.stage}</span><span>{project.status}</span><span aria-hidden="true">&#8594;</span>
             </button>
-          ))}
+          ) : <div className="wbp-project-row" role="row" key={project.key || project.id}>
+            <span>{project.id}</span><strong>{project.name}</strong><span>{project.stage}</span><span>{project.status}</span><span aria-hidden="true" />
+          </div>)}
         </div>
       </section>
     </main>
