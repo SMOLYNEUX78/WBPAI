@@ -519,9 +519,8 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
 
   const documentList = documents.length ? <div className="min-w-0">
     <h4 className="font-semibold text-emerald-950">Historical documents</h4>
-    <ul className="mt-1 divide-y divide-emerald-200">{documents.map((item) => <li key={item.id} className="flex min-w-0 items-center justify-between gap-3 py-1.5">
-      <span className="min-w-0 break-all text-gray-800">{item.original_file_name} <span className="text-gray-500">(unverified)</span></span>
-      <button type="button" onClick={() => openHistoricalDocument(item)} className="shrink-0 font-semibold text-emerald-800 underline">Open</button>
+    <ul className="mt-1 divide-y divide-emerald-200">{documents.map((item) => <li key={item.id} className="min-w-0 py-1.5">
+      <a href="#historical-documents" onClick={(event) => { event.preventDefault(); openHistoricalDocument(item); }} className="break-all font-semibold text-emerald-800 underline underline-offset-2">{item.original_file_name}</a> <span className="text-gray-500">(unverified)</span>
     </li>)}</ul>
   </div> : null;
 

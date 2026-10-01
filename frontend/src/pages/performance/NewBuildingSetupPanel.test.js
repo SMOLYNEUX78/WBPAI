@@ -84,7 +84,7 @@ test("saved design documents open through a short-lived private link", async () 
   try {
     render(<OccupyHistoryTabs record={{ databaseId: "home-1" }} property={null} activeStage="design" contentOnly
       setup={{ historicalStages: { design: { architectPractice: "A. W. J. Mullins" } } }} />);
-    fireEvent.click(await screen.findByRole("button", { name: "Open" }));
+    fireEvent.click(await screen.findByRole("link", { name: "planning.pdf" }));
     await waitFor(() => expect(viewer.location.replace).toHaveBeenCalledWith("https://private.example/planning"));
     expect(createSignedUrl).toHaveBeenCalledWith(evidence.storage_reference, 60);
   } finally { from.mockRestore(); storage.mockRestore(); open.mockRestore(); }
