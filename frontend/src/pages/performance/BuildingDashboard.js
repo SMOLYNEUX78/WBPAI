@@ -180,6 +180,7 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
   const [practiceMatches, setPracticeMatches] = useState([]);
   const [builderNameStatus, setBuilderNameStatus] = useState("idle");
   const [builderMatches, setBuilderMatches] = useState([]);
+  const [linkedBuilderAddress, setLinkedBuilderAddress] = useState("");
   const [searchStatus, setSearchStatus] = useState("");
   const [uploadStatus, setUploadStatus] = useState("");
   const [busy, setBusy] = useState(false);
@@ -221,6 +222,20 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
   const designerOfficeAddress = String(shownHistory.design?.designerOfficeAddress || "").trim();
   const practiceName = String(shownHistory.design?.architectPractice || "").trim();
   const builderName = String(shownHistory.build?.mainContractor || "").trim();
+  const savedBuilderRef = savedHistory.build?.buildProfileRef;
+
+  useEffect(() => {
+    setLinkedBuilderAddress("");
+    if (!savedBuilderRef) return;
+    let active = true;
+    supabase.rpc("wbp_build_profile_preview", { p_profile_ref: savedBuilderRef }).then(({ data, error }) => {
+      if (active && !error) {
+        const builder = data?.[0];
+        setLinkedBuilderAddress([builder?.office_address, builder?.city, builder?.postcode].filter(Boolean).join(", "));
+      }
+    });
+    return () => { active = false; };
+  }, [savedBuilderRef]);
 
   useEffect(() => {
     if (!isBuild || !showEditor || !builderName) {
@@ -587,7 +602,11 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
               {[
                 [["mainContractor", "Main contractor / builder"], ["builderAddress", "Address"]],
                 [["buildingControlReference", "Building control / completion reference"], ["developer", "Developer / client"], ["constructionStart", "Construction start"], ["completionDate", "Completion year / date"], ["evidenceSourceUrl", "Building record URL"]],
-              ].map((column, index) => <dl key={index} className="min-w-0 border-r border-emerald-200 pr-2">{column.filter(([key]) => recordedStage[key]).map(([key, label]) => <div key={key} className="mb-2 min-w-0"><dt className="text-gray-600">{label}</dt><dd className="break-words font-semibold">{key === "mainContractor" && recordedStage.buildProfileRef ? <a href={`/workspace/build-profile/${encodeURIComponent(recordedStage.buildProfileRef)}`} className="text-emerald-900 underline underline-offset-2">{recordedStage[key]}</a> : recordedStage[key]}</dd></div>)}</dl>)}
+              ].map((column, index) => <dl key={index} className="min-w-0 border-r border-emerald-200 pr-2">{column.filter(([key]) => ["builderAddress", "buildingControlReference"].includes(key) || recordedStage[key]).map(([key, label]) => {
+                const suggestedAddress = key === "builderAddress" && !recordedStage.builderAddress && linkedBuilderAddress;
+                const value = recordedStage[key] || (suggestedAddress ? linkedBuilderAddress : "Not yet provided");
+                return <div key={key} className="mb-2 min-w-0"><dt className="text-gray-600">{label}</dt><dd className={`break-words font-semibold ${!recordedStage[key] ? "text-gray-500" : ""}`}>{key === "mainContractor" && recordedStage.buildProfileRef ? <a href={`/workspace/build-profile/${encodeURIComponent(recordedStage.buildProfileRef)}`} className="text-emerald-900 underline underline-offset-2">{value}</a> : value}</dd>{suggestedAddress ? <small className="text-gray-600">From selected Build profile · unverified</small> : null}</div>;
+              })}</dl>)}
               <div className="min-w-0">{documentList || <><h4 className="font-semibold text-emerald-950">Historical documents</h4><p className="mt-1 text-gray-600">None uploaded</p></>}</div>
             </div>}
             <div className="mt-2 flex flex-wrap items-end justify-between gap-2">

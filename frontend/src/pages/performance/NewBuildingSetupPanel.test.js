@@ -69,6 +69,19 @@ test("saved Build history groups builder address, control reference and document
   expect(screen.getByRole("textbox", { name: "Builder address" })).toHaveValue("1 High Street, Woodbridge");
 });
 
+test("saved Build history shows missing reference and selected builder's unverified office address", async () => {
+  const rpc = jest.spyOn(supabase, "rpc").mockResolvedValue({ data: [{ office_address: "1 High Street", city: "Woodbridge", postcode: "IP12 1AA" }], error: null });
+  try {
+    render(<MemoryRouter><OccupyHistoryTabs record={null} property={null} activeStage="build" contentOnly
+      setup={{ historicalStages: { build: { mainContractor: "Example Builders", buildProfileRef: "builder-1", savedAt: "2026-10-01" } } }} /></MemoryRouter>);
+    expect(await screen.findByText("1 High Street, Woodbridge, IP12 1AA")).toBeInTheDocument();
+    expect(screen.getByText("From selected Build profile · unverified")).toBeInTheDocument();
+    expect(screen.getByText("Building control / completion reference")).toBeInTheDocument();
+    expect(screen.getByText("Not yet provided")).toBeInTheDocument();
+    expect(rpc).toHaveBeenCalledWith("wbp_build_profile_preview", { p_profile_ref: "builder-1" });
+  } finally { rpc.mockRestore(); }
+});
+
 test("saved design history is presented as a record until explicitly edited", () => {
   render(<OccupyHistoryTabs record={null} property={null} activeStage="design" contentOnly
     setup={{ historicalStages: { design: { architectPractice: "A. W. J. Mullins", leadDesigner: "A. W. J. Mullins", designerOfficeAddress: "Woodbridge, Suffolk", planningReference: "E8026/3" } } }} />);
