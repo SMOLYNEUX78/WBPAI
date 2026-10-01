@@ -210,7 +210,7 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
     ["planningReference", "Planning application reference"], ["planningDecisionDate", "Planning decision date"],
     ["planningPortalUrl", "Planning portal record URL"], ["originalUse", "Original building use"],
   ] : [
-    ["mainContractor", "Main contractor / builder"], ["developer", "Developer / client"],
+    ["mainContractor", "Main contractor / builder"], ["builderAddress", "Builder address"], ["developer", "Developer / client"],
     ["constructionStart", "Construction start"], ["completionDate", "Completion year / date"],
     ["buildingControlReference", "Building control / completion reference"], ["evidenceSourceUrl", "Building record URL"],
   ];
@@ -583,7 +583,13 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
               <div className="min-w-0">{documentList || <><h4 className="font-semibold text-emerald-950">Historical documents</h4><p className="mt-1 text-gray-600">None uploaded</p></>}
                 {/^https?:\/\//i.test(recordedStage.planningPortalUrl || "") ? <a href={recordedStage.planningPortalUrl} target="_blank" rel="noopener noreferrer" className="mt-2 block font-semibold text-emerald-900 underline underline-offset-2">Planning portal record URL</a> : null}
               </div>
-            </div> : <dl className="mt-1 grid min-w-0 grid-cols-4 gap-2 text-[10px] leading-tight [overflow-wrap:anywhere] sm:gap-3 sm:text-xs">{fields.filter(([key]) => recordedStage[key]).map(([key, label]) => <div key={key} className="min-w-0 border-r border-emerald-200 pr-2 last:border-0"><dt className="text-gray-600">{label}</dt><dd className="break-words font-semibold">{key === "mainContractor" && recordedStage.buildProfileRef ? <a href={`/workspace/build-profile/${encodeURIComponent(recordedStage.buildProfileRef)}`} className="text-emerald-900 underline underline-offset-2">{recordedStage[key]}</a> : recordedStage[key]}</dd></div>)}</dl>}
+            </div> : <div className="mt-1 grid min-w-0 grid-cols-3 gap-2 text-[10px] leading-tight [overflow-wrap:anywhere] sm:gap-3 sm:text-xs">
+              {[
+                [["mainContractor", "Main contractor / builder"], ["builderAddress", "Address"]],
+                [["buildingControlReference", "Building control / completion reference"], ["developer", "Developer / client"], ["constructionStart", "Construction start"], ["completionDate", "Completion year / date"], ["evidenceSourceUrl", "Building record URL"]],
+              ].map((column, index) => <dl key={index} className="min-w-0 border-r border-emerald-200 pr-2">{column.filter(([key]) => recordedStage[key]).map(([key, label]) => <div key={key} className="mb-2 min-w-0"><dt className="text-gray-600">{label}</dt><dd className="break-words font-semibold">{key === "mainContractor" && recordedStage.buildProfileRef ? <a href={`/workspace/build-profile/${encodeURIComponent(recordedStage.buildProfileRef)}`} className="text-emerald-900 underline underline-offset-2">{recordedStage[key]}</a> : recordedStage[key]}</dd></div>)}</dl>)}
+              <div className="min-w-0">{documentList || <><h4 className="font-semibold text-emerald-950">Historical documents</h4><p className="mt-1 text-gray-600">None uploaded</p></>}</div>
+            </div>}
             <div className="mt-2 flex flex-wrap items-end justify-between gap-2">
               <p className="text-gray-600">{recordedStage.designProfileRef || recordedStage.buildProfileRef ? `Owner-selected ${isBuild ? "Build" : "Design"} account; project attribution remains unverified.` : "Owner-supplied historical record; organisation attribution is unverified."}</p>
               <button type="button" onClick={() => { if (showEditor) changeHistory((current) => ({ ...current, [contentStage]: recordedStage })); setEditingStage(showEditor ? null : contentStage); }} className="shrink-0 border border-emerald-700 px-3 py-1 font-semibold text-emerald-950">{showEditor ? "Cancel" : "Edit details"}</button>
@@ -692,9 +698,9 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
               onChange={(event) => { uploadDocument(event.target.files?.[0]); event.target.value = ""; }} className="mt-1 block w-full min-w-0 text-xs" />
             {!recordId ? <p className="mt-1 text-gray-700">Save this home before uploading.</p> : null}
             {uploadStatus ? <p role="status" className="mt-1 text-gray-700">{uploadStatus}</p> : null}
-            {(!hasRecordedStage || !isDesign) ? documentList : null}
+            {!hasRecordedStage ? documentList : null}
           </div> : null}
-          </> : (!hasRecordedStage || !isDesign) ? documentList : null}
+          </> : !hasRecordedStage ? documentList : null}
         </div>}
     </div>
     </div>

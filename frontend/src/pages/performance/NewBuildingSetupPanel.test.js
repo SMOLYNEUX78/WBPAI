@@ -57,6 +57,18 @@ test("Build history does not present East Suffolk contacts for another council",
   expect(screen.getByRole("link", { name: /Find your council and its Building Control/ })).toHaveAttribute("href", "https://www.gov.uk/find-local-council");
 });
 
+test("saved Build history groups builder address, control reference and documents", () => {
+  render(<MemoryRouter><OccupyHistoryTabs record={null} property={null} activeStage="build" contentOnly
+    setup={{ historicalStages: { build: { mainContractor: "Example Builders", builderAddress: "1 High Street, Woodbridge", buildingControlReference: "BC-123", savedAt: "2026-10-01" } } }} /></MemoryRouter>);
+  expect(screen.getByText("Example Builders")).toBeInTheDocument();
+  expect(screen.getByText("1 High Street, Woodbridge")).toBeInTheDocument();
+  expect(screen.getByText("BC-123")).toBeInTheDocument();
+  expect(screen.getByText("Historical documents")).toBeInTheDocument();
+  expect(screen.queryByRole("textbox", { name: "Builder address" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Edit details" }));
+  expect(screen.getByRole("textbox", { name: "Builder address" })).toHaveValue("1 High Street, Woodbridge");
+});
+
 test("saved design history is presented as a record until explicitly edited", () => {
   render(<OccupyHistoryTabs record={null} property={null} activeStage="design" contentOnly
     setup={{ historicalStages: { design: { architectPractice: "A. W. J. Mullins", leadDesigner: "A. W. J. Mullins", designerOfficeAddress: "Woodbridge, Suffolk", planningReference: "E8026/3" } } }} />);
