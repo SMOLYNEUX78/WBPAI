@@ -32,21 +32,17 @@ test("building history banner labels its audit stage Occupy", () => {
   expect(screen.queryByRole("tab", { name: "Audit" })).not.toBeInTheDocument();
 });
 
-test("Build history keeps its form visible after an accessible record is found", async () => {
-  const originalFrom = supabase.from.bind(supabase);
-  const from = jest.spyOn(supabase, "from").mockImplementation((table) => table === "WBPBuildingRecords"
-    ? { select: () => ({ filter: () => ({ limit: async () => ({ data: [{ id: "record-1", record_reference: "WBP-001", lifecycle_stage: "build", address: { address: "14 Bridgewood Road", postcode: "IP12 4HA" }, uprn: "100091142492" }], error: null }) }) }) }
-    : originalFrom(table));
-  try {
-    render(<MemoryRouter><OccupyHistoryTabs record={null}
-      property={{ address: "14 Bridgewood Road", postcode: "IP12 4HA", uprn: "100091142492" }}
-      activeStage="build" contentOnly /></MemoryRouter>);
-    expect(await screen.findByText("1 accessible build record(s) found.", {}, { timeout: 2000 })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Historical build details" })).toBeInTheDocument();
-    expect(screen.getByRole("textbox", { name: "Main contractor / builder" })).toBeInTheDocument();
-    expect(screen.getByRole("textbox", { name: "Building control / completion reference" })).toBeInTheDocument();
-    expect(screen.getByLabelText("Upload historical build documents")).toBeInTheDocument();
-  } finally { from.mockRestore(); }
+test("Build history shows its form and council route without claiming ecosystem records", () => {
+  render(<MemoryRouter><OccupyHistoryTabs record={null}
+    property={{ address: "14 Bridgewood Road", postcode: "IP12 4HA", uprn: "100091142492", localAuthority: "East Suffolk" }}
+    activeStage="build" contentOnly /></MemoryRouter>);
+  expect(screen.getByRole("heading", { name: "Historical build details" })).toBeInTheDocument();
+  expect(screen.getByRole("textbox", { name: "Main contractor / builder" })).toBeInTheDocument();
+  expect(screen.getByRole("textbox", { name: "Building control / completion reference" })).toBeInTheDocument();
+  expect(screen.getByLabelText("Upload historical build documents")).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Council building and land charges records" })).toBeInTheDocument();
+  expect(screen.queryByText(/accessible build record\(s\) found/)).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Use record details" })).not.toBeInTheDocument();
 });
 
 test("saved design history is presented as a record until explicitly edited", () => {

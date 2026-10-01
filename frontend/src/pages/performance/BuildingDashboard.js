@@ -198,7 +198,7 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
   const isAddressHistory = isDesign || isBuild;
   const resolvedCouncil = property?.localAuthority || designCouncil;
   const isEastSuffolk = /east suffolk/i.test(resolvedCouncil || "");
-  const councilRouteOpen = ecosystemStatus === "missing" || ecosystemStatus === "error" || useCouncilRoute;
+  const councilRouteOpen = isBuild || ecosystemStatus === "missing" || ecosystemStatus === "error" || useCouncilRoute;
   const showHistoryInputs = isBuild || councilRouteOpen || selectedEcosystemRecord || Boolean(savedHistory[contentStage]?.savedAt);
   const designAddress = property?.address || addressDraft?.address || "";
   const designPostcode = property?.postcode || addressDraft?.postcode || "";
@@ -319,7 +319,11 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
   }, [recordId, onDraftHistoryChange, changeHistory]);
 
   useEffect(() => {
-    if (!isAddressHistory) return;
+    if (!isDesign) {
+      setEcosystemStatus("idle");
+      setEcosystemMatches([]);
+      return;
+    }
     const address = designAddress.trim();
     const cleanPostcode = designPostcode.replace(/\s+/g, "").toUpperCase();
     setUseCouncilRoute(false);
@@ -331,8 +335,8 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
     const timer = setTimeout(async () => {
       const addressPattern = `%${address.replace(/\s+/g, "%")}%`;
       const [projects, records] = await Promise.all([
-        isDesign ? supabase.from("WBPDesignProjects").select("id,title,site_address,planning_reference,design_team")
-          .ilike("site_address", addressPattern).limit(10) : Promise.resolve({ data: [] }),
+        supabase.from("WBPDesignProjects").select("id,title,site_address,planning_reference,design_team")
+          .ilike("site_address", addressPattern).limit(10),
         supabase.from("WBPBuildingRecords").select("id,record_reference,lifecycle_stage,address,uprn")
           .filter("address->>postcode", "ilike", `${cleanPostcode.slice(0, -3)}%${cleanPostcode.slice(-3)}`).limit(30),
       ]);
@@ -343,17 +347,17 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
         detail: "Design project in your account",
       }));
       const recordMatches = (records.data || []).filter((item) =>
-        (isDesign ? ["design", "procurement", "build", "commission"] : ["build", "commission", "occupy"]).includes(item.lifecycle_stage) &&
+        ["design", "procurement", "build", "commission"].includes(item.lifecycle_stage) &&
         (item.address?.postcode || "").replace(/\s+/g, "").toUpperCase() === cleanPostcode &&
         (designUprn && item.uprn ? item.uprn === designUprn : (item.address?.address || "").trim().toLowerCase() === address.toLowerCase())
       ).map((item) => ({ id: item.id, label: item.record_reference,
-        reference: item.record_reference, detail: `${isBuild ? "Build-stage" : "WBP"} building record in your account` }));
+        reference: item.record_reference, detail: "WBP building record in your account" }));
       const matches = [...projectMatches, ...recordMatches];
       setEcosystemMatches(matches);
       setEcosystemStatus(matches.length ? "found" : projects.error || records.error ? "error" : "missing");
     }, 650);
     return () => { active = false; clearTimeout(timer); };
-  }, [isAddressHistory, isDesign, isBuild, designAddress, designPostcode, designUprn]);
+  }, [isDesign, designAddress, designPostcode, designUprn]);
 
   useEffect(() => {
     if (!isDesign) return;
@@ -587,7 +591,7 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
           </div> : null}
           {saveStatus && !showEditor ? <p role="status" className="text-gray-700">{saveStatus}</p> : null}
           {showEditor ? <>
-          {isAddressHistory ? <div className="min-w-0">
+          {isDesign ? <div className="min-w-0">
             <h3 className="font-bold text-gray-900">Find an existing {contentStage} record</h3>
             <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,2fr)_minmax(130px,1fr)]">
               <label className="font-semibold text-gray-800">Address<input value={designAddress} readOnly={Boolean(property?.address)} onChange={(event) => onAddressDraftChange?.("address", event.target.value)} placeholder="House number and street" className="mt-1 block w-full border border-gray-300 bg-white px-2 py-1.5 font-normal" /></label>
@@ -601,7 +605,7 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
             </div>)}</div> : null}
             {ecosystemStatus === "found" && !useCouncilRoute ? <button type="button" onClick={() => setUseCouncilRoute(true)} className="mt-2 font-semibold text-emerald-800 underline">Use council records instead</button> : null}
             {councilRouteOpen && resolvedCouncil ? <p className="mt-2 text-gray-700">Local authority: <strong>{resolvedCouncil}</strong></p> : null}
-          </div> : <form onSubmit={searchRecord} className="min-w-0">
+          </div> : isBuild ? null : <form onSubmit={searchRecord} className="min-w-0">
             <label className="block font-semibold text-emerald-950" htmlFor={`wbp-${stage}-lookup`}>Find an existing {stage} record</label>
             <div className="mt-1 flex gap-3"><label><input type="radio" name="history-lookup" checked={lookupMode === "wbp"} onChange={() => setLookupMode("wbp")} /> WBP number</label><label><input type="radio" name="history-lookup" checked={lookupMode === "address"} onChange={() => setLookupMode("address")} /> Address</label></div>
             <div className="mt-1 flex min-w-0 gap-1">{lookupMode === "wbp"
