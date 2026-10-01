@@ -28,14 +28,17 @@ test("building history banner labels its audit stage Occupy", () => {
 
 test("saved design history is presented as a record until explicitly edited", () => {
   render(<OccupyHistoryTabs record={null} property={null} activeStage="design" contentOnly
-    setup={{ historicalStages: { design: { architectPractice: "A. W. J. Mullins", designerOfficeAddress: "Woodbridge, Suffolk", planningReference: "E8026/3" } } }} />);
-  expect(screen.getByText("A. W. J. Mullins")).toBeInTheDocument();
+    setup={{ historicalStages: { design: { architectPractice: "A. W. J. Mullins", leadDesigner: "A. W. J. Mullins", designerOfficeAddress: "Woodbridge, Suffolk", planningReference: "E8026/3" } } }} />);
+  expect(screen.getAllByText("A. W. J. Mullins")).toHaveLength(2);
   expect(screen.getByText("Woodbridge, Suffolk")).toBeInTheDocument();
+  expect(screen.getByText("Lead designer")).toBeInTheDocument();
   expect(screen.queryByRole("textbox", { name: "Architect / practice" })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Edit details" }));
   expect(screen.getByRole("textbox", { name: "Architect / practice" })).toHaveValue("A. W. J. Mullins");
   expect(within(screen.getByRole("button", { name: "Save design" }).closest("form"))
     .getByRole("textbox", { name: "Address" })).toHaveValue("Woodbridge, Suffolk");
+  expect(within(screen.getByRole("button", { name: "Save design" }).closest("form"))
+    .getByRole("textbox", { name: "Lead designer" })).toHaveValue("A. W. J. Mullins");
 });
 
 test("designer office address warns when an existing Design profile may match", async () => {

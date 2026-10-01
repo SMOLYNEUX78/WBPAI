@@ -204,9 +204,9 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
   const shownHistory = draftHistory || history;
   const changeHistory = onDraftHistoryChange || setHistory;
   const fields = contentStage === "design" ? [
-    ["architectPractice", "Architect / practice"], ["designerOfficeAddress", "Address"],
+    ["architectPractice", "Architect / practice"], ["leadDesigner", "Lead designer"], ["designerOfficeAddress", "Address"],
     ["planningReference", "Planning application reference"], ["planningDecisionDate", "Planning decision date"],
-    ["originalUse", "Original building use"], ["planningPortalUrl", "Planning portal record URL"],
+    ["planningPortalUrl", "Planning portal record URL"], ["originalUse", "Original building use"],
   ] : [
     ["mainContractor", "Main contractor / builder"], ["developer", "Developer / client"],
     ["constructionStart", "Construction start"], ["completionDate", "Completion year / date"],
@@ -538,9 +538,9 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
           {hasRecordedStage ? <div className="min-w-0 border-t border-emerald-200 pt-2 text-gray-800">
             {isDesign ? <div className="mt-1 grid min-w-0 grid-cols-4 gap-2 text-[10px] leading-tight [overflow-wrap:anywhere] sm:gap-3 sm:text-xs">
               {[
-                [["architectPractice", "Architect / practice"], ["designerOfficeAddress", "Address"]],
+                [["architectPractice", "Architect / practice"], ["leadDesigner", "Lead designer"], ["designerOfficeAddress", "Address"]],
                 [["planningReference", "Planning application reference"], ["planningDecisionDate", "Planning decision date"]],
-                [["originalUse", "Original building use"], ["internalArea", "Internal floor area"]],
+                [["originalUse", "Original building use"], ["internalArea", "Internal floor area"], ["areaSource", "Area source"]],
               ].map((column, index) => <dl key={index} className="min-w-0 border-r border-emerald-200 pr-2">
                 {column.filter(([key]) => recordedStage[key]).map(([key, label]) => <div key={key} className="mb-2 min-w-0"><dt className="text-gray-600">{label}</dt><dd className="break-words font-semibold">{key === "architectPractice" && recordedStage.designProfileRef
                   ? <a href={`/workspace/design-profile/${encodeURIComponent(recordedStage.designProfileRef)}`} className="text-emerald-900 underline underline-offset-2">{recordedStage[key]}</a>
@@ -601,21 +601,21 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
               </div>)}</div> : null}
           </div> : null}
           {(showHistoryInputs || editingStage === contentStage) ? <form onSubmit={saveHistory} className="grid gap-2 border-t border-emerald-200 pt-2 sm:grid-cols-3">
-            {fields.map(([key, label]) => <label key={key} className="min-w-0 font-semibold text-emerald-950">{label}<input aria-label={label} value={shownHistory[stage]?.[key] || ""} onChange={(event) => changeHistory((current) => ({ ...current, [stage]: { ...current[stage], [key]: event.target.value, ...(key === "architectPractice" || key === "designerOfficeAddress" ? { designProfileRef: null, designProfileConfirmedByOwnerAt: null } : {}) } }))} className="mt-1 block w-full min-w-0 border border-emerald-300 bg-white px-2 py-1.5 font-normal text-gray-900" />
+            {fields.map(([key, label]) => <React.Fragment key={key}><label className="min-w-0 font-semibold text-emerald-950">{label}<input aria-label={label} value={shownHistory[stage]?.[key] || ""} onChange={(event) => changeHistory((current) => ({ ...current, [stage]: { ...current[stage], [key]: event.target.value, ...(key === "architectPractice" || key === "designerOfficeAddress" ? { designProfileRef: null, designProfileConfirmedByOwnerAt: null } : {}) } }))} className="mt-1 block w-full min-w-0 border border-emerald-300 bg-white px-2 py-1.5 font-normal text-gray-900" />
               {key === "architectPractice" && practiceName ? <span role="status" className={`mt-1 block text-xs font-normal ${practiceNameStatus === "matched" ? "text-amber-800" : "text-gray-600"}`}>
                 {{ incomplete: "Enter a distinctive part of the practice name to check for a match.", checking: "Checking existing Design accounts...", matched: "Possible Design account matches found. Review the profile before selecting one.", clear: "No matching Design account name found.", unavailable: "Profile lookup unavailable. Apply Design Profile Preview.sql in Supabase." }[practiceNameStatus] || ""}
               </span> : null}
               {key === "designerOfficeAddress" && designerOfficeAddress ? <span role="status" className={`mt-1 block text-xs font-normal ${officeAddressStatus === "matched" ? "text-amber-800" : "text-gray-600"}`}>
                 {{ incomplete: "Include the full office address and postcode to check for a match.", checking: "Checking existing Design profiles...", matched: "Possible match: a Design profile already uses this office address. Confirm the practice before linking records.", clear: "No matching Design office address found.", unavailable: "Address check unavailable. The Design Profile Address Check SQL may need to be applied." }[officeAddressStatus] || ""}
               </span> : null}
-            </label>)}
-            {isDesign && practiceMatches.length ? <div className="sm:col-span-3" aria-label="Matching Design profiles">
+            </label>
+            {isDesign && key === "designerOfficeAddress" && practiceMatches.length ? <div className="sm:col-span-3" aria-label="Matching Design profiles">
               {practiceMatches.map((match) => <div key={match.profile_ref} className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-200 bg-white px-3 py-2 text-xs">
                 <span><strong>{match.organisation_name}</strong> · {[match.city, match.postcode, match.registration_number && `Registration ${match.registration_number}`].filter(Boolean).join(" · ")}</span>
                 <span className="flex gap-3"><a href={`/workspace/design-profile/${encodeURIComponent(match.profile_ref)}`} target="_blank" rel="noopener noreferrer" className="font-semibold text-emerald-800 underline">View profile</a><button type="button" onClick={() => changeHistory((current) => ({ ...current, design: { ...current.design, architectPractice: match.organisation_name, designProfileRef: match.profile_ref, designProfileConfirmedByOwnerAt: new Date().toISOString() } }))} className="font-semibold text-emerald-800 underline">Use this practice</button></span>
               </div>)}
               {shownHistory.design?.designProfileRef ? <p className="mt-1 text-emerald-900">Practice selected. Save Design to record your choice; this does not verify its involvement or grant access.</p> : null}
-            </div> : null}
+            </div> : null}</React.Fragment>)}
             {isDesign ? <>
               <label className="min-w-0 font-semibold text-emerald-950">Internal floor area (m2)
                 <input type="number" min="1" step="0.1" value={designArea} onChange={(event) => {
