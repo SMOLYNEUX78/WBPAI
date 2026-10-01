@@ -13,10 +13,14 @@ const DESIGN_TABS = [
   { label: "Portfolio", path: "/dashboard/portfolio?role=architect" },
   { label: "Exchange", path: "/dashboard/exchange?role=architect" },
 ];
+const BUILD_TABS = [
+  { label: "New", path: "/workspace/builder/new" },
+  { label: "Profile", path: "/workspace/builder" },
+];
 
 export default function PrototypeTabs({ activePath, onDashboardTab, scope = "occupy" }) {
   const navigate = useNavigate();
-  const tabs = scope === "design" ? DESIGN_TABS : OCCUPY_TABS;
+  const tabs = scope === "design" ? DESIGN_TABS : scope === "build" ? BUILD_TABS : OCCUPY_TABS;
   return (
     <nav aria-label="Prototype pages" className="flex min-w-0 flex-1 gap-2 overflow-x-auto pb-1">
       {tabs.map(({ label, path }) => (

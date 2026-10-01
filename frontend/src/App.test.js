@@ -39,8 +39,7 @@ test.each(["architect", "builder"])("%s portfolio shows saved organisation detai
 
   render(<App />);
   expect(await screen.findByRole("heading", { name: "Original organisation" })).toBeInTheDocument();
-  if (role === "builder") expect(screen.getByText("WBP Prototype").closest(".wbp-professional-sticky")).toContainElement(screen.getByText("Delivery, quality and commissioning"));
-  else expect(screen.getByRole("navigation", { name: "Prototype pages" })).toBeInTheDocument();
+  expect(screen.getByRole("navigation", { name: "Prototype pages" })).toBeInTheDocument();
   expect(screen.getByText(role === "architect" ? "Design intent and specification" : "Delivery, quality and commissioning").closest(".wbp-professional-stage-banner")).toHaveClass(role === "architect" ? "is-design" : "is-build");
   expect(screen.queryByText(role === "architect" ? "Design portfolio" : "Build portfolio")).not.toBeInTheDocument();
   if (role === "builder") expect(screen.queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
@@ -59,6 +58,26 @@ test.each(["architect", "builder"])("%s portfolio shows saved organisation detai
     expect(groups[1].textContent).toContain("Email");
     expect(groups[2].textContent).toContain("Registration");
   }
+});
+
+test("Build New tab opens and saves a build-specific record", async () => {
+  const session = { user: { id: "builder-user", email: "wbpai25@gmail.com" } };
+  supabase.auth.getSession.mockResolvedValue({ data: { session } });
+  supabase.auth.getUser.mockResolvedValue({ data: { user: session.user } });
+  supabase.auth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: jest.fn() } } });
+  const insert = jest.fn().mockResolvedValue({ error: null });
+  supabase.from.mockImplementation((table) => table === "WBPBuildProjects"
+    ? { select: () => ({ order: async () => ({ data: [], error: null }) }), insert }
+    : { select: () => ({ order: async () => ({ data: [], error: null }), eq: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }) }) });
+  window.history.pushState({}, "", "/workspace/builder");
+  render(<App />);
+  fireEvent.click(await screen.findByRole("button", { name: "New" }));
+  expect(await screen.findByRole("heading", { name: "New build record" })).toBeInTheDocument();
+  expect(window.location.pathname).toBe("/workspace/builder/new");
+  fireEvent.change(screen.getByRole("textbox", { name: "Project name" }), { target: { value: "Bridgewood retrofit" } });
+  fireEvent.change(screen.getByRole("textbox", { name: "Site address" }), { target: { value: "14 Bridgewood Road" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save build record" }));
+  await waitFor(() => expect(insert).toHaveBeenCalledWith(expect.objectContaining({ created_by: "builder-user", title: "Bridgewood retrofit", site_address: "14 Bridgewood Road" })));
 });
 
 test("Design banner edits are saved to the account profile", async () => {

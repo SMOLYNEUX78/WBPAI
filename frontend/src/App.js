@@ -11,6 +11,7 @@ import BuildingDashboard from "./pages/performance/BuildingDashboard";
 import PrototypeTabs from "./PrototypeTabs";
 import DesignProject from "./DesignProject";
 import BuildHandover from "./BuildHandover";
+import BuildProject from "./BuildProject";
 import supabase from "./supabaseClient";
 import { isProfessionalEmailAllowed, TEST_PROFESSIONAL_EMAIL } from "./professionalEmail";
 import { hasFullWorkspaceAccess, loadLinkedHistoricOutline } from "./workspaceAccess";
@@ -664,6 +665,7 @@ const ProfessionalWorkspace = () => {
   const [designProjects, setDesignProjects] = useState([]);
   const [linkedDesignProjects, setLinkedDesignProjects] = useState([]);
   const [buildInvitations, setBuildInvitations] = useState([]);
+  const [buildProjects, setBuildProjects] = useState([]);
   const [isTestAccount, setIsTestAccount] = useState(false);
   const [organisationAccess, setOrganisationAccess] = useState(null);
   const [pendingRequests, setPendingRequests] = useState([]);
@@ -741,6 +743,10 @@ const ProfessionalWorkspace = () => {
   useEffect(() => {
     if (!isBuilder) return;
     let active = true;
+    supabase.from("WBPBuildProjects").select("id,title,site_address,wbp_reference,updated_at")
+      .order("updated_at", { ascending: false }).then(({ data }) => {
+        if (active) setBuildProjects(data || []);
+      });
     supabase.rpc("wbp_list_design_handover_invitations").then(({ data, error }) => {
       if (active) setBuildInvitations(data || []);
       if (active && error) setProfileStatus("Build handovers are not enabled yet. Run Design Build Handover.sql in Supabase.");
@@ -800,7 +806,8 @@ const ProfessionalWorkspace = () => {
     [["Registration", profile.registrationNumber], ["Professional body", profile.professionalRegistration], ["VAT", profile.vatNumber], ["Stages", Array.isArray(profile.requestedStages) ? profile.requestedStages.map((stage) => ({ architect: "Design", builder: "Build", homeowner: "Occupy" })[stage] || stage).join(" · ") : ""]],
   ];
   const projects = isBuilder
-    ? buildInvitations.map((item) => ({ id: item.id.slice(0, 8), name: item.project_title, stage: `Revision ${item.revision}`, status: item.status, route: `/workspace/builder/handover/${item.id}` }))
+    ? [...buildProjects.map((item) => ({ id: item.wbp_reference || item.id.slice(0, 8), key: item.id, name: item.title, stage: "Build record", status: "Draft", route: `/workspace/builder/project/${item.id}` })),
+      ...buildInvitations.map((item) => ({ id: item.id.slice(0, 8), name: item.project_title, stage: `Revision ${item.revision}`, status: item.status, route: `/workspace/builder/handover/${item.id}` }))]
     : [
       ...designProjects.map((item) => ({ id: item.id, name: item.title, stage: item.design_stage, status: "Design record", route: `/workspace/architect/project/${item.id}` })),
       ...linkedDesignProjects.map((item) => ({ id: item.record_reference, key: `linked-${item.building_record_id}`, name: item.site_address || item.record_reference, stage: "Historic Design", status: "Owner linked · unverified", route: `/workspace/occupy-profile/${encodeURIComponent(item.building_record_id)}` })),
@@ -817,7 +824,7 @@ const ProfessionalWorkspace = () => {
     <main className={`wbp-professional-shell is-${isBuilder ? "build" : "design"}`}>
       <div className="wbp-professional-sticky">
       <header className="wbp-professional-nav">
-        {isBuilder ? <strong>WBP Prototype</strong> : <PrototypeTabs scope="design" activePath={location.pathname} />}
+        <PrototypeTabs scope={isBuilder ? "build" : "design"} activePath={location.pathname} />
         <div className="wbp-professional-nav-actions">
           <button type="button" onClick={() => navigate("/login")}>Switch workspace</button>
         </div>
@@ -882,7 +889,7 @@ const ProfessionalWorkspace = () => {
       </section> : null}
 
       <section className="wbp-workspace-actions">
-        <button type="button" className="is-primary" onClick={() => navigate(isBuilder ? "/dashboard/new?role=builder&phase=build" : "/workspace/architect/project/new")}>
+        <button type="button" className="is-primary" onClick={() => navigate(isBuilder ? "/workspace/builder/new" : "/workspace/architect/project/new")}>
           + New project
         </button>
         {!isBuilder ? <button type="button" onClick={() => navigate("/workspace/architect/project/new")}>Prepare build handover</button> : null}
@@ -1156,6 +1163,8 @@ const App = () => (
       <Route path="/workspace/design-profile/:profileId" element={<AuthenticatedRoute><DesignAccountPreview /></AuthenticatedRoute>} />
       <Route path="/workspace/:role" element={<AuthenticatedRoute requireProfessionalEmail><ProfessionalWorkspace /></AuthenticatedRoute>} />
       <Route path="/workspace/architect/project/:projectId" element={<AuthenticatedRoute requireProfessionalEmail><DesignProject /></AuthenticatedRoute>} />
+      <Route path="/workspace/builder/new" element={<AuthenticatedRoute requireProfessionalEmail><BuildProject /></AuthenticatedRoute>} />
+      <Route path="/workspace/builder/project/:projectId" element={<AuthenticatedRoute requireProfessionalEmail><BuildProject /></AuthenticatedRoute>} />
       <Route path="/workspace/builder/handover/:handoverId" element={<AuthenticatedRoute requireProfessionalEmail><BuildHandover /></AuthenticatedRoute>} />
       <Route path="/dashboard/*" element={<AuthenticatedRoute><BuildingDashboard /></AuthenticatedRoute>} />
     </Routes>
