@@ -5,6 +5,14 @@ import supabase from "../../supabaseClient";
 
 beforeEach(() => window.localStorage.clear());
 
+test("new property setup reuses the address entered during sign-up", () => {
+  window.sessionStorage.setItem("wbp-occupy-property-draft:v1", JSON.stringify({ address: "14 Bridgewood Road", postcode: "IP12 4HA" }));
+  render(<MemoryRouter><NewBuildingSetupPanel freshStart isActive /></MemoryRouter>);
+  expect(screen.getByRole("textbox", { name: "Property address" })).toHaveValue("14 Bridgewood Road");
+  expect(screen.getByRole("textbox", { name: "Postcode" })).toHaveValue("IP12 4HA");
+  expect(window.sessionStorage.getItem("wbp-occupy-property-draft:v1")).toBeNull();
+});
+
 test("single-home exchange cache uses the CC summary and leaves missing values pending", () => {
   expect(readCachedBridgewoodValue()).toEqual({ credits: null, savedKwh: null, energyValue: null, savedKgCo2e: null });
   window.localStorage.setItem("home:carbonIntervalSavingsSummary:v4", JSON.stringify({

@@ -16,6 +16,7 @@ import { isProfessionalEmailAllowed, TEST_PROFESSIONAL_EMAIL } from "./professio
 import { hasFullWorkspaceAccess, loadLinkedHistoricOutline } from "./workspaceAccess";
 
 const AUTH_INTENT_KEY = "wbp-auth-intent:v1";
+const OCCUPY_PROPERTY_DRAFT_KEY = "wbp-occupy-property-draft:v1";
 const PROFILE_IMAGE_LIMIT_BYTES = 750 * 1024;
 
 const readProfileImage = (file) => new Promise((resolve, reject) => {
@@ -126,8 +127,10 @@ const RoleGateway = () => {
   const location = useLocation();
   const designSignup = new URLSearchParams(location.search).get("role") === "architect"
     && new URLSearchParams(location.search).get("mode") === "signup";
-  const [selectedRole, setSelectedRole] = useState(designSignup ? "architect" : "");
-  const [authMode, setAuthMode] = useState(designSignup ? "signup" : "signin");
+  const occupySignup = new URLSearchParams(location.search).get("role") === "homeowner"
+    && new URLSearchParams(location.search).get("mode") === "signup";
+  const [selectedRole, setSelectedRole] = useState(designSignup ? "architect" : occupySignup ? "homeowner" : "");
+  const [authMode, setAuthMode] = useState(designSignup || occupySignup ? "signup" : "signin");
   const [occupyMode, setOccupyMode] = useState("new");
   const [email, setEmail] = useState("");
   const [authStatus, setAuthStatus] = useState("idle");
@@ -204,6 +207,9 @@ const RoleGateway = () => {
       return;
     }
 
+    if (intent.propertyDraft?.address && intent.propertyDraft?.postcode) {
+      window.sessionStorage.setItem(OCCUPY_PROPERTY_DRAFT_KEY, JSON.stringify(intent.propertyDraft));
+    }
     navigate(`/dashboard/new?role=homeowner&phase=occupy&record=${intent.occupyMode || "new"}`);
   }, [navigate]);
 
@@ -286,6 +292,9 @@ const RoleGateway = () => {
       occupyMode,
       email: email.trim(),
       profile,
+      propertyDraft: selectedRole === "homeowner" && authMode === "signup" && occupyMode === "new"
+        ? { address: String(formData.get("propertyAddress") || "").trim(), postcode: String(formData.get("propertyPostcode") || "").trim() }
+        : null,
       authMode,
       createdAt: new Date().toISOString(),
     };
@@ -383,6 +392,7 @@ const RoleGateway = () => {
                 });
               } else {
                 setSelectedRole(role.id);
+                setAuthMode(role.id === "homeowner" ? "signup" : "signin");
               }
             }}
           >
@@ -417,9 +427,9 @@ const RoleGateway = () => {
             <div className="wbp-auth-heading">
               <p>{activeRole.label} workspace</p>
               <h2 id="wbp-auth-title">
-                {authMode === "signin" ? "Welcome back" : "Create your account"}
+                {authMode === "signin" ? "Welcome back" : selectedRole === "homeowner" ? "New property profile" : "Create your account"}
               </h2>
-              <span>{activeRole.detail}</span>
+              <span>{authMode === "signup" && selectedRole === "homeowner" ? "Let’s set up your property" : activeRole.detail}</span>
             </div>
 
             <div className="wbp-auth-tabs" role="tablist" aria-label="Account access">
@@ -445,6 +455,13 @@ const RoleGateway = () => {
                   <input name="fullName" type="text" placeholder="Your name" required />
                 </label>
               ) : null}
+
+              {authMode === "signup" && selectedRole === "homeowner" && occupyMode === "new" ? <fieldset className="wbp-organisation-fields">
+                <legend>Find your property</legend>
+                <label className="wbp-access-field wbp-field-wide"><span>Property address</span><input name="propertyAddress" type="text" placeholder="House number, street and town" required /></label>
+                <label className="wbp-access-field"><span>Postcode</span><input name="propertyPostcode" type="text" autoComplete="postal-code" placeholder="IP12 4HA" required /></label>
+                <p className="text-xs text-gray-600">We’ll match this against the address register after you sign in.</p>
+              </fieldset> : null}
 
               {authMode === "signup" && selectedRole !== "homeowner" ? (
                 <fieldset className="wbp-organisation-fields">

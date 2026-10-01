@@ -18,6 +18,7 @@ jest.mock("./supabaseClient", () => ({
 jest.mock("./pages/performance/BuildingDashboard", () => () => "Dashboard test view");
 
 beforeEach(() => {
+  window.localStorage.removeItem("wbp-auth-intent:v1");
   supabase.from.mockImplementation(() => ({
     select: () => ({
       order: () => Promise.resolve({ data: [], error: null }),
@@ -156,6 +157,39 @@ test("owner-linked home appears in the Design project register without private a
   expect(within(register).getByText("Owner linked · unverified")).toBeInTheDocument();
   fireEvent.click(within(register).getByText("14 Bridgewood Road"));
   expect(window.location.pathname).toBe("/workspace/occupy-profile/home-1");
+});
+
+test("Occupy sign-up collects the property draft before secure login", async () => {
+  supabase.auth.getSession.mockResolvedValue({ data: { session: null } });
+  supabase.auth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: jest.fn() } } });
+  supabase.auth.signInWithOtp.mockResolvedValue({ error: null });
+  window.history.pushState({}, "", "/login?role=homeowner&mode=signup");
+
+  render(<App />);
+  const dialog = await screen.findByRole("dialog", { name: "New property profile" });
+  fireEvent.change(within(dialog).getByRole("textbox", { name: "Full name" }), { target: { value: "Alex Owner" } });
+  fireEvent.change(within(dialog).getByRole("textbox", { name: "Property address" }), { target: { value: "14 Bridgewood Road" } });
+  fireEvent.change(within(dialog).getByRole("textbox", { name: "Postcode" }), { target: { value: "IP12 4HA" } });
+  fireEvent.change(within(dialog).getByRole("textbox", { name: "Email address" }), { target: { value: "alex@example.com" } });
+  fireEvent.click(within(dialog).getByRole("button", { name: /Create account/ }));
+  await waitFor(() => expect(supabase.auth.signInWithOtp).toHaveBeenCalled());
+  expect(JSON.parse(window.localStorage.getItem("wbp-auth-intent:v1"))).toEqual(expect.objectContaining({
+    propertyDraft: { address: "14 Bridgewood Road", postcode: "IP12 4HA" },
+    profile: expect.objectContaining({ contactName: "Alex Owner" }),
+  }));
+});
+
+test("Occupy entry opens the new property form ahead of sign-in", async () => {
+  supabase.auth.getSession.mockResolvedValue({ data: { session: null } });
+  supabase.auth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: jest.fn() } } });
+  window.history.pushState({}, "", "/login");
+  render(<App />);
+  const occupy = await screen.findByRole("button", { name: /Occupy/ });
+  await waitFor(() => expect(occupy).toBeEnabled());
+  fireEvent.click(occupy);
+  const dialog = screen.getByRole("dialog", { name: "New property profile" });
+  expect(within(dialog).getByRole("textbox", { name: "Property address" })).toBeInTheDocument();
+  expect(within(dialog).getByRole("button", { name: "Sign in" })).toBeInTheDocument();
 });
 
 test("linked Occupy profile stays read-only for a separate Design account", async () => {

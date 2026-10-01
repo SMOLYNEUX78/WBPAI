@@ -837,6 +837,7 @@ const preserveTrendEnergy = (incoming, previous) => {
 };
 
 const PROPERTY_DISCOVERY_CACHE_KEY = "wbp-property-discovery-draft:v1";
+const OCCUPY_PROPERTY_DRAFT_KEY = "wbp-occupy-property-draft:v1";
 const CARBON_EVIDENCE_TYPES = [
   { id: "energy-bill", section: "monitoring", label: "Energy bill", help: "Supplier bill for customer-confirmed tariff details. Usage still comes from the meter feed." },
   { id: "heating-system", section: "carbon", label: "Heating system", help: "Installation or commissioning record for the main heating system." },
@@ -8833,7 +8834,12 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
     }
   };
   const [propertySearch, setPropertySearch] = useState(() => {
-    if (isolatedDraft) return { address: "", postcode: "", uprn: "", latitude: "", longitude: "" };
+    if (isolatedDraft) {
+      let draft = {};
+      try { draft = JSON.parse(window.sessionStorage.getItem(OCCUPY_PROPERTY_DRAFT_KEY) || "{}"); } catch { /* Ignore invalid draft. */ }
+      window.sessionStorage.removeItem(OCCUPY_PROPERTY_DRAFT_KEY);
+      return { address: draft.address || "", postcode: draft.postcode || "", uprn: "", latitude: "", longitude: "" };
+    }
     try {
       const cached = JSON.parse(window.localStorage.getItem(PROPERTY_DISCOVERY_CACHE_KEY) || "null");
       return cached?.search || {
@@ -10175,8 +10181,8 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
         {(!ownershipRecord || editingOwnership) ? (
           <form onSubmit={createBuildingPassport} className="mx-auto max-w-4xl border border-emerald-200 bg-white p-4 sm:p-5">
             <div className="border-b border-gray-200 pb-4">
-              <p className="text-xs font-bold uppercase text-emerald-700">{editingOwnership ? "Home profile" : "New home profile"}</p>
-              <h3 className="mt-1 text-xl font-bold">{editingOwnership ? "Edit home details" : "Let’s set up your home"}</h3>
+              <p className="text-xs font-bold uppercase text-emerald-700">{editingOwnership ? "Property profile" : "New property profile"}</p>
+              <h3 className="mt-1 text-xl font-bold">{editingOwnership ? "Edit property details" : "Let’s set up your property"}</h3>
               <p className="mt-1 max-w-2xl text-sm text-gray-600">
                 Find your home and create its profile. You can add private ownership evidence now or later.
               </p>
@@ -10191,7 +10197,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
             {!propertyDiscovery?.confirmedAt ? <section className="wbp-setup-step-enter mt-5 border border-gray-200 bg-gray-50 p-3 sm:p-4">
               <div>
                 <p className="text-xs font-bold uppercase text-blue-700">Step 1 of 3</p>
-                <h4 className="mt-1 text-base font-bold">Find your home</h4>
+                <h4 className="mt-1 text-base font-bold">Find your property</h4>
                 <p className="mt-1 text-sm text-gray-600">Search your address, then choose the matching property.</p>
               </div>
 
