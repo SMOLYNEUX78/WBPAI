@@ -154,7 +154,22 @@ test("owner-linked home appears in the Design project register without private a
   const register = await screen.findByRole("table", { name: "Design projects" });
   expect(await within(register).findByText("14 Bridgewood Road")).toBeInTheDocument();
   expect(within(register).getByText("Owner linked · unverified")).toBeInTheDocument();
-  expect(within(register).getByText("14 Bridgewood Road").closest('[role="row"]')).not.toHaveAttribute("type", "button");
+  fireEvent.click(within(register).getByText("14 Bridgewood Road"));
+  expect(window.location.pathname).toBe("/workspace/occupy-profile/home-1");
+});
+
+test("linked Occupy profile stays read-only for a separate Design account", async () => {
+  const session = { user: { id: "designer-1", email: "designer@example.com" } };
+  supabase.auth.getSession.mockResolvedValue({ data: { session } });
+  supabase.auth.getUser.mockResolvedValue({ data: { user: session.user } });
+  supabase.auth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: jest.fn() } } });
+  supabase.rpc.mockResolvedValue({ data: [{ building_record_id: "home-1", record_reference: "WBP-001", site_address: "14 Bridgewood Road" }], error: null });
+  supabase.from.mockImplementation(() => ({ select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }) }) }));
+  window.history.pushState({}, "", "/workspace/occupy-profile/home-1");
+
+  render(<App />);
+  expect(await screen.findByRole("heading", { name: "14 Bridgewood Road" })).toBeInTheDocument();
+  expect(screen.getByText(/private evidence remain inaccessible/)).toBeInTheDocument();
 });
 
 test("saved portfolio image appears in the banner", async () => {

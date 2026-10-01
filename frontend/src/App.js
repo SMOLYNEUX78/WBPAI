@@ -795,7 +795,7 @@ const ProfessionalWorkspace = () => {
     ? buildInvitations.map((item) => ({ id: item.id.slice(0, 8), name: item.project_title, stage: `Revision ${item.revision}`, status: item.status, route: `/workspace/builder/handover/${item.id}` }))
     : [
       ...designProjects.map((item) => ({ id: item.id, name: item.title, stage: item.design_stage, status: "Design record", route: `/workspace/architect/project/${item.id}` })),
-      ...linkedDesignProjects.map((item) => ({ id: item.record_reference, key: `linked-${item.building_record_id}`, name: item.site_address || item.record_reference, stage: "Historic Design", status: "Owner linked · unverified" })),
+      ...linkedDesignProjects.map((item) => ({ id: item.record_reference, key: `linked-${item.building_record_id}`, name: item.site_address || item.record_reference, stage: "Historic Design", status: "Owner linked · unverified", route: `/workspace/occupy-profile/${encodeURIComponent(item.building_record_id)}` })),
     ];
 
   const logOut = async () => {
@@ -987,6 +987,43 @@ const AuthenticatedRoute = ({ children, requireProfessionalEmail = false }) => {
   return children;
 };
 
+const LinkedOccupyProfile = () => {
+  const { buildingId } = useParams();
+  const navigate = useNavigate();
+  const [home, setHome] = useState(null);
+  const [status, setStatus] = useState("Loading linked home...");
+
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      const { data: linked, error } = await supabase.rpc("wbp_design_linked_projects");
+      if (!active) return;
+      const match = !error && (linked || []).find((item) => item.building_record_id === buildingId);
+      if (!match) { setStatus("This home is not linked to your Design account."); return; }
+      const { data: auth } = await supabase.auth.getUser();
+      if (!active) return;
+      const { data: ownRecord } = await supabase.from("WBPBuildingRecords")
+        .select("id").eq("id", buildingId).eq("custodian_user_id", auth?.user?.id || "").maybeSingle();
+      if (!active) return;
+      if (ownRecord) { navigate("/dashboard/home", { replace: true }); return; }
+      setHome(match);
+      setStatus("");
+    };
+    load();
+    return () => { active = false; };
+  }, [buildingId, navigate]);
+
+  return <main className="mx-auto max-w-3xl px-4 py-8 text-gray-900">
+    <button type="button" onClick={() => navigate(-1)} className="mb-6 border border-gray-300 px-3 py-2 text-sm">Back to Design portfolio</button>
+    {home ? <>
+      <p className="text-sm font-semibold uppercase text-emerald-800">Occupy profile · owner linked</p>
+      <h1 className="mt-2 text-2xl font-bold">{home.site_address || home.record_reference}</h1>
+      <p className="mt-2 text-sm text-gray-600">{home.record_reference}</p>
+      <p className="mt-6 border border-amber-200 bg-amber-50 p-3 text-sm">The homeowner selected this Design account. The practice has not confirmed its involvement, and the building record and private evidence remain inaccessible until access is approved.</p>
+    </> : <p role="status" className="text-sm">{status}</p>}
+  </main>;
+};
+
 const DesignPracticeMatch = () => {
   const { buildingId } = useParams();
   const navigate = useNavigate();
@@ -1103,6 +1140,7 @@ const App = () => (
       <Route path="/login" element={<RoleGateway />} />
       <Route path="/workspaces" element={<AuthenticatedRoute><WorkspaceSwitcher /></AuthenticatedRoute>} />
       <Route path="/workspace/history" element={<AuthenticatedRoute><WorkspaceSwitcher historicalOnly /></AuthenticatedRoute>} />
+      <Route path="/workspace/occupy-profile/:buildingId" element={<AuthenticatedRoute><LinkedOccupyProfile /></AuthenticatedRoute>} />
       <Route path="/workspace/design-match/:buildingId" element={<AuthenticatedRoute><DesignPracticeMatch /></AuthenticatedRoute>} />
       <Route path="/workspace/provisional/architect/:buildingId" element={<AuthenticatedRoute><DesignPracticeMatch /></AuthenticatedRoute>} />
       <Route path="/workspace/design-profile/:profileId" element={<AuthenticatedRoute><DesignAccountPreview /></AuthenticatedRoute>} />
