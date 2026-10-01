@@ -81,7 +81,7 @@ test("Build New tab opens and saves a build-specific record", async () => {
   await waitFor(() => expect(insert).toHaveBeenCalledWith(expect.objectContaining({ created_by: "builder-user", title: "Bridgewood retrofit", site_address: "14 Bridgewood Road" })));
 });
 
-test("Build sign-up saves multiple professional registrations", async () => {
+test("Build sign-up asks only for contact and company email", async () => {
   supabase.auth.getSession.mockResolvedValue({ data: { session: null } });
   supabase.auth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: jest.fn() } } });
   supabase.auth.signInWithOtp.mockResolvedValue({ error: null });
@@ -92,13 +92,38 @@ test("Build sign-up saves multiple professional registrations", async () => {
   fireEvent.click(build);
   const dialog = screen.getByRole("dialog");
   fireEvent.click(within(dialog).getByRole("button", { name: "Sign up" }));
-  fireEvent.change(within(dialog).getByRole("textbox", { name: "Professional registration 1" }), { target: { value: "CIOB 12345" } });
-  fireEvent.click(within(dialog).getByRole("button", { name: "Add registration" }));
-  fireEvent.change(within(dialog).getByRole("textbox", { name: "Professional registration 2" }), { target: { value: "FMB 67890" } });
+  fireEvent.change(within(dialog).getByRole("textbox", { name: "Full name" }), { target: { value: "Alex Builder" } });
+  expect(within(dialog).queryByRole("textbox", { name: "Organisation name" })).not.toBeInTheDocument();
   fireEvent.change(within(dialog).getByRole("textbox", { name: "Company email address" }), { target: { value: "builder@company.co.uk" } });
   fireEvent.submit(within(dialog).getByRole("button", { name: "Create account" }).closest("form"));
   await waitFor(() => expect(supabase.auth.signInWithOtp).toHaveBeenCalled());
-  expect(JSON.parse(window.localStorage.getItem("wbp-auth-intent:v1")).profile.professionalRegistrations).toEqual(["CIOB 12345", "FMB 67890"]);
+  expect(JSON.parse(window.localStorage.getItem("wbp-auth-intent:v1")).profile.contactName).toBe("Alex Builder");
+});
+
+test("test account can create a Build profile in the workspace", async () => {
+  const session = { user: { id: "fresh-builder", email: "wbpai25@gmail.com" } };
+  supabase.auth.getSession.mockResolvedValue({ data: { session } });
+  supabase.auth.getUser.mockResolvedValue({ data: { user: session.user } });
+  supabase.auth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: jest.fn() } } });
+  const upsert = jest.fn().mockResolvedValue({ error: null });
+  supabase.from.mockImplementation((table) => table === "WBPWorkspaceProfiles"
+    ? { select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }) }), upsert }
+    : { select: () => ({ order: async () => ({ data: [], error: null }) }) });
+  window.history.pushState({}, "", "/workspace/builder");
+  render(<App />);
+  const dialog = await screen.findByRole("dialog", { name: "Set up your organisation" });
+  fireEvent.change(within(dialog).getByRole("textbox", { name: "Organisation name" }), { target: { value: "New Build Co" } });
+  fireEvent.change(within(dialog).getByRole("textbox", { name: "Organisation type" }), { target: { value: "Main contractor" } });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Continue" }));
+  fireEvent.change(within(dialog).getByRole("textbox", { name: "Head office address" }), { target: { value: "1 High Street" } });
+  fireEvent.change(within(dialog).getByRole("textbox", { name: "Town / city" }), { target: { value: "Woodbridge" } });
+  fireEvent.change(within(dialog).getByRole("textbox", { name: "Postcode" }), { target: { value: "IP12 1AA" } });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Continue" }));
+  fireEvent.click(within(dialog).getByRole("button", { name: "Continue" }));
+  fireEvent.change(within(dialog).getByRole("textbox", { name: "Professional registration 1" }), { target: { value: "CIOB 12345" } });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Save organisation profile" }));
+  await waitFor(() => expect(upsert).toHaveBeenCalledWith(expect.objectContaining({ profile: expect.objectContaining({ organisationName: "New Build Co", professionalRegistrations: ["CIOB 12345"] }) }), expect.anything()));
+  expect(await screen.findByRole("heading", { name: "New Build Co" })).toBeInTheDocument();
 });
 
 test("Design banner edits are saved to the account profile", async () => {

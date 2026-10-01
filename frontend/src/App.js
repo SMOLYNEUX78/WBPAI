@@ -132,7 +132,6 @@ const RoleGateway = () => {
   const [selectedRole, setSelectedRole] = useState(designSignup ? "architect" : occupySignup ? "homeowner" : "");
   const [authMode, setAuthMode] = useState(designSignup || occupySignup ? "signup" : "signin");
   const [occupyMode, setOccupyMode] = useState("new");
-  const [builderRegistrations, setBuilderRegistrations] = useState([""]);
   const [email, setEmail] = useState("");
   const [authStatus, setAuthStatus] = useState("idle");
   const [authMessage, setAuthMessage] = useState("");
@@ -277,7 +276,7 @@ const RoleGateway = () => {
       logoName: formData.get("logo")?.name || "",
       requestedStages: formData.getAll("workspaceStages"),
     };
-    if (selectedRole !== "homeowner") {
+    if (selectedRole !== "homeowner" && formData.get("logo")?.size) {
       try {
         profile.logoDataUrl = await readProfileImage(formData.get("logo"));
       } catch (error) {
@@ -297,7 +296,7 @@ const RoleGateway = () => {
     const { data: currentSession } = await supabase.auth.getSession();
     if (currentSession.session) {
       const signedInEmail = currentSession.session.user.email || "";
-      if (authMode === "signup" || signedInEmail.toLowerCase() !== email.trim().toLowerCase()) {
+      if (signedInEmail.toLowerCase() !== email.trim().toLowerCase()) {
         setExistingSessionEmail(signedInEmail);
         setAuthStatus("error");
         setAuthMessage(`You're already signed in as ${signedInEmail}. Sign out before using another account.`);
@@ -452,99 +451,7 @@ const RoleGateway = () => {
                 </label>
               ) : null}
 
-              {authMode === "signup" && selectedRole !== "homeowner" ? (
-                <fieldset className="wbp-organisation-fields">
-                  <legend>Organisation profile</legend>
-                  <label className="wbp-access-field wbp-field-wide">
-                    <span>Organisation name</span>
-                    <input name="organisationName" type="text" placeholder="Registered organisation name" required />
-                  </label>
-                  <label className="wbp-access-field">
-                    <span>Organisation type</span>
-                    <select name="organisationType" required defaultValue="">
-                      <option value="" disabled>Select type</option>
-                      {selectedRole === "architect" ? (
-                        <>
-                          <option>Architectural practice</option>
-                          <option>Local authority</option>
-                          <option>Housing association</option>
-                          <option>Design consultancy</option>
-                          <option>Developer</option>
-                        </>
-                      ) : (
-                        <>
-                          <option>Main contractor</option>
-                          <option>Specialist contractor</option>
-                          <option>Developer / contractor</option>
-                          <option>Local authority</option>
-                          <option>Housing association</option>
-                        </>
-                      )}
-                    </select>
-                  </label>
-                  <fieldset className="wbp-access-field wbp-field-wide">
-                    <legend>Stages managed by your organisation</legend>
-                    <div className="mt-2 flex flex-wrap gap-4 text-sm">
-                      <label><input type="checkbox" name="workspaceStages" value="architect" defaultChecked={selectedRole === "architect"} /> Design</label>
-                      <label><input type="checkbox" name="workspaceStages" value="builder" defaultChecked={selectedRole === "builder"} /> Build</label>
-                      <label><input type="checkbox" name="workspaceStages" value="homeowner" /> Occupy</label>
-                    </div>
-                    <p className="mt-2 text-xs">Multiple stages can be requested, but switching is enabled only after organisation access is verified.</p>
-                  </fieldset>
-                  <label className="wbp-access-field">
-                    <span>Companies House / statutory registration</span>
-                    <input name="registrationNumber" type="text" placeholder="Registration number" required />
-                  </label>
-                  {selectedRole === "architect" ? <label className="wbp-access-field">
-                    <span>ARB / RIBA / professional registration</span>
-                    <input name="professionalRegistration" type="text" placeholder="Body and membership number" />
-                  </label> : <fieldset className="wbp-access-field wbp-field-wide">
-                    <legend>Professional registrations</legend>
-                    {builderRegistrations.map((value, index) => <div key={index} className="mt-2 flex gap-2">
-                      <input name="professionalRegistration" aria-label={`Professional registration ${index + 1}`} type="text" value={value} onChange={(event) => setBuilderRegistrations((current) => current.map((item, itemIndex) => itemIndex === index ? event.target.value : item))} placeholder="Body and membership number, e.g. CIOB 12345" />
-                      {builderRegistrations.length > 1 ? <button type="button" onClick={() => setBuilderRegistrations((current) => current.filter((_, itemIndex) => itemIndex !== index))} aria-label={`Remove registration ${index + 1}`}>Remove</button> : null}
-                    </div>)}
-                    <button type="button" className="mt-2 text-sm font-semibold underline" onClick={() => setBuilderRegistrations((current) => [...current, ""])}>Add registration</button>
-                  </fieldset>}
-                  <label className="wbp-access-field">
-                    <span>VAT number</span>
-                    <input name="vatNumber" type="text" placeholder="Optional" />
-                  </label>
-                  <label className="wbp-access-field">
-                    <span>Primary contact role</span>
-                    <input name="jobTitle" type="text" placeholder="Director, project lead, contracts manager" required />
-                  </label>
-                  <label className="wbp-access-field">
-                    <span>Telephone</span>
-                    <input name="phone" type="tel" placeholder="Organisation telephone" required />
-                  </label>
-                  <label className="wbp-access-field wbp-field-wide">
-                    <span>Website</span>
-                    <input name="website" type="url" placeholder="https://" />
-                  </label>
-                  <label className="wbp-access-field wbp-field-wide">
-                    <span>Head office address</span>
-                    <input name="address" type="text" placeholder="Building and street" required />
-                  </label>
-                  <label className="wbp-access-field">
-                    <span>Town / city</span>
-                    <input name="city" type="text" required />
-                  </label>
-                  <label className="wbp-access-field">
-                    <span>Postcode</span>
-                    <input name="postcode" type="text" required />
-                  </label>
-                  <label className="wbp-access-field wbp-field-wide">
-                    <span>Operating area</span>
-                    <input name="serviceArea" type="text" placeholder="Regions or local authority areas served" required />
-                  </label>
-                  <label className="wbp-access-field wbp-field-wide">
-                    <span>Company logo / profile image</span>
-                    <input name="logo" type="file" accept="image/png,image/jpeg,image/webp" />
-                  </label>
-                </fieldset>
-              ) : null}
-
+              {authMode === "signup" && selectedRole !== "homeowner" ? <p className="text-sm text-gray-600">You can complete your organisation profile after verifying your company email.</p> : null}
               <label className="wbp-access-field">
                 <span>{selectedRole === "homeowner" ? "Email address" : "Company email address"}</span>
                 <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder={selectedRole === "homeowner" ? "you@example.com" : "name@organisation.co.uk"} required />
@@ -669,6 +576,8 @@ const ProfessionalWorkspace = () => {
   const [profileStatus, setProfileStatus] = useState("");
   const [editingProfile, setEditingProfile] = useState(false);
   const [profileDraft, setProfileDraft] = useState({});
+  const [profileLoaded, setProfileLoaded] = useState(false);
+  const [setupStep, setSetupStep] = useState(0);
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileImageError, setProfileImageError] = useState("");
   const [designProjects, setDesignProjects] = useState([]);
@@ -705,7 +614,7 @@ const ProfessionalWorkspace = () => {
       }
       let cached = {};
       try {
-        cached = JSON.parse(window.localStorage.getItem(`wbp-${role}-profile-${data.user.id}`) || window.localStorage.getItem(`wbp-organisation-profile-${data.user.id}`) || "{}");
+        cached = JSON.parse(window.localStorage.getItem(`wbp-${role}-profile-${data.user.id}`) || "{}");
         setProfile(location.state?.profile?.organisationName ? location.state.profile : cached);
       } catch {
         setProfile({});
@@ -724,6 +633,7 @@ const ProfessionalWorkspace = () => {
       } else if (result.error) {
         setProfileStatus("Profile is still stored in this browser. Run Workspace Profiles.sql to enable account sync.");
       }
+      if (active) setProfileLoaded(true);
     });
     return () => { active = false; };
   }, [role, location.state, refreshRequests]);
@@ -784,7 +694,7 @@ const ProfessionalWorkspace = () => {
       setSavingProfile(false);
       return;
     }
-    const updated = { ...profile, ...profileDraft };
+    const updated = { ...profile, ...profileDraft, onboardingComplete: true };
     const { error } = await supabase.from("WBPWorkspaceProfiles").upsert({
       user_id: user.id, workspace_role: role, profile: updated, updated_at: new Date().toISOString(),
     }, { onConflict: "user_id,workspace_role" });
@@ -794,6 +704,14 @@ const ProfessionalWorkspace = () => {
       window.localStorage.setItem(`wbp-${role}-profile-${user.id}`, JSON.stringify(updated));
       setEditingProfile(false);
       setProfileStatus("Profile saved.");
+      if (user.email?.toLowerCase() !== TEST_PROFESSIONAL_EMAIL && !organisationAccess) {
+        const { error: accessError } = await supabase.rpc("wbp_request_organisation_access", {
+          p_workspace_role: role, p_organisation_name: updated.organisationName,
+          p_registration_number: updated.registrationNumber || null,
+        });
+        if (accessError) setProfileStatus(`Profile saved. Organisation review could not be requested: ${accessError.message}`);
+        else setProfileStatus("Profile saved. Organisation review requested.");
+      }
     }
     setSavingProfile(false);
   };
@@ -829,8 +747,33 @@ const ProfessionalWorkspace = () => {
     navigate("/login");
   };
 
+  const needsSetup = profileLoaded && !profile.organisationName;
+  const setupFields = [
+    [["organisationName", "Organisation name"], ["organisationType", "Organisation type"], ["registrationNumber", "Companies House / statutory registration"], ["contactName", "Primary contact name"]],
+    [["address", "Head office address"], ["city", "Town / city"], ["postcode", "Postcode"], ["serviceArea", "Operating area"]],
+    [["jobTitle", "Contact role"], ["phone", "Telephone"], ["website", "Website"], ["vatNumber", "VAT number"]],
+  ];
+
   return (
     <main className={`wbp-professional-shell is-${isBuilder ? "build" : "design"}`}>
+      {needsSetup ? <div className="wbp-auth-backdrop wbp-profile-setup-backdrop">
+        <section className="wbp-auth-modal wbp-profile-setup" role="dialog" aria-modal="true" aria-labelledby="profile-setup-title">
+          <p className="text-sm font-semibold uppercase">{isBuilder ? "Build" : "Design"} · {setupStep + 1} of 4</p>
+          <h2 id="profile-setup-title">Set up your organisation</h2>
+          <form onSubmit={(event) => { event.preventDefault(); if (setupStep < 3) setSetupStep((step) => step + 1); else saveProfile(event); }}>
+            {setupStep < 3 ? setupFields[setupStep].map(([key, label]) => <label key={key} className="wbp-access-field">
+              <span>{label}</span><input type={key === "website" ? "url" : "text"} value={profileDraft[key] || ""} onChange={(event) => setProfileDraft((current) => ({ ...current, [key]: event.target.value }))} required={["organisationName", "organisationType", "address", "city", "postcode"].includes(key)} />
+            </label>) : <>
+              {isBuilder ? <div className="wbp-access-field"><span>Professional registrations</span>{(profileDraft.professionalRegistrations || [""]).map((value, index) => <div key={index} className="wbp-profile-registration"><input aria-label={`Professional registration ${index + 1}`} value={value} onChange={(event) => setProfileDraft((current) => ({ ...current, professionalRegistrations: (current.professionalRegistrations || [""]).map((item, itemIndex) => itemIndex === index ? event.target.value : item) }))} placeholder="Body and membership number" />{(profileDraft.professionalRegistrations || []).length > 1 ? <button type="button" onClick={() => setProfileDraft((current) => ({ ...current, professionalRegistrations: current.professionalRegistrations.filter((_, itemIndex) => itemIndex !== index) }))}>Remove</button> : null}</div>)}<button type="button" onClick={() => setProfileDraft((current) => ({ ...current, professionalRegistrations: [...(current.professionalRegistrations || [""]), ""] }))}>Add registration</button></div> : <label className="wbp-access-field"><span>ARB / RIBA / professional registration</span><input value={profileDraft.professionalRegistration || ""} onChange={(event) => setProfileDraft((current) => ({ ...current, professionalRegistration: event.target.value }))} /></label>}
+              <label className="wbp-access-field"><span>Company logo / profile image</span><input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => changeProfileImage(event.target.files?.[0])} /></label>
+              <fieldset className="wbp-profile-stages"><legend>Stages managed</legend>{[["architect", "Design"], ["builder", "Build"], ["homeowner", "Occupy"]].map(([value, label]) => <label key={value}><input type="checkbox" checked={(profileDraft.requestedStages || [role]).includes(value)} onChange={(event) => setProfileDraft((current) => ({ ...current, requestedStages: event.target.checked ? [...new Set([...(current.requestedStages || [role]), value])] : (current.requestedStages || [role]).filter((item) => item !== value) }))} />{label}</label>)}</fieldset>
+            </>}
+            {profileImageError ? <p role="alert">{profileImageError}</p> : null}
+            {profileStatus ? <p role="status">{profileStatus}</p> : null}
+            <div className="wbp-profile-setup-actions">{setupStep > 0 ? <button type="button" onClick={() => setSetupStep((step) => step - 1)}>Back</button> : null}<button type="submit" disabled={savingProfile}>{savingProfile ? "Saving..." : setupStep === 3 ? "Save organisation profile" : "Continue"}</button></div>
+          </form>
+        </section>
+      </div> : null}
       <div className="wbp-professional-sticky">
       <header className="wbp-professional-nav">
         <PrototypeTabs scope={isBuilder ? "build" : "design"} activePath={location.pathname} />
@@ -996,7 +939,7 @@ const AuthenticatedRoute = ({ children, requireProfessionalEmail = false }) => {
   if (!authReady) {
     return <main className="flex min-h-screen items-center justify-center bg-white text-sm font-semibold text-gray-600">Checking secure access...</main>;
   }
-  if (requireProfessionalEmail && !professionalAccess.approved) {
+  if (requireProfessionalEmail && !professionalAccess.approved && !/^\/workspace\/(architect|builder)$/.test(location.pathname)) {
     if (professionalAccess.loading) return <main className="p-6 text-sm">Checking organisation access...</main>;
     return <main className="mx-auto max-w-xl space-y-4 p-6">
       <h1 className="text-xl font-bold">Organisation access</h1>

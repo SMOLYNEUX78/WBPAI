@@ -676,6 +676,20 @@ code {
 .wbp-organisation-details dd { margin: 0; overflow-wrap: anywhere; font-size: 13px; font-weight: 650; }
 .wbp-organisation-details a { color: #1d4ed8; text-decoration: underline; }
 .wbp-organisation-edit { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; padding: 20px 32px; background: #f7fcf9; border-bottom: 1px solid #a7e4c4; }
+.wbp-profile-setup-backdrop { position: fixed; inset: 0; z-index: 1000; backdrop-filter: blur(5px); }
+.wbp-profile-setup { width: min(540px, 100%); }
+.wbp-profile-setup h2 { font-size: 1.4rem; font-weight: 700; margin: 8px 0 16px; }
+.wbp-profile-setup form { display: grid; gap: 12px; }
+.wbp-profile-setup input { width: 100%; }
+.wbp-profile-registration { display: flex; gap: 8px; margin: 6px 0; }
+.wbp-profile-registration button { border: 1px solid #b6d7c7; padding: 4px 8px; }
+.wbp-profile-stages { display: flex; flex-wrap: wrap; gap: 12px; }
+.wbp-profile-stages legend { width: 100%; font-weight: 700; }
+.wbp-profile-stages label { display: flex; align-items: center; gap: 5px; }
+.wbp-profile-stages input { width: auto; }
+.wbp-profile-setup-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+.wbp-profile-setup-actions button { border: 1px solid #047857; padding: 8px 14px; font-weight: 700; }
+.wbp-profile-setup-actions button[type="submit"] { background: #047857; color: white; }
 .wbp-organisation-edit label { min-width: 0; font-size: 12px; font-weight: 700; color: #064e3b; }
 .wbp-organisation-edit input { display: block; width: 100%; margin-top: 5px; padding: 8px; border: 1px solid #a7e4c4; background: white; color: #111827; }
 .wbp-organisation-edit-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 8px; }
