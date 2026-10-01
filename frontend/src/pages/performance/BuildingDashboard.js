@@ -199,7 +199,7 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
   const resolvedCouncil = property?.localAuthority || designCouncil;
   const isEastSuffolk = /east suffolk/i.test(resolvedCouncil || "");
   const councilRouteOpen = ecosystemStatus === "missing" || ecosystemStatus === "error" || useCouncilRoute;
-  const showHistoryInputs = councilRouteOpen || selectedEcosystemRecord || Boolean(savedHistory[contentStage]?.savedAt);
+  const showHistoryInputs = isBuild || councilRouteOpen || selectedEcosystemRecord || Boolean(savedHistory[contentStage]?.savedAt);
   const designAddress = property?.address || addressDraft?.address || "";
   const designPostcode = property?.postcode || addressDraft?.postcode || "";
   const designUprn = property?.uprn || record?.uprn || addressDraft?.uprn || "";
@@ -629,6 +629,7 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
               </div>)}</div> : null}
           </div> : null}
           {(showHistoryInputs || editingStage === contentStage) ? <form onSubmit={saveHistory} className="grid gap-2 border-t border-emerald-200 pt-2 sm:grid-cols-3">
+            {isBuild ? <div className="sm:col-span-3"><h3 className="font-bold text-gray-900">Historical build details</h3><p className="mt-1 text-gray-600">Add details from building control, completion certificates or archived construction records.</p></div> : null}
             {fields.map(([key, label]) => <React.Fragment key={key}><label className="min-w-0 font-semibold text-emerald-950">{label}<input aria-label={label} value={shownHistory[stage]?.[key] || ""} onChange={(event) => changeHistory((current) => ({ ...current, [stage]: { ...current[stage], [key]: event.target.value, ...(key === "architectPractice" || key === "designerOfficeAddress" ? { designProfileRef: null, designProfileConfirmedByOwnerAt: null } : {}), ...(key === "mainContractor" ? { buildProfileRef: null, buildProfileConfirmedByOwnerAt: null } : {}) } }))} className="mt-1 block w-full min-w-0 border border-emerald-300 bg-white px-2 py-1.5 font-normal text-gray-900" />
               {key === "architectPractice" && practiceName ? <span role="status" className={`mt-1 block text-xs font-normal ${practiceNameStatus === "matched" ? "text-amber-800" : "text-gray-600"}`}>
                 {{ incomplete: "Enter a distinctive part of the practice name to check for a match.", checking: "Checking existing Design accounts...", matched: "Possible Design account matches found. Review the profile before selecting one.", clear: "No matching Design account name found.", unavailable: "Profile lookup unavailable. Apply Design Profile Preview.sql in Supabase." }[practiceNameStatus] || ""}
