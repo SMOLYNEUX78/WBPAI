@@ -7145,10 +7145,13 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
             })
           )}
 
-          {redReadings.length > 0 ? <div className="flex flex-wrap gap-2 px-3 pb-2" role="status" aria-label="Live readings in the red band">
-            {redReadings.map((reading) => <span key={reading.key} className="border-l-2 border-red-600 bg-red-50 px-2 py-1 text-xs font-semibold text-red-900">
-              {reading.label}: {reading.value} {reading.unit}
-            </span>)}
+          {redReadings.length > 0 ? <div className="mx-3 mb-3 border-l-4 border-red-600 bg-red-50 px-4 py-3 text-red-950 sm:mx-5 sm:px-5" role="status" aria-label="Live readings in the red band">
+            <p className="text-base font-bold sm:text-lg">Live readings in the red</p>
+            <div className="mt-2 flex flex-wrap gap-x-5 gap-y-2">
+              {redReadings.map((reading) => <span key={reading.key} className="text-sm font-semibold sm:text-base">
+                {reading.label}: <strong>{reading.value} {reading.unit}</strong>
+              </span>)}
+            </div>
           </div> : null}
 
           {!isCarbonCreditTab && building.id !== "home" ? (
