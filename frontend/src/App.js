@@ -976,7 +976,7 @@ const AuthenticatedRoute = ({ children, requireProfessionalEmail = false }) => {
   return children;
 };
 
-const ProvisionalArchitectProfile = () => {
+const DesignPracticeMatch = () => {
   const { buildingId } = useParams();
   const navigate = useNavigate();
   const [profile, setProfile] = useState(null);
@@ -1031,15 +1031,8 @@ const ProvisionalArchitectProfile = () => {
   return <main className="mx-auto max-w-3xl px-4 py-8 text-gray-900">
     <button type="button" onClick={() => navigate(-1)} className="mb-6 border border-gray-300 px-3 py-2 text-sm">Back to building</button>
     {profile ? <>
-      <p className="text-sm font-semibold uppercase text-emerald-800">Provisional Design Profile</p>
-      <h1 className="mt-2 text-2xl font-bold">{profile.organisation_name}</h1>
-      <div className="mt-5 border-t border-gray-200 pt-4 text-sm">
-        <p><strong>Status:</strong> Unclaimed</p>
-        <p className="mt-2">This practice was named in owner-supplied historical records. WBP has not verified its involvement or granted it access to the building record.</p>
-        <p className="mt-2">A verified organisation can request a reviewed link before this project appears in its portfolio. Private documents remain with the homeowner until access is approved.</p>
-      </div>
-      <section className="mt-6 border-t border-gray-200 pt-5">
-        <h2 className="text-lg font-bold">Potential Design account matches</h2>
+      <h1 className="text-2xl font-bold">Potential Design account matches</h1>
+      <section className="mt-5">
         <p role="status" className="mt-1 text-sm text-gray-600">{matchStatus}</p>
         {matches.map((match) => <div key={match.profile_ref} className="mt-3 flex flex-wrap items-center justify-between gap-3 border border-gray-200 p-3 text-sm">
           <div><strong className="block">{match.organisation_name}</strong><span className="text-gray-600">{[match.city, match.postcode, match.registration_number && `Registration ${match.registration_number}`].filter(Boolean).join(" · ")}</span></div>
@@ -1047,6 +1040,11 @@ const ProvisionalArchitectProfile = () => {
         </div>)}
         {selectionStatus ? <p role="status" className="mt-3 text-sm">{selectionStatus}</p> : null}
       </section>
+      <div className="mt-8 border-t border-gray-200 pt-4 text-sm">
+        <h2 className="font-semibold">Owner-supplied Design record</h2>
+        <p className="mt-2">Named practice: {profile.organisation_name}</p>
+        <p className="mt-2">A matching name does not verify this practice's involvement or grant it access to the building record. Private documents remain with the homeowner until access is reviewed.</p>
+      </div>
     </> : <p role="status" className="text-sm">{status}</p>}
   </main>;
 };
@@ -1087,7 +1085,8 @@ const App = () => (
       <Route path="/login" element={<RoleGateway />} />
       <Route path="/workspaces" element={<AuthenticatedRoute><WorkspaceSwitcher /></AuthenticatedRoute>} />
       <Route path="/workspace/history" element={<AuthenticatedRoute><WorkspaceSwitcher historicalOnly /></AuthenticatedRoute>} />
-      <Route path="/workspace/provisional/architect/:buildingId" element={<AuthenticatedRoute><ProvisionalArchitectProfile /></AuthenticatedRoute>} />
+      <Route path="/workspace/design-match/:buildingId" element={<AuthenticatedRoute><DesignPracticeMatch /></AuthenticatedRoute>} />
+      <Route path="/workspace/provisional/architect/:buildingId" element={<AuthenticatedRoute><DesignPracticeMatch /></AuthenticatedRoute>} />
       <Route path="/workspace/design-profile/:profileId" element={<AuthenticatedRoute><DesignAccountPreview /></AuthenticatedRoute>} />
       <Route path="/workspace/:role" element={<AuthenticatedRoute requireProfessionalEmail><ProfessionalWorkspace /></AuthenticatedRoute>} />
       <Route path="/workspace/architect/project/:projectId" element={<AuthenticatedRoute requireProfessionalEmail><DesignProject /></AuthenticatedRoute>} />

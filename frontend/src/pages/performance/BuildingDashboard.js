@@ -545,7 +545,7 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
                 {column.filter(([key]) => recordedStage[key]).map(([key, label]) => <div key={key} className="mb-2 min-w-0"><dt className="text-gray-600">{label}</dt><dd className="break-words font-semibold">{key === "architectPractice" && recordedStage.designProfileRef
                   ? <a href={`/workspace/design-profile/${encodeURIComponent(recordedStage.designProfileRef)}`} className="text-emerald-900 underline underline-offset-2">{recordedStage[key]}</a>
                   : key === "architectPractice" && recordId
-                  ? <a href={`/workspace/provisional/architect/${encodeURIComponent(recordId)}`} className="text-emerald-900 underline underline-offset-2">{recordedStage[key]}</a>
+                  ? <a href={`/workspace/design-match/${encodeURIComponent(recordId)}`} className="text-emerald-900 underline underline-offset-2">{recordedStage[key]}</a>
                   : key === "internalArea" ? `${recordedStage[key]} m2` : recordedStage[key]}</dd></div>)}
               </dl>)}
               <div className="min-w-0">{documentList || <><h4 className="font-semibold text-emerald-950">Historical documents</h4><p className="mt-1 text-gray-600">None uploaded</p></>}

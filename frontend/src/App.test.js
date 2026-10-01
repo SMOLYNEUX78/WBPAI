@@ -102,7 +102,7 @@ test("saved provisional designer shows account matches and records an owner sele
   supabase.from.mockImplementation((table) => table === "WBPProvisionalOrganisationProjects"
     ? { select: () => ({ eq: () => ({ eq: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { organisation_name: "A. W. J. Mullins" }, error: null }) }) }) }) }) }
     : { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { setup_data: { historicalStages: { design: { architectPractice: "A. W. J. Mullins" } } } }, error: null }) }) }), upsert });
-  window.history.pushState({}, "", "/workspace/provisional/architect/00000000-0000-0000-0000-000000000002");
+  window.history.pushState({}, "", "/workspace/design-match/00000000-0000-0000-0000-000000000002");
   render(<App />);
   expect(await screen.findByRole("heading", { name: "Potential Design account matches" })).toBeInTheDocument();
   expect(await screen.findByRole("link", { name: "View account profile" })).toHaveAttribute("href", "/workspace/design-profile/00000000-0000-0000-0000-000000000001");
