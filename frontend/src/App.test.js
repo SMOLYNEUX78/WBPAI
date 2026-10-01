@@ -34,7 +34,7 @@ test.each(["architect", "builder"])("%s portfolio shows saved organisation detai
   supabase.auth.getSession.mockResolvedValue({ data: { session } });
   supabase.auth.getUser.mockResolvedValue({ data: { user: session.user } });
   supabase.auth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: jest.fn() } } });
-  window.localStorage.setItem(`wbp-${role}-profile-${session.user.id}`, JSON.stringify({ organisationName: "Original organisation", registrationNumber: "12345", phone: "01234 567890", address: "1 High Street", city: "Woodbridge", postcode: "IP12 1AA", serviceArea: "Suffolk" }));
+  window.localStorage.setItem(`wbp-${role}-profile-${session.user.id}`, JSON.stringify({ organisationName: "Original organisation", registrationNumber: "12345", contactName: "Alex Designer", phone: "01234 567890", website: "https://studio.example", address: "1 High Street", city: "Woodbridge", postcode: "IP12 1AA", serviceArea: "Suffolk" }));
   window.history.pushState({}, "", `/workspace/${role}`);
 
   render(<App />);
@@ -49,6 +49,16 @@ test.each(["architect", "builder"])("%s portfolio shows saved organisation detai
   expect(screen.getByText("1 High Street, Woodbridge, IP12 1AA")).toBeInTheDocument();
   expect(screen.getByText("Suffolk")).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: "Original organisation" })).toBeInTheDocument();
+  if (role === "architect") {
+    const groups = screen.getByRole("heading", { name: "Original organisation" }).closest(".wbp-professional-hero").querySelectorAll(".wbp-organisation-detail-group");
+    expect(groups).toHaveLength(3);
+    expect(groups[0].textContent).toContain("Head office");
+    expect(within(groups[0]).getByRole("link", { name: "https://studio.example" })).toHaveAttribute("href", "https://studio.example");
+    expect(groups[1].textContent).toContain("Contact");
+    expect(groups[1].textContent).toContain("Telephone");
+    expect(groups[1].textContent).toContain("Email");
+    expect(groups[2].textContent).toContain("Registration");
+  }
 });
 
 test("Design banner edits are saved to the account profile", async () => {

@@ -669,6 +669,8 @@ code {
 .wbp-professional-hero > div > span { display: block; margin-top: 6px; color: #4b5563; font-size: 14px; }
 .wbp-organisation-meta { display: grid; gap: 5px; justify-items: end; color: #4b5563; font-size: 12px; }
 .wbp-organisation-details { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 13px 22px; margin: 0; padding-top: 12px; border-top: 1px solid rgba(17, 24, 39, 0.14); }
+.wbp-organisation-details.is-design { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.wbp-organisation-detail-group { display: grid; align-content: start; gap: 12px; }
 .wbp-organisation-details div { min-width: 0; }
 .wbp-organisation-details dt { margin-bottom: 3px; color: #4b5563; font-size: 11px; font-weight: 800; text-transform: uppercase; }
 .wbp-organisation-details dd { margin: 0; overflow-wrap: anywhere; font-size: 13px; font-weight: 650; }
@@ -782,6 +784,9 @@ button.wbp-project-row:hover { background: #f9fafb; }
   .wbp-organisation-logo { width: 58px; height: 58px; font-size: 18px; }
   .wbp-organisation-meta { grid-column: 1 / -1; align-items: start; justify-items: start; padding-top: 8px; border-top: 1px solid rgba(17, 24, 39, 0.14); }
   .wbp-organisation-details { grid-template-columns: repeat(2, minmax(0, 1fr)); padding-top: 14px; }
+  .wbp-organisation-details.is-design { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .wbp-organisation-detail-group { gap: 9px; }
+  .wbp-organisation-details.is-design dd { font-size: 11px; }
   .wbp-design-project-header { align-items: start; flex-direction: column; }
   .wbp-design-grid { grid-template-columns: 1fr; }
   .wbp-design-fields { padding: 16px; }

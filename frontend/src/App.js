@@ -808,6 +808,11 @@ const ProfessionalWorkspace = () => {
     ["Operating area", profile.serviceArea],
     ["Stages", Array.isArray(profile.requestedStages) ? profile.requestedStages.map((stage) => ({ architect: "Design", builder: "Build", homeowner: "Occupy" })[stage] || stage).join(" · ") : ""],
   ].filter(([, value]) => value);
+  const designDetailGroups = [
+    [["Head office", [profile.address, profile.city, profile.postcode].filter(Boolean).join(", ")], ["Website", profile.website], ["Operating area", profile.serviceArea]],
+    [["Contact", [profile.contactName, profile.jobTitle].filter(Boolean).join(" · ")], ["Telephone", profile.phone], ["Email", profileEmail]],
+    [["Registration", profile.registrationNumber], ["Professional body", profile.professionalRegistration], ["VAT", profile.vatNumber], ["Stages", Array.isArray(profile.requestedStages) ? profile.requestedStages.map((stage) => ({ architect: "Design", builder: "Build", homeowner: "Occupy" })[stage] || stage).join(" · ") : ""]],
+  ];
   const projects = isBuilder
     ? buildInvitations.map((item) => ({ id: item.id.slice(0, 8), name: item.project_title, stage: `Revision ${item.revision}`, status: item.status, route: `/workspace/builder/handover/${item.id}` }))
     : [
@@ -853,11 +858,13 @@ const ProfessionalWorkspace = () => {
           <span>{isTestAccount ? "Test account · Organisation not verified" : organisationAccess ? `Verified organisation · ${organisationAccess.access_role}` : "Self-declared · Organisation not verified"}</span>
           {!isBuilder && profile.organisationName ? <button type="button" onClick={() => { setProfileDraft(profile); setProfileImageError(""); setEditingProfile((current) => !current); }} className="border border-emerald-700 bg-white px-3 py-1 font-semibold text-emerald-900">{editingProfile ? "Cancel" : "Edit"}</button> : null}
         </div>
-        <dl className="wbp-organisation-details">{profileDetails.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{label === "Website" && /^https:\/\//i.test(value) ? <a href={value} target="_blank" rel="noopener noreferrer">{value}</a> : value}</dd></div>)}</dl>
+        <dl className={`wbp-organisation-details ${isBuilder ? "" : "is-design"}`}>{isBuilder
+          ? profileDetails.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{label === "Website" && /^https:\/\//i.test(value) ? <a href={value} target="_blank" rel="noopener noreferrer">{value}</a> : value}</dd></div>)
+          : designDetailGroups.map((group, index) => <div key={index} className="wbp-organisation-detail-group">{group.filter(([, value]) => value).map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{label === "Website" && /^https:\/\//i.test(value) ? <a href={value} target="_blank" rel="noopener noreferrer">{value}</a> : value}</dd></div>)}</div>)}</dl>
       </section>
 
       {!isBuilder && editingProfile ? <form onSubmit={saveProfile} className="wbp-organisation-edit" aria-label="Edit Design profile">
-        {[["organisationName", "Organisation name"], ["organisationType", "Organisation type"], ["registrationNumber", "Registration number"], ["professionalRegistration", "Professional registration"], ["vatNumber", "VAT number"], ["contactName", "Contact name"], ["jobTitle", "Contact role"], ["phone", "Telephone"], ["website", "Website"], ["address", "Head office address"], ["city", "Town / city"], ["postcode", "Postcode"], ["serviceArea", "Operating area"]].map(([key, label]) => <label key={key}>{label}<input value={profileDraft[key] || ""} onChange={(event) => setProfileDraft((current) => ({ ...current, [key]: event.target.value }))} required={["organisationName", "address", "city", "postcode"].includes(key)} /></label>)}
+        {[["organisationName", "Organisation name"], ["organisationType", "Organisation type"], ["registrationNumber", "Registration number"], ["professionalRegistration", "Professional registration"], ["vatNumber", "VAT number"], ["contactName", "Contact name"], ["jobTitle", "Contact role"], ["phone", "Telephone"], ["website", "Website"], ["address", "Head office address"], ["city", "Town / city"], ["postcode", "Postcode"], ["serviceArea", "Operating area"]].map(([key, label]) => <label key={key}>{label}<input type={key === "website" ? "url" : "text"} value={profileDraft[key] || ""} onChange={(event) => setProfileDraft((current) => ({ ...current, [key]: event.target.value }))} required={["organisationName", "address", "city", "postcode"].includes(key)} /></label>)}
         <label>Company email<input type="email" value={profileEmail} readOnly /></label>
         <div className="wbp-organisation-edit-image">
           <label htmlFor="design-profile-image">Company logo / profile image</label>
