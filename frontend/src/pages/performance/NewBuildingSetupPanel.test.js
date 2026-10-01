@@ -56,13 +56,16 @@ test("designer office address warns when an existing Design profile may match", 
 });
 
 test("practice name checks a distinctive part against existing Design accounts", async () => {
-  const rpc = jest.spyOn(supabase, "rpc").mockResolvedValue({ data: true, error: null });
+  const rpc = jest.spyOn(supabase, "rpc").mockResolvedValue({ data: [{ profile_ref: "00000000-0000-0000-0000-000000000001", organisation_name: "A. W. J. Mullins", city: "Woodbridge", postcode: "IP12 1AA", registration_number: "12345" }], error: null });
   try {
     render(<OccupyHistoryTabs record={null} property={null} activeStage="design" contentOnly
       setup={{ historicalStages: { design: { architectPractice: "A. W. J. Mullins", savedAt: "2026-01-01" } } }} />);
     fireEvent.click(screen.getByRole("button", { name: "Edit details" }));
-    expect(await screen.findByText(/Possible match: a Design account already uses this name/, {}, { timeout: 2000 })).toBeInTheDocument();
-    expect(rpc).toHaveBeenCalledWith("wbp_design_profile_name_exists", { p_name: "A. W. J. Mullins" });
+    expect(await screen.findByText(/Possible Design account matches found/, {}, { timeout: 2000 })).toBeInTheDocument();
+    expect(rpc).toHaveBeenCalledWith("wbp_design_profile_candidates", { p_name: "A. W. J. Mullins" });
+    expect(screen.getByRole("link", { name: "View profile" })).toHaveAttribute("href", "/workspace/design-profile/00000000-0000-0000-0000-000000000001");
+    fireEvent.click(screen.getByRole("button", { name: "Use this practice" }));
+    expect(screen.getByText(/Practice selected. Save Design/)).toBeInTheDocument();
   } finally { rpc.mockRestore(); }
 });
 

@@ -1009,6 +1009,35 @@ const ProvisionalArchitectProfile = () => {
   </main>;
 };
 
+const DesignAccountPreview = () => {
+  const { profileId } = useParams();
+  const navigate = useNavigate();
+  const [profile, setProfile] = useState(null);
+  const [status, setStatus] = useState("Loading Design profile...");
+
+  useEffect(() => {
+    let active = true;
+    supabase.rpc("wbp_design_profile_preview", { p_profile_ref: profileId }).then(({ data, error }) => {
+      if (!active) return;
+      setProfile(data?.[0] || null);
+      setStatus(error ? "Profile preview unavailable. Apply Design Profile Preview.sql in Supabase." : data?.length ? "" : "This Design profile is no longer available.");
+    });
+    return () => { active = false; };
+  }, [profileId]);
+
+  return <main className="mx-auto max-w-3xl px-4 py-8 text-gray-900">
+    <button type="button" onClick={() => navigate(-1)} className="mb-6 border border-gray-300 px-3 py-2 text-sm">Back to building</button>
+    {profile ? <>
+      <p className="text-sm font-semibold uppercase text-emerald-800">Design account preview</p>
+      <h1 className="mt-2 text-2xl font-bold">{profile.organisation_name}</h1>
+      <dl className="mt-5 grid gap-4 border-t border-gray-200 pt-4 text-sm sm:grid-cols-2">
+        {[["Organisation type", profile.organisation_type], ["Office", [profile.office_address, profile.city, profile.postcode].filter(Boolean).join(", ")], ["Registration", profile.registration_number], ["Professional registration", profile.professional_registration], ["Website", profile.website]].filter(([, value]) => value).map(([label, value]) => <div key={label}><dt className="text-gray-600">{label}</dt><dd className="font-semibold break-words">{value}</dd></div>)}
+      </dl>
+      <p className="mt-6 border border-amber-200 bg-amber-50 p-3 text-sm">These are self-declared account details. A matching name or address does not verify the practice, its involvement in this project, or permission to access private evidence. Return to the Design form and select “Use this practice” only if the details match your records.</p>
+    </> : <p role="status" className="text-sm">{status}</p>}
+  </main>;
+};
+
 const App = () => (
   <Router>
     <Routes>
@@ -1017,6 +1046,7 @@ const App = () => (
       <Route path="/workspaces" element={<AuthenticatedRoute><WorkspaceSwitcher /></AuthenticatedRoute>} />
       <Route path="/workspace/history" element={<AuthenticatedRoute><WorkspaceSwitcher historicalOnly /></AuthenticatedRoute>} />
       <Route path="/workspace/provisional/architect/:buildingId" element={<AuthenticatedRoute><ProvisionalArchitectProfile /></AuthenticatedRoute>} />
+      <Route path="/workspace/design-profile/:profileId" element={<AuthenticatedRoute><DesignAccountPreview /></AuthenticatedRoute>} />
       <Route path="/workspace/:role" element={<AuthenticatedRoute requireProfessionalEmail><ProfessionalWorkspace /></AuthenticatedRoute>} />
       <Route path="/workspace/architect/project/:projectId" element={<AuthenticatedRoute requireProfessionalEmail><DesignProject /></AuthenticatedRoute>} />
       <Route path="/workspace/builder/handover/:handoverId" element={<AuthenticatedRoute requireProfessionalEmail><BuildHandover /></AuthenticatedRoute>} />
