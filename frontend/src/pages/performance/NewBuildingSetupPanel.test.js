@@ -40,9 +40,21 @@ test("Build history shows its form and council route without claiming ecosystem 
   expect(screen.getByRole("textbox", { name: "Main contractor / builder" })).toBeInTheDocument();
   expect(screen.getByRole("textbox", { name: "Building control / completion reference" })).toBeInTheDocument();
   expect(screen.getByLabelText("Upload historical build documents")).toBeInTheDocument();
-  expect(screen.getByRole("heading", { name: "Council building and land charges records" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "East Suffolk records" })).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "buildingcontrol@eastsuffolk.gov.uk" })).toHaveAttribute("href", expect.stringContaining("mailto:buildingcontrol@eastsuffolk.gov.uk"));
+  expect(screen.getByRole("link", { name: "01394 444219" })).toHaveAttribute("href", "tel:+441394444219");
+  expect(screen.getByRole("link", { name: "land.charges@eastsuffolk.gov.uk" })).toHaveAttribute("href", expect.stringContaining("mailto:land.charges@eastsuffolk.gov.uk"));
   expect(screen.queryByText(/accessible build record\(s\) found/)).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Use record details" })).not.toBeInTheDocument();
+});
+
+test("Build history does not present East Suffolk contacts for another council", () => {
+  render(<MemoryRouter><OccupyHistoryTabs record={null}
+    property={{ address: "1 Example Street", postcode: "NR1 1AA", localAuthority: "Norwich City Council" }}
+    activeStage="build" contentOnly /></MemoryRouter>);
+  expect(screen.getByRole("heading", { name: "Norwich City Council records" })).toBeInTheDocument();
+  expect(screen.queryByRole("link", { name: "buildingcontrol@eastsuffolk.gov.uk" })).not.toBeInTheDocument();
+  expect(screen.getByRole("link", { name: /Find your council and its Building Control/ })).toHaveAttribute("href", "https://www.gov.uk/find-local-council");
 });
 
 test("saved design history is presented as a record until explicitly edited", () => {

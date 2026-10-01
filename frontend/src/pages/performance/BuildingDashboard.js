@@ -615,13 +615,23 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
             {searchStatus ? <p role="status" className="mt-1 text-gray-700">{searchStatus}</p> : null}
           </form>}
           {isAddressHistory && councilRouteOpen ? <div className="border-t border-gray-300 pt-3 text-gray-700">
-            <h3 className="font-bold text-gray-900">Council {isBuild ? "building and land charges" : "planning and land charges"} records</h3>
-            <p className="mt-1">{resolvedCouncil || "Your local authority"} may hold {isBuild ? "building control, completion and archived construction records" : "the application, drawings and older archived records"}. Check the council records before adding unverified details below.</p>
-            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
-              <a href={isEastSuffolk ? "https://publicaccess.eastsuffolk.gov.uk/online-applications/" : "https://www.gov.uk/find-local-council"} target="_blank" rel="noreferrer" className="font-semibold text-emerald-800 underline">{isEastSuffolk ? "East Suffolk planning portal" : "Find this council's records"}</a>
-              {isEastSuffolk ? <><a href="mailto:land.charges@eastsuffolk.gov.uk?subject=Property%20record%20enquiry" className="font-semibold text-emerald-800 underline">land.charges@eastsuffolk.gov.uk</a><a href="tel:+441394444301" className="font-semibold text-emerald-800 underline">01394 444301</a></> : <a href="https://www.gov.uk/find-local-council" target="_blank" rel="noreferrer" className="font-semibold text-emerald-800 underline">Find Local Land Charges contact</a>}
-            </div>
-            {!isEastSuffolk ? <p className="mt-1 text-gray-600">We have not verified a direct planning or Land Charges contact for this council yet.</p> : null}
+            <h3 className="font-bold text-gray-900">{resolvedCouncil || "Local authority"} records</h3>
+            <p className="mt-1">Contact the council for {isBuild ? "building control, completion and archived construction records" : "planning applications, drawings and archived design records"}. These records have not been verified for this property.</p>
+            {isEastSuffolk ? <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <div className="border border-emerald-200 bg-white p-3">
+                <h4 className="font-bold text-emerald-950">Building Control</h4>
+                <a href="mailto:buildingcontrol@eastsuffolk.gov.uk?subject=Building%20control%20records%20enquiry" className="mt-1 block break-all font-semibold text-emerald-800 underline">buildingcontrol@eastsuffolk.gov.uk</a>
+                <a href="tel:+441394444219" className="mt-1 block font-semibold text-emerald-800 underline">01394 444219</a>
+                <a href="https://my.eastsuffolk.gov.uk/appshost/firmstep/self/apps/custompage/Planning?language=en" target="_blank" rel="noreferrer" className="mt-1 block font-semibold text-emerald-800 underline">Building Control services</a>
+              </div>
+              <div className="border border-emerald-200 bg-white p-3">
+                <h4 className="font-bold text-emerald-950">Local Land Charges</h4>
+                <a href="mailto:land.charges@eastsuffolk.gov.uk?subject=Property%20record%20enquiry" className="mt-1 block break-all font-semibold text-emerald-800 underline">land.charges@eastsuffolk.gov.uk</a>
+                <a href="tel:+441394444301" className="mt-1 block font-semibold text-emerald-800 underline">01394 444301</a>
+                <a href="https://my.eastsuffolk.gov.uk/appshost/firmstep/self/apps/custompage/Planning?language=en" target="_blank" rel="noreferrer" className="mt-1 block font-semibold text-emerald-800 underline">Local Land Charges services</a>
+              </div>
+            </div> : <p className="mt-2 text-gray-600">Direct department contacts are not verified for {resolvedCouncil || "this address"} yet. <a href="https://www.gov.uk/find-local-council" target="_blank" rel="noreferrer" className="font-semibold text-emerald-800 underline">Find your council and its Building Control and Land Charges teams</a>.</p>}
+            {isEastSuffolk && isDesign ? <a href="https://publicaccess.eastsuffolk.gov.uk/online-applications/" target="_blank" rel="noreferrer" className="mt-2 block font-semibold text-emerald-800 underline">East Suffolk planning portal</a> : null}
             {isDesign && planningStatus ? <p role="status" className="mt-1 text-gray-700">{planningStatus}</p> : null}
             {isDesign && planningCandidates.length ? <div className="mt-2 max-h-36 overflow-y-auto border border-gray-300 bg-white p-2">
               {planningCandidates.slice(0, 10).map((candidate, index) => <div key={`${candidate.reference}-${index}`} className="flex items-center justify-between gap-2 border-b border-gray-100 py-1 last:border-0">
