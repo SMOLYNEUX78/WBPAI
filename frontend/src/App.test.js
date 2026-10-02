@@ -66,21 +66,25 @@ test("Build New tab opens and saves a build-specific record", async () => {
   supabase.auth.getSession.mockResolvedValue({ data: { session } });
   supabase.auth.getUser.mockResolvedValue({ data: { user: session.user } });
   supabase.auth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: jest.fn() } } });
-  const insert = jest.fn().mockResolvedValue({ error: null });
+  const insert = jest.fn().mockReturnValue({ select: () => ({ single: async () => ({ data: { id: "build-1" }, error: null }) }) });
+  const update = jest.fn().mockReturnValue({ eq: () => ({ select: () => ({ single: async () => ({ data: { id: "build-1" }, error: null }) }) }) });
   supabase.from.mockImplementation((table) => table === "WBPBuildProjects"
-    ? { select: () => ({ order: async () => ({ data: [], error: null }) }), insert }
+    ? { select: () => ({ order: async () => ({ data: [], error: null }), eq: () => ({ single: async () => ({ data: { id: "build-1", title: "Bridgewood retrofit", site_address: "14 Bridgewood Road", contractor_name: "Example Builders" }, error: null }) }) }), insert, update }
     : { select: () => ({ order: async () => ({ data: [], error: null }), eq: () => ({ eq: () => ({ maybeSingle: async () => ({ data: table === "WBPWorkspaceProfiles" ? { profile: { organisationName: "Example Builders", professionalRegistrations: ["CIOB 12345"], phone: "01234 567890" } } : null, error: null }) }) }) }) });
   window.history.pushState({}, "", "/workspace/builder");
   render(<App />);
   fireEvent.click(await screen.findByRole("button", { name: "New" }));
-  expect(await screen.findByRole("heading", { name: "New build record" })).toBeInTheDocument();
+  const dialog = await screen.findByRole("dialog", { name: "New build record" });
   expect(window.location.pathname).toBe("/workspace/builder/new");
-  expect(await screen.findByRole("region", { name: "Build organisation details" })).toHaveTextContent("CIOB 12345");
-  expect(screen.getByRole("textbox", { name: "Contractor / build team" })).toHaveValue("Example Builders");
-  fireEvent.change(screen.getByRole("textbox", { name: "Project name" }), { target: { value: "Bridgewood retrofit" } });
-  fireEvent.change(screen.getByRole("textbox", { name: "Site address" }), { target: { value: "14 Bridgewood Road" } });
-  fireEvent.click(screen.getByRole("button", { name: "Save build record" }));
+  fireEvent.change(within(dialog).getByRole("textbox", { name: "Project name" }), { target: { value: "Bridgewood retrofit" } });
+  fireEvent.change(within(dialog).getByRole("textbox", { name: "Site address" }), { target: { value: "14 Bridgewood Road" } });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Save and continue" }));
   await waitFor(() => expect(insert).toHaveBeenCalledWith(expect.objectContaining({ created_by: "builder-user", title: "Bridgewood retrofit", site_address: "14 Bridgewood Road" })));
+  expect(await within(dialog).findByText("Build · 2 of 2")).toBeInTheDocument();
+  expect(within(dialog).getByRole("textbox", { name: "Contractor / build team" })).toHaveValue("Example Builders");
+  fireEvent.click(within(dialog).getByRole("button", { name: "Save build record" }));
+  await waitFor(() => expect(update).toHaveBeenCalled());
+  await waitFor(() => expect(screen.queryByRole("dialog", { name: "New build record" })).not.toBeInTheDocument());
 });
 
 test("Build sign-up asks only for contact and company email", async () => {
@@ -129,12 +133,15 @@ test("test account can create a Build profile in the workspace", async () => {
   const dialog = await screen.findByRole("dialog", { name: "Set up your organisation" });
   fireEvent.change(within(dialog).getByRole("textbox", { name: "Organisation name" }), { target: { value: "New Build Co" } });
   fireEvent.change(within(dialog).getByRole("textbox", { name: "Organisation type" }), { target: { value: "Main contractor" } });
-  fireEvent.click(within(dialog).getByRole("button", { name: "Continue" }));
+  fireEvent.click(within(dialog).getByRole("button", { name: "Save and continue" }));
+  await within(dialog).findByText("Build · 2 of 4");
   fireEvent.change(within(dialog).getByRole("textbox", { name: "Head office address" }), { target: { value: "1 High Street" } });
   fireEvent.change(within(dialog).getByRole("textbox", { name: "Town / city" }), { target: { value: "Woodbridge" } });
   fireEvent.change(within(dialog).getByRole("textbox", { name: "Postcode" }), { target: { value: "IP12 1AA" } });
-  fireEvent.click(within(dialog).getByRole("button", { name: "Continue" }));
-  fireEvent.click(within(dialog).getByRole("button", { name: "Continue" }));
+  fireEvent.click(within(dialog).getByRole("button", { name: "Save and continue" }));
+  await within(dialog).findByText("Build · 3 of 4");
+  fireEvent.click(within(dialog).getByRole("button", { name: "Save and continue" }));
+  await within(dialog).findByText("Build · 4 of 4");
   fireEvent.change(within(dialog).getByRole("textbox", { name: "Professional registration 1" }), { target: { value: "CIOB 12345" } });
   fireEvent.click(within(dialog).getByRole("button", { name: "Save organisation profile" }));
   await waitFor(() => expect(upsert).toHaveBeenCalledWith(expect.objectContaining({ profile: expect.objectContaining({ organisationName: "New Build Co", professionalRegistrations: ["CIOB 12345"] }) }), expect.anything()));
@@ -335,10 +342,9 @@ test("Design new project opens a design-stage intake rather than the homeowner f
 
   render(<App />);
   fireEvent.click(await screen.findByRole("button", { name: /New project/i }));
-  expect(await screen.findByRole("heading", { name: "New design project" })).toBeInTheDocument();
-  expect(screen.getByRole("heading", { name: "Import existing project" })).toBeInTheDocument();
-  fireEvent.click(within(screen.getByRole("navigation", { name: "Design project sections" })).getByRole("button", { name: "Evidence" }));
-  expect(screen.getByRole("heading", { name: "Existing documents" })).toBeInTheDocument();
+  const dialog = await screen.findByRole("dialog", { name: "New design project" });
+  expect(within(dialog).getByText("Design · 1 of 6")).toBeInTheDocument();
+  expect(within(dialog).getByRole("textbox", { name: "Project name" })).toBeInTheDocument();
   expect(window.location.pathname).toBe("/workspace/architect/project/new");
 });
 

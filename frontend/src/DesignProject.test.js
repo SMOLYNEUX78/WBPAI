@@ -13,8 +13,9 @@ test("new Design project saves to the design-stage table", async () => {
   const single = jest.fn().mockResolvedValue({ data: { id: "design-123" }, error: null });
   const select = jest.fn(() => ({ single }));
   const insert = jest.fn(() => ({ select }));
+  const update = jest.fn(() => ({ eq: () => ({ select }) }));
   supabase.from.mockImplementation(() => ({
-    insert,
+    insert, update,
     select: () => ({ eq: () => ({ single: async () => ({ data: { id: "design-123", title: "New low-energy homes" }, error: null }), order: async () => ({ data: [], error: null }) }) }),
   }));
   supabase.auth.getUser.mockResolvedValue({ data: { user: { id: "designer-1" } }, error: null });
@@ -22,28 +23,24 @@ test("new Design project saves to the design-stage table", async () => {
   render(<MemoryRouter initialEntries={["/workspace/architect/project/new"]}>
     <Routes><Route path="/workspace/architect/project/:projectId" element={<DesignProject />} /></Routes>
   </MemoryRouter>);
-  expect(screen.getByRole("heading", { name: "Import existing project" })).toBeInTheDocument();
-  expect(screen.getByText("0/6 present")).toBeInTheDocument();
-  expect(screen.getByRole("progressbar", { name: "Project readiness" })).toHaveAttribute("aria-valuenow", "0");
-  expect(screen.queryByRole("heading", { name: "WBP information check" })).not.toBeInTheDocument();
-  fireEvent.click(within(screen.getByRole("navigation", { name: "Design project sections" })).getByRole("button", { name: "Overview" }));
-  fireEvent.change(screen.getByRole("textbox", { name: "Project brief and success criteria" }), { target: { value: "Low-energy housing" } });
-  fireEvent.click(within(screen.getByRole("navigation", { name: "Design project sections" })).getByRole("button", { name: "Import" }));
-  expect(screen.getByRole("progressbar", { name: "Project readiness" })).toHaveAttribute("aria-valuenow", "17");
-  fireEvent.click(within(screen.getByRole("navigation", { name: "Design project sections" })).getByRole("button", { name: "Handover" }));
-  expect(screen.getByRole("heading", { name: "Build handover" })).toBeInTheDocument();
-  expect(screen.getByText("1/6 design items present")).toBeInTheDocument();
-  expect(screen.getByText(/no handover has been issued/i)).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Open Products" }));
-  expect(screen.getByRole("heading", { name: "Product schedule" })).toBeInTheDocument();
-  fireEvent.click(within(screen.getByRole("navigation", { name: "Design project sections" })).getByRole("button", { name: "Import" }));
-  fireEvent.change(screen.getByRole("textbox", { name: "Project name" }), { target: { value: "New low-energy homes" } });
-  fireEvent.click(screen.getByRole("button", { name: "Create project and add documents" }));
+  const dialog = screen.getByRole("dialog", { name: "New design project" });
+  expect(within(dialog).getByText("Design · 1 of 6")).toBeInTheDocument();
+  fireEvent.change(within(dialog).getByRole("textbox", { name: "Project name" }), { target: { value: "New low-energy homes" } });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Save and continue" }));
 
   await waitFor(() => expect(insert).toHaveBeenCalled());
   expect(supabase.from).toHaveBeenCalledWith("WBPDesignProjects");
   expect(insert.mock.calls[0][0]).toMatchObject({ title: "New low-energy homes", created_by: "designer-1", project_type: "new-build" });
-  expect(await screen.findByRole("heading", { name: "Existing documents" })).toBeInTheDocument();
+  expect(await within(dialog).findByText("Design · 2 of 6")).toBeInTheDocument();
+  fireEvent.change(within(dialog).getByRole("textbox", { name: "Project brief and success criteria" }), { target: { value: "Low-energy housing" } });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Save and continue" }));
+  await waitFor(() => expect(update).toHaveBeenCalledWith(expect.objectContaining({ brief: "Low-energy housing" })));
+  for (const step of [3, 4, 5, 6]) {
+    expect(await within(dialog).findByText(`Design · ${step} of 6`)).toBeInTheDocument();
+    if (step < 6) fireEvent.click(within(dialog).getByRole("button", { name: "Save and continue" }));
+  }
+  fireEvent.click(within(dialog).getByRole("button", { name: "Save design project" }));
+  await waitFor(() => expect(screen.queryByRole("dialog", { name: "New design project" })).not.toBeInTheDocument());
 });
 
 test("imported evidence keeps its revision, date and issuing organisation", async () => {

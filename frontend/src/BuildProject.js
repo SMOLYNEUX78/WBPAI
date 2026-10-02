@@ -1,13 +1,17 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import PrototypeTabs from "./PrototypeTabs";
+import ProfileSetupOverlay from "./ProfileSetupOverlay";
 import supabase from "./supabaseClient";
 
 const emptyRecord = { title: "", site_address: "", wbp_reference: "", contractor_name: "", construction_start: "", target_completion: "", handover_id: "" };
 
 export default function BuildProject() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { projectId } = useParams();
+  const newFlow = !projectId || new URLSearchParams(location.search).has("setup");
+  const [setupStep, setSetupStep] = useState(new URLSearchParams(location.search).get("setup") === "delivery" ? 1 : 0);
   const [record, setRecord] = useState(emptyRecord);
   const [invitations, setInvitations] = useState([]);
   const [status, setStatus] = useState("");
@@ -53,7 +57,7 @@ export default function BuildProject() {
   }, [projectId]);
 
   const change = (key, value) => setRecord((current) => ({ ...current, [key]: value }));
-  const save = async (event) => {
+  const save = async (event, advance = false) => {
     event.preventDefault();
     setBusy(true);
     setStatus("");
@@ -67,19 +71,31 @@ export default function BuildProject() {
       handover_id: record.handover_id || null,
       updated_at: new Date().toISOString(),
     };
-    const { error } = projectId
-      ? await supabase.from("WBPBuildProjects").update(payload).eq("id", projectId)
-      : await supabase.from("WBPBuildProjects").insert({ ...payload, created_by: auth.user.id });
+    const { data, error } = projectId
+      ? await supabase.from("WBPBuildProjects").update(payload).eq("id", projectId).select("id").single()
+      : await supabase.from("WBPBuildProjects").insert({ ...payload, created_by: auth.user.id }).select("id").single();
     if (error) setStatus(`Could not save build record: ${error.message}. Apply Build Projects.sql in Supabase if the table is missing.`);
-    else { setStatus("Build record saved to your account. Appointment and work remain unverified."); if (!projectId) setRecord({ ...emptyRecord, contractor_name: organisation?.organisationName || "" }); }
+    else if (advance && setupStep === 0 && !data?.id) setStatus("The build record saved, but its ID was not returned. Reopen it from your Build profile to continue.");
+    else if (advance && setupStep === 0 && data?.id) {
+      setSetupStep(1);
+      navigate(`/workspace/builder/project/${data.id}?setup=delivery`, { replace: true });
+    } else if (advance && setupStep === 1) {
+      navigate(`/workspace/builder/project/${data?.id || projectId}`, { replace: true });
+      setStatus("Build record saved to your account. Appointment and work remain unverified.");
+    } else setStatus("Build record saved to your account. Appointment and work remain unverified.");
     setBusy(false);
   };
 
-  return <main className="wbp-professional-shell is-build">
+  return <><main className="wbp-professional-shell is-build" aria-hidden={newFlow ? "true" : undefined}>
     <div className="wbp-professional-sticky"><header className="wbp-professional-nav"><PrototypeTabs scope="build" activePath="/workspace/builder/new" /></header>
       <section className="wbp-professional-stage-banner is-build"><div><strong>Build</strong><span>Delivery, quality and commissioning</span></div><button type="button" onClick={() => navigate("/workspace/builder")}>Build profile</button></section></div>
     <section className="wbp-design-fields">
       <h1 className="text-xl font-bold">{projectId ? "Build record" : "New build record"}</h1>
+      {newFlow ? <section className="wbp-project-setup-preview" aria-label="Build record preview">
+        <span>Build record</span><h2>{record.title || "New build record"}</h2>
+        <p>{record.site_address || "Site address pending"}</p>
+        <dl><div><dt>Contractor</dt><dd>{record.contractor_name || "Pending"}</dd></div><div><dt>Construction start</dt><dd>{record.construction_start || "Pending"}</dd></div><div><dt>Target completion</dt><dd>{record.target_completion || "Pending"}</dd></div></dl>
+      </section> : null}
       {organisation ? <section className="wbp-build-organisation-summary" aria-label="Build organisation details">
         <div className="wbp-build-organisation-summary-heading"><div><strong>{organisation.organisationName}</strong><span>{organisation.organisationType}</span></div><button type="button" onClick={() => navigate("/workspace/builder")}>View profile</button></div>
         <dl>{[
@@ -93,7 +109,7 @@ export default function BuildProject() {
           ["Operating area", organisation.serviceArea],
         ].filter(([, value]) => value).map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
       </section> : null}
-      <form onSubmit={save} className="wbp-design-grid">
+      <form onSubmit={(event) => save(event)} className="wbp-design-grid">
         {[["title", "Project name"], ["site_address", "Site address"], ["wbp_reference", "WBP reference"], ["contractor_name", "Contractor / build team"]].map(([key, label]) => <label key={key} className="wbp-access-field"><span>{label}</span><input value={record[key]} onChange={(event) => change(key, event.target.value)} required={key === "title"} /></label>)}
         <label className="wbp-access-field"><span>Construction start</span><input type="date" value={record.construction_start} onChange={(event) => change("construction_start", event.target.value)} /></label>
         <label className="wbp-access-field"><span>Target completion</span><input type="date" value={record.target_completion} onChange={(event) => change("target_completion", event.target.value)} min={record.construction_start || undefined} /></label>
@@ -102,5 +118,24 @@ export default function BuildProject() {
       </form>
       {status ? <p role="status" className="mt-3 text-sm">{status}</p> : null}
     </section>
-  </main>;
+  </main>
+  {newFlow ? <ProfileSetupOverlay title="New build record" phase="Build" step={setupStep + 1} total={2}>
+    <form onSubmit={(event) => save(event, true)} className="wbp-project-setup-form">
+      {setupStep === 0 ? <>
+        <label className="wbp-access-field"><span>Project name</span><input value={record.title} onChange={(event) => change("title", event.target.value)} required /></label>
+        <label className="wbp-access-field"><span>Site address</span><input value={record.site_address} onChange={(event) => change("site_address", event.target.value)} /></label>
+        <label className="wbp-access-field"><span>WBP reference</span><input value={record.wbp_reference} onChange={(event) => change("wbp_reference", event.target.value)} /></label>
+      </> : <>
+        <label className="wbp-access-field"><span>Contractor / build team</span><input value={record.contractor_name} onChange={(event) => change("contractor_name", event.target.value)} /></label>
+        <label className="wbp-access-field"><span>Construction start</span><input type="date" value={record.construction_start} onChange={(event) => change("construction_start", event.target.value)} /></label>
+        <label className="wbp-access-field"><span>Target completion</span><input type="date" value={record.target_completion} onChange={(event) => change("target_completion", event.target.value)} min={record.construction_start || undefined} /></label>
+        <label className="wbp-access-field"><span>Accepted Design handover</span><select value={record.handover_id} onChange={(event) => change("handover_id", event.target.value)}><option value="">None linked yet</option>{invitations.map((item) => <option key={item.id} value={item.id}>{item.project_title} · revision {item.revision}</option>)}</select></label>
+      </>}
+      {status ? <p role="status">{status}</p> : null}
+      <div className="wbp-project-setup-actions">
+        {setupStep > 0 ? <button type="button" onClick={() => { setSetupStep(0); navigate(`/workspace/builder/project/${projectId}?setup=basics`, { replace: true }); }}>Back</button> : null}
+        <button type="submit" disabled={busy || !record.title.trim()}>{busy ? "Saving..." : setupStep === 0 ? "Save and continue" : "Save build record"}</button>
+      </div>
+    </form>
+  </ProfileSetupOverlay> : null}</>;
 }

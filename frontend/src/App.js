@@ -617,13 +617,18 @@ const ProfessionalWorkspace = () => {
       try {
         cached = JSON.parse(window.localStorage.getItem(`wbp-${role}-profile-${data.user.id}`) || "{}");
         setProfile(location.state?.profile?.organisationName ? location.state.profile : cached);
+        setProfileDraft(location.state?.profile?.organisationName ? location.state.profile : cached);
       } catch {
         setProfile({});
       }
       const result = await supabase.from("WBPWorkspaceProfiles").select("profile").eq("user_id", data.user.id).eq("workspace_role", role).maybeSingle();
       if (!active) return;
-      if (result.data?.profile?.organisationName) {
+      if (result.data?.profile) {
         setProfile(result.data.profile);
+        setProfileDraft(result.data.profile);
+        if (result.data.profile.onboardingComplete === false) {
+          setSetupStep(Math.min(result.data.profile.onboardingStep || 0, 3));
+        }
         window.localStorage.setItem(`wbp-${role}-profile-${data.user.id}`, JSON.stringify(result.data.profile));
       } else if (!result.error && cached.organisationName) {
         const { error } = await supabase.from("WBPWorkspaceProfiles").upsert({
@@ -721,6 +726,29 @@ const ProfessionalWorkspace = () => {
     }
     setSavingProfile(false);
   };
+  const saveSetupStep = async (event) => {
+    event.preventDefault();
+    if (setupStep === 3) { await saveProfile(event); return; }
+    setSavingProfile(true);
+    setProfileStatus("");
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      setProfileStatus("Sign in again before saving this step.");
+      setSavingProfile(false);
+      return;
+    }
+    const draft = { ...profile, ...profileDraft, onboardingComplete: false, onboardingStep: setupStep + 1 };
+    const { error } = await supabase.from("WBPWorkspaceProfiles").upsert({
+      user_id: user.id, workspace_role: role, profile: draft, updated_at: new Date().toISOString(),
+    }, { onConflict: "user_id,workspace_role" });
+    if (error) setProfileStatus(`Could not save this step: ${error.message}`);
+    else {
+      setProfile(draft);
+      window.localStorage.setItem(`wbp-${role}-profile-${user.id}`, JSON.stringify(draft));
+      setSetupStep((step) => step + 1);
+    }
+    setSavingProfile(false);
+  };
   const profileDetails = [
     ["Registration", profile.registrationNumber],
     [isBuilder ? "Professional registrations" : "Professional body", isBuilder && profile.professionalRegistrations?.length ? profile.professionalRegistrations.join(" · ") : profile.professionalRegistration],
@@ -754,7 +782,7 @@ const ProfessionalWorkspace = () => {
     navigate("/login");
   };
 
-  const needsSetup = profileLoaded && !profile.organisationName;
+  const needsSetup = profileLoaded && (profile.onboardingComplete === false || !profile.organisationName);
   const setupFields = [
     [["organisationName", "Organisation name"], ["organisationType", "Organisation type"], ["registrationNumber", "Companies House / statutory registration"], ["contactName", "Primary contact name"]],
     [["address", "Head office address"], ["city", "Town / city"], ["postcode", "Postcode"], ["serviceArea", "Operating area"]],
@@ -767,7 +795,7 @@ const ProfessionalWorkspace = () => {
         <section className="wbp-auth-modal wbp-profile-setup" role="dialog" aria-modal="true" aria-labelledby="profile-setup-title">
           <p className="text-sm font-semibold uppercase">{isBuilder ? "Build" : "Design"} · {setupStep + 1} of 4</p>
           <h2 id="profile-setup-title">Set up your organisation</h2>
-          <form onSubmit={(event) => { event.preventDefault(); if (setupStep < 3) setSetupStep((step) => step + 1); else saveProfile(event); }}>
+          <form key={setupStep} className="wbp-setup-step-enter" onSubmit={saveSetupStep}>
             {setupStep < 3 ? setupFields[setupStep].map(([key, label]) => <label key={key} className="wbp-access-field">
               <span>{label}</span><input type={key === "website" ? "url" : "text"} value={profileDraft[key] || ""} onChange={(event) => setProfileDraft((current) => ({ ...current, [key]: event.target.value }))} required={["organisationName", "organisationType", "address", "city", "postcode"].includes(key)} />
             </label>) : <>
@@ -777,7 +805,7 @@ const ProfessionalWorkspace = () => {
             </>}
             {profileImageError ? <p role="alert">{profileImageError}</p> : null}
             {profileStatus ? <p role="status">{profileStatus}</p> : null}
-            <div className="wbp-profile-setup-actions">{setupStep > 0 ? <button type="button" onClick={() => setSetupStep((step) => step - 1)}>Back</button> : null}<button type="submit" disabled={savingProfile}>{savingProfile ? "Saving..." : setupStep === 3 ? "Save organisation profile" : "Continue"}</button></div>
+            <div className="wbp-profile-setup-actions">{setupStep > 0 ? <button type="button" onClick={() => setSetupStep((step) => step - 1)}>Back</button> : null}<button type="submit" disabled={savingProfile}>{savingProfile ? "Saving..." : setupStep === 3 ? "Save organisation profile" : "Save and continue"}</button></div>
           </form>
         </section>
       </div> : null}
