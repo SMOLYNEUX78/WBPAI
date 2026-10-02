@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import ProfileSetupOverlay from "./ProfileSetupOverlay";
+import PrototypeTabs from "./PrototypeTabs";
 import supabase from "./supabaseClient";
 
 const emptyProject = {
@@ -240,6 +241,8 @@ export default function DesignProject() {
   };
 
   return <><main className="wbp-design-project" aria-hidden={newFlow ? "true" : undefined}>
+    <div className="wbp-professional-sticky"><header className="wbp-professional-nav"><PrototypeTabs scope="design" activePath={projectId === "new" ? "/workspace/architect/project/new" : "/workspace/architect"} /></header>
+      <section className="wbp-professional-stage-banner is-design"><div><strong>Design</strong><span>Design intent and specification</span></div><button type="button" onClick={() => navigate("/workspace/architect")}>Design profile</button></section></div>
     <header className="wbp-design-project-header"><div><button type="button" onClick={() => navigate("/workspace/architect")}>← Design portfolio</button><h1>{savedId ? project.title || "Design project" : "New design project"}</h1><p>Design-stage record · self-declared until reviewed</p></div><button type="submit" form="wbp-design-form" disabled={busy}>{busy ? "Saving..." : "Save project"}</button></header>
     {newFlow ? <section className="wbp-project-setup-preview" aria-label="Design record preview">
       <span>Design record</span><h2>{project.title || "New design project"}</h2>
