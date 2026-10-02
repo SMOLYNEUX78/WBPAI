@@ -130,7 +130,7 @@ test("test account can create a Build profile in the workspace", async () => {
     : { select: () => ({ order: async () => ({ data: [], error: null }) }) });
   window.history.pushState({}, "", "/workspace/builder");
   render(<App />);
-  const dialog = await screen.findByRole("dialog", { name: "Set up your organisation" });
+  const dialog = await screen.findByRole("dialog", { name: "Set up your build profile" });
   fireEvent.change(within(dialog).getByRole("textbox", { name: "Organisation name" }), { target: { value: "New Build Co" } });
   fireEvent.change(within(dialog).getByRole("textbox", { name: "Organisation type" }), { target: { value: "Main contractor" } });
   fireEvent.click(within(dialog).getByRole("button", { name: "Save and continue" }));
@@ -346,6 +346,23 @@ test("Design new project opens a design-stage intake rather than the homeowner f
   expect(within(dialog).getByText("Design · 1 of 6")).toBeInTheDocument();
   expect(within(dialog).getByRole("textbox", { name: "Project name" })).toBeInTheDocument();
   expect(window.location.pathname).toBe("/workspace/architect/project/new");
+});
+
+test("Design New opens the stepped organisation profile over its preview", async () => {
+  const session = { user: { id: "design-profile-test", email: "wbpai25@gmail.com" } };
+  supabase.auth.getSession.mockResolvedValue({ data: { session } });
+  supabase.auth.getUser.mockResolvedValue({ data: { user: session.user } });
+  supabase.auth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: jest.fn() } } });
+  window.localStorage.setItem(`wbp-architect-profile-${session.user.id}`, JSON.stringify({ organisationName: "Existing Studio", onboardingComplete: true }));
+  window.history.pushState({}, "", "/workspace/architect");
+
+  render(<App />);
+  fireEvent.click(within(await screen.findByRole("navigation", { name: "Prototype pages" })).getByRole("button", { name: "New" }));
+  const dialog = await screen.findByRole("dialog", { name: "Set up your design profile" });
+  expect(within(dialog).getByText("Design · 1 of 4")).toBeInTheDocument();
+  expect(within(dialog).getByRole("textbox", { name: "Organisation name" })).toHaveValue("Existing Studio");
+  fireEvent.click(within(dialog).getByRole("button", { name: "Close setup" }));
+  expect(window.location.pathname).toBe("/workspace/architect");
 });
 
 test("test account switches workspaces without requesting another email link", async () => {
