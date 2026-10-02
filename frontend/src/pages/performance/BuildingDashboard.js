@@ -8758,12 +8758,18 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
 };
 
 export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = false, isActive = false }) => {
+  const navigate = useNavigate();
   const isolatedDraft = freshStart;
   const [setupTab, setSetupTab] = useState("ownership");
   const [historyStage, setHistoryStage] = useState("audit");
   const [showSetupOverlay, setShowSetupOverlay] = useState(freshStart);
   const [editingOwnership, setEditingOwnership] = useState(false);
   const overlayVisible = showSetupOverlay && isActive;
+  const wasActiveRef = useRef(isActive);
+  useEffect(() => {
+    if (freshStart && isActive && !wasActiveRef.current) setShowSetupOverlay(true);
+    wasActiveRef.current = isActive;
+  }, [freshStart, isActive]);
   const [setupOverlayExiting, setSetupOverlayExiting] = useState(false);
   const [historyDraft, setHistoryDraft] = useState({ design: {}, build: {} });
   const [modelAreaEdited, setModelAreaEdited] = useState(false);
@@ -10302,8 +10308,9 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       </section>
       <PortalWhen active={overlayVisible}>
       <section className={`mx-4 mb-4 bg-gray-100 p-4 shadow ${overlayVisible ? `wbp-setup-overlay ${setupOverlayExiting ? "wbp-setup-overlay--exiting" : ""}` : ""}`} role={overlayVisible ? "dialog" : undefined} aria-modal={overlayVisible ? "true" : undefined} aria-label={overlayVisible ? "Let's set up your home" : undefined}>
+      <div className={overlayVisible ? "wbp-occupy-setup-dialog" : undefined}>
       {historyStage === "audit" ? <>
-      {showSetupOverlay ? <div className="mb-3 flex justify-end"><button type="button" onClick={() => setShowSetupOverlay(false)} className="flex h-9 w-9 items-center justify-center text-2xl text-gray-700" aria-label="Close setup" title="Close setup">&times;</button></div> : null}
+      {showSetupOverlay ? <div className="wbp-occupy-setup-heading"><div><span>Occupy · {ownershipRecord ? 3 : propertyDiscovery?.confirmedAt ? 2 : 1} of 3</span><h2>Let’s set up your home</h2></div><button type="button" onClick={() => { setShowSetupOverlay(false); navigate("/dashboard/home"); }} className="wbp-occupy-setup-close" aria-label="Close setup" title="Close setup">&times;</button></div> : null}
       <header className={`border-b border-gray-300 ${showSetupOverlay ? "hidden" : ""}`}>
       <nav className="relative -mb-px grid w-full min-w-0 grid-cols-4 gap-1 sm:flex sm:justify-center" role="tablist" aria-label="New building sections">
         {[["ownership", "Ownership"], ["measurements", "3D Model"], ["energy", "Energy Monitoring"], ["health", "Health Monitoring"]].map(([id, label]) => (
@@ -10337,7 +10344,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       <div className="min-w-0">
         {(!ownershipRecord || editingOwnership) ? (
           <form onSubmit={createBuildingPassport} className="mx-auto max-w-4xl border border-emerald-200 bg-white p-4 sm:p-5">
-            <div className="border-b border-gray-200 pb-4">
+            <div className="wbp-occupy-setup-intro border-b border-gray-200 pb-4">
               <p className="text-xs font-bold uppercase text-emerald-700">{editingOwnership ? "Property profile" : "New property profile"}</p>
               <h3 className="mt-1 text-xl font-bold">{editingOwnership ? "Edit property details" : "Let’s set up your property"}</h3>
               <p className="mt-1 max-w-2xl text-sm text-gray-600">
@@ -11113,6 +11120,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
           draftHistory={historyDraft} onDraftHistoryChange={setHistoryDraft} onPlanningLookup={setDesignPlanningLookup}
           internalArea={manualData.internalArea} onInternalAreaChange={(value) => handleManualChange("internalArea", value)} />
       </div></div>}
+      </div>
       </section>
       </PortalWhen>
     </div>

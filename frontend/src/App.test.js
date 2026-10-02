@@ -402,6 +402,7 @@ test("test account switches workspaces without requesting another email link", a
   fireEvent.click(occupy);
 
   expect(await screen.findByText("Dashboard test view")).toBeInTheDocument();
+  expect(window.location.pathname).toBe("/dashboard/home");
   expect(supabase.auth.signInWithOtp).not.toHaveBeenCalled();
   expect(supabase.auth.signOut).not.toHaveBeenCalled();
 });

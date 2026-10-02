@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import { NewBuildingSetupPanel, OccupyHistoryTabs, ProfileSummaryColumns, addressLines, decodeSensorLabel, parseSensorLabelText, mergeScannedSensor, registerSensorDraft, findAccountHomeRecord, findHomeProfileForOverwrite, readCachedBridgewoodValue } from "./BuildingDashboard";
 import supabase from "../../supabaseClient";
 
@@ -727,6 +727,19 @@ test("setup dialog opens only while the New tab is active", () => {
   rerender(<MemoryRouter><NewBuildingSetupPanel freshStart isActive={false} /></MemoryRouter>);
   expect(screen.queryByRole("dialog", { name: "Let's set up your home" })).not.toBeInTheDocument();
   expect(document.body.style.overflow).not.toBe("hidden");
+});
+
+test("closing New setup returns to WBP-001 without changing the saved home", () => {
+  const saved = { recordId: "WBP-EXISTING", legalOwnerName: "Existing Owner" };
+  window.localStorage.setItem("wbp-new-building-passport", JSON.stringify(saved));
+  const CurrentPath = () => <p data-testid="current-path">{useLocation().pathname}</p>;
+  const { rerender } = render(<MemoryRouter initialEntries={["/dashboard/new"]}><CurrentPath /><NewBuildingSetupPanel freshStart isActive /></MemoryRouter>);
+  fireEvent.click(screen.getByRole("button", { name: "Close setup" }));
+  expect(screen.getByTestId("current-path")).toHaveTextContent("/dashboard/home");
+  expect(JSON.parse(window.localStorage.getItem("wbp-new-building-passport"))).toEqual(saved);
+  rerender(<MemoryRouter initialEntries={["/dashboard/new"]}><CurrentPath /><NewBuildingSetupPanel freshStart isActive={false} /></MemoryRouter>);
+  rerender(<MemoryRouter initialEntries={["/dashboard/new"]}><CurrentPath /><NewBuildingSetupPanel freshStart isActive /></MemoryRouter>);
+  expect(screen.getByRole("dialog", { name: "Let's set up your home" })).toBeInTheDocument();
 });
 
 test("monitoring setup stays above every tab without counting audit evidence", () => {
