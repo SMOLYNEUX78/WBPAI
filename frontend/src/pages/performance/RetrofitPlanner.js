@@ -13,7 +13,6 @@ const FUNDING = [
 ];
 
 export default function RetrofitPlanner({ ready, annualEui, area, DetailSurface }) {
-  const [tab, setTab] = useState("baseline");
   const [selected, setSelected] = useState("fabric");
   const [packOpen, setPackOpen] = useState(false);
   const option = OPTIONS.find((item) => item.id === selected);
@@ -24,11 +23,8 @@ export default function RetrofitPlanner({ ready, annualEui, area, DetailSurface 
 
   return (
     <section className="wbp-retrofit-planner" aria-label="Retrofit planning">
-      <div className="wbp-retrofit-tabs" role="tablist" aria-label="Next stage">
-        <button type="button" role="tab" aria-selected={tab === "baseline"} onClick={() => setTab("baseline")}>Baseline</button>
-        <button type="button" role="tab" aria-selected={tab === "retrofit"} className={ready ? "wbp-retrofit-tab--ready" : ""} disabled={!ready} onClick={() => setTab("retrofit")}>Retrofit {ready ? "" : "(at 100%)"}</button>
-      </div>
-      {ready && tab === "retrofit" ? (
+      <h2 className="text-lg font-bold">Retrofit options</h2>
+      {ready ? (
         <div className="wbp-retrofit-content">
           <div className="wbp-retrofit-options" role="group" aria-label="Retrofit options">
             {OPTIONS.map((item) => (
@@ -50,7 +46,7 @@ export default function RetrofitPlanner({ ready, annualEui, area, DetailSurface 
             <button type="button" onClick={() => setPackOpen(true)}>View retrofit pack</button>
           </div>
         </div>
-      ) : !ready ? <p className="wbp-retrofit-locked">The retrofit menu unlocks when the measured baseline reaches 100% confidence.</p> : null}
+      ) : <p className="wbp-retrofit-locked">The retrofit menu unlocks when the measured baseline reaches 100% confidence.</p>}
       {packOpen ? <DetailSurface modal title={`${option.name} plan`} onClose={() => setPackOpen(false)}>
         <div className="wbp-retrofit-pack">
           <p>Planning target: {option.reduction}% lower EUI. Commission a whole-home assessment to validate measures, costs and comfort before procurement.</p>

@@ -1150,6 +1150,13 @@ const BUILDINGS = [
     dataSourceId: "home",
   },
   {
+    ...HOME_BUILDING,
+    id: "rf",
+    name: "WBP-001rf",
+    subtitle: "Retrofit planning prototype",
+    dataSourceId: "home",
+  },
+  {
     id: "portfolio",
     name: "Portfolio",
     subtitle: "Social housing portfolio management",
@@ -7248,6 +7255,16 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
         ) : null}
       </div>
 
+      {building.id === "rf" ? (
+        <section className="wbp-retrofit-page -mx-4 px-4 py-5 sm:px-8" aria-label="Retrofit planning prototype">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-sm font-semibold">
+            <span>Baseline confidence</span><strong>100% assumed</strong>
+          </div>
+          <div role="progressbar" aria-label="Assumed baseline confidence" aria-valuenow={100} aria-valuemin={0} aria-valuemax={100} className="mt-2 h-2 bg-gray-200"><div className="h-full w-full bg-emerald-500" /></div>
+          <p className="mt-2 text-xs text-gray-600">Future-stage prototype. This does not change the measured baseline or certify any outcome on WBP-001.</p>
+          <RetrofitPlanner ready annualEui={displayedAnnualEui} area={Number(matterportMetadata.internalArea)} DetailSurface={DetailSurface} />
+        </section>
+      ) : <>
       <div className={dataSourceBuildingId === "home" ? "wbp-performance-stage wbp-performance-stage--linear -mx-4" : "wbp-performance-stage bg-gray-100 p-3 sm:p-4 rounded shadow"}>
         {dataSourceBuildingId !== "home" ? <h2 className="mb-2 text-lg font-bold">Performance</h2> : null}
 
@@ -7281,7 +7298,6 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
                     {baselineConfidenceSteps.map((step) => <li key={step.label} className="list-disc">{step.complete ? "Complete" : "Needed"}: {step.label} - {step.detail}</li>)}
                   </ul>
                 </details>
-                <RetrofitPlanner ready={baselineConfidence.complete} annualEui={displayedAnnualEui} area={Number(matterportMetadata.internalArea)} DetailSurface={DetailSurface} />
               </div>
             </div>
           ) : isCarbonCreditTab ? (
@@ -8749,6 +8765,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
             document.body
           )
         : null}
+      </>}
     </div>
   );
 };
