@@ -146,6 +146,22 @@ test("saved design documents open through a short-lived private link", async () 
   } finally { from.mockRestore(); storage.mockRestore(); open.mockRestore(); }
 });
 
+test("historical documents use stable numbered names in two columns unless renamed", async () => {
+  const evidence = [
+    { id: "one", version_number: 1, original_file_name: "scan-a.jpeg", mime_type: "image/jpeg", display_name: null },
+    { id: "two", version_number: 2, original_file_name: "scan-b.pdf", mime_type: "application/pdf", display_name: "Insulation cert" },
+  ];
+  const query = { eq: () => query, is: () => query, order: () => query, limit: () => Promise.resolve({ data: evidence, error: null }),
+    maybeSingle: () => Promise.resolve({ data: null, error: null }) };
+  const from = jest.spyOn(supabase, "from").mockImplementation(() => ({ select: () => query }));
+  try {
+    render(<OccupyHistoryTabs record={{ databaseId: "home-1" }} property={null} activeStage="build" contentOnly />);
+    expect(await screen.findByRole("link", { name: "1.jpg" })).toHaveAttribute("title", "scan-a.jpeg");
+    expect(screen.getByRole("link", { name: "Insulation cert" })).toHaveAttribute("title", "scan-b.pdf");
+    expect(screen.getByRole("link", { name: "1.jpg" }).closest("ul")).toHaveClass("grid-cols-2");
+  } finally { from.mockRestore(); }
+});
+
 test("historical build document labels save without changing the uploaded filename", async () => {
   const evidence = { id: "evidence-1", original_file_name: "certificate-2020.pdf", display_name: null, storage_reference: "owner/home/certificate-2020.pdf" };
   const query = { eq: () => query, is: () => query, order: () => query, limit: () => Promise.resolve({ data: [evidence], error: null }),

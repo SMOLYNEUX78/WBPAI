@@ -163,6 +163,14 @@ export const ProfileSummaryColumns = ({ record, property, setup = {} }) => {
     </div>)}
   </div>;
 };
+const historicalDocumentExtension = (mimeType, fileName = "") => ({
+  "application/pdf": "pdf", "image/jpeg": "jpg", "image/png": "png",
+}[mimeType] || fileName.match(/\.([a-z0-9]+)$/i)?.[1]?.toLowerCase() || "file");
+
+const historicalDocumentLabel = (document) => document.display_name || (document.version_number
+  ? `${document.version_number}.${historicalDocumentExtension(document.mime_type, document.original_file_name)}`
+  : document.original_file_name);
+
 export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed = false, activeStage, contentOnly = false, addressDraft, onAddressDraftChange, draftHistory, onDraftHistoryChange, onPlanningLookup, internalArea, onInternalAreaChange }) => {
   const [localStage, setLocalStage] = useState(initiallyCollapsed ? null : "audit");
   const stage = activeStage || localStage;
@@ -431,9 +439,9 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
     if (stage === "audit" || !recordId) return;
     let active = true;
     supabase.from("WBPEvidenceVersions")
-      .select("id,evidence_type,original_file_name,display_name,storage_reference,created_at,assurance_status")
+      .select("id,evidence_type,version_number,original_file_name,display_name,mime_type,storage_reference,created_at,assurance_status")
       .eq("building_record_id", recordId).eq("lifecycle_stage", stage).is("deleted_at", null)
-      .order("created_at", { ascending: false }).limit(20)
+      .order("version_number", { ascending: true }).limit(100)
       .then(({ data, error }) => {
         if (!active) return;
         setDocuments(error ? [] : data || []);
@@ -533,19 +541,21 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
         .select("version_number").eq("building_record_id", recordId).eq("evidence_type", evidenceType)
         .order("version_number", { ascending: false }).limit(1);
       if (versionError) throw versionError;
+      const versionNumber = (previous?.[0]?.version_number || 0) + 1;
       path = `${auth.user.id}/${recordId}/${window.crypto.randomUUID()}`;
       const { error: uploadError } = await supabase.storage.from("wbp-private-evidence")
         .upload(path, file, { contentType: file.type, upsert: false });
       if (uploadError) throw uploadError;
       const { data, error: metadataError } = await supabase.from("WBPEvidenceVersions").insert({
         building_record_id: recordId, evidence_type: evidenceType, lifecycle_stage: stage,
-        version_number: (previous?.[0]?.version_number || 0) + 1, storage_reference: path,
+        version_number: versionNumber, storage_reference: path,
         evidence_hash: evidenceHash, original_file_name: file.name, mime_type: file.type,
+        display_name: `${versionNumber}.${historicalDocumentExtension(file.type, file.name)}`,
         byte_size: file.size, classification: "verifier-access", assurance_status: "self-declared",
         submitted_by: auth.user.id,
-      }).select("id,evidence_type,original_file_name,display_name,storage_reference,created_at,assurance_status").single();
+      }).select("id,evidence_type,version_number,original_file_name,display_name,mime_type,storage_reference,created_at,assurance_status").single();
       if (metadataError) throw metadataError;
-      setDocuments((current) => [data, ...current]);
+      setDocuments((current) => [...current, data]);
       setUploadStatus(`${file.name} stored privately. Origin and contents are not yet verified.`);
     } catch (error) {
       if (path) await supabase.storage.from("wbp-private-evidence").remove([path]);
@@ -629,14 +639,14 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
 
   const documentList = documents.length ? <div className="min-w-0">
     <h4 className="font-semibold text-emerald-950">Historical documents</h4>
-    <ul className="mt-1 divide-y divide-emerald-200">{documents.map((item) => <li key={item.id} className="min-w-0 py-1.5">
+    <ul className="mt-1 grid grid-cols-2 gap-x-3">{documents.map((item) => <li key={item.id} className="min-w-0 border-b border-emerald-200 py-1.5">
       {renamingDocumentId === item.id ? <form onSubmit={(event) => saveDocumentName(event, item)} className="flex flex-wrap items-center gap-2">
         <input aria-label={`Name for ${item.original_file_name}`} autoFocus maxLength={100} value={documentNameDraft} onChange={(event) => setDocumentNameDraft(event.target.value)} className="min-w-0 flex-1 border border-emerald-300 bg-white px-2 py-1" />
         <button type="submit" disabled={busy} className="font-semibold text-emerald-900 underline disabled:opacity-50">Save</button>
         <button type="button" onClick={() => setRenamingDocumentId(null)} className="text-gray-600 underline">Cancel</button>
       </form> : <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
-        <a href="#historical-documents" onClick={(event) => { event.preventDefault(); openHistoricalDocument(item); }} title={item.original_file_name} className="min-w-0 break-all font-semibold text-emerald-800 underline underline-offset-2">{item.display_name || item.original_file_name}</a>
-        <button type="button" onClick={() => { setRenamingDocumentId(item.id); setDeletingDocumentId(null); setDocumentNameDraft(item.display_name || item.original_file_name.replace(/\.[^.]+$/, "")); setUploadStatus(""); }} className="text-emerald-900 underline">Rename</button>
+        <a href="#historical-documents" onClick={(event) => { event.preventDefault(); openHistoricalDocument(item); }} title={item.original_file_name} className="min-w-0 break-all font-semibold text-emerald-800 underline underline-offset-2">{historicalDocumentLabel(item)}</a>
+        <button type="button" onClick={() => { setRenamingDocumentId(item.id); setDeletingDocumentId(null); setDocumentNameDraft(historicalDocumentLabel(item)); setUploadStatus(""); }} className="text-emerald-900 underline">Rename</button>
         {item.assurance_status === "self-declared" ? deletingDocumentId === item.id ? <span className="flex flex-wrap items-baseline gap-2 text-red-800">
           Delete this file? <button type="button" disabled={busy} onClick={() => deleteHistoricalDocument(item)} className="font-semibold underline disabled:opacity-50">Confirm delete</button>
           <button type="button" onClick={() => setDeletingDocumentId(null)} className="underline">Cancel</button>
