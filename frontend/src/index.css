@@ -519,6 +519,7 @@ code {
 }
 
 .wbp-project-setup-dialog {
+  position: relative;
   width: min(100%, 760px);
   max-height: calc(100dvh - 32px);
   overflow-x: hidden;
@@ -532,7 +533,7 @@ code {
 .wbp-project-setup-backdrop.is-design .wbp-project-setup-heading span { color: #165989; }
 .wbp-project-setup-backdrop.is-build .wbp-project-setup-heading span { color: #89590d; }
 
-.wbp-project-setup-heading { padding: 22px 26px 0; }
+.wbp-project-setup-heading { padding: 22px 62px 0 26px; }
 .wbp-project-setup-heading span { color: #047857; font-size: 12px; font-weight: 800; text-transform: uppercase; }
 .wbp-project-setup-heading h2 { margin: 5px 0 0; font-size: 22px; }
 .wbp-project-setup-form { display: grid; gap: 14px; padding: 20px 26px 26px; }

@@ -339,7 +339,7 @@ export default function DesignProject() {
     </section> : null}
     {status ? <p className="wbp-design-status" role="status">{status}</p> : null}
   </main>
-  {newFlow ? <ProfileSetupOverlay title="New design project" phase="Design" step={setupTabs.indexOf(tab) + 1} total={setupTabs.length}>
+  {newFlow ? <ProfileSetupOverlay title="New design project" phase="Design" step={setupTabs.indexOf(tab) + 1} total={setupTabs.length} onClose={() => navigate("/workspace/architect")}>
     <form onSubmit={saveSetupStep} className="wbp-project-setup-form">
       {tab === "Import" ? <>
         <Field label="Project name" value={project.title} onChange={(value) => update("title", value)} required />

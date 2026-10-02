@@ -577,6 +577,7 @@ const ProfessionalWorkspace = () => {
   const [editingProfile, setEditingProfile] = useState(false);
   const [profileDraft, setProfileDraft] = useState({});
   const [profileLoaded, setProfileLoaded] = useState(false);
+  const [setupDismissed, setSetupDismissed] = useState(false);
   const [setupStep, setSetupStep] = useState(0);
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileImageError, setProfileImageError] = useState("");
@@ -782,7 +783,7 @@ const ProfessionalWorkspace = () => {
     navigate("/login");
   };
 
-  const needsSetup = profileLoaded && (profile.onboardingComplete === false || !profile.organisationName);
+  const needsSetup = profileLoaded && !setupDismissed && (profile.onboardingComplete === false || !profile.organisationName);
   const setupFields = [
     [["organisationName", "Organisation name"], ["organisationType", "Organisation type"], ["registrationNumber", "Companies House / statutory registration"], ["contactName", "Primary contact name"]],
     [["address", "Head office address"], ["city", "Town / city"], ["postcode", "Postcode"], ["serviceArea", "Operating area"]],
@@ -793,6 +794,7 @@ const ProfessionalWorkspace = () => {
     <main className={`wbp-professional-shell is-${isBuilder ? "build" : "design"}`}>
       {needsSetup ? <div className="wbp-auth-backdrop wbp-profile-setup-backdrop">
         <section className="wbp-auth-modal wbp-profile-setup" role="dialog" aria-modal="true" aria-labelledby="profile-setup-title">
+          <button type="button" className="wbp-auth-close" aria-label="Close setup" onClick={() => setSetupDismissed(true)}>&times;</button>
           <p className="text-sm font-semibold uppercase">{isBuilder ? "Build" : "Design"} · {setupStep + 1} of 4</p>
           <h2 id="profile-setup-title">Set up your organisation</h2>
           <form key={setupStep} className="wbp-setup-step-enter" onSubmit={saveSetupStep}>
@@ -827,6 +829,7 @@ const ProfessionalWorkspace = () => {
       </div>
 
       <section className="wbp-professional-hero">
+        {setupDismissed && (profile.onboardingComplete === false || !profile.organisationName) ? <button type="button" onClick={() => setSetupDismissed(false)}>Continue profile setup</button> : null}
         <div className="wbp-organisation-logo" aria-hidden="true">
           {profile.logoDataUrl ? <img src={profile.logoDataUrl} alt="" /> : organisationName.slice(0, 2).toUpperCase()}
         </div>

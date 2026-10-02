@@ -10303,7 +10303,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       <PortalWhen active={overlayVisible}>
       <section className={`mx-4 mb-4 bg-gray-100 p-4 shadow ${overlayVisible ? `wbp-setup-overlay ${setupOverlayExiting ? "wbp-setup-overlay--exiting" : ""}` : ""}`} role={overlayVisible ? "dialog" : undefined} aria-modal={overlayVisible ? "true" : undefined} aria-label={overlayVisible ? "Let's set up your home" : undefined}>
       {historyStage === "audit" ? <>
-      {showSetupOverlay ? <div className="mb-3 flex justify-end"><button type="button" onClick={() => setShowSetupOverlay(false)} className="border border-gray-300 bg-white px-3 py-1.5 text-sm font-semibold text-gray-800">Close</button></div> : null}
+      {showSetupOverlay ? <div className="mb-3 flex justify-end"><button type="button" onClick={() => setShowSetupOverlay(false)} className="flex h-9 w-9 items-center justify-center text-2xl text-gray-700" aria-label="Close setup" title="Close setup">&times;</button></div> : null}
       <header className={`border-b border-gray-300 ${showSetupOverlay ? "hidden" : ""}`}>
       <nav className="relative -mb-px grid w-full min-w-0 grid-cols-4 gap-1 sm:flex sm:justify-center" role="tablist" aria-label="New building sections">
         {[["ownership", "Ownership"], ["measurements", "3D Model"], ["energy", "Energy Monitoring"], ["health", "Health Monitoring"]].map(([id, label]) => (

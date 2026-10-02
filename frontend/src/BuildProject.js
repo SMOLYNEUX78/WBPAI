@@ -119,7 +119,7 @@ export default function BuildProject() {
       {status ? <p role="status" className="mt-3 text-sm">{status}</p> : null}
     </section>
   </main>
-  {newFlow ? <ProfileSetupOverlay title="New build record" phase="Build" step={setupStep + 1} total={2}>
+  {newFlow ? <ProfileSetupOverlay title="New build record" phase="Build" step={setupStep + 1} total={2} onClose={() => navigate("/workspace/builder")}>
     <form onSubmit={(event) => save(event, true)} className="wbp-project-setup-form">
       {setupStep === 0 ? <>
         <label className="wbp-access-field"><span>Project name</span><input value={record.title} onChange={(event) => change("title", event.target.value)} required /></label>

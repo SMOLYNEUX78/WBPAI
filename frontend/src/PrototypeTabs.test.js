@@ -19,11 +19,11 @@ test("design prototype navigation contains the portfolio and exchange", () => {
   expect(screen.queryByRole("button", { name: "WBP-001cc" })).not.toBeInTheDocument();
 });
 
-test("Design New opens the stepped project setup route", () => {
+test("Design New opens organisation signup, not project setup", () => {
   const CurrentPath = () => <p data-testid="current-path">{useLocation().pathname}</p>;
   render(<MemoryRouter initialEntries={["/workspace/architect"]}>
     <Routes><Route path="*" element={<><PrototypeTabs scope="design" activePath="/workspace/architect" /><CurrentPath /></>} /></Routes>
   </MemoryRouter>);
   fireEvent.click(screen.getByRole("button", { name: "New" }));
-  expect(screen.getByTestId("current-path")).toHaveTextContent("/workspace/architect/project/new");
+  expect(screen.getByTestId("current-path")).toHaveTextContent("/login");
 });
