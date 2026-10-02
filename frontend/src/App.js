@@ -571,7 +571,7 @@ const ProfessionalWorkspace = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const isBuilder = role === "builder";
-  const [profile, setProfile] = useState(location.state?.profile?.organisationName ? location.state.profile : {});
+  const [profile, setProfile] = useState(location.state?.profile || {});
   const [profileEmail, setProfileEmail] = useState("");
   const [profileStatus, setProfileStatus] = useState("");
   const [editingProfile, setEditingProfile] = useState(false);
@@ -616,8 +616,8 @@ const ProfessionalWorkspace = () => {
       let cached = {};
       try {
         cached = JSON.parse(window.localStorage.getItem(`wbp-${role}-profile-${data.user.id}`) || "{}");
-        setProfile(location.state?.profile?.organisationName ? location.state.profile : cached);
-        setProfileDraft(location.state?.profile?.organisationName ? location.state.profile : cached);
+        setProfile(location.state?.profile && Object.values(location.state.profile).some(Boolean) ? location.state.profile : cached);
+        setProfileDraft(location.state?.profile && Object.values(location.state.profile).some(Boolean) ? location.state.profile : cached);
       } catch {
         setProfile({});
       }
