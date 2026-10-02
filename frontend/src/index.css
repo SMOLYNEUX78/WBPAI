@@ -737,9 +737,32 @@ code {
 .wbp-profile-setup-backdrop { position: fixed; inset: 0; z-index: 1000; backdrop-filter: blur(5px); }
 .wbp-profile-setup { width: min(540px, 100%); }
 .wbp-profile-setup h2 { font-size: 1.4rem; font-weight: 700; margin: 8px 0 16px; }
-.wbp-profile-setup form { display: grid; gap: 12px; }
-.wbp-profile-setup input { width: 100%; }
+.wbp-profile-setup form { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+.wbp-profile-setup .wbp-access-field { min-width: 0; }
+.wbp-profile-setup .wbp-access-field > input,
+.wbp-profile-setup .wbp-profile-registration input {
+  width: 100%;
+  height: 46px;
+  min-height: 46px;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid #9ca3af;
+  border-radius: 0;
+  background: #fff;
+  color: #111827;
+  font: inherit;
+}
+.wbp-profile-setup .wbp-access-field > input[type="file"] { padding: 7px 10px; }
+.wbp-profile-setup input[type="file"]::file-selector-button {
+  margin-right: 10px;
+  padding: 4px 8px;
+  border: 1px solid #9ca3af;
+  background: #f9fafb;
+  color: #111827;
+  font: inherit;
+}
 .wbp-profile-registration { display: flex; gap: 8px; margin: 6px 0; }
+.wbp-profile-registration input { min-width: 0; flex: 1; }
 .wbp-profile-registration button { border: 1px solid #b6d7c7; padding: 4px 8px; }
 .wbp-profile-stages { display: flex; flex-wrap: wrap; gap: 12px; }
 .wbp-profile-stages legend { width: 100%; font-weight: 700; }
