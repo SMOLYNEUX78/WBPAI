@@ -862,7 +862,7 @@ code {
 .wbp-handover-manifest > div { padding: 12px; border: 1px solid #e5e7eb; background: #f9fafb; }
 .wbp-handover-manifest span { color: #374151; font-size: 11px; font-weight: 800; text-transform: uppercase; }
 .wbp-handover-manifest p { color: #4b5563; }
-.wbp-project-register { margin: 20px clamp(20px, 4vw, 58px) 48px; border: 1px solid #d1d5db; background: #ffffff; }
+.wbp-project-register { container-type: inline-size; margin: 20px clamp(20px, 4vw, 58px) 48px; border: 1px solid #d1d5db; background: #ffffff; }
 .wbp-register-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 21px; border-bottom: 1px solid #e5e7eb; }
 .wbp-register-heading p { margin: 0 0 4px; color: #6b7280; font-size: 11px; font-weight: 800; text-transform: uppercase; }
 .wbp-register-heading h2 { margin: 0; font-size: 20px; }
@@ -875,7 +875,17 @@ button.wbp-project-row:hover { background: #f9fafb; }
 .wbp-project-row.is-heading { min-height: 39px; background: #f9fafb; color: #6b7280; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; }
 .wbp-project-row strong { color: #111827; font-size: 1em; }
 
-@media (max-width: 650px) {
+@container (min-width: 720px) {
+  .wbp-project-row { font-size: 1rem; }
+  .wbp-project-row.is-heading { font-size: 0.8125rem; }
+}
+
+@container (min-width: 1050px) {
+  .wbp-project-row { font-size: 1.125rem; min-height: 60px; }
+  .wbp-project-row.is-heading { font-size: 0.875rem; }
+}
+
+@container (max-width: 620px) {
   .wbp-project-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) 1rem; gap: 6px 12px; padding: 12px; }
   .wbp-project-row.is-heading { display: none; }
   .wbp-project-row > :nth-child(3) { grid-column: 1; }
