@@ -187,6 +187,7 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
   const [documents, setDocuments] = useState([]);
   const [renamingDocumentId, setRenamingDocumentId] = useState(null);
   const [documentNameDraft, setDocumentNameDraft] = useState("");
+  const [deletingDocumentId, setDeletingDocumentId] = useState(null);
   const [planningCandidates, setPlanningCandidates] = useState([]);
   const [planningStatus, setPlanningStatus] = useState("");
   const [designCouncil, setDesignCouncil] = useState("");
@@ -430,8 +431,8 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
     if (stage === "audit" || !recordId) return;
     let active = true;
     supabase.from("WBPEvidenceVersions")
-      .select("id,evidence_type,original_file_name,display_name,storage_reference,created_at")
-      .eq("building_record_id", recordId).eq("lifecycle_stage", stage)
+      .select("id,evidence_type,original_file_name,display_name,storage_reference,created_at,assurance_status")
+      .eq("building_record_id", recordId).eq("lifecycle_stage", stage).is("deleted_at", null)
       .order("created_at", { ascending: false }).limit(20)
       .then(({ data, error }) => {
         if (!active) return;
@@ -542,7 +543,7 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
         evidence_hash: evidenceHash, original_file_name: file.name, mime_type: file.type,
         byte_size: file.size, classification: "verifier-access", assurance_status: "self-declared",
         submitted_by: auth.user.id,
-      }).select("id,evidence_type,original_file_name,display_name,storage_reference,created_at").single();
+      }).select("id,evidence_type,original_file_name,display_name,storage_reference,created_at,assurance_status").single();
       if (metadataError) throw metadataError;
       setDocuments((current) => [data, ...current]);
       setUploadStatus(`${file.name} stored privately. Origin and contents are not yet verified.`);
@@ -586,6 +587,46 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
     setUploadStatus("Document name saved.");
   };
 
+  const deleteHistoricalDocument = async (document) => {
+    if (!recordId || !document?.id || document.assurance_status !== "self-declared") return;
+    setBusy(true);
+    setUploadStatus("");
+    const { data: auth, error: authError } = await supabase.auth.getUser();
+    if (authError || !auth.user) {
+      setUploadStatus("Sign in again before deleting this document.");
+      setBusy(false);
+      return;
+    }
+    const deletedAt = new Date().toISOString();
+    const evidence = supabase.from("WBPEvidenceVersions");
+    const { data, error } = await evidence.update({ deleted_at: deletedAt })
+      .eq("id", document.id).eq("building_record_id", recordId)
+      .eq("lifecycle_stage", stage).eq("assurance_status", "self-declared")
+      .is("deleted_at", null).select("id").single();
+    if (error || !data) {
+      setUploadStatus(`Could not delete document: ${error?.message || "Record unavailable"}`);
+      setBusy(false);
+      return;
+    }
+    const { error: storageError } = document.storage_reference
+      ? await supabase.storage.from("wbp-private-evidence").remove([document.storage_reference])
+      : { error: null };
+    if (storageError) {
+      const { error: restoreError } = await evidence.update({ deleted_at: null })
+        .eq("id", document.id).eq("building_record_id", recordId).eq("deleted_at", deletedAt);
+      setUploadStatus(restoreError
+        ? "The file could not be removed and its listing could not be restored. Contact support."
+        : `Could not remove private file: ${storageError.message}`);
+      setBusy(false);
+      return;
+    }
+    setDocuments((current) => current.filter((item) => item.id !== document.id));
+    setDeletingDocumentId(null);
+    setRenamingDocumentId(null);
+    setUploadStatus("Document deleted. Its audit metadata is retained without the file.");
+    setBusy(false);
+  };
+
   const documentList = documents.length ? <div className="min-w-0">
     <h4 className="font-semibold text-emerald-950">Historical documents</h4>
     <ul className="mt-1 divide-y divide-emerald-200">{documents.map((item) => <li key={item.id} className="min-w-0 py-1.5">
@@ -595,7 +636,11 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
         <button type="button" onClick={() => setRenamingDocumentId(null)} className="text-gray-600 underline">Cancel</button>
       </form> : <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
         <a href="#historical-documents" onClick={(event) => { event.preventDefault(); openHistoricalDocument(item); }} title={item.original_file_name} className="min-w-0 break-all font-semibold text-emerald-800 underline underline-offset-2">{item.display_name || item.original_file_name}</a>
-        <button type="button" onClick={() => { setRenamingDocumentId(item.id); setDocumentNameDraft(item.display_name || item.original_file_name.replace(/\.[^.]+$/, "")); setUploadStatus(""); }} className="text-emerald-900 underline">Rename</button>
+        <button type="button" onClick={() => { setRenamingDocumentId(item.id); setDeletingDocumentId(null); setDocumentNameDraft(item.display_name || item.original_file_name.replace(/\.[^.]+$/, "")); setUploadStatus(""); }} className="text-emerald-900 underline">Rename</button>
+        {item.assurance_status === "self-declared" ? deletingDocumentId === item.id ? <span className="flex flex-wrap items-baseline gap-2 text-red-800">
+          Delete this file? <button type="button" disabled={busy} onClick={() => deleteHistoricalDocument(item)} className="font-semibold underline disabled:opacity-50">Confirm delete</button>
+          <button type="button" onClick={() => setDeletingDocumentId(null)} className="underline">Cancel</button>
+        </span> : <button type="button" onClick={() => { setDeletingDocumentId(item.id); setRenamingDocumentId(null); setUploadStatus(""); }} className="text-red-800 underline">Delete</button> : null}
         <span className="text-gray-500">(unverified)</span>
       </div>}
     </li>)}</ul>

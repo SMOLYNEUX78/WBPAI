@@ -130,7 +130,7 @@ test("practice name checks a distinctive part against existing Design accounts",
 
 test("saved design documents open through a short-lived private link", async () => {
   const evidence = { id: "evidence-1", original_file_name: "planning.pdf", storage_reference: "owner/home/planning.pdf" };
-  const query = { eq: () => query, order: () => query, limit: () => Promise.resolve({ data: [evidence], error: null }),
+  const query = { eq: () => query, is: () => query, order: () => query, limit: () => Promise.resolve({ data: [evidence], error: null }),
     maybeSingle: () => Promise.resolve({ data: null, error: null }) };
   const from = jest.spyOn(supabase, "from").mockImplementation(() => ({ select: () => query }));
   const createSignedUrl = jest.fn().mockResolvedValue({ data: { signedUrl: "https://private.example/planning" }, error: null });
@@ -148,7 +148,7 @@ test("saved design documents open through a short-lived private link", async () 
 
 test("historical build document labels save without changing the uploaded filename", async () => {
   const evidence = { id: "evidence-1", original_file_name: "certificate-2020.pdf", display_name: null, storage_reference: "owner/home/certificate-2020.pdf" };
-  const query = { eq: () => query, order: () => query, limit: () => Promise.resolve({ data: [evidence], error: null }),
+  const query = { eq: () => query, is: () => query, order: () => query, limit: () => Promise.resolve({ data: [evidence], error: null }),
     maybeSingle: () => Promise.resolve({ data: null, error: null }) };
   const updateSingle = jest.fn().mockResolvedValue({ data: { id: evidence.id, display_name: "Insulation cert" }, error: null });
   const updateQuery = { eq: () => updateQuery, select: () => ({ single: updateSingle }) };
@@ -163,6 +163,28 @@ test("historical build document labels save without changing the uploaded filena
     expect(update).toHaveBeenCalledWith({ display_name: "Insulation cert" });
     expect(screen.getByRole("link", { name: "Insulation cert" })).toHaveAttribute("title", evidence.original_file_name);
   } finally { from.mockRestore(); }
+});
+
+test("unverified historical build documents require confirmation before private file removal", async () => {
+  const evidence = { id: "evidence-1", original_file_name: "certificate.pdf", storage_reference: "owner/home/certificate.pdf", assurance_status: "self-declared" };
+  const query = { eq: () => query, is: () => query, order: () => query, limit: () => Promise.resolve({ data: [evidence], error: null }),
+    maybeSingle: () => Promise.resolve({ data: null, error: null }) };
+  const updateSingle = jest.fn().mockResolvedValue({ data: { id: evidence.id }, error: null });
+  const updateQuery = { eq: () => updateQuery, is: () => updateQuery, select: () => ({ single: updateSingle }) };
+  const update = jest.fn().mockReturnValue(updateQuery);
+  const from = jest.spyOn(supabase, "from").mockImplementation(() => ({ select: () => query, update }));
+  const getUser = jest.spyOn(supabase.auth, "getUser").mockResolvedValue({ data: { user: { id: "owner-1" } }, error: null });
+  const remove = jest.fn().mockResolvedValue({ data: [], error: null });
+  const storage = jest.spyOn(supabase, "storage", "get").mockReturnValue({ from: () => ({ remove }) });
+  try {
+    render(<OccupyHistoryTabs record={{ databaseId: "home-1" }} property={null} activeStage="build" contentOnly />);
+    fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
+    expect(remove).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
+    await waitFor(() => expect(screen.queryByRole("link", { name: "certificate.pdf" })).not.toBeInTheDocument());
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({ deleted_at: expect.any(String) }));
+    expect(remove).toHaveBeenCalledWith([evidence.storage_reference]);
+  } finally { from.mockRestore(); getUser.mockRestore(); storage.mockRestore(); }
 });
 
 test("energy monitoring contains bill and carbon context while health has its own tab", () => {
