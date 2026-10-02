@@ -87,7 +87,7 @@ export default function BuildProject() {
   };
 
   return <><main className="wbp-professional-shell is-build" aria-hidden={newFlow ? "true" : undefined}>
-    <div className="wbp-professional-sticky"><header className="wbp-professional-nav"><PrototypeTabs scope="build" activePath="/workspace/builder/new" /></header>
+    <div className="wbp-professional-sticky"><header className="wbp-professional-nav"><PrototypeTabs scope="build" activePath="/workspace/builder" /></header>
       <section className="wbp-professional-stage-banner is-build"><div><strong>Build</strong><span>Delivery, quality and commissioning</span></div><button type="button" onClick={() => navigate("/workspace/builder")}>Build profile</button></section></div>
     <section className="wbp-design-fields">
       <h1 className="text-xl font-bold">{projectId ? "Build record" : "New build record"}</h1>

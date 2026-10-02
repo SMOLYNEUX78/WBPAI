@@ -573,6 +573,8 @@ const ProfessionalWorkspace = ({ workspaceRole }) => {
   const navigate = useNavigate();
   const isBuilder = role === "builder";
   const isNewDesignProfile = role === "architect" && location.pathname === "/workspace/architect/new";
+  const isNewBuildProfile = role === "builder" && location.pathname === "/workspace/builder/profile/new";
+  const isNewWorkspaceProfile = isNewDesignProfile || isNewBuildProfile;
   const [profile, setProfile] = useState(location.state?.profile || {});
   const [profileEmail, setProfileEmail] = useState("");
   const [profileStatus, setProfileStatus] = useState("");
@@ -718,7 +720,7 @@ const ProfessionalWorkspace = ({ workspaceRole }) => {
       window.localStorage.setItem(`wbp-${role}-profile-${user.id}`, JSON.stringify(updated));
       setEditingProfile(false);
       setProfileStatus("Profile saved.");
-      if (isNewDesignProfile) navigate("/workspace/architect");
+      if (isNewWorkspaceProfile) navigate(`/workspace/${role}`);
       if (user.email?.toLowerCase() !== TEST_PROFESSIONAL_EMAIL && !organisationAccess) {
         const { error: accessError } = await supabase.rpc("wbp_request_organisation_access", {
           p_workspace_role: role, p_organisation_name: updated.organisationName,
@@ -786,7 +788,7 @@ const ProfessionalWorkspace = ({ workspaceRole }) => {
     navigate("/login");
   };
 
-  const needsSetup = profileLoaded && !setupDismissed && (isNewDesignProfile || profile.onboardingComplete === false || !profile.organisationName);
+  const needsSetup = profileLoaded && !setupDismissed && (isNewWorkspaceProfile || profile.onboardingComplete === false || !profile.organisationName);
   const setupFields = [
     [["organisationName", "Organisation name"], ["organisationType", "Organisation type"], ["registrationNumber", "Companies House / statutory registration"], ["contactName", "Primary contact name"]],
     [["address", "Head office address"], ["city", "Town / city"], ["postcode", "Postcode"], ["serviceArea", "Operating area"]],
@@ -797,7 +799,7 @@ const ProfessionalWorkspace = ({ workspaceRole }) => {
     <main className={`wbp-professional-shell is-${isBuilder ? "build" : "design"}`}>
       {needsSetup ? <div className="wbp-auth-backdrop wbp-profile-setup-backdrop">
         <section className="wbp-auth-modal wbp-profile-setup" role="dialog" aria-modal="true" aria-labelledby="profile-setup-title">
-          <button type="button" className="wbp-auth-close" aria-label="Close setup" onClick={() => { setSetupDismissed(true); if (isNewDesignProfile) navigate("/workspace/architect"); }}>&times;</button>
+          <button type="button" className="wbp-auth-close" aria-label="Close setup" onClick={() => { setSetupDismissed(true); if (isNewWorkspaceProfile) navigate(`/workspace/${role}`); }}>&times;</button>
           <p className="text-sm font-semibold uppercase">{isBuilder ? "Build" : "Design"} · {setupStep + 1} of 4</p>
           <h2 id="profile-setup-title">{isBuilder ? "Set up your build profile" : "Set up your design profile"}</h2>
           <form key={setupStep} className="wbp-setup-step-enter" onSubmit={saveSetupStep}>
@@ -1159,6 +1161,7 @@ const App = () => (
       <Route path="/workspace/design-profile/:profileId" element={<AuthenticatedRoute><OrganisationAccountPreview /></AuthenticatedRoute>} />
       <Route path="/workspace/build-profile/:profileId" element={<AuthenticatedRoute><OrganisationAccountPreview role="builder" /></AuthenticatedRoute>} />
       <Route path="/workspace/architect/new" element={<AuthenticatedRoute requireProfessionalEmail><ProfessionalWorkspace workspaceRole="architect" /></AuthenticatedRoute>} />
+      <Route path="/workspace/builder/profile/new" element={<AuthenticatedRoute requireProfessionalEmail><ProfessionalWorkspace workspaceRole="builder" /></AuthenticatedRoute>} />
       <Route path="/workspace/:role" element={<AuthenticatedRoute requireProfessionalEmail><ProfessionalWorkspace /></AuthenticatedRoute>} />
       <Route path="/workspace/architect/project/:projectId" element={<AuthenticatedRoute requireProfessionalEmail><DesignProject /></AuthenticatedRoute>} />
       <Route path="/workspace/builder/new" element={<AuthenticatedRoute requireProfessionalEmail><BuildProject /></AuthenticatedRoute>} />

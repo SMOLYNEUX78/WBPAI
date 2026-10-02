@@ -14,7 +14,7 @@ const DESIGN_TABS = [
   { label: "Exchange", path: "/dashboard/exchange?role=architect" },
 ];
 const BUILD_TABS = [
-  { label: "New", path: "/workspace/builder/new" },
+  { label: "New", path: "/workspace/builder/profile/new" },
   { label: "Profile", path: "/workspace/builder" },
 ];
 

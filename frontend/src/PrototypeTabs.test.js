@@ -27,3 +27,12 @@ test("Design New opens organisation profile setup, not project setup", () => {
   fireEvent.click(screen.getByRole("button", { name: "New" }));
   expect(screen.getByTestId("current-path")).toHaveTextContent("/workspace/architect/new");
 });
+
+test("Build New opens organisation profile setup, not a build record", () => {
+  const CurrentPath = () => <p data-testid="current-path">{useLocation().pathname}</p>;
+  render(<MemoryRouter initialEntries={["/workspace/builder"]}>
+    <Routes><Route path="*" element={<><PrototypeTabs scope="build" activePath="/workspace/builder" /><CurrentPath /></>} /></Routes>
+  </MemoryRouter>);
+  fireEvent.click(screen.getByRole("button", { name: "New" }));
+  expect(screen.getByTestId("current-path")).toHaveTextContent("/workspace/builder/profile/new");
+});

@@ -73,7 +73,7 @@ test("Build New tab opens and saves a build-specific record", async () => {
     : { select: () => ({ order: async () => ({ data: [], error: null }), eq: () => ({ eq: () => ({ maybeSingle: async () => ({ data: table === "WBPWorkspaceProfiles" ? { profile: { organisationName: "Example Builders", professionalRegistrations: ["CIOB 12345"], phone: "01234 567890" } } : null, error: null }) }) }) }) });
   window.history.pushState({}, "", "/workspace/builder");
   render(<App />);
-  fireEvent.click(await screen.findByRole("button", { name: "New" }));
+  fireEvent.click(await screen.findByRole("button", { name: /New project/i }));
   const dialog = await screen.findByRole("dialog", { name: "New build record" });
   expect(window.location.pathname).toBe("/workspace/builder/new");
   fireEvent.change(within(dialog).getByRole("textbox", { name: "Project name" }), { target: { value: "Bridgewood retrofit" } });
@@ -363,6 +363,23 @@ test("Design New opens the stepped organisation profile over its preview", async
   expect(within(dialog).getByRole("textbox", { name: "Organisation name" })).toHaveValue("Existing Studio");
   fireEvent.click(within(dialog).getByRole("button", { name: "Close setup" }));
   expect(window.location.pathname).toBe("/workspace/architect");
+});
+
+test("Build New opens the stepped organisation profile over its preview", async () => {
+  const session = { user: { id: "build-profile-test", email: "wbpai25@gmail.com" } };
+  supabase.auth.getSession.mockResolvedValue({ data: { session } });
+  supabase.auth.getUser.mockResolvedValue({ data: { user: session.user } });
+  supabase.auth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: jest.fn() } } });
+  window.localStorage.setItem(`wbp-builder-profile-${session.user.id}`, JSON.stringify({ organisationName: "Existing Builder", onboardingComplete: true }));
+  window.history.pushState({}, "", "/workspace/builder");
+
+  render(<App />);
+  fireEvent.click(within(await screen.findByRole("navigation", { name: "Prototype pages" })).getByRole("button", { name: "New" }));
+  const dialog = await screen.findByRole("dialog", { name: "Set up your build profile" });
+  expect(within(dialog).getByText("Build · 1 of 4")).toBeInTheDocument();
+  expect(within(dialog).getByRole("textbox", { name: "Organisation name" })).toHaveValue("Existing Builder");
+  fireEvent.click(within(dialog).getByRole("button", { name: "Close setup" }));
+  expect(window.location.pathname).toBe("/workspace/builder");
 });
 
 test("test account switches workspaces without requesting another email link", async () => {
