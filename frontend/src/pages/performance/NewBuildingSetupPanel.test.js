@@ -162,6 +162,23 @@ test("historical documents use stable numbered names in two columns unless renam
   } finally { from.mockRestore(); }
 });
 
+test("saved Build documents show rename and delete only in Edit details", async () => {
+  const evidence = { id: "evidence-1", original_file_name: "certificate.pdf", storage_reference: "owner/home/certificate.pdf", assurance_status: "self-declared" };
+  const query = { eq: () => query, is: () => query, order: () => query, limit: () => Promise.resolve({ data: [evidence], error: null }),
+    maybeSingle: () => Promise.resolve({ data: null, error: null }) };
+  const from = jest.spyOn(supabase, "from").mockImplementation(() => ({ select: () => query }));
+  try {
+    render(<OccupyHistoryTabs record={{ databaseId: "home-1" }} property={null} activeStage="build" contentOnly
+      setup={{ historicalStages: { build: { mainContractor: "Example Builder", savedAt: "2026-01-01" } } }} />);
+    expect(await screen.findByRole("link", { name: "certificate.pdf" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Rename" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Delete" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Edit details" }));
+    expect(screen.getByRole("button", { name: "Rename" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Delete" })).toBeInTheDocument();
+  } finally { from.mockRestore(); }
+});
+
 test("historical build document labels save without changing the uploaded filename", async () => {
   const evidence = { id: "evidence-1", original_file_name: "certificate-2020.pdf", display_name: null, storage_reference: "owner/home/certificate-2020.pdf" };
   const query = { eq: () => query, is: () => query, order: () => query, limit: () => Promise.resolve({ data: [evidence], error: null }),

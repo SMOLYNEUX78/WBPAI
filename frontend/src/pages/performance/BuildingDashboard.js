@@ -637,17 +637,17 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
     setBusy(false);
   };
 
-  const documentList = documents.length ? <div className="min-w-0">
+  const renderDocumentList = (editable = false) => documents.length ? <div className="min-w-0">
     <h4 className="font-semibold text-emerald-950">Historical documents</h4>
     <ul className="mt-1 grid grid-cols-2 gap-x-3">{documents.map((item) => <li key={item.id} className="min-w-0 border-b border-emerald-200 py-1.5">
-      {renamingDocumentId === item.id ? <form onSubmit={(event) => saveDocumentName(event, item)} className="flex flex-wrap items-center gap-2">
+      {editable && renamingDocumentId === item.id ? <form onSubmit={(event) => saveDocumentName(event, item)} className="flex flex-wrap items-center gap-2">
         <input aria-label={`Name for ${item.original_file_name}`} autoFocus maxLength={100} value={documentNameDraft} onChange={(event) => setDocumentNameDraft(event.target.value)} className="min-w-0 flex-1 border border-emerald-300 bg-white px-2 py-1" />
         <button type="submit" disabled={busy} className="font-semibold text-emerald-900 underline disabled:opacity-50">Save</button>
         <button type="button" onClick={() => setRenamingDocumentId(null)} className="text-gray-600 underline">Cancel</button>
       </form> : <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
         <a href="#historical-documents" onClick={(event) => { event.preventDefault(); openHistoricalDocument(item); }} title={item.original_file_name} className="min-w-0 break-all font-semibold text-emerald-800 underline underline-offset-2">{historicalDocumentLabel(item)}</a>
-        <button type="button" onClick={() => { setRenamingDocumentId(item.id); setDeletingDocumentId(null); setDocumentNameDraft(historicalDocumentLabel(item)); setUploadStatus(""); }} className="text-emerald-900 underline">Rename</button>
-        {item.assurance_status === "self-declared" ? deletingDocumentId === item.id ? <span className="flex flex-wrap items-baseline gap-2 text-red-800">
+        {editable ? <button type="button" onClick={() => { setRenamingDocumentId(item.id); setDeletingDocumentId(null); setDocumentNameDraft(historicalDocumentLabel(item)); setUploadStatus(""); }} className="text-emerald-900 underline">Rename</button> : null}
+        {editable && item.assurance_status === "self-declared" ? deletingDocumentId === item.id ? <span className="flex flex-wrap items-baseline gap-2 text-red-800">
           Delete this file? <button type="button" disabled={busy} onClick={() => deleteHistoricalDocument(item)} className="font-semibold underline disabled:opacity-50">Confirm delete</button>
           <button type="button" onClick={() => setDeletingDocumentId(null)} className="underline">Cancel</button>
         </span> : <button type="button" onClick={() => { setDeletingDocumentId(item.id); setRenamingDocumentId(null); setUploadStatus(""); }} className="text-red-800 underline">Delete</button> : null}
@@ -679,7 +679,7 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
                   ? <a href={`/workspace/design-match/${encodeURIComponent(recordId)}`} className="text-emerald-900 underline underline-offset-2">{recordedStage[key]}</a>
                   : key === "internalArea" ? `${recordedStage[key]} m2` : recordedStage[key]}</dd></div>)}
               </dl>)}
-              <div className="min-w-0">{documentList || <><h4 className="font-semibold text-emerald-950">Historical documents</h4><p className="mt-1 text-gray-600">None uploaded</p></>}
+              <div className="min-w-0">{renderDocumentList() || <><h4 className="font-semibold text-emerald-950">Historical documents</h4><p className="mt-1 text-gray-600">None uploaded</p></>}
                 {/^https?:\/\//i.test(recordedStage.planningPortalUrl || "") ? <a href={recordedStage.planningPortalUrl} target="_blank" rel="noopener noreferrer" className="mt-2 block font-semibold text-emerald-900 underline underline-offset-2">Planning portal record URL</a> : null}
               </div>
             </div> : <div className="mt-1 grid min-w-0 grid-cols-3 gap-2 text-[10px] leading-tight [overflow-wrap:anywhere] sm:gap-3 sm:text-xs">
@@ -691,7 +691,7 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
                 const value = recordedStage[key] || (suggestedAddress ? linkedBuilderAddress : "Not yet provided");
                 return <div key={key} className="mb-2 min-w-0"><dt className="text-gray-600">{label}</dt><dd className={`break-words font-semibold ${!recordedStage[key] ? "text-gray-500" : ""}`}>{key === "mainContractor" && recordedStage.buildProfileRef ? <a href={`/workspace/build-profile/${encodeURIComponent(recordedStage.buildProfileRef)}`} className="text-emerald-900 underline underline-offset-2">{value}</a> : value}</dd>{suggestedAddress ? <small className="text-gray-600">From selected Build profile · unverified</small> : null}</div>;
               })}</dl>)}
-              <div className="min-w-0">{documentList || <><h4 className="font-semibold text-emerald-950">Historical documents</h4><p className="mt-1 text-gray-600">None uploaded</p></>}</div>
+              <div className="min-w-0">{renderDocumentList() || <><h4 className="font-semibold text-emerald-950">Historical documents</h4><p className="mt-1 text-gray-600">None uploaded</p></>}</div>
             </div>}
             <div className="mt-2 flex flex-wrap items-end justify-between gap-2">
               <p className="text-gray-600">{recordedStage.designProfileRef || recordedStage.buildProfileRef ? `Owner-selected ${isBuild ? "Build" : "Design"} account; project attribution remains unverified.` : "Owner-supplied historical record; organisation attribution is unverified."}</p>
@@ -801,9 +801,9 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
               onChange={(event) => { uploadDocument(event.target.files?.[0]); event.target.value = ""; }} className="mt-1 block w-full min-w-0 text-xs" />
             {!recordId ? <p className="mt-1 text-gray-700">Save this home before uploading.</p> : null}
             {uploadStatus ? <p role="status" className="mt-1 text-gray-700">{uploadStatus}</p> : null}
-            {!hasRecordedStage ? documentList : null}
+            {renderDocumentList(true)}
           </div> : null}
-          </> : !hasRecordedStage ? documentList : null}
+          </> : !hasRecordedStage ? renderDocumentList() : null}
         </div>}
     </div>
     </div>
