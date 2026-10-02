@@ -10,6 +10,7 @@ import { getReadinessGates } from "./readinessGates";
 import { mergeMonthlyHlaRows } from "./monthlyHla";
 import { liveRedReadings } from "./liveRedReadings";
 import { extractEnergyBillImage, extractEnergyBillPdf, normaliseBillReview } from "./energyBill";
+import RetrofitPlanner from "./RetrofitPlanner";
 import "./occupyScreen.css";
 
 export const DetailSurface = ({ children, title, onClose, modal, headerExtra }) => {
@@ -7280,12 +7281,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
                     {baselineConfidenceSteps.map((step) => <li key={step.label} className="list-disc">{step.complete ? "Complete" : "Needed"}: {step.label} - {step.detail}</li>)}
                   </ul>
                 </details>
-                <button type="button" onClick={() => setActiveMrvEvidenceField("overview")} className="mt-3 block w-full border-t border-gray-200 pt-2 text-left text-xs font-semibold text-gray-700" aria-label={`Audit evidence ${evidencePackScore} percent complete. Open audit evidence pack`}>
-                  <span className="flex justify-between"><span>Audit evidence</span><span>{evidencePackScore}%</span></span>
-                  <span role="progressbar" aria-label="Audit evidence readiness" aria-valuenow={evidencePackScore} aria-valuemin={0} aria-valuemax={100} className="mt-1 block h-2 overflow-hidden bg-gray-200">
-                    <span className={`block h-full transition-[width] duration-300 ${evidencePackScore >= 80 ? "bg-emerald-500" : evidencePackScore >= 50 ? "bg-amber-500" : "bg-red-500"}`} style={{ width: `${evidencePackScore}%` }} />
-                  </span>
-                </button>
+                <RetrofitPlanner ready={baselineConfidence.complete} annualEui={displayedAnnualEui} area={Number(matterportMetadata.internalArea)} DetailSurface={DetailSurface} />
               </div>
             </div>
           ) : isCarbonCreditTab ? (

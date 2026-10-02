@@ -308,6 +308,31 @@
   text-align: left;
 }
 
+.wbp-retrofit-planner { margin-top: 12px; border-top: 1px solid #d1d5db; padding-top: 8px; }
+.wbp-retrofit-tabs { display: flex; gap: 16px; font-size: 12px; font-weight: 700; color: #6b7280; }
+.wbp-retrofit-tabs button { border: 0; border-bottom: 2px solid transparent; background: transparent; padding: 3px 0; }
+.wbp-retrofit-tabs button[aria-selected="true"] { border-bottom-color: #047857; color: #047857; }
+.wbp-retrofit-tabs button:disabled { cursor: not-allowed; color: #9ca3af; }
+.wbp-retrofit-tab--ready { color: #047857; border-bottom: 2px solid #047857; }
+.wbp-retrofit-locked, .wbp-retrofit-caveat { margin-top: 6px; color: #6b7280; font-size: 11px; line-height: 1.4; }
+.wbp-retrofit-content { margin-top: 10px; }
+.wbp-retrofit-options { display: flex; gap: 6px; overflow-x: auto; }
+.wbp-retrofit-option { min-width: 0; flex: 1 0 110px; border: 1px solid #d1d5db; background: white; padding: 7px; text-align: left; font-size: 11px; }
+.wbp-retrofit-option strong, .wbp-retrofit-option span { display: block; }
+.wbp-retrofit-option span { margin-top: 3px; color: #4b5563; }
+.wbp-retrofit-option--selected { border-color: #047857; background: #ecfdf5; }
+.wbp-retrofit-forecast { margin-top: 9px; font-size: 12px; }
+.wbp-retrofit-forecast dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px 12px; margin-top: 7px; }
+.wbp-retrofit-forecast dt { color: #6b7280; }
+.wbp-retrofit-forecast dd { font-weight: 600; }
+.wbp-retrofit-forecast button { margin-top: 9px; border: 1px solid #047857; background: #047857; color: white; padding: 7px 12px; font-weight: 700; }
+.wbp-retrofit-pack { font-size: 14px; line-height: 1.5; }
+.wbp-retrofit-pack h3 { margin-top: 20px; font-weight: 700; }
+.wbp-retrofit-pack ul { margin-top: 8px; }
+.wbp-retrofit-pack li { display: flex; flex-wrap: wrap; gap: 4px 10px; border-bottom: 1px solid #e5e7eb; padding: 8px 0; }
+.wbp-retrofit-pack a { color: #047857; text-decoration: underline; font-weight: 700; }
+.wbp-retrofit-pack li span { color: #4b5563; }
+
 @media (min-width: 600px) and (max-width: 1100px) and (orientation: portrait) {
   .wbp-dashboard--occupy { display: flex; flex-direction: column; height: 100dvh; min-height: 0; overflow: hidden; }
   .wbp-dashboard--occupy > .sticky { flex: none; }
