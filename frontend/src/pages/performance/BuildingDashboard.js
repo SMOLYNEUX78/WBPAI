@@ -185,6 +185,8 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
   const [uploadStatus, setUploadStatus] = useState("");
   const [busy, setBusy] = useState(false);
   const [documents, setDocuments] = useState([]);
+  const [renamingDocumentId, setRenamingDocumentId] = useState(null);
+  const [documentNameDraft, setDocumentNameDraft] = useState("");
   const [planningCandidates, setPlanningCandidates] = useState([]);
   const [planningStatus, setPlanningStatus] = useState("");
   const [designCouncil, setDesignCouncil] = useState("");
@@ -428,7 +430,7 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
     if (stage === "audit" || !recordId) return;
     let active = true;
     supabase.from("WBPEvidenceVersions")
-      .select("id,evidence_type,original_file_name,storage_reference,created_at")
+      .select("id,evidence_type,original_file_name,display_name,storage_reference,created_at")
       .eq("building_record_id", recordId).eq("lifecycle_stage", stage)
       .order("created_at", { ascending: false }).limit(20)
       .then(({ data, error }) => {
@@ -540,7 +542,7 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
         evidence_hash: evidenceHash, original_file_name: file.name, mime_type: file.type,
         byte_size: file.size, classification: "verifier-access", assurance_status: "self-declared",
         submitted_by: auth.user.id,
-      }).select("id,evidence_type,original_file_name,storage_reference,created_at").single();
+      }).select("id,evidence_type,original_file_name,display_name,storage_reference,created_at").single();
       if (metadataError) throw metadataError;
       setDocuments((current) => [data, ...current]);
       setUploadStatus(`${file.name} stored privately. Origin and contents are not yet verified.`);
@@ -565,10 +567,37 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
     viewer.location.replace(data.signedUrl);
   };
 
+  const saveDocumentName = async (event, document) => {
+    event.preventDefault();
+    const name = documentNameDraft.trim();
+    if (!name || name.length > 100) {
+      setUploadStatus("Enter a document name of 1 to 100 characters.");
+      return;
+    }
+    setBusy(true);
+    const { data, error } = await supabase.from("WBPEvidenceVersions")
+      .update({ display_name: name }).eq("id", document.id)
+      .eq("building_record_id", recordId).eq("lifecycle_stage", stage)
+      .select("id,display_name").single();
+    setBusy(false);
+    if (error) { setUploadStatus(`Could not rename document: ${error.message}`); return; }
+    setDocuments((current) => current.map((item) => item.id === data.id ? { ...item, display_name: data.display_name } : item));
+    setRenamingDocumentId(null);
+    setUploadStatus("Document name saved.");
+  };
+
   const documentList = documents.length ? <div className="min-w-0">
     <h4 className="font-semibold text-emerald-950">Historical documents</h4>
     <ul className="mt-1 divide-y divide-emerald-200">{documents.map((item) => <li key={item.id} className="min-w-0 py-1.5">
-      <a href="#historical-documents" onClick={(event) => { event.preventDefault(); openHistoricalDocument(item); }} className="break-all font-semibold text-emerald-800 underline underline-offset-2">{item.original_file_name}</a> <span className="text-gray-500">(unverified)</span>
+      {renamingDocumentId === item.id ? <form onSubmit={(event) => saveDocumentName(event, item)} className="flex flex-wrap items-center gap-2">
+        <input aria-label={`Name for ${item.original_file_name}`} autoFocus maxLength={100} value={documentNameDraft} onChange={(event) => setDocumentNameDraft(event.target.value)} className="min-w-0 flex-1 border border-emerald-300 bg-white px-2 py-1" />
+        <button type="submit" disabled={busy} className="font-semibold text-emerald-900 underline disabled:opacity-50">Save</button>
+        <button type="button" onClick={() => setRenamingDocumentId(null)} className="text-gray-600 underline">Cancel</button>
+      </form> : <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
+        <a href="#historical-documents" onClick={(event) => { event.preventDefault(); openHistoricalDocument(item); }} title={item.original_file_name} className="min-w-0 break-all font-semibold text-emerald-800 underline underline-offset-2">{item.display_name || item.original_file_name}</a>
+        <button type="button" onClick={() => { setRenamingDocumentId(item.id); setDocumentNameDraft(item.display_name || item.original_file_name.replace(/\.[^.]+$/, "")); setUploadStatus(""); }} className="text-emerald-900 underline">Rename</button>
+        <span className="text-gray-500">(unverified)</span>
+      </div>}
     </li>)}</ul>
   </div> : null;
 

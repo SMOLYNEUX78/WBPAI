@@ -146,6 +146,25 @@ test("saved design documents open through a short-lived private link", async () 
   } finally { from.mockRestore(); storage.mockRestore(); open.mockRestore(); }
 });
 
+test("historical build document labels save without changing the uploaded filename", async () => {
+  const evidence = { id: "evidence-1", original_file_name: "certificate-2020.pdf", display_name: null, storage_reference: "owner/home/certificate-2020.pdf" };
+  const query = { eq: () => query, order: () => query, limit: () => Promise.resolve({ data: [evidence], error: null }),
+    maybeSingle: () => Promise.resolve({ data: null, error: null }) };
+  const updateSingle = jest.fn().mockResolvedValue({ data: { id: evidence.id, display_name: "Insulation cert" }, error: null });
+  const updateQuery = { eq: () => updateQuery, select: () => ({ single: updateSingle }) };
+  const update = jest.fn().mockReturnValue(updateQuery);
+  const from = jest.spyOn(supabase, "from").mockImplementation(() => ({ select: () => query, update }));
+  try {
+    render(<OccupyHistoryTabs record={{ databaseId: "home-1" }} property={null} activeStage="build" contentOnly />);
+    fireEvent.click(await screen.findByRole("button", { name: "Rename" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Name for certificate-2020.pdf" }), { target: { value: "Insulation cert" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(screen.getByRole("link", { name: "Insulation cert" })).toBeInTheDocument());
+    expect(update).toHaveBeenCalledWith({ display_name: "Insulation cert" });
+    expect(screen.getByRole("link", { name: "Insulation cert" })).toHaveAttribute("title", evidence.original_file_name);
+  } finally { from.mockRestore(); }
+});
+
 test("energy monitoring contains bill and carbon context while health has its own tab", () => {
   render(<MemoryRouter><NewBuildingSetupPanel /></MemoryRouter>);
   expect(screen.getByRole("tab", { name: "Ownership" })).toBeInTheDocument();
