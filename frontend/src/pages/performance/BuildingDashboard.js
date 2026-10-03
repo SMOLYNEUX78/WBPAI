@@ -7258,13 +7258,13 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
       {building.id === "rf" ? (
         <section className="wbp-retrofit-page -mx-4 px-4 pb-5 sm:px-8" aria-label="Retrofit planning prototype">
           <div className="-mx-4 sm:-mx-8">
-            <div className="wbp-linear-performance-track" role="img" aria-label={Number.isFinite(performanceValue) ? `Measured baseline performance ${Math.round(performanceValue)} out of 100` : "Measured baseline performance pending"}>
+            <button type="button" className="wbp-linear-performance-track" onClick={() => setOccupyDetail("trends")} aria-label={Number.isFinite(performanceValue) ? `Measured baseline performance ${Math.round(performanceValue)} out of 100. Open seasonal charts and deep dive` : "Measured baseline performance pending. Open seasonal charts and deep dive"}>
               {Number.isFinite(performanceValue) ? (
                 <span className="wbp-linear-performance-marker" style={{ left: `${Math.max(0, Math.min(100, performanceValue))}%` }} aria-hidden="true">
                   <span>{Math.round(performanceValue)}</span>
                 </span>
               ) : <span className="wbp-linear-performance-pending">Pending</span>}
-            </div>
+            </button>
           </div>
           <p className="mt-3 text-xs font-semibold text-gray-700">Measured baseline performance</p>
           <div className="flex flex-wrap items-center justify-between gap-2 text-sm font-semibold">
@@ -7274,8 +7274,8 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
           <p className="mt-2 text-xs text-gray-600">Future-stage prototype. This does not change the measured baseline or certify any outcome on WBP-001.</p>
           <RetrofitPlanner ready annualEui={displayedAnnualEui} area={Number(matterportMetadata.internalArea)} DetailSurface={DetailSurface} />
         </section>
-      ) : <>
-      <div className={dataSourceBuildingId === "home" ? "wbp-performance-stage wbp-performance-stage--linear -mx-4" : "wbp-performance-stage bg-gray-100 p-3 sm:p-4 rounded shadow"}>
+      ) : null}
+      <div className={building.id === "rf" ? "hidden" : dataSourceBuildingId === "home" ? "wbp-performance-stage wbp-performance-stage--linear -mx-4" : "wbp-performance-stage bg-gray-100 p-3 sm:p-4 rounded shadow"}>
         {dataSourceBuildingId !== "home" ? <h2 className="mb-2 text-lg font-bold">Performance</h2> : null}
 
         <div className="wbp-performance-content space-y-2.5 sm:space-y-4">
@@ -7348,6 +7348,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
           {!shouldShowDeepDive || occupyDetail !== "performance" ? null : (
           <DetailSurface modal={Boolean(occupyPerformanceTabs)} title={occupyPerformanceTabs ? "" : "Performance deep dive"} onClose={() => setOccupyDetail(null)} headerExtra={occupyPerformanceTabs}>
           <div className="bg-white rounded border p-2.5 sm:p-4 min-w-0 overflow-hidden">
+            {building.id === "rf" ? <p className="mb-3 text-xs text-gray-600">Measured WBP-001 baseline context, not post-retrofit performance.</p> : null}
             {isCarbonCreditTab ? (
               <div className="mb-3 border-b border-gray-100 pb-2 text-xs text-gray-600">
                 <h3 className="font-semibold text-gray-900">
@@ -7865,6 +7866,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
         {!shouldShowDeepDive || occupyDetail !== "trends" ? null : (
         <DetailSurface modal={Boolean(occupyPerformanceTabs)} title={occupyPerformanceTabs ? "" : "Seasonal performance trends"} onClose={() => setOccupyDetail(null)} headerExtra={occupyPerformanceTabs}>
         <div className="mt-4 bg-white rounded border p-3 sm:p-4 space-y-3 overflow-hidden">
+          {building.id === "rf" ? <p className="text-xs text-gray-600">Measured WBP-001 seasonal readings, not a retrofit forecast.</p> : null}
           {isCarbonCreditTab ? <p className="text-xs text-gray-600">{ccStage === "before" ? "Historical seasonal readings; the before baseline is still being gathered, not locked." : "Measured seasonal readings for context; these are not a forecast of the EnerPHit retrofit."}</p> : null}
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="font-semibold">Seasonal Performance Trends</h3>
@@ -8775,7 +8777,6 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
             document.body
           )
         : null}
-      </>}
     </div>
   );
 };

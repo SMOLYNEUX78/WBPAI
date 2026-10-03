@@ -309,8 +309,6 @@
 }
 
 .wbp-retrofit-planner { margin-top: 12px; border-top: 1px solid #d1d5db; padding-top: 8px; }
-.wbp-retrofit-page .wbp-linear-performance-track { cursor: default; }
-.wbp-retrofit-page .wbp-linear-performance-track:hover { filter: none; }
 .wbp-retrofit-locked, .wbp-retrofit-caveat { margin-top: 6px; color: #6b7280; font-size: 11px; line-height: 1.4; }
 .wbp-retrofit-content { margin-top: 10px; }
 .wbp-retrofit-options { display: flex; gap: 6px; overflow-x: auto; }
