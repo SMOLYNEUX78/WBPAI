@@ -1144,16 +1144,16 @@ const BUILDINGS = [
   },
   {
     ...HOME_BUILDING,
-    id: "cc",
-    name: "WBP-001cc",
-    subtitle: "Carbon credit token workspace",
+    id: "rf",
+    name: "WBP-001rf",
+    subtitle: "Retrofit planning prototype",
     dataSourceId: "home",
   },
   {
     ...HOME_BUILDING,
-    id: "rf",
-    name: "WBP-001rf",
-    subtitle: "Retrofit planning prototype",
+    id: "cc",
+    name: "WBP-001cc",
+    subtitle: "Carbon credit token workspace",
     dataSourceId: "home",
   },
   {
