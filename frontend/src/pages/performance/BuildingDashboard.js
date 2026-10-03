@@ -7256,7 +7256,17 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
       </div>
 
       {building.id === "rf" ? (
-        <section className="wbp-retrofit-page -mx-4 px-4 py-5 sm:px-8" aria-label="Retrofit planning prototype">
+        <section className="wbp-retrofit-page -mx-4 px-4 pb-5 sm:px-8" aria-label="Retrofit planning prototype">
+          <div className="-mx-4 sm:-mx-8">
+            <div className="wbp-linear-performance-track" role="img" aria-label={Number.isFinite(performanceValue) ? `Measured baseline performance ${Math.round(performanceValue)} out of 100` : "Measured baseline performance pending"}>
+              {Number.isFinite(performanceValue) ? (
+                <span className="wbp-linear-performance-marker" style={{ left: `${Math.max(0, Math.min(100, performanceValue))}%` }} aria-hidden="true">
+                  <span>{Math.round(performanceValue)}</span>
+                </span>
+              ) : <span className="wbp-linear-performance-pending">Pending</span>}
+            </div>
+          </div>
+          <p className="mt-3 text-xs font-semibold text-gray-700">Measured baseline performance</p>
           <div className="flex flex-wrap items-center justify-between gap-2 text-sm font-semibold">
             <span>Baseline confidence</span><strong>100% assumed</strong>
           </div>
