@@ -344,8 +344,8 @@
   .wbp-dashboard--occupy .wbp-performance-content > * + * { margin-top: 0; }
   .wbp-dashboard--occupy .wbp-performance-content > :first-child { flex: none; }
   .wbp-dashboard--occupy .wbp-performance-stage .wbp-occupy-actions { flex: none; }
-  .wbp-dashboard--occupy:has(.wbp-history-panel--open) { height: auto; min-height: 100dvh; overflow: visible; }
-  .wbp-dashboard--occupy:has(.wbp-history-panel--open) > .overflow-hidden { flex: none; overflow: visible; }
+  .wbp-dashboard--occupy:has(.wbp-history-panel--open) { height: auto; min-height: 100dvh; overflow-x: clip; overflow-y: visible; }
+  .wbp-dashboard--occupy:has(.wbp-history-panel--open) > .overflow-hidden { flex: none; width: 100%; min-width: 0; overflow-x: clip; overflow-y: visible; }
   .wbp-dashboard--occupy:has(.wbp-history-panel--open) > .overflow-hidden > .flex { height: auto; }
   .wbp-dashboard--occupy:has(.wbp-history-panel--open) .wbp-occupy-panel { height: auto; overflow: visible; }
 }

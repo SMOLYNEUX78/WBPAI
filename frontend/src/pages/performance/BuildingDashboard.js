@@ -12443,9 +12443,9 @@ const BuildingDashboard = () => {
             return (
               <div
                 key={building.id}
-                className={isActiveSlide ? "h-auto" : "h-0 overflow-hidden"}
+                className={isActiveSlide ? "h-auto min-w-0" : "h-0 min-w-0 overflow-hidden"}
                 aria-hidden={!isActiveSlide}
-                style={{ width: `${100 / BUILDINGS.length}%` }}
+                style={{ flex: `0 0 ${100 / BUILDINGS.length}%`, width: `${100 / BUILDINGS.length}%` }}
               >
                 {building.setupOnly ? (
                   <NewBuildingSetupPanel key={new URLSearchParams(location.search).get("record") === "existing" ? "existing" : "fresh"} freshStart={new URLSearchParams(location.search).get("record") !== "existing"} syncHomeProfile isActive={isActiveSlide} />
