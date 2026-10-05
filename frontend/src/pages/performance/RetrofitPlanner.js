@@ -28,7 +28,7 @@ export default function RetrofitPlanner({ ready, annualEui, area, DetailSurface 
         <div className="wbp-retrofit-content">
           <div className="wbp-retrofit-options" role="group" aria-label="Retrofit options">
             {OPTIONS.map((item) => (
-              <button key={item.id} type="button" className={item.id === selected ? "wbp-retrofit-option wbp-retrofit-option--selected" : "wbp-retrofit-option"} onClick={() => setSelected(item.id)}>
+              <button key={item.id} type="button" aria-pressed={item.id === selected} className={item.id === selected ? "wbp-retrofit-option wbp-retrofit-option--selected" : "wbp-retrofit-option"} onClick={() => setSelected(item.id)}>
                 <strong>{item.name}</strong><span>Planning target: {item.reduction}% lower EUI</span>
               </button>
             ))}
