@@ -309,16 +309,19 @@
 }
 
 .wbp-retrofit-planner { margin-top: 12px; border-top: 1px solid #d1d5db; padding-top: 8px; }
+.wbp-retrofit-decision { margin-top: 3px; color: #4b5563; font-size: 12px; }
 .wbp-retrofit-locked, .wbp-retrofit-caveat { margin-top: 6px; color: #6b7280; font-size: 11px; line-height: 1.4; }
 .wbp-retrofit-content { margin-top: 10px; }
 .wbp-retrofit-controls { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.wbp-retrofit-controls--main { grid-template-columns: minmax(0, 1fr); }
+.wbp-retrofit-assumptions .wbp-retrofit-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .wbp-retrofit-controls label { min-width: 0; display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: #4b5563; }
 .wbp-retrofit-controls label strong { color: #17212b; font-size: 14px; }
 .wbp-retrofit-controls input[type="range"] { width: 100%; min-height: 24px; accent-color: #047857; }
 .wbp-retrofit-range-labels { display: flex; justify-content: space-between; gap: 4px; font-size: 10px; line-height: 1.2; }
 .wbp-retrofit-range-labels span { max-width: 33%; }
 .wbp-retrofit-range-labels span:last-child { text-align: right; }
-@media (max-width: 599px) { .wbp-retrofit-controls { grid-template-columns: 1fr; gap: 14px; } }
+@media (max-width: 599px) { .wbp-retrofit-controls, .wbp-retrofit-assumptions .wbp-retrofit-controls { grid-template-columns: 1fr; gap: 14px; } }
 .wbp-retrofit-forecast { margin-top: 18px; font-size: 14px; }
 .wbp-retrofit-premium { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 12px; font-size: 12px; font-weight: 600; }
 .wbp-retrofit-premium input { width: 210px; max-width: 100%; border: 1px solid #9ca3af; border-radius: 3px; background: white; padding: 7px 9px; font-size: 13px; font-weight: 400; }
@@ -328,21 +331,16 @@
 .wbp-retrofit-scenarios [role="row"] > :first-child { color: #4b5563; }
 .wbp-retrofit-scenario-labels { background: #ecfdf5; }
 .wbp-retrofit-scenarios [role="row"] > :not(:first-child) { text-align: right; font-weight: 600; }
-.wbp-retrofit-forecast dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 18px; margin-top: 12px; }
-.wbp-retrofit-forecast dl > div { min-width: 0; border-top: 1px solid #d1d5db; padding: 10px 0 12px; }
-.wbp-retrofit-forecast dt { color: #4b5563; font-size: 12px; }
-.wbp-retrofit-forecast dd { margin-top: 3px; font-size: 18px; font-weight: 700; line-height: 1.2; }
-.wbp-retrofit-forecast small { display: block; margin-top: 3px; color: #6b7280; font-size: 11px; line-height: 1.35; }
 .wbp-retrofit-sources { margin-top: 8px; color: #6b7280; font-size: 11px; line-height: 1.4; }
 .wbp-retrofit-sources a { color: #065f46; text-decoration: underline; }
-@media (min-width: 700px) {
-  .wbp-retrofit-forecast dl { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-}
 .wbp-retrofit-forecast button { margin-top: 9px; border: 1px solid #047857; background: #047857; color: white; padding: 7px 12px; font-weight: 700; }
+.wbp-retrofit-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.wbp-retrofit-outcome { margin-top: 10px; font-size: 12px; font-weight: 600; }
 .wbp-retrofit-benefit { display: grid; grid-template-columns: minmax(0, 1fr) 120px minmax(0, 1fr); align-items: center; gap: 14px; margin-top: 16px; border-top: 1px solid #d1d5db; border-bottom: 1px solid #d1d5db; padding: 16px 0; }
 .wbp-retrofit-benefit-main { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
 .wbp-retrofit-benefit-main > p { font-size: 13px; font-weight: 700; }
-.wbp-retrofit-benefit-main > strong { font-size: 28px; line-height: 1.1; }
+.wbp-retrofit-benefit-main > strong { font-size: 22px; line-height: 1.1; overflow-wrap: anywhere; }
+.wbp-retrofit-benefit-main > p:not(:first-child) { margin-top: 8px; }
 .wbp-retrofit-benefit-main > span { font-size: 11px; color: #4b5563; }
 .wbp-retrofit-benefit-pie { width: 120px; aspect-ratio: 1; border-radius: 50%; display: grid; place-items: center; }
 .wbp-retrofit-benefit-pie span { width: 64%; aspect-ratio: 1; border-radius: 50%; background: white; }
@@ -350,9 +348,6 @@
 .wbp-retrofit-benefit-key > div { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; align-items: center; gap: 6px; padding: 3px 0; }
 .wbp-retrofit-benefit-key i { width: 9px; height: 9px; }
 .wbp-retrofit-benefit-key small { display: block; margin-top: 6px; color: #6b7280; font-size: 10px; }
-.wbp-retrofit-benefit-switch { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
-.wbp-retrofit-forecast .wbp-retrofit-benefit-switch button { margin: 0; border: 1px solid #9ca3af; background: white; color: #374151; padding: 5px 7px; font-size: 11px; }
-.wbp-retrofit-forecast .wbp-retrofit-benefit-switch button[aria-pressed="true"] { border-color: #047857; background: #047857; color: white; }
 @media (max-width: 599px) {
   .wbp-retrofit-benefit { grid-template-columns: minmax(0, 1fr) 100px; gap: 10px; }
   .wbp-retrofit-benefit-pie { width: 100px; }
