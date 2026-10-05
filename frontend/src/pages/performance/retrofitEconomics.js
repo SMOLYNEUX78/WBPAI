@@ -4,6 +4,22 @@ export const RETROFIT_OPTIONS = [
   { id: "whole", name: "Whole-home retrofit", reduction: 45, fixedCost: [18000, 28000], areaCost: [270, 470], measures: "Coordinate fabric, ventilation, heating and controls in one staged design." },
 ];
 
+export function getRetrofitOption(scope) {
+  const position = Math.max(0, Math.min(100, Number(scope) || 0));
+  const lower = position < 50 ? RETROFIT_OPTIONS[0] : RETROFIT_OPTIONS[1];
+  const upper = position < 50 ? RETROFIT_OPTIONS[1] : RETROFIT_OPTIONS[2];
+  const fraction = (position % 50) / 50;
+  if (position === 100) return RETROFIT_OPTIONS[2];
+  const blend = (a, b) => a + (b - a) * fraction;
+  return {
+    name: position === 0 ? lower.name : position === 50 ? lower.name : "Staged retrofit",
+    reduction: blend(lower.reduction, upper.reduction),
+    fixedCost: lower.fixedCost.map((value, index) => blend(value, upper.fixedCost[index])),
+    areaCost: lower.areaCost.map((value, index) => blend(value, upper.areaCost[index])),
+    measures: position < 50 ? "Scale fabric, airtightness and ventilation works before adding clean heat." : "Add clean heat and progressively extend to whole-home measures.",
+  };
+}
+
 const OFGEM_OCT_2026_PENCE = { electricity: 26.32, gas: 7.97 };
 const DESNZ_2026_KG_CO2E_PER_KWH = { electricity: 0.13096, gas: 0.18231 };
 export const DATA_LICENCE_REFERENCE_GBP_PER_YEAR = 144 + 120 + 180;
@@ -36,7 +52,7 @@ const validRate = (value, fallback) => {
   return Number.isFinite(parsed) && parsed > 0 && parsed < 100 ? parsed : fallback;
 };
 
-export function projectRetrofit({ option, annualEui, area, electricityDailyKwh, gasDailyKwh, billReview = {} }) {
+export function projectRetrofit({ option, annualEui, area, electricityDailyKwh, gasDailyKwh, billReview = {}, energyPriceChangePercent = 0, carbonPriceChangePercent = 0 }) {
   const validArea = Number.isFinite(area) && area > 0;
   const validEui = Number.isFinite(annualEui) && annualEui > 0;
   const energySavedKwh = validArea && validEui ? annualEui * area * option.reduction / 100 : null;
@@ -56,11 +72,12 @@ export function projectRetrofit({ option, annualEui, area, electricityDailyKwh, 
   const costRangeGbp = validArea ? option.fixedCost.map((fixed, index) => fixed + area * option.areaCost[index]) : null;
   const scenarios = RETROFIT_SCENARIOS.map((scenario, index) => ({
     ...scenario,
+    carbonPrice: Math.max(0, scenario.carbonPrice * (1 + carbonPriceChangePercent / 100)),
     costGbp: costRangeGbp ? [costRangeGbp[1], (costRangeGbp[0] + costRangeGbp[1]) / 2, costRangeGbp[0]][index] : null,
     energySavedKwh: energySavedKwh === null ? null : energySavedKwh * scenario.savingsFactor,
-    billSavedGbp: billSavedGbp === null ? null : billSavedGbp * scenario.savingsFactor,
+    billSavedGbp: billSavedGbp === null ? null : billSavedGbp * scenario.savingsFactor * (1 + energyPriceChangePercent / 100),
     carbonSavedTonnes: carbonSavedTonnes === null ? null : carbonSavedTonnes * scenario.savingsFactor,
-    carbonValueGbp: carbonSavedTonnes === null ? null : carbonSavedTonnes * scenario.savingsFactor * scenario.carbonPrice,
+    carbonValueGbp: carbonSavedTonnes === null ? null : carbonSavedTonnes * scenario.savingsFactor * Math.max(0, scenario.carbonPrice * (1 + carbonPriceChangePercent / 100)),
   }));
 
   return {

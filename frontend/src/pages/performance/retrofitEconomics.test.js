@@ -1,4 +1,12 @@
-import { getAnnualBenefitBreakdown, projectInsuranceSaving, projectRetrofit, RETROFIT_OPTIONS } from "./retrofitEconomics";
+import { getAnnualBenefitBreakdown, getRetrofitOption, projectInsuranceSaving, projectRetrofit, RETROFIT_OPTIONS } from "./retrofitEconomics";
+
+test("interpolates works scope between package anchors", () => {
+  expect(getRetrofitOption(0).reduction).toBe(15);
+  expect(getRetrofitOption(25).reduction).toBe(22.5);
+  expect(getRetrofitOption(50).reduction).toBe(30);
+  expect(getRetrofitOption(100).reduction).toBe(45);
+  expect(getRetrofitOption(25).fixedCost).toEqual([8000, 13500]);
+});
 
 test("insurance sensitivity requires a premium and never assumes a confirmed discount", () => {
   expect(projectInsuranceSaving("", 0.1)).toBeNull();
@@ -42,4 +50,14 @@ test("annual benefit sums distinct components and excludes unknown insurance", (
   const scenario = { billSavedGbp: 300, carbonValueGbp: 40, dataIncome: 222, insuranceDiscount: 0.05 };
   expect(getAnnualBenefitBreakdown(scenario, "")).toMatchObject({ total: 562, insuranceIncluded: false });
   expect(getAnnualBenefitBreakdown(scenario, "500")).toMatchObject({ total: 587, insuranceIncluded: true });
+});
+
+test("price stress changes money values without changing energy or carbon tonnes", () => {
+  const inputs = { option: getRetrofitOption(50), annualEui: 120, area: 100, electricityDailyKwh: 5, gasDailyKwh: 15 };
+  const base = projectRetrofit(inputs).scenarios[1];
+  const stressed = projectRetrofit({ ...inputs, energyPriceChangePercent: 50, carbonPriceChangePercent: 100 }).scenarios[1];
+  expect(stressed.energySavedKwh).toBe(base.energySavedKwh);
+  expect(stressed.carbonSavedTonnes).toBe(base.carbonSavedTonnes);
+  expect(stressed.billSavedGbp).toBeCloseTo(base.billSavedGbp * 1.5);
+  expect(stressed.carbonValueGbp).toBeCloseTo(base.carbonValueGbp * 2);
 });

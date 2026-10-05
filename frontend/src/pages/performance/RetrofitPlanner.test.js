@@ -6,7 +6,7 @@ const Surface = ({ children, title, onClose }) => <div role="dialog" aria-label=
 
 test("keeps retrofit planning locked until baseline is complete", () => {
   render(<RetrofitPlanner ready={false} annualEui={120} area={100} DetailSurface={Surface} />);
-  expect(screen.queryByText("Fabric first")).not.toBeInTheDocument();
+  expect(screen.queryByRole("slider", { name: "Extent of retrofit works" })).not.toBeInTheDocument();
 });
 
 test("shows assumption-based scenarios and opens the selected pack", () => {
@@ -21,9 +21,11 @@ test("shows assumption-based scenarios and opens the selected pack", () => {
   expect(screen.getByText("£25 (5%)")).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Upside" }));
   expect(screen.getByText(/Upside scenario/)).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: /Whole-home retrofit/ }));
+  fireEvent.change(screen.getByRole("slider", { name: "Extent of retrofit works" }), { target: { value: "100" } });
   expect(screen.getByText(/Target EUI 66\.0 kWh\/m²\/yr/)).toBeInTheDocument();
   expect(screen.getByText("£75,000")).toBeInTheDocument();
+  fireEvent.change(screen.getByRole("slider", { name: "Energy unit price change" }), { target: { value: "50" } });
+  expect(screen.getByText("+50%")).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "View retrofit pack" }));
   expect(screen.getByRole("dialog", { name: "Whole-home retrofit plan" })).toBeInTheDocument();
   expect(screen.getByText(/No WBP design or build profile has a verified/)).toBeInTheDocument();
