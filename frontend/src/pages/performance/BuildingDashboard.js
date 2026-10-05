@@ -9113,6 +9113,9 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   const [sensorPhotoBusy, setSensorPhotoBusy] = useState(false);
   const sensorVideoRef = useRef(null);
   const [sensorCheckBusy, setSensorCheckBusy] = useState("");
+  const [dysonStreams, setDysonStreams] = useState([]);
+  const [dysonStreamStatus, setDysonStreamStatus] = useState("");
+  const [dysonStreamBusy, setDysonStreamBusy] = useState(false);
   useEffect(() => {
     if (!syncHomeProfile || !isolatedDraft) return undefined;
     let active = true;
@@ -10264,6 +10267,31 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
     setSensorCheckBusy("");
   };
 
+  const findDysonStreams = async () => {
+    setDysonStreamBusy(true);
+    setDysonStreamStatus("");
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const { data, error } = await supabase.from("Readings")
+      .select("reading_type,timestamp")
+      .eq("building_id", "home")
+      .in("reading_type", DYSON_READING_TYPES.map(([type]) => type))
+      .gte("timestamp", since)
+      .order("timestamp", { ascending: false })
+      .limit(100);
+    if (error) {
+      setDysonStreamStatus("Could not check the collector right now. Try again shortly.");
+      setDysonStreams([]);
+    } else {
+      const latest = new Map();
+      (data || []).forEach((row) => {
+        if (!latest.has(row.reading_type)) latest.set(row.reading_type, row.timestamp);
+      });
+      setDysonStreams(Array.from(latest, ([type, timestamp]) => ({ type, timestamp })));
+      setDysonStreamStatus(latest.size ? "Select the stream matching this instrument." : "No Dyson readings arrived in the past 24 hours. Check the tablet collector and purifier Wi-Fi connection.");
+    }
+    setDysonStreamBusy(false);
+  };
+
   const toggleSensorMetric = (metric) => {
     sensorDraftTouchedRef.current = true;
     setSensorDraft((current) => ({
@@ -10979,6 +11007,13 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                     </select>
                   </label> : null}
                 </div>
+                {sensorDraft.connectionMethod === "dyson" ? <div className="space-y-2">
+                  <button type="button" disabled={dysonStreamBusy} onClick={findDysonStreams} className="border border-emerald-700 px-3 py-2 text-xs font-semibold text-emerald-900 disabled:opacity-50">{dysonStreamBusy ? "Finding streams..." : "Find active Dyson streams"}</button>
+                  {dysonStreamStatus ? <p className="text-xs text-gray-700" role="status">{dysonStreamStatus}</p> : null}
+                  {dysonStreams.length ? <div className="grid gap-2 sm:grid-cols-2">{dysonStreams.map(({ type, timestamp }) => <button key={type} type="button" onClick={() => handleSensorDraftChange("readingType", type)} className={`border p-2 text-left text-xs ${sensorDraft.readingType === type ? "border-emerald-700 bg-emerald-100" : "border-gray-300 bg-white"}`}>
+                    <strong>{DYSON_READING_TYPES.find(([value]) => value === type)?.[1] || type}</strong><br />Last reading: {new Date(timestamp).toLocaleString()}
+                  </button>)}</div> : null}
+                </div> : null}
                 {sensorDraft.connectionMethod === "dyson" ? <details className="border border-emerald-300 bg-emerald-50 p-3 text-xs text-emerald-950">
                   <summary className="cursor-pointer font-semibold">Connect a Dyson on your home network</summary>
                   <ol className="mt-2 list-decimal space-y-1 pl-5">
