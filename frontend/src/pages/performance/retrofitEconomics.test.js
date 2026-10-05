@@ -1,11 +1,27 @@
-import { getAnnualBenefitBreakdown, getRetrofitOption, projectInsuranceSaving, projectRetrofit, RETROFIT_OPTIONS } from "./retrofitEconomics";
+import { CC_CANDIDATE_PROFILE, getAnnualBenefitBreakdown, getRetrofitOption, projectInsuranceSaving, projectRetrofit, RETROFIT_OPTIONS } from "./retrofitEconomics";
 
 test("interpolates works scope between package anchors", () => {
   expect(getRetrofitOption(0).reduction).toBe(15);
   expect(getRetrofitOption(25).reduction).toBe(22.5);
   expect(getRetrofitOption(50).reduction).toBe(30);
-  expect(getRetrofitOption(100).reduction).toBe(45);
+  expect(getRetrofitOption(75).reduction).toBe(35);
+  expect(getRetrofitOption(100).name).toBe("EnerPHit design pathway");
   expect(getRetrofitOption(25).fixedCost).toEqual([8000, 13500]);
+});
+
+test("far-right pathway uses the shared CC all-electric candidate, not a percentage-only fuel mix", () => {
+  const annualEui = 41.47;
+  const area = 99.2;
+  const result = projectRetrofit({
+    option: getRetrofitOption(100), annualEui, area,
+    electricityDailyKwh: 5, gasDailyKwh: 7,
+    billReview: { electricityUnitRatePence: 25, gasUnitRatePence: 8 },
+  });
+  expect(result.targetEui).toBe(CC_CANDIDATE_PROFILE.annualEui);
+  expect(result.energySavedKwh).toBeCloseTo((annualEui - 25) * area);
+  const baselineKwh = annualEui * area;
+  expect(result.billSavedGbp).toBeCloseTo((baselineKwh * (5 / 12) * 25 + baselineKwh * (7 / 12) * 8 - 25 * area * 25) / 100);
+  expect(result.costRangeGbp).toEqual([54760, 99520]);
 });
 
 test("insurance sensitivity requires a premium and never assumes a confirmed discount", () => {
@@ -50,6 +66,9 @@ test("annual benefit sums distinct components and excludes unknown insurance", (
   const scenario = { billSavedGbp: 300, carbonValueGbp: 40, dataIncome: 222, insuranceDiscount: 0.05 };
   expect(getAnnualBenefitBreakdown(scenario, "")).toMatchObject({ total: 562, insuranceIncluded: false });
   expect(getAnnualBenefitBreakdown(scenario, "500")).toMatchObject({ total: 587, insuranceIncluded: true });
+  const extraCost = getAnnualBenefitBreakdown({ ...scenario, billSavedGbp: -50 }, "");
+  expect(extraCost).toMatchObject({ total: 212, energyCostIncrease: 50 });
+  expect(extraCost.parts[0].value).toBe(0);
 });
 
 test("price stress changes money values without changing energy or carbon tonnes", () => {

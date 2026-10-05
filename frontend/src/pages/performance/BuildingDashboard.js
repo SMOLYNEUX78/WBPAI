@@ -11,6 +11,7 @@ import { mergeMonthlyHlaRows } from "./monthlyHla";
 import { liveRedReadings } from "./liveRedReadings";
 import { extractEnergyBillImage, extractEnergyBillPdf, normaliseBillReview } from "./energyBill";
 import RetrofitPlanner from "./RetrofitPlanner";
+import { CC_CANDIDATE_PROFILE } from "./retrofitEconomics";
 import "./occupyScreen.css";
 
 export const DetailSurface = ({ children, title, onClose, modal, headerExtra }) => {
@@ -6143,7 +6144,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
         hddSource: heatLossSummary.hddSource,
       },
       projectedPerformance: {
-        standard: "EnerPHit certified candidate scenario",
+        standard: "EnerPHit design candidate scenario; PHPP and certification pending",
         annualEui: projectedPerformanceDeepDive.annualEui,
         electricityDailyAverage:
           projectedPerformanceDeepDive.electricityDailyAverage,
@@ -6932,13 +6933,13 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
       : null;
   const isNewPerformanceDeepDive = isCarbonCreditTab && ccStage === "live";
   const projectedPerformanceDeepDive = {
-    annualEui: 25,
-    electricityDailyAverage: 6.8,
-    gasDailyAverage: 0,
+    annualEui: CC_CANDIDATE_PROFILE.annualEui,
+    electricityDailyAverage: CC_CANDIDATE_PROFILE.electricityDailyKwh,
+    gasDailyAverage: CC_CANDIDATE_PROFILE.gasDailyKwh,
     regulatedDailyKwh: 4.2,
     unregulatedDailyKwh: 2.6,
     regulatedEnergyShare: 62,
-    splitConfidence: "Projected EnerPHit certified all-electric retrofit profile",
+    splitConfidence: "Projected all-electric EnerPHit design candidate; not certified",
     internalTemp: 20.5,
     externalTemp: sensorData.externalTemp,
     humidity: 45,
@@ -6959,7 +6960,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
     nightCooldownRateCPerHour: 0.08,
     nightCooldownNights: 90,
     nightCooldownSamples: 720,
-    hddSource: "Projected PHPP / EnerPHit retrofit model",
+    hddSource: "Illustrative retrofit profile; PHPP pending",
     comfortNote: "20.5 deg C target internal temp / EnerPHit comfort assumed",
   };
   const displayedAnnualEui = isNewPerformanceDeepDive
@@ -7314,7 +7315,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
             <div className="wbp-linear-performance">
               <button type="button" className="wbp-linear-performance-track"
                 onClick={openCcPerformance}
-                aria-label={Number.isFinite(performanceValue) ? `Measured baseline ${Math.round(performanceValue)} out of 100; EnerPHit live performance 93 out of 100. Open building details` : "Measured baseline pending; EnerPHit live performance 93 out of 100. Open building details"}>
+                aria-label={Number.isFinite(performanceValue) ? `Measured baseline ${Math.round(performanceValue)} out of 100; illustrative EnerPHit candidate 93 out of 100. Open building details` : "Measured baseline pending; illustrative EnerPHit candidate 93 out of 100. Open building details"}>
                 {Number.isFinite(performanceValue) ? <span className="wbp-linear-performance-marker wbp-linear-performance-marker--baseline"
                   style={{ left: `${Math.max(0, Math.min(100, performanceValue))}%` }} aria-hidden="true" /> : null}
                 <span className="wbp-linear-performance-marker" style={{ left: "93%" }} aria-hidden="true" />
@@ -7434,7 +7435,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
                   {isNewPerformanceDeepDive ? (
                     <div className="pt-2 mt-2 border-t border-gray-200 space-y-1">
                       <p>
-                        <strong>Fabric:</strong> EnerPHit certified retrofit envelope
+                        <strong>Fabric:</strong> EnerPHit target envelope; certification pending
                       </p>
                       <p>
                         <strong>Heat Source:</strong> Heat pump + solar-ready electric load
