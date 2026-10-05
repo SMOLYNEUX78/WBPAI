@@ -8800,6 +8800,10 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   const [showSetupOverlay, setShowSetupOverlay] = useState(freshStart || editModal);
   const [editingOwnership, setEditingOwnership] = useState(editModal);
   const [editStep, setEditStep] = useState(1);
+  const selectEditSection = (step) => {
+    setEditStep(step);
+    setSetupTab(({ 4: "measurements", 5: "energy", 6: "health" })[step] || "ownership");
+  };
   const overlayVisible = showSetupOverlay && isActive;
   const wasActiveRef = useRef(isActive);
   useEffect(() => {
@@ -10036,7 +10040,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       window.requestAnimationFrame(() => setupPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
       setPassportSaveStatus("saved");
       setEditingOwnership(editModal);
-      if (editModal) setEditStep(3);
+      if (editModal) selectEditSection(3);
       // Keep the setup open for the private identity and title-evidence step.
     } catch (error) {
       setPassportSaveStatus("error");
@@ -10366,7 +10370,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       <section className={`mx-4 mb-4 bg-gray-100 p-4 shadow ${overlayVisible ? `wbp-setup-overlay ${setupOverlayExiting ? "wbp-setup-overlay--exiting" : ""}` : ""}`} role={overlayVisible ? "dialog" : undefined} aria-modal={overlayVisible ? "true" : undefined} aria-label={overlayVisible ? editModal ? "Edit property profile" : "Let's set up your home" : undefined}>
       <div className={overlayVisible ? "wbp-occupy-setup-dialog" : undefined}>
       {historyStage === "audit" ? <>
-      {showSetupOverlay ? <><div className="wbp-occupy-setup-heading"><div><span>Occupy · {editModal ? `Edit ${editStep} of 3` : `${ownershipRecord ? 3 : propertyDiscovery?.confirmedAt ? 2 : 1} of 3`}</span><h2>{editModal ? "Edit property profile" : "Let’s set up your home"}</h2></div><button type="button" onClick={() => { if (editModal) onClose?.(); else { setShowSetupOverlay(false); navigate("/dashboard/home"); } }} className="wbp-occupy-setup-close" aria-label="Close setup" title="Close setup">&times;</button></div>{editModal ? <nav className="mx-6 mt-4 grid grid-cols-3 gap-2" aria-label="Profile edit steps">{[[1, "Property"], [2, "Owner details"], [3, "Evidence"]].map(([step, label]) => <button key={step} type="button" onClick={() => setEditStep(step)} aria-current={editStep === step ? "step" : undefined} className={`border px-2 py-2 text-xs font-semibold ${editStep === step ? "border-emerald-700 bg-emerald-50 text-emerald-950" : "border-gray-300 text-gray-700"}`}>{label}</button>)}</nav> : null}</> : null}
+      {showSetupOverlay ? <><div className="wbp-occupy-setup-heading"><div><span>Occupy · {editModal ? "Edit profile" : `${ownershipRecord ? 3 : propertyDiscovery?.confirmedAt ? 2 : 1} of 3`}</span><h2>{editModal ? "Edit property profile" : "Let’s set up your home"}</h2></div><button type="button" onClick={() => { if (editModal) onClose?.(); else { setShowSetupOverlay(false); navigate("/dashboard/home"); } }} className="wbp-occupy-setup-close" aria-label="Close setup" title="Close setup">&times;</button></div>{editModal ? <nav className="mx-6 mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3" aria-label="Profile edit steps">{[[1, "Property"], [2, "Owner details"], [3, "Evidence"], [4, "3D model"], [5, "Energy monitoring"], [6, "Health monitoring"]].map(([step, label]) => <button key={step} type="button" onClick={() => selectEditSection(step)} aria-current={editStep === step ? "step" : undefined} className={`border px-2 py-2 text-xs font-semibold ${editStep === step ? "border-emerald-700 bg-emerald-50 text-emerald-950" : "border-gray-300 text-gray-700"}`}>{label}</button>)}</nav> : null}</> : null}
       <header className={`border-b border-gray-300 ${showSetupOverlay ? "hidden" : ""}`}>
       <nav className="relative -mb-px grid w-full min-w-0 grid-cols-4 gap-1 sm:flex sm:justify-center" role="tablist" aria-label="New building sections">
         {[["ownership", "Ownership"], ["measurements", "3D Model"], ["energy", "Energy Monitoring"], ["health", "Health Monitoring"]].map(([id, label]) => (
@@ -10483,7 +10487,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
               ) : null}
             </section> : null}
 
-            {editModal && editStep === 1 && propertyDiscovery?.confirmedAt ? <section className="mt-5 border border-emerald-200 bg-emerald-50 p-4 text-sm"><strong>Current property</strong><p>{propertyDiscovery.address}, {propertyDiscovery.postcode}</p><p>UPRN {propertyDiscovery.uprn || "Pending"}</p><div className="mt-4 flex gap-3"><button type="button" onClick={() => { const updated = { ...propertyDiscovery, confirmedAt: null }; setPropertyDiscovery(updated); window.localStorage.setItem(PROPERTY_DISCOVERY_CACHE_KEY, JSON.stringify({ search: propertySearch, snapshot: updated })); }} className="border border-emerald-700 px-3 py-2 font-semibold text-emerald-900">Change property</button><button type="button" onClick={() => setEditStep(2)} className="bg-emerald-700 px-3 py-2 font-semibold text-white">Owner details</button></div></section> : null}
+            {editModal && editStep === 1 && propertyDiscovery?.confirmedAt ? <section className="mt-5 border border-emerald-200 bg-emerald-50 p-4 text-sm"><strong>Current property</strong><p>{propertyDiscovery.address}, {propertyDiscovery.postcode}</p><p>UPRN {propertyDiscovery.uprn || "Pending"}</p><button type="button" onClick={() => { const updated = { ...propertyDiscovery, confirmedAt: null }; setPropertyDiscovery(updated); window.localStorage.setItem(PROPERTY_DISCOVERY_CACHE_KEY, JSON.stringify({ search: propertySearch, snapshot: updated })); }} className="mt-4 border border-emerald-700 px-3 py-2 font-semibold text-emerald-900">Change property</button></section> : null}
             {propertyDiscovery?.confirmedAt && (!editModal || editStep === 2) ? (
               <section className="wbp-setup-step-enter mt-5 border border-gray-200 bg-white p-3 sm:p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs font-bold uppercase text-emerald-700">Step 2 of 3</p><button type="button" onClick={() => { const updated = { ...propertyDiscovery, confirmedAt: null }; setPropertyDiscovery(updated); window.localStorage.setItem(PROPERTY_DISCOVERY_CACHE_KEY, JSON.stringify({ search: propertySearch, snapshot: updated })); }} className="text-xs font-semibold text-blue-700 underline">Change home</button></div>

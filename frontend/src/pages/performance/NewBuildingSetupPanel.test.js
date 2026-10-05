@@ -26,10 +26,17 @@ test("existing property editing stays in a jumpable dialog", () => {
   const dialog = screen.getByRole("dialog", { name: "Edit property profile" });
   const steps = within(dialog).getByRole("navigation", { name: "Profile edit steps" });
   expect(within(dialog).getByText("Current property")).toBeInTheDocument();
+  expect(within(dialog).getAllByRole("button", { name: "Owner details" })).toHaveLength(1);
   fireEvent.click(within(steps).getByRole("button", { name: "Owner details" }));
   expect(within(dialog).getByRole("combobox", { name: "Property type" })).toHaveValue("Semi-detached house");
   fireEvent.click(within(steps).getByRole("button", { name: "Evidence" }));
   expect(within(dialog).getByText("Show that you can manage this home profile")).toBeInTheDocument();
+  fireEvent.click(within(steps).getByRole("button", { name: "3D model" }));
+  expect(within(dialog).getByRole("button", { name: "Save 3D model" })).toBeInTheDocument();
+  fireEvent.click(within(steps).getByRole("button", { name: "Energy monitoring" }));
+  expect(within(dialog).getByRole("button", { name: "Save energy monitoring" })).toBeInTheDocument();
+  fireEvent.click(within(steps).getByRole("button", { name: "Health monitoring" }));
+  expect(within(dialog).getByRole("button", { name: "Save health monitoring" })).toBeInTheDocument();
   fireEvent.click(within(dialog).getByRole("button", { name: "Close setup" }));
   expect(onClose).toHaveBeenCalledTimes(1);
 });
