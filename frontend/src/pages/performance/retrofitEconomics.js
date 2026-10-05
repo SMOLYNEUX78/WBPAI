@@ -8,6 +8,11 @@ const OFGEM_OCT_2026_PENCE = { electricity: 26.32, gas: 7.97 };
 const DESNZ_2026_KG_CO2E_PER_KWH = { electricity: 0.13096, gas: 0.18231 };
 export const DATA_LICENCE_REFERENCE_GBP_PER_YEAR = 144 + 120 + 180;
 export const CARBON_REFERENCE_GBP_PER_TONNE = 65;
+export const RETROFIT_SCENARIOS = [
+  { id: "low", label: "Conservative", savingsFactor: 0.5, carbonPrice: 0, dataIncome: 0 },
+  { id: "central", label: "Planning", savingsFactor: 1, carbonPrice: 65, dataIncome: DATA_LICENCE_REFERENCE_GBP_PER_YEAR / 2 },
+  { id: "high", label: "Upside", savingsFactor: 1.25, carbonPrice: 150, dataIncome: DATA_LICENCE_REFERENCE_GBP_PER_YEAR },
+];
 
 const validRate = (value, fallback) => {
   const parsed = Number(value);
@@ -32,6 +37,14 @@ export function projectRetrofit({ option, annualEui, area, electricityDailyKwh, 
   const carbonSavedTonnes = hasFuelSplit && energySavedKwh !== null
     ? (electricitySavedKwh * DESNZ_2026_KG_CO2E_PER_KWH.electricity + gasSavedKwh * DESNZ_2026_KG_CO2E_PER_KWH.gas) / 1000 : null;
   const costRangeGbp = validArea ? option.fixedCost.map((fixed, index) => fixed + area * option.areaCost[index]) : null;
+  const scenarios = RETROFIT_SCENARIOS.map((scenario, index) => ({
+    ...scenario,
+    costGbp: costRangeGbp ? [costRangeGbp[1], (costRangeGbp[0] + costRangeGbp[1]) / 2, costRangeGbp[0]][index] : null,
+    energySavedKwh: energySavedKwh === null ? null : energySavedKwh * scenario.savingsFactor,
+    billSavedGbp: billSavedGbp === null ? null : billSavedGbp * scenario.savingsFactor,
+    carbonSavedTonnes: carbonSavedTonnes === null ? null : carbonSavedTonnes * scenario.savingsFactor,
+    carbonValueGbp: carbonSavedTonnes === null ? null : carbonSavedTonnes * scenario.savingsFactor * scenario.carbonPrice,
+  }));
 
   return {
     targetEui: validEui ? annualEui * (1 - option.reduction / 100) : null,
@@ -40,6 +53,7 @@ export function projectRetrofit({ option, annualEui, area, electricityDailyKwh, 
     carbonSavedTonnes,
     carbonReferenceGbp: carbonSavedTonnes === null ? null : carbonSavedTonnes * CARBON_REFERENCE_GBP_PER_TONNE,
     costRangeGbp,
+    scenarios,
     usingBillElectricityRate: electricityRate !== OFGEM_OCT_2026_PENCE.electricity,
     usingBillGasRate: gasRate !== OFGEM_OCT_2026_PENCE.gas,
   };

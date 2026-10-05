@@ -17,6 +17,10 @@ test("uses measured fuel shares and bill rates for conditional annual values", (
   expect(result.billSavedGbp).toBe(441);
   expect(result.carbonSavedTonnes).toBeCloseTo(0.610101);
   expect(result.carbonReferenceGbp).toBeCloseTo(39.656565);
+  expect(result.scenarios.map((scenario) => scenario.carbonPrice)).toEqual([0, 65, 150]);
+  expect(result.scenarios.map((scenario) => scenario.carbonValueGbp)).toEqual([
+    0, result.carbonSavedTonnes * 65, result.carbonSavedTonnes * 1.25 * 150,
+  ]);
 });
 
 test("does not invent fuel-dependent earnings without a metered split", () => {

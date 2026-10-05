@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { CARBON_REFERENCE_GBP_PER_TONNE, DATA_LICENCE_REFERENCE_GBP_PER_YEAR, projectRetrofit, RETROFIT_OPTIONS } from "./retrofitEconomics";
+import { projectRetrofit, RETROFIT_OPTIONS } from "./retrofitEconomics";
 
 const FUNDING = [
   { name: "Warm Homes: Local Grant", href: "https://www.gov.uk/apply-warm-homes-local-grant", note: "Private homes; income and official energy-certificate eligibility apply." },
@@ -30,14 +30,20 @@ export default function RetrofitPlanner({ ready, annualEui, area, electricityDai
           </div>
           <div className="wbp-retrofit-forecast">
             <p><strong>{option.name}</strong> · {option.measures}</p>
-            <dl>
-              <div><dt>Installed retrofit cost</dt><dd>{costRange ? `${formatGbp(costRange[0])}–${formatGbp(costRange[1])}` : "Needs floor area"}</dd><small>{costRange ? `Midpoint ${formatGbp((costRange[0] + costRange[1]) / 2)} · before grants` : ""}</small></div>
-              <div><dt>Annual energy saved</dt><dd>{projection.energySavedKwh !== null ? `${Math.round(projection.energySavedKwh).toLocaleString("en-GB")} kWh` : "Needs baseline EUI and area"}</dd><small>{projection.targetEui !== null ? `Target EUI ${projection.targetEui.toFixed(1)} kWh/m²/yr` : ""}</small></div>
-              <div><dt>Annual bill saving</dt><dd>{projection.billSavedGbp !== null ? `${formatGbp(projection.billSavedGbp)}/yr` : "Needs metered fuel split"}</dd><small>Unit rates only; standing charges unchanged</small></div>
-              <div><dt>Potential carbon value</dt><dd>{projection.carbonReferenceGbp !== null ? `${formatGbp(projection.carbonReferenceGbp)}/yr` : "Needs metered fuel split"}</dd><small>{projection.carbonSavedTonnes !== null ? `${projection.carbonSavedTonnes.toFixed(2)} tCO₂e/yr proxy · £0 issued` : "No issued credits"}</small></div>
-              <div><dt>Potential data licences</dt><dd>£0–{formatGbp(DATA_LICENCE_REFERENCE_GBP_PER_YEAR)}/yr</dd><small>£0 contracted; buyer and consent needed</small></div>
-            </dl>
-            <p className="wbp-retrofit-caveat">Planning assumptions, not a survey or quote. The energy, bill and carbon proxies hold today’s fuel mix constant, so they do not model heat-pump electricity demand or rebound. Carbon uses the 2026 UK factors and an illustrative {formatGbp(CARBON_REFERENCE_GBP_PER_TONNE)}/t reference, not a credit price or sale. Data assumes three annual licences; no buyer is contracted.</p>
+            <p>{projection.targetEui !== null ? `Target EUI ${projection.targetEui.toFixed(1)} kWh/m²/yr` : "Target EUI pending baseline"}</p>
+            <div className="wbp-retrofit-scenarios" role="table" aria-label="Retrofit cost and annual value scenarios">
+              <div className="wbp-retrofit-scenario-labels" role="row"><span role="columnheader">Scenario</span>{projection.scenarios.map((scenario) => <strong role="columnheader" key={scenario.id}>{scenario.label}</strong>)}</div>
+              {[
+                ["Installed cost", (s) => s.costGbp === null ? "Needs floor area" : formatGbp(s.costGbp)],
+                ["Energy saved /yr", (s) => s.energySavedKwh === null ? "Pending" : `${Math.round(s.energySavedKwh).toLocaleString("en-GB")} kWh`],
+                ["Bill saving /yr", (s) => s.billSavedGbp === null ? "Pending" : formatGbp(s.billSavedGbp)],
+                ["Carbon saved /yr", (s) => s.carbonSavedTonnes === null ? "Pending" : `${s.carbonSavedTonnes.toFixed(2)} tCO₂e`],
+                ["Carbon price /t", (s) => s.carbonPrice ? formatGbp(s.carbonPrice) : "No sale"],
+                ["Carbon value /yr", (s) => s.carbonValueGbp === null ? "Pending" : formatGbp(s.carbonValueGbp)],
+                ["Data licences /yr", (s) => formatGbp(s.dataIncome)],
+              ].map(([label, render]) => <div role="row" key={label}><span role="rowheader">{label}</span>{projection.scenarios.map((scenario) => <span role="cell" key={scenario.id}>{render(scenario)}</span>)}</div>)}
+            </div>
+            <p className="wbp-retrofit-caveat">Illustrative scenarios, not quotes or offers. Savings are 50%, 100% and 125% of the selected planning target; winter baseline is incomplete. Carbon prices of £0, £65 and £150/t and data income of £0, £222 and £444/yr are assumptions, not market bids. £0 credits issued and £0 licences contracted. Bill and carbon proxies hold today’s fuel mix constant, so they do not model heat-pump electricity demand or rebound. Costs exclude grants.</p>
             <p className="wbp-retrofit-sources">Cost ranges are WBP planning allowances informed by <a href="https://energysavingtrust.org.uk/retrofitting-the-uks-housing-stock-to-reach-net-zero/" target="_blank" rel="noreferrer">Energy Saving Trust measures</a>; fallback unit rates use <a href="https://www.ofgem.gov.uk/your-energy-supply/your-energy-bill/energy-price-cap-unit-rates-and-standing-charges" target="_blank" rel="noreferrer">Ofgem’s October 2026 averages</a>. Carbon factors: <a href="https://www.gov.uk/government/publications/greenhouse-gas-reporting-conversion-factors-2026" target="_blank" rel="noreferrer">DESNZ 2026</a>.</p>
             <button type="button" onClick={() => setPackOpen(true)}>View retrofit pack</button>
           </div>
