@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { projectInsuranceSaving, projectRetrofit, RETROFIT_OPTIONS } from "./retrofitEconomics";
+import { getAnnualBenefitBreakdown, projectInsuranceSaving, projectRetrofit, RETROFIT_OPTIONS } from "./retrofitEconomics";
 
 const FUNDING = [
   { name: "Warm Homes: Local Grant", href: "https://www.gov.uk/apply-warm-homes-local-grant", note: "Private homes; income and official energy-certificate eligibility apply." },
@@ -13,9 +13,18 @@ export default function RetrofitPlanner({ ready, annualEui, area, electricityDai
   const [selected, setSelected] = useState("fabric");
   const [packOpen, setPackOpen] = useState(false);
   const [annualPremium, setAnnualPremium] = useState("");
+  const [selectedScenario, setSelectedScenario] = useState("central");
   const option = RETROFIT_OPTIONS.find((item) => item.id === selected);
   const projection = projectRetrofit({ option, annualEui, area, electricityDailyKwh, gasDailyKwh, billReview });
   const costRange = projection.costRangeGbp;
+  const activeScenario = projection.scenarios.find((scenario) => scenario.id === selectedScenario);
+  const annualBenefit = getAnnualBenefitBreakdown(activeScenario, annualPremium);
+  let piePosition = 0;
+  const pieStops = annualBenefit?.total > 0 ? annualBenefit.parts.map((part) => {
+    const start = piePosition;
+    piePosition += part.value / annualBenefit.total * 100;
+    return `${part.colour} ${start}% ${piePosition}%`;
+  }).join(", ") : "#e5e7eb 0% 100%";
 
   return (
     <section className="wbp-retrofit-planner" aria-label="Retrofit planning">
@@ -35,6 +44,22 @@ export default function RetrofitPlanner({ ready, annualEui, area, electricityDai
             <label className="wbp-retrofit-premium">Current annual buildings insurance premium, optional (£)
               <input type="number" min="0" max="100000" step="1" inputMode="decimal" value={annualPremium} onChange={(event) => setAnnualPremium(event.target.value)} placeholder="Enter premium to compare quotes" />
             </label>
+            <div className="wbp-retrofit-benefit" aria-label="Potential annual benefit breakdown">
+              <div className="wbp-retrofit-benefit-main">
+                <p>Potential annual benefit</p>
+                <strong>{annualBenefit ? `${formatGbp(annualBenefit.total)}/yr` : "Pending baseline"}</strong>
+                <span>{activeScenario.label} scenario · not secured income</span>
+                <span>Installed cost: {activeScenario.costGbp === null ? "pending area" : formatGbp(activeScenario.costGbp)} before grants</span>
+                <div className="wbp-retrofit-benefit-switch" role="group" aria-label="Annual benefit scenario">
+                  {projection.scenarios.map((scenario) => <button key={scenario.id} type="button" aria-pressed={scenario.id === selectedScenario} onClick={() => setSelectedScenario(scenario.id)}>{scenario.label}</button>)}
+                </div>
+              </div>
+              <div className="wbp-retrofit-benefit-pie" role="img" aria-label={annualBenefit ? `Annual benefit split: ${annualBenefit.parts.map((part) => `${part.label} ${formatGbp(part.value)}`).join(", ")}` : "Annual benefit split pending baseline"} style={{ background: `conic-gradient(${pieStops})` }}><span /></div>
+              <div className="wbp-retrofit-benefit-key">
+                {annualBenefit?.parts.map((part) => <div key={part.label}><i style={{ backgroundColor: part.colour }} /><span>{part.label}</span><strong>{formatGbp(part.value)}</strong></div>)}
+                {annualBenefit && !annualBenefit.insuranceIncluded ? <small>Insurance excluded until a premium is entered.</small> : null}
+              </div>
+            </div>
             <div className="wbp-retrofit-scenarios" role="table" aria-label="Retrofit cost and annual value scenarios">
               <div className="wbp-retrofit-scenario-labels" role="row"><span role="columnheader">Scenario</span>{projection.scenarios.map((scenario) => <strong role="columnheader" key={scenario.id}>{scenario.label}</strong>)}</div>
               {[

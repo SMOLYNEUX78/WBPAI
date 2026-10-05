@@ -1,4 +1,4 @@
-import { projectInsuranceSaving, projectRetrofit, RETROFIT_OPTIONS } from "./retrofitEconomics";
+import { getAnnualBenefitBreakdown, projectInsuranceSaving, projectRetrofit, RETROFIT_OPTIONS } from "./retrofitEconomics";
 
 test("insurance sensitivity requires a premium and never assumes a confirmed discount", () => {
   expect(projectInsuranceSaving("", 0.1)).toBeNull();
@@ -35,4 +35,11 @@ test("does not invent fuel-dependent earnings without a metered split", () => {
   expect(result.energySavedKwh).toBe(1800);
   expect(result.billSavedGbp).toBeNull();
   expect(result.carbonReferenceGbp).toBeNull();
+  expect(getAnnualBenefitBreakdown(result.scenarios[1], "500")).toBeNull();
+});
+
+test("annual benefit sums distinct components and excludes unknown insurance", () => {
+  const scenario = { billSavedGbp: 300, carbonValueGbp: 40, dataIncome: 222, insuranceDiscount: 0.05 };
+  expect(getAnnualBenefitBreakdown(scenario, "")).toMatchObject({ total: 562, insuranceIncluded: false });
+  expect(getAnnualBenefitBreakdown(scenario, "500")).toMatchObject({ total: 587, insuranceIncluded: true });
 });

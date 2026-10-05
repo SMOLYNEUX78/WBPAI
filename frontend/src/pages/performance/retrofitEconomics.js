@@ -19,6 +19,18 @@ export function projectInsuranceSaving(premium, discount) {
   return Number.isFinite(amount) && amount > 0 && amount <= 100000 ? amount * discount : null;
 }
 
+export function getAnnualBenefitBreakdown(scenario, annualPremium) {
+  const insuranceSaving = projectInsuranceSaving(annualPremium, scenario.insuranceDiscount);
+  if (scenario.billSavedGbp === null || scenario.carbonValueGbp === null) return null;
+  const parts = [
+    { label: "Energy bills", value: scenario.billSavedGbp, colour: "#047857" },
+    { label: "Carbon", value: scenario.carbonValueGbp, colour: "#2563eb" },
+    { label: "Data licences", value: scenario.dataIncome, colour: "#d97706" },
+    { label: "Insurance", value: insuranceSaving ?? 0, colour: "#be123c" },
+  ];
+  return { parts, total: parts.reduce((sum, part) => sum + part.value, 0), insuranceIncluded: insuranceSaving !== null };
+}
+
 const validRate = (value, fallback) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 && parsed < 100 ? parsed : fallback;
