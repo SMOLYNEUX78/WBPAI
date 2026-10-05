@@ -163,6 +163,19 @@ MILESIGHT_POLL_INTERVAL_MS=60000
 
 Home Dyson purifier IAQ:
 
+For a new Dyson device, run `python backend/dyson-discover.py` on the home
+collector tablet while it is connected to the same Wi-Fi as the purifier.
+Install `libdyson-rest` locally first if it is missing. The command requests
+Dyson account authentication and a one-time code, lists the purifiers, and asks
+for each private IP shown in the router's device list. It checks that the local
+MQTT port is reachable, then writes `DYSON_DEVICES` to the tablet's ignored
+`backend/.env`. It does not print local MQTT passwords or send them to WBP.
+Restart the collector after enrollment (`scripts/termux-config-home-tablet.sh`
+on the home tablet), then register each sensor under New > Occupy > Health
+monitoring, select its stream, and check for a recent sample. Reserve each
+purifier's IP in the router so it does not change. A recent stream is a data
+availability check, not independent proof of the serial on the physical label.
+
 ```env
 BUILDING_ID=home
 COLLECTOR_INSTANCE=home-tablet

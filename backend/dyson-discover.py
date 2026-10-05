@@ -1,23 +1,20 @@
-"""Discover Dyson purifier details for the local WBPAI Dyson collector.
-
-This uses Dyson's current OTP login flow through libdyson-rest and prints the
-DYSON_DEVICES value expected by dyson-handler.js.
-"""
+"""Enroll Dyson purifiers for the local WBPAI collector without printing secrets."""
 
 from __future__ import annotations
 
 import getpass
 import os
+import socket
 import sys
+import tempfile
+import argparse
+import ipaddress
 from pathlib import Path
 
 
 LOCAL_VENDOR_DIR = Path(__file__).resolve().parent / ".dyson-tools"
 if LOCAL_VENDOR_DIR.exists():
     sys.path.insert(0, str(LOCAL_VENDOR_DIR))
-
-from libdyson_rest import DysonClient  # noqa: E402
-
 
 def env_or_prompt(name: str, prompt: str, secret: bool = False) -> str:
     value = os.environ.get(name, "").strip()
@@ -54,7 +51,40 @@ def safe_name(value: str) -> str:
     )
 
 
+def local_ip(value: str) -> str:
+    address = ipaddress.ip_address(value.strip())
+    if address.version != 4 or not address.is_private or address.is_loopback:
+        raise ValueError("Use the purifier's private IPv4 address from your home router")
+    return str(address)
+
+
+def save_devices(env_path: Path, entries: list[str]) -> None:
+    if not env_path.exists():
+        raise FileNotFoundError(f"Create {env_path} with collector credentials first")
+    original = env_path.read_text(encoding="utf-8")
+    lines = [line for line in original.splitlines() if not line.startswith("DYSON_DEVICES=")]
+    lines.append(f"DYSON_DEVICES={','.join(entries)}")
+    fd, temp_path = tempfile.mkstemp(prefix=".dyson-env-", dir=env_path.parent)
+    try:
+        os.chmod(temp_path, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as output:
+            output.write("\n".join(lines) + "\n")
+        os.replace(temp_path, env_path)
+    finally:
+        if os.path.exists(temp_path):
+            os.unlink(temp_path)
+
+
 def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--env-file", type=Path, default=Path(__file__).resolve().parent / ".env")
+    args = parser.parse_args()
+    try:
+        from libdyson_rest import DysonClient
+    except ImportError:
+        print("Install libdyson-rest on the home collector first.", file=sys.stderr)
+        return 1
+
     email = env_or_prompt("DYSON_EMAIL", "Dyson email: ")
     password = env_or_prompt("DYSON_PASSWORD", "Dyson password: ", secret=True)
     country = os.environ.get("DYSON_COUNTRY", "GB").strip().upper()
@@ -107,7 +137,20 @@ def main() -> int:
         host = ip_map.get(device.serial_number) or ip_map.get(
             normalise_serial(device.serial_number)
         )
+        if local_password and not host:
+            host = input(f"  Router IP for {device.name} (blank to skip): ").strip()
         if host and local_password:
+            try:
+                host = local_ip(host)
+            except ValueError as error:
+                print(f"  Skipped: {error}")
+                continue
+            try:
+                with socket.create_connection((host, 1883), timeout=3):
+                    pass
+            except OSError:
+                print(f"  Skipped: local MQTT is not reachable at {host}:1883")
+                continue
             env_entries.append(
                 ":".join(
                     [
@@ -121,12 +164,11 @@ def main() -> int:
             )
 
     if env_entries:
-        print("\nPaste this into backend/.env:")
-        print(f"DYSON_DEVICES={','.join(env_entries)}")
+        save_devices(args.env_file, env_entries)
+        print(f"\nSaved {len(env_entries)} device(s) to local collector configuration. Restart the collector to connect.")
     else:
         print(
-            "\nNo DYSON_DEVICES line could be built. Set DYSON_DEVICE_IPS with "
-            "serial=ip entries and make sure the devices have local MQTT."
+            "\nNo devices enrolled. Check the router IPs and local MQTT availability."
         )
 
     return 0

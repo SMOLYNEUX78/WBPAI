@@ -10963,7 +10963,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                   <label className="text-xs text-gray-600">Connection route
                     <select className="mt-1 w-full border bg-white p-2 text-xs" value={sensorDraft.connectionMethod}
                       onChange={(event) => { sensorDraftTouchedRef.current = true; setSensorDraft((current) => ({ ...current, connectionMethod: event.target.value, readingType: "" })); }}>
-                      <option value="dyson">Existing Dyson collector</option>
+                      <option value="dyson">Dyson via home collector</option>
                       <option value="bluetooth">Bluetooth integration needed</option>
                       <option value="manufacturer-api">Manufacturer integration needed</option>
                       <option value="matter">Matter integration needed</option>
@@ -10979,7 +10979,15 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                     </select>
                   </label> : null}
                 </div>
-                <p className="text-xs text-gray-600">Selecting a route does not pair a device. A Dyson stream check confirms data availability, not that this physical sensor produced it. Other routes need a supported connector.</p>
+                {sensorDraft.connectionMethod === "dyson" ? <details className="border border-emerald-300 bg-emerald-50 p-3 text-xs text-emerald-950">
+                  <summary className="cursor-pointer font-semibold">Connect a Dyson on your home network</summary>
+                  <ol className="mt-2 list-decimal space-y-1 pl-5">
+                    <li>Connect the purifier and home collector tablet to the same router. Find the purifier's local IP in the router's device list.</li>
+                    <li>On the collector tablet, run <code>python backend/dyson-discover.py</code> from the WBP folder. Sign in to Dyson and enter its one-time code there. Enter each purifier's router IP when asked.</li>
+                    <li>Restart the home collector. Select the matching stream here, register the instrument, and check for a recent sample.</li>
+                  </ol>
+                  <p className="mt-2">Dyson credentials stay on the home collector. Scanning a label identifies the device but does not connect it. A recent stream alone does not prove its physical serial; compare it with the Dyson account during setup.</p>
+                </details> : <p className="text-xs text-gray-600">Other routes need a supported connector before readings can be imported.</p>}
               </div>
 
               <fieldset className="space-y-2">
