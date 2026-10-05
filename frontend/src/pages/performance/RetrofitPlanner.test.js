@@ -4,6 +4,20 @@ import RetrofitPlanner from "./RetrofitPlanner";
 
 const Surface = ({ children, title, onClose }) => <div role="dialog" aria-label={title}>{children}<button onClick={onClose}>Close</button></div>;
 
+test("upper works scope separates possible annual costs from the benefit range", () => {
+  render(<RetrofitPlanner ready annualEui={41.47} area={99.2} electricityDailyKwh={5} gasDailyKwh={7} DetailSurface={Surface} />);
+  fireEvent.click(screen.getByRole("button", { name: "Adjust assumptions" }));
+  fireEvent.change(screen.getByRole("combobox", { name: "Heating fuel assumption" }), { target: { value: "electric" } });
+  fireEvent.click(screen.getByRole("button", { name: "Close" }));
+  fireEvent.change(screen.getByRole("slider", { name: "Extent of retrofit works" }), { target: { value: "100" } });
+  const range = screen.getByText("Potential annual benefit").nextElementSibling;
+  expect(range.textContent).toMatch(/^£0–£[\d,]+\/yr$/);
+  expect(screen.getByText(/Possible net annual cost: up to £/)).toBeInTheDocument();
+  expect(screen.getByText(/Energy cost increase: £/)).toBeInTheDocument();
+  fireEvent.change(screen.getByRole("slider", { name: "Extent of retrofit works" }), { target: { value: "0" } });
+  expect(screen.queryByText(/Possible net annual cost/)).not.toBeInTheDocument();
+});
+
 test("keeps retrofit planning locked until baseline is complete", () => {
   render(<RetrofitPlanner ready={false} annualEui={120} area={100} DetailSurface={Surface} />);
   expect(screen.queryByRole("slider", { name: "Extent of retrofit works" })).not.toBeInTheDocument();

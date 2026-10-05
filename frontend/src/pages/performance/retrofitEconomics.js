@@ -60,12 +60,12 @@ const validRate = (value, fallback) => {
   return Number.isFinite(parsed) && parsed > 0 && parsed < 100 ? parsed : fallback;
 };
 
-export function projectRetrofit({ option, annualEui, area, electricityDailyKwh, gasDailyKwh, billReview = {}, energyPriceChangePercent = 0, carbonPriceChangePercent = 0 }) {
+export function projectRetrofit({ option, annualEui, area, electricityDailyKwh, gasDailyKwh, billReview = {}, energyPriceChangePercent = 0, carbonPriceChangePercent = 0, allElectric = false }) {
   const validArea = Number.isFinite(area) && area > 0;
   const validEui = Number.isFinite(annualEui) && annualEui > 0;
   const progress = option.enerphitProgress || 0;
   const targetEui = validEui
-    ? annualEui * (1 - option.reduction / 100) * (1 - progress) + Math.min(annualEui, CC_CANDIDATE_PROFILE.annualEui) * progress
+    ? annualEui * (1 - option.reduction / 100) * (1 - progress) + Math.min(annualEui * (1 - option.reduction / 100), CC_CANDIDATE_PROFILE.annualEui) * progress
     : null;
   const baselineKwh = validArea && validEui ? annualEui * area : null;
   const targetKwh = targetEui !== null && validArea ? targetEui * area : null;
@@ -75,8 +75,9 @@ export function projectRetrofit({ option, annualEui, area, electricityDailyKwh, 
     && electricityDailyKwh + gasDailyKwh > 0;
   const electricityShare = hasFuelSplit ? electricityDailyKwh / (electricityDailyKwh + gasDailyKwh) : null;
   const gasShare = hasFuelSplit ? 1 - electricityShare : null;
-  const electricitySavedKwh = energySavedKwh !== null && hasFuelSplit ? baselineKwh * electricityShare - (targetKwh - targetKwh * gasShare * (1 - progress)) : null;
-  const gasSavedKwh = energySavedKwh !== null && hasFuelSplit ? baselineKwh * gasShare - targetKwh * gasShare * (1 - progress) : null;
+  const fuelSwitchProgress = allElectric ? progress : 0;
+  const electricitySavedKwh = energySavedKwh !== null && hasFuelSplit ? baselineKwh * electricityShare - (targetKwh - targetKwh * gasShare * (1 - fuelSwitchProgress)) : null;
+  const gasSavedKwh = energySavedKwh !== null && hasFuelSplit ? baselineKwh * gasShare - targetKwh * gasShare * (1 - fuelSwitchProgress) : null;
   const electricityRate = validRate(billReview.electricityUnitRatePence, OFGEM_OCT_2026_PENCE.electricity);
   const gasRate = validRate(billReview.gasUnitRatePence, OFGEM_OCT_2026_PENCE.gas);
   const billSavedGbp = hasFuelSplit && energySavedKwh !== null

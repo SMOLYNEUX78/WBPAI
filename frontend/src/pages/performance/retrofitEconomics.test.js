@@ -13,7 +13,7 @@ test("far-right pathway uses the shared CC all-electric candidate, not a percent
   const annualEui = 41.47;
   const area = 99.2;
   const result = projectRetrofit({
-    option: getRetrofitOption(100), annualEui, area,
+    option: getRetrofitOption(100), annualEui, area, allElectric: true,
     electricityDailyKwh: 5, gasDailyKwh: 7,
     billReview: { electricityUnitRatePence: 25, gasUnitRatePence: 8 },
   });
@@ -22,6 +22,20 @@ test("far-right pathway uses the shared CC all-electric candidate, not a percent
   const baselineKwh = annualEui * area;
   expect(result.billSavedGbp).toBeCloseTo((baselineKwh * (5 / 12) * 25 + baselineKwh * (7 / 12) * 8 - 25 * area * 25) / 100);
   expect(result.costRangeGbp).toEqual([54760, 99520]);
+});
+
+test("increasing scope never reverses EUI or bill savings with a consistent fuel assumption", () => {
+  for (const annualEui of [20, 35, 41.47, 120]) {
+    let previous;
+    for (let scope = 0; scope <= 100; scope += 1) {
+      const result = projectRetrofit({ option: getRetrofitOption(scope), annualEui, area: 99.2, electricityDailyKwh: 5, gasDailyKwh: 7 });
+      if (previous) {
+        expect(result.targetEui).toBeLessThanOrEqual(previous.targetEui + 1e-9);
+        expect(result.billSavedGbp).toBeGreaterThanOrEqual(previous.billSavedGbp - 1e-9);
+      }
+      previous = result;
+    }
+  }
 });
 
 test("insurance sensitivity requires a premium and never assumes a confirmed discount", () => {
