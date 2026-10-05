@@ -10252,7 +10252,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   const checkSensorReading = async (sensor) => {
     if (sensor.connectionMethod !== "dyson" || !sensor.readingType) return;
     setSensorCheckBusy(sensor.id);
-    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const since = new Date(Date.now() - 15 * 60 * 1000).toISOString();
     const { data, error } = await supabase.from("Readings")
       .select("*")
       .eq("building_id", "home").eq("reading_type", sensor.readingType)
@@ -10261,7 +10261,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
     const metricStatus = Object.fromEntries(sensor.metrics.map((metric) => [metric,
       row?.[SENSOR_READING_COLUMNS[metric]] != null ? "observed" : "not observed"]));
     setHealthSensors((current) => current.map((item) => item.id === sensor.id ? {
-      ...item, connectionStatus: error ? "check failed" : row ? "stream has recent sample" : "no recent sample",
+      ...item, connectionStatus: error ? "check failed" : row ? "live stream confirmed" : "no recent sample",
       lastSampleAt: row?.timestamp || "", metricStatus: error ? {} : metricStatus,
     } : item));
     setSensorCheckBusy("");
@@ -10270,7 +10270,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   const findDysonStreams = async () => {
     setDysonStreamBusy(true);
     setDysonStreamStatus("");
-    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const since = new Date(Date.now() - 15 * 60 * 1000).toISOString();
     const { data, error } = await supabase.from("Readings")
       .select("reading_type,timestamp")
       .eq("building_id", "home")
@@ -10287,7 +10287,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
         if (!latest.has(row.reading_type)) latest.set(row.reading_type, row.timestamp);
       });
       setDysonStreams(Array.from(latest, ([type, timestamp]) => ({ type, timestamp })));
-      setDysonStreamStatus(latest.size ? "Select the stream matching this instrument." : "No Dyson readings arrived in the past 24 hours. Check the tablet collector and purifier Wi-Fi connection.");
+      setDysonStreamStatus(latest.size ? "Choose the stream for this purifier, then confirm its readings." : "No Dyson readings arrived in the past 15 minutes. This purifier may need pairing with the tablet collector.");
     }
     setDysonStreamBusy(false);
   };
@@ -10986,12 +10986,12 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
               </div>
 
               <div className="space-y-2 border-t pt-3">
-                <h4 className="font-semibold text-sm">2. Connect readings</h4>
+                <h4 className="font-semibold text-sm">2. Connect sensor</h4>
                 <div className="grid gap-2 sm:grid-cols-2">
                   <label className="text-xs text-gray-600">Connection route
                     <select className="mt-1 w-full border bg-white p-2 text-xs" value={sensorDraft.connectionMethod}
                       onChange={(event) => { sensorDraftTouchedRef.current = true; setSensorDraft((current) => ({ ...current, connectionMethod: event.target.value, readingType: "" })); }}>
-                      <option value="dyson">Dyson via home collector</option>
+                      <option value="dyson">Dyson via tablet collector</option>
                       <option value="bluetooth">Bluetooth integration needed</option>
                       <option value="manufacturer-api">Manufacturer integration needed</option>
                       <option value="matter">Matter integration needed</option>
@@ -11008,21 +11008,13 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                   </label> : null}
                 </div>
                 {sensorDraft.connectionMethod === "dyson" ? <div className="space-y-2">
-                  <button type="button" disabled={dysonStreamBusy} onClick={findDysonStreams} className="border border-emerald-700 px-3 py-2 text-xs font-semibold text-emerald-900 disabled:opacity-50">{dysonStreamBusy ? "Finding streams..." : "Find active Dyson streams"}</button>
+                  <button type="button" disabled={dysonStreamBusy} onClick={findDysonStreams} className="border border-emerald-700 px-3 py-2 text-xs font-semibold text-emerald-900 disabled:opacity-50">{dysonStreamBusy ? "Connecting..." : "Connect via tablet collector"}</button>
                   {dysonStreamStatus ? <p className="text-xs text-gray-700" role="status">{dysonStreamStatus}</p> : null}
                   {dysonStreams.length ? <div className="grid gap-2 sm:grid-cols-2">{dysonStreams.map(({ type, timestamp }) => <button key={type} type="button" onClick={() => handleSensorDraftChange("readingType", type)} className={`border p-2 text-left text-xs ${sensorDraft.readingType === type ? "border-emerald-700 bg-emerald-100" : "border-gray-300 bg-white"}`}>
                     <strong>{DYSON_READING_TYPES.find(([value]) => value === type)?.[1] || type}</strong><br />Last reading: {new Date(timestamp).toLocaleString()}
                   </button>)}</div> : null}
                 </div> : null}
-                {sensorDraft.connectionMethod === "dyson" ? <details className="border border-emerald-300 bg-emerald-50 p-3 text-xs text-emerald-950">
-                  <summary className="cursor-pointer font-semibold">Connect a Dyson on your home network</summary>
-                  <ol className="mt-2 list-decimal space-y-1 pl-5">
-                    <li>Connect the purifier and home collector tablet to the same router. Find the purifier's local IP in the router's device list.</li>
-                    <li>On the collector tablet, run <code>python backend/dyson-discover.py</code> from the WBP folder. Sign in to Dyson and enter its one-time code there. Enter each purifier's router IP when asked.</li>
-                    <li>Restart the home collector. Select the matching stream here, register the instrument, and check for a recent sample.</li>
-                  </ol>
-                  <p className="mt-2">Dyson credentials stay on the home collector. Scanning a label identifies the device but does not connect it. A recent stream alone does not prove its physical serial; compare it with the Dyson account during setup.</p>
-                </details> : <p className="text-xs text-gray-600">Other routes need a supported connector before readings can be imported.</p>}
+                {sensorDraft.connectionMethod === "dyson" ? <p className="text-xs text-gray-600">The tablet and purifier must share the home Wi-Fi. No router sign-in is needed. This connects an already streaming Dyson to the profile; pairing a new purifier with the collector is not yet available in-app. Confirm the selected room and serial against its label.</p> : <p className="text-xs text-gray-600">Other routes need a supported connector before readings can be imported.</p>}
               </div>
 
               <fieldset className="space-y-2">
