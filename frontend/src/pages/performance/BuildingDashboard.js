@@ -12276,8 +12276,6 @@ const BuildingDashboard = () => {
   const [activeIndex, setActiveIndex] = useState(defaultIndex >= 0 ? defaultIndex : 0);
   const [bridgewoodValue, setBridgewoodValue] = useState(readCachedBridgewoodValue);
   const bridgewoodTokens = bridgewoodValue.credits;
-  const touchStartX = useRef(null);
-  const [dragOffset, setDragOffset] = useState(0);
 
   const activeBuilding = BUILDINGS[activeIndex];
 
@@ -12358,45 +12356,8 @@ const BuildingDashboard = () => {
     };
   }, []);
 
-  const handleTouchStart = (event) => {
-    touchStartX.current = event.touches[0].clientX;
-    setDragOffset(0);
-  };
-
-  const handleTouchMove = (event) => {
-    if (touchStartX.current === null) {
-      return;
-    }
-
-    const touchX = event.touches[0].clientX;
-    const deltaX = touchX - touchStartX.current;
-    setDragOffset(Math.max(-140, Math.min(140, deltaX)));
-  };
-
-  const handleTouchEnd = (event) => {
-    if (touchStartX.current === null) {
-      return;
-    }
-
-    const touchEndX = event.changedTouches[0].clientX;
-    const deltaX = touchEndX - touchStartX.current;
-    touchStartX.current = null;
-    setDragOffset(0);
-
-    if (Math.abs(deltaX) < 60) {
-      return;
-    }
-
-    goToBuilding(activeIndex + (deltaX < 0 ? 1 : -1));
-  };
-
   return (
-    <div
-      className={`min-h-screen bg-white ${activeBuilding.id === "home" ? "wbp-dashboard--occupy" : ""}`}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-    >
+    <div className={`min-h-screen bg-white ${activeBuilding.id === "home" ? "wbp-dashboard--occupy" : ""}`}>
       <div className="sticky top-0 z-20">
       <div className="border-b bg-white px-4 py-3">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
@@ -12404,7 +12365,6 @@ const BuildingDashboard = () => {
 
           <div className="flex shrink-0 items-center gap-3">
             <button type="button" onClick={() => navigate("/login")} className="border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-900 hover:bg-gray-100">Switch workspace</button>
-            <p className="hidden text-xs text-gray-500 lg:block">Swipe left or right to switch buildings</p>
           </div>
         </div>
       </div>
@@ -12434,8 +12394,7 @@ const BuildingDashboard = () => {
           className="flex"
           style={{
             width: `${BUILDINGS.length * 100}%`,
-            transform: `translateX(calc(${-activeIndex * (100 / BUILDINGS.length)}% + ${dragOffset}px))`,
-            transition: dragOffset ? "none" : "transform 280ms ease-out",
+            transform: `translateX(${-activeIndex * (100 / BUILDINGS.length)}%)`,
           }}
         >
           {BUILDINGS.map((building) => {
