@@ -321,10 +321,17 @@
 @media (max-width: 599px) {
   .wbp-retrofit-options { grid-template-columns: repeat(3, minmax(190px, 1fr)); overflow-x: auto; }
 }
-.wbp-retrofit-forecast { margin-top: 9px; font-size: 12px; }
-.wbp-retrofit-forecast dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px 12px; margin-top: 7px; }
-.wbp-retrofit-forecast dt { color: #6b7280; }
-.wbp-retrofit-forecast dd { font-weight: 600; }
+.wbp-retrofit-forecast { margin-top: 18px; font-size: 14px; }
+.wbp-retrofit-forecast dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 18px; margin-top: 12px; }
+.wbp-retrofit-forecast dl > div { min-width: 0; border-top: 1px solid #d1d5db; padding: 10px 0 12px; }
+.wbp-retrofit-forecast dt { color: #4b5563; font-size: 12px; }
+.wbp-retrofit-forecast dd { margin-top: 3px; font-size: 18px; font-weight: 700; line-height: 1.2; }
+.wbp-retrofit-forecast small { display: block; margin-top: 3px; color: #6b7280; font-size: 11px; line-height: 1.35; }
+.wbp-retrofit-sources { margin-top: 8px; color: #6b7280; font-size: 11px; line-height: 1.4; }
+.wbp-retrofit-sources a { color: #065f46; text-decoration: underline; }
+@media (min-width: 700px) {
+  .wbp-retrofit-forecast dl { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
 .wbp-retrofit-forecast button { margin-top: 9px; border: 1px solid #047857; background: #047857; color: white; padding: 7px 12px; font-weight: 700; }
 .wbp-retrofit-pack { font-size: 14px; line-height: 1.5; }
 .wbp-retrofit-pack h3 { margin-top: 20px; font-weight: 700; }

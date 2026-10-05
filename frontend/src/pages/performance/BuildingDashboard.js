@@ -7272,7 +7272,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
           </div>
           <div role="progressbar" aria-label="Assumed baseline confidence" aria-valuenow={100} aria-valuemin={0} aria-valuemax={100} className="mt-2 h-2 bg-gray-200"><div className="h-full w-full bg-emerald-500" /></div>
           <p className="mt-2 text-xs text-gray-600">Future-stage prototype. This does not change the measured baseline or certify any outcome on WBP-001.</p>
-          <RetrofitPlanner ready annualEui={displayedAnnualEui} area={Number(matterportMetadata.internalArea)} DetailSurface={DetailSurface} />
+          <RetrofitPlanner ready annualEui={displayedAnnualEui} area={Number(matterportMetadata.internalArea)} electricityDailyKwh={energySummary.electricityDailyAverage} gasDailyKwh={energySummary.gasDailyAverage} billReview={normaliseBillReview(homeSetup.billReview)} DetailSurface={DetailSurface} />
         </section>
       ) : null}
       <div className={building.id === "rf" ? "hidden" : dataSourceBuildingId === "home" ? "wbp-performance-stage wbp-performance-stage--linear -mx-4" : "wbp-performance-stage bg-gray-100 p-3 sm:p-4 rounded shadow"}>
