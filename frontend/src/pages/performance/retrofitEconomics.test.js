@@ -1,4 +1,11 @@
-import { projectRetrofit, RETROFIT_OPTIONS } from "./retrofitEconomics";
+import { projectInsuranceSaving, projectRetrofit, RETROFIT_OPTIONS } from "./retrofitEconomics";
+
+test("insurance sensitivity requires a premium and never assumes a confirmed discount", () => {
+  expect(projectInsuranceSaving("", 0.1)).toBeNull();
+  expect(projectInsuranceSaving("500", 0)).toBe(0);
+  expect(projectInsuranceSaving("500", 0.05)).toBe(25);
+  expect(projectInsuranceSaving("500", 0.1)).toBe(50);
+});
 
 test("scales installed cost with floor area and retrofit scope", () => {
   const inputs = { annualEui: 120, area: 100, electricityDailyKwh: 5, gasDailyKwh: 15 };

@@ -322,6 +322,8 @@
   .wbp-retrofit-options { grid-template-columns: repeat(3, minmax(190px, 1fr)); overflow-x: auto; }
 }
 .wbp-retrofit-forecast { margin-top: 18px; font-size: 14px; }
+.wbp-retrofit-premium { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 12px; font-size: 12px; font-weight: 600; }
+.wbp-retrofit-premium input { width: 210px; max-width: 100%; border: 1px solid #9ca3af; border-radius: 3px; background: white; padding: 7px 9px; font-size: 13px; font-weight: 400; }
 .wbp-retrofit-scenarios { margin-top: 12px; width: 100%; font-size: 12px; }
 .wbp-retrofit-scenarios [role="row"] { display: grid; grid-template-columns: minmax(105px, 1.2fr) repeat(3, minmax(0, 1fr)); border-bottom: 1px solid #d1d5db; }
 .wbp-retrofit-scenarios [role="row"] > * { min-width: 0; padding: 9px 5px; overflow-wrap: anywhere; }

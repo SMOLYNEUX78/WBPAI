@@ -9,10 +9,15 @@ const DESNZ_2026_KG_CO2E_PER_KWH = { electricity: 0.13096, gas: 0.18231 };
 export const DATA_LICENCE_REFERENCE_GBP_PER_YEAR = 144 + 120 + 180;
 export const CARBON_REFERENCE_GBP_PER_TONNE = 65;
 export const RETROFIT_SCENARIOS = [
-  { id: "low", label: "Conservative", savingsFactor: 0.5, carbonPrice: 0, dataIncome: 0 },
-  { id: "central", label: "Planning", savingsFactor: 1, carbonPrice: 65, dataIncome: DATA_LICENCE_REFERENCE_GBP_PER_YEAR / 2 },
-  { id: "high", label: "Upside", savingsFactor: 1.25, carbonPrice: 150, dataIncome: DATA_LICENCE_REFERENCE_GBP_PER_YEAR },
+  { id: "low", label: "Conservative", savingsFactor: 0.5, carbonPrice: 0, dataIncome: 0, insuranceDiscount: 0 },
+  { id: "central", label: "Planning", savingsFactor: 1, carbonPrice: 65, dataIncome: DATA_LICENCE_REFERENCE_GBP_PER_YEAR / 2, insuranceDiscount: 0.05 },
+  { id: "high", label: "Upside", savingsFactor: 1.25, carbonPrice: 150, dataIncome: DATA_LICENCE_REFERENCE_GBP_PER_YEAR, insuranceDiscount: 0.1 },
 ];
+
+export function projectInsuranceSaving(premium, discount) {
+  const amount = Number(premium);
+  return Number.isFinite(amount) && amount > 0 && amount <= 100000 ? amount * discount : null;
+}
 
 const validRate = (value, fallback) => {
   const parsed = Number(value);
