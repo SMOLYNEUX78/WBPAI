@@ -11,6 +11,13 @@ test("new property setup starts with an empty address search", () => {
   expect(screen.getByRole("textbox", { name: "Postcode" })).toHaveValue("");
 });
 
+test("Occupy summary offers profile editing when opened", () => {
+  const onEditProfile = jest.fn();
+  render(<MemoryRouter><OccupyHistoryTabs record={{ propertyType: "Semi-detached house" }} property={null} onEditProfile={onEditProfile} /></MemoryRouter>);
+  fireEvent.click(screen.getByRole("button", { name: "Edit profile" }));
+  expect(onEditProfile).toHaveBeenCalledTimes(1);
+});
+
 test("single-home exchange cache uses the CC summary and leaves missing values pending", () => {
   expect(readCachedBridgewoodValue()).toEqual({ credits: null, savedKwh: null, energyValue: null, savedKgCo2e: null });
   window.localStorage.setItem("home:carbonIntervalSavingsSummary:v4", JSON.stringify({

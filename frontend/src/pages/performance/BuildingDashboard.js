@@ -173,7 +173,7 @@ const historicalDocumentLabel = (document) => document.display_name || (document
   ? `${document.version_number}.${historicalDocumentExtension(document.mime_type, document.original_file_name)}`
   : document.original_file_name);
 
-export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed = false, activeStage, contentOnly = false, addressDraft, onAddressDraftChange, draftHistory, onDraftHistoryChange, onPlanningLookup, internalArea, onInternalAreaChange }) => {
+export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed = false, activeStage, contentOnly = false, addressDraft, onAddressDraftChange, draftHistory, onDraftHistoryChange, onPlanningLookup, internalArea, onInternalAreaChange, onEditProfile }) => {
   const [localStage, setLocalStage] = useState(initiallyCollapsed ? null : "audit");
   const stage = activeStage || localStage;
   const [displayStage, setDisplayStage] = useState("audit");
@@ -666,7 +666,7 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
     </div> : null}
     <div className={`wbp-history-panel ${stage ? "wbp-history-panel--open bg-emerald-50" : ""}`} aria-hidden={!stage}>
     <div role="tabpanel" className="min-h-0 overflow-hidden pb-2">
-      {contentStage === "audit" ? <ProfileSummaryColumns record={record} property={property} setup={setup} /> :
+      {contentStage === "audit" ? <><ProfileSummaryColumns record={record} property={property} setup={setup} />{onEditProfile ? <div className="flex justify-end px-3 py-2 sm:px-5"><button type="button" onClick={onEditProfile} className="border border-emerald-700 px-3 py-2 text-xs font-semibold text-emerald-900">Edit profile</button></div> : null}</> :
         <div className={isAddressHistory ? "grid gap-3 px-3 py-2 text-xs sm:px-5" : "grid gap-2 px-3 py-2 text-xs sm:grid-cols-2 sm:px-5"}>
           {hasRecordedStage ? <div className="min-w-0 border-t border-emerald-200 pt-2 text-gray-800">
             {isDesign ? <div className="mt-1 grid min-w-0 grid-cols-4 gap-2 text-[10px] leading-tight [overflow-wrap:anywhere] sm:gap-3 sm:text-xs">
@@ -1280,6 +1280,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
           legalOwnerName: data.legal_owner_name || "",
           otherOwnerName: data.other_owner_name || "",
           ownershipType: data.ownership_type || "",
+          propertyType: data.address?.property_type || "",
           tenure: data.tenure || "",
           ownershipVerificationStatus: data.ownership_verification_status || "unverified",
           propertyDiscovery: {
@@ -7223,11 +7224,11 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
                 </div>
               </div>
             ) : null}
-            <div className={dataSourceBuildingId === "home" ? "grid min-w-0 grid-cols-2 gap-x-2 sm:gap-x-4" : "contents"}>
+            <div className={dataSourceBuildingId === "home" ? "grid min-w-0 grid-cols-1" : "contents"}>
               {[
                 ...(dataSourceBuildingId === "home" ? [] : [["Address", [homePassport?.propertyDiscovery?.address, homePassport?.propertyDiscovery?.postcode].filter(Boolean).join(", ") || matterportMetadata.address]]),
                 ["Coordinates", (homePassport?.propertyDiscovery?.latitude != null && homePassport?.propertyDiscovery?.longitude != null) ? `${homePassport.propertyDiscovery.latitude}, ${homePassport.propertyDiscovery.longitude}` : dataSourceBuildingId === "home" ? "Pending matched UPRN location" : [matterportMetadata.latitude, matterportMetadata.longitude].join(", ")],
-                ...(dataSourceBuildingId === "home" ? [["Energy supplier", normaliseBillReview(homeSetup.billReview).supplier]] : []),
+                ...(dataSourceBuildingId === "home" ? [["Property type", homePassport?.propertyType]] : []),
               ].map(([label, value]) => <div key={label} className={dataSourceBuildingId === "home" ? "min-w-0 py-0.5" : "min-w-0 border-b border-gray-100 py-1.5 last:border-0"}><dt className="text-gray-600">{label}</dt><dd className="break-words font-semibold text-gray-900">{value || "Pending"}</dd></div>)}
             </div>
           </dl>
@@ -7252,7 +7253,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
           </div>
         </div>
         {dataSourceBuildingId === "home" ? (
-          <OccupyHistoryTabs record={homePassport} property={homePassport?.propertyDiscovery} setup={homeSetup} initiallyCollapsed />
+          <OccupyHistoryTabs record={homePassport} property={homePassport?.propertyDiscovery} setup={homeSetup} initiallyCollapsed onEditProfile={() => navigate("/dashboard/new?record=existing&edit=profile")} />
         ) : null}
       </div>
 
@@ -8784,11 +8785,19 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
 
 export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = false, isActive = false }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const isolatedDraft = freshStart;
   const [setupTab, setSetupTab] = useState("ownership");
   const [historyStage, setHistoryStage] = useState("audit");
   const [showSetupOverlay, setShowSetupOverlay] = useState(freshStart);
   const [editingOwnership, setEditingOwnership] = useState(false);
+  const editProfileRequested = new URLSearchParams(location.search).get("edit") === "profile";
+  useEffect(() => {
+    if (!isActive || !editProfileRequested) return;
+    setHistoryStage("audit");
+    setSetupTab("ownership");
+    setEditingOwnership(true);
+  }, [editProfileRequested, isActive]);
   const overlayVisible = showSetupOverlay && isActive;
   const wasActiveRef = useRef(isActive);
   useEffect(() => {
@@ -8804,7 +8813,6 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   const setupContentRef = useRef(null);
   const previousPanelHeightRef = useRef(null);
   const setupOverlayTimerRef = useRef(null);
-  const location = useLocation();
   const recordMode = new URLSearchParams(location.search).get("record") || "new";
   const [ownershipRecord, setOwnershipRecord] = useState(() => {
     return isolatedDraft ? null : readSavedHomePassport();
@@ -8844,6 +8852,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   };
   const [ownershipDraft, setOwnershipDraft] = useState({
     ownershipType: "owner-occupier",
+    propertyType: "",
     legalOwnerName: "",
     otherOwnerName: "",
     tenure: "freehold",
@@ -9147,6 +9156,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
         recordId: record.record_reference, databaseId: record.id, ownerUserId: auth.user.id,
         createdAt: record.created_at, updatedAt: record.updated_at,
         ownershipType: record.ownership_type, tenure: record.tenure,
+        propertyType: record.address?.property_type || "",
         legalOwnerName: record.legal_owner_name, custodianName: record.legal_owner_name,
         otherOwnerName: record.other_owner_name || "",
         uprn: record.uprn || "", genesisHash: record.genesis_hash,
@@ -9160,6 +9170,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
         legalOwnerName: accountRecord.legalOwnerName,
         otherOwnerName: accountRecord.otherOwnerName,
         ownershipType: accountRecord.ownershipType,
+        propertyType: accountRecord.propertyType,
         tenure: accountRecord.tenure,
         privacyAccepted: accountRecord.privacyAccepted,
         uprn: accountRecord.uprn,
@@ -9843,6 +9854,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
         address: record.propertyDiscovery?.address || "",
         postcode: record.propertyDiscovery?.postcode || "",
         local_authority: record.propertyDiscovery?.localAuthority || "",
+        property_type: record.propertyType || null,
       },
       ownership_type: record.ownershipType,
       tenure: record.tenure,
@@ -10316,7 +10328,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
             </h3>
             <p className="mt-1 break-words text-xs text-gray-700">UPRN: <span className="font-semibold">{ownershipRecord?.uprn || ownershipProperty?.uprn || "Pending"}</span></p>
             <p className="mt-1 break-words text-xs text-gray-700">Coordinates: {[buildingLatitude, buildingLongitude].filter((value) => value !== "" && value !== null && value !== undefined).join(", ") || "Pending"}</p>
-            <p className="mt-1 break-words text-xs text-gray-700">Energy supplier: <span className="font-semibold">{billReview.supplier || "Pending"}</span></p>
+            <p className="mt-1 break-words text-xs text-gray-700">Property type: <span className="font-semibold">{ownershipRecord?.propertyType || "Pending"}</span></p>
           </div>
         </div>
         <div className="mx-3 mt-2 flex border-t border-emerald-200 sm:mx-8 lg:mx-12" role="tablist" aria-label="Building history">
@@ -10484,6 +10496,20 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                       <option value="other">Not sure</option>
                     </select>
                   </label>
+                  <label className="space-y-1">
+                    <span className="text-xs font-semibold text-gray-700">Property type</span>
+                    <select className="w-full border border-gray-300 p-2 text-sm" value={ownershipDraft.propertyType} onChange={(event) => updateOwnershipDraft("propertyType", event.target.value)}>
+                      <option value="">Select property type</option>
+                      <option value="Detached house">Detached house</option>
+                      <option value="Semi-detached house">Semi-detached house</option>
+                      <option value="Terraced house">Terraced house</option>
+                      <option value="Detached bungalow">Detached bungalow</option>
+                      <option value="Semi-detached bungalow">Semi-detached bungalow</option>
+                      <option value="Terraced bungalow">Terraced bungalow</option>
+                      <option value="Flat or maisonette">Flat or maisonette</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </label>
                   {recordMode === "import" ? (
                     <label className="space-y-1">
                       <span className="text-xs font-semibold text-gray-700">Handover code</span>
@@ -10514,7 +10540,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
 
         {ownershipRecord ? (
           <section className="wbp-setup-step-enter mx-auto mt-4 max-w-4xl border border-amber-200 bg-white p-4">
-            {syncHomeProfile && !editingOwnership ? <div className="mb-4 flex justify-end"><button type="button" className="border border-emerald-700 px-3 py-2 text-xs font-bold text-emerald-800" onClick={() => { setOwnershipDraft((current) => ({ ...current, legalOwnerName: ownershipRecord.legalOwnerName || "", otherOwnerName: ownershipRecord.otherOwnerName || "", ownershipType: ownershipRecord.ownershipType || "owner-occupier", tenure: ownershipRecord.tenure || "freehold", uprn: ownershipRecord.uprn || "", privacyAccepted: Boolean(ownershipRecord.privacyAccepted), authorityToCreate: false })); setEditingOwnership(true); }}>Edit home details</button></div> : null}
+            {syncHomeProfile && !editingOwnership ? <div className="mb-4 flex justify-end"><button type="button" className="border border-emerald-700 px-3 py-2 text-xs font-bold text-emerald-800" onClick={() => { setOwnershipDraft((current) => ({ ...current, legalOwnerName: ownershipRecord.legalOwnerName || "", otherOwnerName: ownershipRecord.otherOwnerName || "", ownershipType: ownershipRecord.ownershipType || "owner-occupier", propertyType: ownershipRecord.propertyType || "", tenure: ownershipRecord.tenure || "freehold", uprn: ownershipRecord.uprn || "", privacyAccepted: Boolean(ownershipRecord.privacyAccepted), authorityToCreate: false })); setEditingOwnership(true); }}>Edit home details</button></div> : null}
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <p className="text-xs font-bold uppercase text-amber-700">Step 3 of 3 · Ownership evidence</p>

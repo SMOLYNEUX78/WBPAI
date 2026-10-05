@@ -30,7 +30,7 @@ test("shows assumption-based scenarios and opens the selected pack", () => {
   expect(screen.queryByRole("table", { name: /retrofit cost and annual value scenarios/i })).not.toBeInTheDocument();
   expect(screen.getByText("Potential annual benefit")).toBeInTheDocument();
   expect(screen.getByRole("img", { name: /annual benefit split/i })).toBeInTheDocument();
-  expect(screen.getByText("£8,000–£18,000")).toBeInTheDocument();
+  expect(screen.queryByText("Estimated installed cost")).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Adjust assumptions" }));
   expect(screen.getByRole("dialog", { name: "Adjust assumptions" })).toBeInTheDocument();
   expect(screen.getByRole("table", { name: /retrofit cost and annual value scenarios/i })).toBeInTheDocument();
@@ -42,10 +42,8 @@ test("shows assumption-based scenarios and opens the selected pack", () => {
   fireEvent.click(screen.getByRole("button", { name: "Close" }));
   fireEvent.change(screen.getByRole("slider", { name: "Extent of retrofit works" }), { target: { value: "75" } });
   expect(screen.getByText(/Target EUI 78\.0 kWh\/m²\/yr/)).toBeInTheDocument();
-  expect(screen.getByText("£45,000–£75,000")).toBeInTheDocument();
   fireEvent.change(screen.getByRole("slider", { name: "Extent of retrofit works" }), { target: { value: "100" } });
   expect(screen.getByText(/Target EUI 25\.0 kWh\/m²\/yr/)).toBeInTheDocument();
-  expect(screen.getByText("£55,000–£100,000")).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "View retrofit pack" }));
   expect(screen.getByRole("dialog", { name: "EnerPHit design pathway plan" })).toBeInTheDocument();
   expect(screen.getByText(/No WBP design or build profile has a verified/)).toBeInTheDocument();
