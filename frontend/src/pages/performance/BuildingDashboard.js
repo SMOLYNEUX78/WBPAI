@@ -1252,6 +1252,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
   });
   const homePassportId = homePassport?.recordId || "";
   const [homeSetup, setHomeSetup] = useState({});
+  const [editProfileOpen, setEditProfileOpen] = useState(false);
   const homePassportDatabaseId = homePassport?.databaseId;
   const [homeSaleInfoOpen, setHomeSaleInfoOpen] = useState(false);
   useEffect(() => {
@@ -1259,6 +1260,12 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
     const cached = readSavedHomePassport();
     if (cached) setHomePassport(cached);
   }, [dataSourceBuildingId, isActive]);
+  useEffect(() => {
+    if (dataSourceBuildingId !== "home") return undefined;
+    const refreshProfile = () => setHomePassport(readSavedHomePassport());
+    window.addEventListener("wbp:profile-updated", refreshProfile);
+    return () => window.removeEventListener("wbp:profile-updated", refreshProfile);
+  }, [dataSourceBuildingId]);
   useEffect(() => {
     if (dataSourceBuildingId !== "home" || !isActive) return undefined;
     let active = true;
@@ -7253,7 +7260,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
           </div>
         </div>
         {dataSourceBuildingId === "home" ? (
-          <OccupyHistoryTabs record={homePassport} property={homePassport?.propertyDiscovery} setup={homeSetup} initiallyCollapsed onEditProfile={() => navigate("/dashboard/new?record=existing&edit=profile")} />
+          <OccupyHistoryTabs record={homePassport} property={homePassport?.propertyDiscovery} setup={homeSetup} initiallyCollapsed onEditProfile={() => setEditProfileOpen(true)} />
         ) : null}
       </div>
 
@@ -8779,25 +8786,20 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
             document.body
           )
         : null}
+      {editProfileOpen ? <NewBuildingSetupPanel editModal syncHomeProfile isActive onClose={() => setEditProfileOpen(false)} /> : null}
     </div>
   );
 };
 
-export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = false, isActive = false }) => {
+export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = false, isActive = false, editModal = false, onClose }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const isolatedDraft = freshStart;
   const [setupTab, setSetupTab] = useState("ownership");
   const [historyStage, setHistoryStage] = useState("audit");
-  const [showSetupOverlay, setShowSetupOverlay] = useState(freshStart);
-  const [editingOwnership, setEditingOwnership] = useState(false);
-  const editProfileRequested = new URLSearchParams(location.search).get("edit") === "profile";
-  useEffect(() => {
-    if (!isActive || !editProfileRequested) return;
-    setHistoryStage("audit");
-    setSetupTab("ownership");
-    setEditingOwnership(true);
-  }, [editProfileRequested, isActive]);
+  const [showSetupOverlay, setShowSetupOverlay] = useState(freshStart || editModal);
+  const [editingOwnership, setEditingOwnership] = useState(editModal);
+  const [editStep, setEditStep] = useState(1);
   const overlayVisible = showSetupOverlay && isActive;
   const wasActiveRef = useRef(isActive);
   useEffect(() => {
@@ -8863,6 +8865,19 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
     authorityToCreate: false,
     privacyAccepted: false,
   });
+  useEffect(() => {
+    if (!editModal || !ownershipRecord) return;
+    setOwnershipDraft((current) => ({ ...current,
+      legalOwnerName: ownershipRecord.legalOwnerName || "",
+      otherOwnerName: ownershipRecord.otherOwnerName || "",
+      ownershipType: ownershipRecord.ownershipType || "owner-occupier",
+      propertyType: ownershipRecord.propertyType || "",
+      tenure: ownershipRecord.tenure || "freehold",
+      uprn: ownershipRecord.uprn || "",
+      privacyAccepted: Boolean(ownershipRecord.privacyAccepted),
+      authorityToCreate: true,
+    }));
+  }, [editModal, ownershipRecord]);
   const [ownershipCleanupStatus, setOwnershipCleanupStatus] = useState("");
   const [ownershipClaim, setOwnershipClaim] = useState(null);
   const identityUploadRef = useRef(null);
@@ -9173,18 +9188,19 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
         propertyType: accountRecord.propertyType,
         tenure: accountRecord.tenure,
         privacyAccepted: accountRecord.privacyAccepted,
+        authorityToCreate: editModal,
         uprn: accountRecord.uprn,
       }));
       setOwnershipDraft((current) => ({ ...current, titleNumber: "" }));
       setPropertyDiscovery(discovery);
       setPropertySearch((current) => ({ ...current, address: discovery.address, postcode: discovery.postcode, uprn: discovery.uprn }));
-      if (syncHomeProfile) setShowSetupOverlay(false);
+      if (syncHomeProfile && !editModal) setShowSetupOverlay(false);
       setPassportSaveStatus("saved");
       setPassportSaveError("");
     };
     loadAccountPassport();
     return () => { active = false; };
-  }, [isolatedDraft, syncHomeProfile]);
+  }, [isolatedDraft, syncHomeProfile, editModal]);
   const healthMetricOptions = [
     ["temperature", "Temperature"],
     ["humidity", "Humidity"],
@@ -9947,6 +9963,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       const securedRecord = await persistPassportRecord(ownershipRecord);
       window.localStorage.setItem("wbp-new-building-passport", JSON.stringify(securedRecord));
       setOwnershipRecord(securedRecord);
+      window.dispatchEvent(new CustomEvent("wbp:profile-updated"));
       setPassportSaveStatus("saved");
       finishSetupOverlay();
     } catch (error) {
@@ -10015,9 +10032,11 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       const securedRecord = await persistPassportRecord(nextRecord);
       window.localStorage.setItem("wbp-new-building-passport", JSON.stringify(securedRecord));
       setOwnershipRecord(securedRecord);
+      window.dispatchEvent(new CustomEvent("wbp:profile-updated"));
       window.requestAnimationFrame(() => setupPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
       setPassportSaveStatus("saved");
-      setEditingOwnership(false);
+      setEditingOwnership(editModal);
+      if (editModal) setEditStep(3);
       // Keep the setup open for the private identity and title-evidence step.
     } catch (error) {
       setPassportSaveStatus("error");
@@ -10315,7 +10334,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
 
   return (
     <div className="bg-white">
-      <section className="border-b border-emerald-200 bg-emerald-100">
+      {!editModal ? <section className="border-b border-emerald-200 bg-emerald-100">
         <div className="grid min-h-[170px] min-w-0 grid-cols-2 items-stretch sm:min-h-[200px]">
           <div className="relative min-w-0">
             {embedUrl ? <iframe title="3D model preview" src={embedUrl} className="absolute inset-0 block h-full w-full border-0 bg-white" allow="autoplay; fullscreen; xr-spatial-tracking; accelerometer; gyroscope; vr" allowFullScreen />
@@ -10342,12 +10361,12 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
           {passportSaveStatus !== "saved" ? <div className="mx-3 mt-4 flex justify-end sm:mx-8 lg:mx-12"><button type="button" disabled={passportSaveStatus === "saving"} onClick={secureExistingPassport} className="bg-emerald-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">{passportSaveStatus === "saving" ? "Saving..." : "Save to secure account"}</button></div> : null}
           {passportSaveError ? <p className="mx-3 mt-3 border border-red-200 bg-red-50 p-2 text-xs text-red-800 sm:mx-8 lg:mx-12">{passportSaveError}</p> : null}
         </> : null}
-      </section>
+      </section> : null}
       <PortalWhen active={overlayVisible}>
-      <section className={`mx-4 mb-4 bg-gray-100 p-4 shadow ${overlayVisible ? `wbp-setup-overlay ${setupOverlayExiting ? "wbp-setup-overlay--exiting" : ""}` : ""}`} role={overlayVisible ? "dialog" : undefined} aria-modal={overlayVisible ? "true" : undefined} aria-label={overlayVisible ? "Let's set up your home" : undefined}>
+      <section className={`mx-4 mb-4 bg-gray-100 p-4 shadow ${overlayVisible ? `wbp-setup-overlay ${setupOverlayExiting ? "wbp-setup-overlay--exiting" : ""}` : ""}`} role={overlayVisible ? "dialog" : undefined} aria-modal={overlayVisible ? "true" : undefined} aria-label={overlayVisible ? editModal ? "Edit property profile" : "Let's set up your home" : undefined}>
       <div className={overlayVisible ? "wbp-occupy-setup-dialog" : undefined}>
       {historyStage === "audit" ? <>
-      {showSetupOverlay ? <div className="wbp-occupy-setup-heading"><div><span>Occupy · {ownershipRecord ? 3 : propertyDiscovery?.confirmedAt ? 2 : 1} of 3</span><h2>Let’s set up your home</h2></div><button type="button" onClick={() => { setShowSetupOverlay(false); navigate("/dashboard/home"); }} className="wbp-occupy-setup-close" aria-label="Close setup" title="Close setup">&times;</button></div> : null}
+      {showSetupOverlay ? <><div className="wbp-occupy-setup-heading"><div><span>Occupy · {editModal ? `Edit ${editStep} of 3` : `${ownershipRecord ? 3 : propertyDiscovery?.confirmedAt ? 2 : 1} of 3`}</span><h2>{editModal ? "Edit property profile" : "Let’s set up your home"}</h2></div><button type="button" onClick={() => { if (editModal) onClose?.(); else { setShowSetupOverlay(false); navigate("/dashboard/home"); } }} className="wbp-occupy-setup-close" aria-label="Close setup" title="Close setup">&times;</button></div>{editModal ? <nav className="mx-6 mt-4 grid grid-cols-3 gap-2" aria-label="Profile edit steps">{[[1, "Property"], [2, "Owner details"], [3, "Evidence"]].map(([step, label]) => <button key={step} type="button" onClick={() => setEditStep(step)} aria-current={editStep === step ? "step" : undefined} className={`border px-2 py-2 text-xs font-semibold ${editStep === step ? "border-emerald-700 bg-emerald-50 text-emerald-950" : "border-gray-300 text-gray-700"}`}>{label}</button>)}</nav> : null}</> : null}
       <header className={`border-b border-gray-300 ${showSetupOverlay ? "hidden" : ""}`}>
       <nav className="relative -mb-px grid w-full min-w-0 grid-cols-4 gap-1 sm:flex sm:justify-center" role="tablist" aria-label="New building sections">
         {[["ownership", "Ownership"], ["measurements", "3D Model"], ["energy", "Energy Monitoring"], ["health", "Health Monitoring"]].map(([id, label]) => (
@@ -10395,7 +10414,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
               </div>
             ) : null}
 
-            {!propertyDiscovery?.confirmedAt ? <section className="wbp-setup-step-enter mt-5 border border-gray-200 bg-gray-50 p-3 sm:p-4">
+            {(!propertyDiscovery?.confirmedAt && (!editModal || editStep === 1)) ? <section className="wbp-setup-step-enter mt-5 border border-gray-200 bg-gray-50 p-3 sm:p-4">
               <div>
                 <p className="text-xs font-bold uppercase text-blue-700">Step 1 of 3</p>
                 <h4 className="mt-1 text-base font-bold">Find your property</h4>
@@ -10464,7 +10483,8 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
               ) : null}
             </section> : null}
 
-            {propertyDiscovery?.confirmedAt ? (
+            {editModal && editStep === 1 && propertyDiscovery?.confirmedAt ? <section className="mt-5 border border-emerald-200 bg-emerald-50 p-4 text-sm"><strong>Current property</strong><p>{propertyDiscovery.address}, {propertyDiscovery.postcode}</p><p>UPRN {propertyDiscovery.uprn || "Pending"}</p><div className="mt-4 flex gap-3"><button type="button" onClick={() => { const updated = { ...propertyDiscovery, confirmedAt: null }; setPropertyDiscovery(updated); window.localStorage.setItem(PROPERTY_DISCOVERY_CACHE_KEY, JSON.stringify({ search: propertySearch, snapshot: updated })); }} className="border border-emerald-700 px-3 py-2 font-semibold text-emerald-900">Change property</button><button type="button" onClick={() => setEditStep(2)} className="bg-emerald-700 px-3 py-2 font-semibold text-white">Owner details</button></div></section> : null}
+            {propertyDiscovery?.confirmedAt && (!editModal || editStep === 2) ? (
               <section className="wbp-setup-step-enter mt-5 border border-gray-200 bg-white p-3 sm:p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs font-bold uppercase text-emerald-700">Step 2 of 3</p><button type="button" onClick={() => { const updated = { ...propertyDiscovery, confirmedAt: null }; setPropertyDiscovery(updated); window.localStorage.setItem(PROPERTY_DISCOVERY_CACHE_KEY, JSON.stringify({ search: propertySearch, snapshot: updated })); }} className="text-xs font-semibold text-blue-700 underline">Change home</button></div>
                 <h4 className="mt-1 text-base font-bold">About you</h4>
@@ -10538,7 +10558,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
           </form>
         ) : null}
 
-        {ownershipRecord ? (
+        {ownershipRecord && (!editModal || editStep === 3) ? (
           <section className="wbp-setup-step-enter mx-auto mt-4 max-w-4xl border border-amber-200 bg-white p-4">
             {syncHomeProfile && !editingOwnership ? <div className="mb-4 flex justify-end"><button type="button" className="border border-emerald-700 px-3 py-2 text-xs font-bold text-emerald-800" onClick={() => { setOwnershipDraft((current) => ({ ...current, legalOwnerName: ownershipRecord.legalOwnerName || "", otherOwnerName: ownershipRecord.otherOwnerName || "", ownershipType: ownershipRecord.ownershipType || "owner-occupier", propertyType: ownershipRecord.propertyType || "", tenure: ownershipRecord.tenure || "freehold", uprn: ownershipRecord.uprn || "", privacyAccepted: Boolean(ownershipRecord.privacyAccepted), authorityToCreate: false })); setEditingOwnership(true); }}>Edit home details</button></div> : null}
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -10567,7 +10587,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
               {ownershipClaim && ownershipClaim.status !== "verified" ? <p className="mt-3 text-xs text-gray-600">Declaration saved. Identity and registry checks have not been performed. Documents can be added before a later verification request.</p> : null}
               {ownershipClaimError ? <p role="alert" className="mt-3 text-xs text-red-800">{ownershipClaimError}</p> : null}
               {ownershipUploadStatus ? <p role="status" className="mt-3 text-xs text-gray-700">{ownershipUploadStatus}</p> : null}
-              {showSetupOverlay && ownershipClaim ? (
+              {showSetupOverlay && ownershipClaim && !editModal ? (
                 <button type="button" onClick={finishSetupOverlay} className="mt-4 bg-emerald-700 px-4 py-2 text-xs font-bold text-white">Finish setup</button>
               ) : null}
               {(ownershipRecord.titleNumber || ownershipRecord.ownershipEvidence?.fileName || ownershipRecord.ownershipEvidence?.titleNumber) ? (

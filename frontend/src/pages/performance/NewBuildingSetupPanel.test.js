@@ -18,6 +18,22 @@ test("Occupy summary offers profile editing when opened", () => {
   expect(onEditProfile).toHaveBeenCalledTimes(1);
 });
 
+test("existing property editing stays in a jumpable dialog", () => {
+  window.localStorage.setItem("wbp-new-building-passport", JSON.stringify({ recordId: "WBP-TEST", databaseId: "home-1", legalOwnerName: "Owner", propertyType: "Semi-detached house", propertyDiscovery: { address: "14 Bridgewood Road", postcode: "IP12 4HA", uprn: "100091142492", confirmedAt: "2026-09-24" } }));
+  window.localStorage.setItem("wbp-property-discovery-draft:v1", JSON.stringify({ snapshot: { address: "14 Bridgewood Road", postcode: "IP12 4HA", uprn: "100091142492", confirmedAt: "2026-09-24" } }));
+  const onClose = jest.fn();
+  render(<MemoryRouter><NewBuildingSetupPanel editModal syncHomeProfile isActive onClose={onClose} /></MemoryRouter>);
+  const dialog = screen.getByRole("dialog", { name: "Edit property profile" });
+  const steps = within(dialog).getByRole("navigation", { name: "Profile edit steps" });
+  expect(within(dialog).getByText("Current property")).toBeInTheDocument();
+  fireEvent.click(within(steps).getByRole("button", { name: "Owner details" }));
+  expect(within(dialog).getByRole("combobox", { name: "Property type" })).toHaveValue("Semi-detached house");
+  fireEvent.click(within(steps).getByRole("button", { name: "Evidence" }));
+  expect(within(dialog).getByText("Show that you can manage this home profile")).toBeInTheDocument();
+  fireEvent.click(within(dialog).getByRole("button", { name: "Close setup" }));
+  expect(onClose).toHaveBeenCalledTimes(1);
+});
+
 test("single-home exchange cache uses the CC summary and leaves missing values pending", () => {
   expect(readCachedBridgewoodValue()).toEqual({ credits: null, savedKwh: null, energyValue: null, savedKgCo2e: null });
   window.localStorage.setItem("home:carbonIntervalSavingsSummary:v4", JSON.stringify({
