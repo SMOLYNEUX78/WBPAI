@@ -2,11 +2,12 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { sanitiseScan } = require("./collector-scan-result");
 
-test("scan result omits configured collector names and credentials", () => {
+test("scan result includes configured address hints but omits credentials", () => {
   const result = sanitiseScan({ scannedAt: "2026-10-06T14:00:00Z", tabletAddresses: ["192.168.1.102"],
-    configuredDevices: [{ name: "Upstairs", password: "PRIVATE" }],
+    configuredDevices: [{ name: "Upstairs", address: "192.168.1.144", connector: "dyson", password: "PRIVATE" }],
     candidates: [{ address: "192.168.1.144", signals: [{ method: "tcp", detail: "Port 1883 open" }] }],
   });
   assert.equal(result.candidates[0].address, "192.168.1.144");
-  assert.doesNotMatch(JSON.stringify(result), /Upstairs|PRIVATE/);
+  assert.equal(result.configuredDevices[0].name, "Upstairs");
+  assert.doesNotMatch(JSON.stringify(result), /PRIVATE/);
 });

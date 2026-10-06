@@ -1,9 +1,9 @@
-import { readDeviceScan } from "./deviceScan";
+import { readDeviceScan, suggestDeviceCandidates } from "./deviceScan";
 
-test("tablet scan presents network candidates without borrowing configured sensor names", () => {
+test("tablet scan keeps configured hints separate from network identity", () => {
   const report = readDeviceScan(JSON.stringify({
     scannedAt: "2026-10-06T10:00:00Z", tabletAddresses: ["192.168.1.102"],
-    configuredDevices: [{ name: "Upstairs", address: "192.168.1.144" }],
+    configuredDevices: [{ name: "Upstairs", address: "192.168.1.144", connector: "dyson" }],
     candidates: [
       { address: "192.168.1.102", signals: [] },
       { address: "192.168.1.144", signals: [{ method: "tcp", detail: "Port 1883 open; device identity unconfirmed" }] },
@@ -13,5 +13,10 @@ test("tablet scan presents network candidates without borrowing configured senso
   expect(report.candidates.map((item) => item.kind)).toEqual([
     "This tablet", "MQTT service; device unconfirmed", "Audio device",
   ]);
-  expect(JSON.stringify(report)).not.toContain("Upstairs");
+  expect(report.configuredDevices[0].name).toBe("Upstairs");
+  expect(report.candidates[1].kind).not.toContain("Upstairs");
+  expect(suggestDeviceCandidates({ manufacturer: "Dyson", location: "Upstairs" }, report)[0]).toMatchObject({
+    address: "192.168.1.144", suggested: true,
+  });
+  expect(suggestDeviceCandidates({ manufacturer: "Other", location: "Upstairs" }, report)[0].suggested).toBe(false);
 });

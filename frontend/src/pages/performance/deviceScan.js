@@ -19,5 +19,22 @@ export const readDeviceScan = (text) => {
               : "Unidentified network device";
       return { address: candidate.address, kind, signals };
     });
-  return { scannedAt: report.scannedAt, candidates };
+  const configuredDevices = Array.isArray(report.configuredDevices) ? report.configuredDevices.slice(0, 32)
+    .filter((device) => typeof device?.name === "string" && typeof device?.address === "string")
+    .map((device) => ({ name: device.name, address: device.address, connector: String(device.connector || "") })) : [];
+  return { scannedAt: report.scannedAt, candidates, configuredDevices };
+};
+
+export const suggestDeviceCandidates = (instrument, scan) => {
+  if (!instrument || !scan?.candidates) return [];
+  const room = String(instrument.location || "").toLowerCase();
+  const isDyson = /dyson/i.test(instrument.manufacturer || "");
+  return scan.candidates.filter((candidate) => !["This tablet", "Router or gateway", "Audio device"].includes(candidate.kind))
+    .map((candidate) => {
+      const configured = scan.configuredDevices?.find((device) => device.address === candidate.address);
+      const configuredRoom = String(configured?.name || "").toLowerCase().replaceAll("_", " ");
+      const roomHint = configuredRoom && room && (room.includes(configuredRoom) || configuredRoom.includes(room));
+      const connectorHint = isDyson && configured?.connector === "dyson";
+      return { ...candidate, configured, suggested: Boolean(roomHint && connectorHint), compatible: Boolean(connectorHint) };
+    }).sort((a, b) => Number(b.suggested) - Number(a.suggested) || Number(b.compatible) - Number(a.compatible));
 };
