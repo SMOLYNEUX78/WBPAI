@@ -9139,12 +9139,10 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   const [sensorEvidenceFileName, setSensorEvidenceFileName] = useState("");
   const [sensorScanStatus, setSensorScanStatus] = useState("");
   const [sensorScannerOpen, setSensorScannerOpen] = useState(false);
+  const [sensorDetailsVisible, setSensorDetailsVisible] = useState(false);
   const [sensorPhotoBusy, setSensorPhotoBusy] = useState(false);
   const sensorVideoRef = useRef(null);
   const [sensorCheckBusy, setSensorCheckBusy] = useState("");
-  const [dysonStreams, setDysonStreams] = useState([]);
-  const [dysonStreamStatus, setDysonStreamStatus] = useState("");
-  const [dysonStreamBusy, setDysonStreamBusy] = useState(false);
   useEffect(() => {
     if (!syncHomeProfile || !isolatedDraft) return undefined;
     let active = true;
@@ -9177,6 +9175,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
     const instrument = healthSensors.find((item) => item.id === importedInstrument);
     if (!instrument) return;
     importedInstrumentLoadedRef.current = importedInstrument;
+    setSensorDetailsVisible(true);
     sensorDraftTouchedRef.current = true;
     setSensorDraft({ ...emptySensorDraft(), ...instrument,
       networkAddress: /^\d{1,3}(\.\d{1,3}){3}$/.test(importedCandidate || "") ? importedCandidate : instrument.networkAddress || "" });
@@ -9308,7 +9307,10 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       setMeterIdentifiers((current) => ({ ...current, ...saved.meterIdentifiers }));
       setBillReview(normaliseBillReview(saved.billReview));
       setHealthSensors(Array.isArray(saved.healthSensors) ? saved.healthSensors : []);
-      if (saved.healthSensorDraft && !sensorDraftTouchedRef.current) setSensorDraft((current) => ({ ...current, ...saved.healthSensorDraft }));
+      if (saved.healthSensorDraft && !sensorDraftTouchedRef.current) {
+        setSensorDraft((current) => ({ ...current, ...saved.healthSensorDraft }));
+        if (saved.healthSensorDraft.manufacturer || saved.healthSensorDraft.labelCode) setSensorDetailsVisible(true);
+      }
       setCarbonSelections((current) => ({ ...current, ...saved.carbonSelections }));
       if (saved.modelInput) setModelInput(saved.modelInput);
       setSensorEvidenceFileName(saved.sensorEvidenceFileName || "");
@@ -9328,7 +9330,10 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
         setMeterIdentifiers((current) => ({ ...current, ...saved.meterIdentifiers }));
         setBillReview(normaliseBillReview(saved.billReview));
         setHealthSensors(Array.isArray(saved.healthSensors) ? saved.healthSensors : []);
-        if (saved.healthSensorDraft && !sensorDraftTouchedRef.current) setSensorDraft((current) => ({ ...current, ...saved.healthSensorDraft }));
+        if (saved.healthSensorDraft && !sensorDraftTouchedRef.current) {
+          setSensorDraft((current) => ({ ...current, ...saved.healthSensorDraft }));
+          if (saved.healthSensorDraft.manufacturer || saved.healthSensorDraft.labelCode) setSensorDetailsVisible(true);
+        }
         setCarbonSelections((current) => ({ ...current, ...saved.carbonSelections }));
         setSensorEvidenceFileName(saved.sensorEvidenceFileName || "");
         if (saved.modelInput) setModelInput(saved.modelInput);
@@ -9353,7 +9358,10 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
         if (Array.isArray(draft?.healthSensors)) localSensors = draft.healthSensors;
       } catch { /* Ignore a damaged browser draft. */ }
       const accountSensors = Array.isArray(data?.setup_data?.healthSensors) ? data.setup_data.healthSensors : [];
-      if (data?.setup_data?.healthSensorDraft && !sensorDraftTouchedRef.current) setSensorDraft((current) => ({ ...current, ...data.setup_data.healthSensorDraft }));
+      if (data?.setup_data?.healthSensorDraft && !sensorDraftTouchedRef.current) {
+        setSensorDraft((current) => ({ ...current, ...data.setup_data.healthSensorDraft }));
+        if (data.setup_data.healthSensorDraft.manufacturer || data.setup_data.healthSensorDraft.labelCode) setSensorDetailsVisible(true);
+      }
       const sameHome = cachedPassport?.ownerUserId === auth.user.id && cachedPassport.databaseId === healthRecordId;
       setHealthSensors((current) => Array.from(new Map([...accountSensors, ...(sameHome ? localSensors : []), ...current].map((sensor) => [sensor.id, sensor])).values()));
       if (localSensors.length && sameHome) setSectionSaveStatus("Local sensor draft ready to sync. Save health monitoring to add it to your account.");
@@ -10148,6 +10156,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
 
   const acceptSensorCode = (raw, isQrCode) => {
     const decoded = decodeSensorLabel(raw, isQrCode);
+    setSensorDetailsVisible(true);
     if (!decoded) {
       setSensorScanStatus(isQrCode ? "QR detected, but it does not expose a model or serial number WBP can read. Enter these manually; pairing codes are not stored." : "The barcode could not be read. Enter the label details manually.");
       return;
@@ -10188,6 +10197,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
     }).catch(() => {
       if (active) {
         setSensorScanStatus("Camera could not start. Allow camera access or enter the device details manually.");
+        setSensorDetailsVisible(true);
         setSensorScannerOpen(false);
       }
     });
@@ -10282,6 +10292,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       const details = { ...(barcodeDetails || {}), ...printedDetails };
       if (Object.keys(details).length) {
         sensorDraftTouchedRef.current = true;
+        setSensorDetailsVisible(true);
         setSensorDraft((current) => mergeScannedSensor(current, { ...details, identificationMethod: Object.keys(printedDetails).length ? "label-photo" : barcodeDetails?.identificationMethod || "label-photo" }));
         setSensorScanStatus(Object.keys(printedDetails).length
           ? "Label details filled in. Check the model and serial against the printed label before adding the instrument."
@@ -10317,52 +10328,13 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
     setSensorCheckBusy("");
   };
 
-  const findDysonStreams = async () => {
-    if (!healthRecordId || !isBridgewoodProfile) {
-      setDysonStreamStatus("Device discovery is not yet configured for this property. Save its profile first; a property-specific collector is needed before connecting sensors.");
-      setDysonStreams([]);
-      return;
-    }
-    setDysonStreamBusy(true);
-    setDysonStreamStatus("");
-    const since = new Date(Date.now() - 15 * 60 * 1000).toISOString();
-    const { data, error } = await supabase.from("Readings")
-      .select("reading_type,timestamp")
-      .eq("building_id", "home")
-      .like("reading_type", "dyson:%")
-      .gte("timestamp", since)
-      .order("timestamp", { ascending: false })
-      .limit(500);
-    if (error) {
-      setDysonStreamStatus("Could not check the collector right now. Try again shortly.");
-      setDysonStreams([]);
-    } else {
-      const latest = new Map();
-      (data || []).forEach((row) => {
-        if (row.reading_type !== "dyson:whole_home" && !latest.has(row.reading_type)) latest.set(row.reading_type, row.timestamp);
-      });
-      setDysonStreams(Array.from(latest, ([type, timestamp]) => ({ type, timestamp })));
-      setDysonStreamStatus(latest.size ? "Choose the stream for this purifier, then confirm its readings." : "No Dyson readings arrived in the past 15 minutes. This purifier may need pairing with the tablet collector.");
-    }
-    setDysonStreamBusy(false);
-  };
-
-  const toggleSensorMetric = (metric) => {
-    sensorDraftTouchedRef.current = true;
-    setSensorDraft((current) => ({
-      ...current,
-      metrics: current.metrics.includes(metric)
-        ? current.metrics.filter((item) => item !== metric)
-        : [...current.metrics, metric],
-    }));
-  };
-
   const addHealthSensor = () => {
     const registered = registerSensorDraft(healthSensors, sensorDraft, sensorEvidenceFileName);
     if (registered.healthSensorDraft === sensorDraft) return;
     setHealthSensors(registered.healthSensors);
     sensorDraftTouchedRef.current = true;
     setSensorDraft(registered.healthSensorDraft);
+    setSensorDetailsVisible(false);
     setSensorEvidenceFileName(registered.sensorEvidenceFileName);
   };
 
@@ -10895,43 +10867,22 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
               <h3 className="font-semibold mb-2">1. Scan monitoring device</h3>
             </div>
 
-            <details className="border rounded p-3 bg-gray-50 space-y-3">
-              <summary className="cursor-pointer text-sm font-semibold">Find an existing collector stream instead</summary>
-              <p className="text-xs text-gray-600">Find supported sensors already reporting through the tablet collector. Only the Bridgewood pilot is connected for now; other properties need their own collector. Network devices without a supported data connection will not appear here yet.</p>
-              <button type="button" disabled={dysonStreamBusy} onClick={findDysonStreams} className="border border-emerald-700 bg-white px-3 py-2 text-xs font-semibold text-emerald-900 disabled:opacity-50">{dysonStreamBusy ? "Finding devices..." : "Find devices"}</button>
-              {dysonStreamStatus ? <p className="text-xs text-gray-700" role="status">{dysonStreamStatus}</p> : null}
-              {dysonStreams.length ? <div className="grid gap-2 sm:grid-cols-2">{dysonStreams.map((stream) => <button key={stream.type} type="button" onClick={() => {
-                sensorDraftTouchedRef.current = true;
-                setSensorDraft((current) => selectDysonStream(current, stream));
-                setSensorEvidenceFileName("");
-                setSensorScanStatus("");
-              }} className={`border p-3 text-left text-xs ${sensorDraft.readingType === stream.type ? "border-emerald-700 bg-emerald-100" : "border-gray-300 bg-white"}`}>
-                <strong>{dysonStreamLabel(stream.type)}</strong><span className="block text-gray-600">Last reading: {new Date(stream.timestamp).toLocaleString()}</span>
-                <span className="block font-semibold text-emerald-800">{sensorDraft.readingType === stream.type ? "Selected for setup" : "Select device"}</span>
-              </button>)}</div> : null}
-              {sensorDraft.readingType ? <p className="text-xs text-emerald-900">Selected: {dysonStreamLabel(sensorDraft.readingType)}. Confirm its physical label and room below before adding it to the profile.</p> : null}
-            </details>
-
             <div className="border rounded p-3 bg-gray-50 space-y-3">
               <div>
-                <h4 className="font-semibold text-sm">Scan or enter the physical label</h4>
                 <button type="button" title="Reads QR or barcode and nearby printed label; does not connect the sensor" className="mt-2 border border-emerald-700 bg-white px-3 py-2 text-xs font-semibold text-emerald-950"
                   onClick={() => {
-                    if (!navigator.mediaDevices?.getUserMedia) { setSensorScanStatus("Camera access is unavailable here. Open WBP over HTTPS or enter details manually."); return; }
+                    if (!navigator.mediaDevices?.getUserMedia) { setSensorScanStatus("Camera access is unavailable here. Open WBP over HTTPS or enter details manually."); setSensorDetailsVisible(true); return; }
                     setSensorScanStatus(""); setSensorScannerOpen(true);
                   }}>Scan QR or barcode</button>
-                <label className="ml-2 inline-block border border-emerald-700 bg-white px-3 py-2 text-xs font-semibold text-emerald-950">
-                  {sensorPhotoBusy ? "Reading photo..." : "Scan a photo"}
-                  <input type="file" accept="image/*" capture="environment" disabled={sensorPhotoBusy} className="sr-only" aria-label="Scan a sensor label photo" onChange={(event) => { scanSensorPhoto(event.target.files?.[0]); event.target.value = ""; }} />
-                </label>
+                {sensorPhotoBusy ? <p className="mt-1 text-xs text-gray-600">Reading printed label...</p> : null}
                 {sensorScanStatus ? <p role="status" className="mt-1 text-xs text-gray-700">{sensorScanStatus}</p> : null}
                 {sensorScannerOpen ? <div className="mt-2 space-y-2 border border-emerald-300 bg-gray-900 p-2">
                   <video ref={sensorVideoRef} autoPlay muted playsInline aria-label="Live camera for sensor barcode or QR scan" className="max-h-72 w-full object-contain" />
-                  <button type="button" onClick={() => setSensorScannerOpen(false)} className="bg-white px-3 py-1.5 text-xs font-semibold text-gray-900">Close camera</button>
+                  <button type="button" onClick={() => { setSensorScannerOpen(false); setSensorDetailsVisible(true); setSensorScanStatus("Could not scan the label? Enter or correct the device details below."); }} className="bg-white px-3 py-1.5 text-xs font-semibold text-gray-900">Close camera</button>
                 </div> : null}
               </div>
 
-              <div className="grid gap-2 sm:grid-cols-2">
+              {sensorDetailsVisible ? <><div className="grid gap-2 sm:grid-cols-2">
                 <label className="space-y-1 text-xs text-gray-600">
                   Manufacturer
                   <input
@@ -11058,54 +11009,6 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                 </label>
               </div>
 
-              <div className="space-y-2 border-t pt-3">
-                <h4 className="font-semibold text-sm">Connection details</h4>
-                {sensorDraft.networkAddress ? <p className="text-xs text-emerald-900">Network candidate: {sensorDraft.networkAddress}. Identifying this device does not connect it to a collector.</p> : null}
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <label className="text-xs text-gray-600">Connection route
-                    <select className="mt-1 w-full border bg-white p-2 text-xs" value={sensorDraft.connectionMethod}
-                      onChange={(event) => { sensorDraftTouchedRef.current = true; setSensorDraft((current) => ({ ...current, connectionMethod: event.target.value, readingType: "" })); }}>
-                      <option value="dyson">Dyson via tablet collector</option>
-                      <option value="bluetooth">Bluetooth integration needed</option>
-                      <option value="manufacturer-api">Manufacturer integration needed</option>
-                      <option value="matter">Matter integration needed</option>
-                      <option value="gateway">Local gateway / MQTT integration needed</option>
-                      <option value="manual">Record only, no data connection</option>
-                    </select>
-                  </label>
-                  {sensorDraft.connectionMethod === "dyson" ? <label className="text-xs text-gray-600">Collector stream
-                    <select className="mt-1 w-full border bg-white p-2 text-xs" value={sensorDraft.readingType}
-                      onChange={(event) => handleSensorDraftChange("readingType", event.target.value)}>
-                      <option value="">Choose stream</option>
-                      {sensorDraft.readingType && !dysonStreams.some(({ type }) => type === sensorDraft.readingType) ? <option value={sensorDraft.readingType}>{dysonStreamLabel(sensorDraft.readingType)} (not recently seen)</option> : null}
-                      {dysonStreams.map(({ type }) => <option key={type} value={type}>{dysonStreamLabel(type)}</option>)}
-                    </select>
-                  </label> : null}
-                </div>
-                {sensorDraft.connectionMethod === "dyson" ? <p className="text-xs text-gray-600">The tablet and purifier must share the home Wi-Fi. No router sign-in is needed. This connects an already streaming Dyson to the profile; pairing a new purifier with the collector is not yet available in-app. Confirm the selected room and serial against its label.</p> : <p className="text-xs text-gray-600">Other routes need a supported connector before readings can be imported.</p>}
-              </div>
-
-              <fieldset className="space-y-2">
-                <legend className="text-xs font-semibold text-gray-700">
-                  Metrics to validate
-                </legend>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {healthMetricOptions.map(([value, label]) => (
-                    <label
-                      key={value}
-                      className="flex items-center gap-2 text-xs border rounded bg-white p-2"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={sensorDraft.metrics.includes(value)}
-                        onChange={() => toggleSensorMetric(value)}
-                      />
-                      <span>{label}</span>
-                    </label>
-                  ))}
-                </div>
-              </fieldset>
-
               <label className="space-y-1 text-xs text-gray-600 block">
                 Placement and installation notes
                 <textarea
@@ -11118,7 +11021,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                 />
               </label>
 
-              <p className="text-xs text-gray-600">A manufacturer and model or unique label code are needed to register. Save Health Monitoring after adding an instrument to link it to this building profile. Metric availability is checked against a recent sample after registration.</p>
+              <p className="text-xs text-gray-600">Review the scanned details, add the room, then save the instrument before finding it on the network.</p>
               {sensorDraft.id ? <p className="text-xs font-semibold text-emerald-900">Editing {sensorDraft.manufacturer} {sensorDraft.model}. Update instrument, then save Health Monitoring to sync the change.</p> : null}
               <button
                 type="button"
@@ -11128,6 +11031,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
               >
                 {sensorDraft.id ? "Update instrument" : "Add instrument to profile"}
               </button>
+              </> : null}
             </div>
 
             <div className="space-y-2">
@@ -11188,6 +11092,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                     </p>
                     <button type="button" className="mr-3 font-semibold text-emerald-800 underline" onClick={() => {
                       sensorDraftTouchedRef.current = true;
+                      setSensorDetailsVisible(true);
                       setSensorDraft({ ...emptySensorDraft(), ...sensor });
                       setSensorEvidenceFileName(sensor.evidenceFileName || "");
                       setSectionSaveStatus("");
@@ -12729,7 +12634,7 @@ const DeviceImportWorkbench = ({ isActive, embedded = false }) => {
       setImportBusy(false);
       return;
     }
-    const { data: readings, error: readingError } = await supabase.from("Readings").select("timestamp")
+    const { data: readings, error: readingError } = await supabase.from("Readings").select("*")
       .eq("building_id", "home").eq("reading_type", selectedMatch.stream)
       .order("timestamp", { ascending: false }).limit(1);
     if (readingError || !readings?.length) {
@@ -12738,9 +12643,13 @@ const DeviceImportWorkbench = ({ isActive, embedded = false }) => {
       return;
     }
     const importedAt = new Date().toISOString();
+    const observedMetrics = Object.entries(SENSOR_READING_COLUMNS)
+      .filter(([, column]) => readings[0][column] != null).map(([metric]) => metric);
     const updated = stored.map((item) => item.id === instrument.id ? { ...item,
       connectionMethod: "dyson", readingType: selectedMatch.stream, sourceBuildingId: "home",
       lastSampleAt: readings[0].timestamp,
+      metrics: Array.from(new Set([...(item.metrics || []), ...observedMetrics])),
+      metricStatus: { ...(item.metricStatus || {}), ...Object.fromEntries(observedMetrics.map((metric) => [metric, "observed"])) },
       networkMatch: { ...item.networkMatch, importedAt },
     } : item);
     const setupData = { ...(existing?.setup_data || {}), healthSensors: updated };

@@ -47,6 +47,8 @@ test("Connect opens the shared Health Monitoring editor at scan, match and impor
   const dialog = screen.getByRole("dialog", { name: "Edit property profile" });
   expect(within(dialog).getByRole("button", { name: "Health monitoring" })).toHaveAttribute("aria-current", "step");
   expect(within(dialog).getByRole("heading", { name: "1. Scan monitoring device" })).toBeInTheDocument();
+  expect(within(dialog).getByRole("button", { name: "Scan QR or barcode" })).toBeInTheDocument();
+  expect(within(dialog).queryByRole("textbox", { name: "Serial / device ID" })).not.toBeInTheDocument();
   expect(within(dialog).getByRole("heading", { name: "2. Find it on the home network" })).toBeInTheDocument();
   expect(within(dialog).getByRole("heading", { name: "3. Import sensor data" })).toBeInTheDocument();
   getUser.mockRestore();
