@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router-dom";
-import { NewBuildingSetupPanel, OccupyHistoryTabs, ProfileSummaryColumns, addressLines, decodeSensorLabel, parseSensorLabelText, mergeScannedSensor, selectDysonStream, registerSensorDraft, findAccountHomeRecord, findHomeProfileForOverwrite, readCachedBridgewoodValue, observedSensorMetrics } from "./BuildingDashboard";
+import { NewBuildingSetupPanel, OccupyHistoryTabs, ProfileSummaryColumns, addressLines, decodeSensorLabel, parseSensorLabelText, mergeScannedSensor, selectDysonStream, registerSensorDraft, sensorLabelConflict, findAccountHomeRecord, findHomeProfileForOverwrite, readCachedBridgewoodValue, observedSensorMetrics } from "./BuildingDashboard";
 import supabase from "../../supabaseClient";
 
 beforeEach(() => window.localStorage.clear());
@@ -323,6 +323,18 @@ test("Dyson label text extracts identity and electrical rating without claiming 
   expect(parseSensorLabelText("DYSON -TPO2 NN6-UK-HDA1783A")).toMatchObject({
     manufacturer: "Dyson", model: "TP02", serialNumber: "NN6-UK-HDA1783A",
   });
+  expect(parseSensorLabelText("230-240V 5OHz 58W")).toMatchObject({
+    ratedPowerW: "58", ratedVoltage: "230-240", ratedFrequencyHz: "50",
+  });
+});
+
+test("a downstairs label cannot overwrite the upstairs instrument", () => {
+  const sensors = [
+    { id: "upstairs", location: "Upstairs", serialNumber: "7BD-UK-TAA0665A" },
+    { id: "downstairs", location: "Living room", serialNumber: "NN6-UK-HDA1783A" },
+  ];
+  expect(sensorLabelConflict(sensors, sensors[0], "NN6-UK-HDA1783A")).toMatch(/registered Living room/);
+  expect(sensorLabelConflict(sensors, sensors[1], "NN6-UK-HDA1783A")).toBe("");
 });
 
 test("scanning another sensor clears the previous room and connection details", () => {
@@ -377,7 +389,7 @@ test("registered instrument tiles open their edit details", async () => {
   window.localStorage.setItem("WBP-TEST:setupSections", JSON.stringify({ healthSensors: [{
     id: "sensor-1", manufacturer: "Dyson", model: "TP02", serialNumber: "NN6-UK-HDA1783",
     location: "Upstairs", metrics: [], connectionMethod: "manual", evidenceGrade: "indicative",
-    verificationStatus: "unverified",
+    verificationStatus: "unverified", evidenceStorageReference: "owner/home/label", evidenceFileName: "dyson-label.jpg",
   }] }));
   render(<MemoryRouter><NewBuildingSetupPanel editModal syncHomeProfile isActive /></MemoryRouter>);
   const dialog = screen.getByRole("dialog", { name: "Edit property profile" });
@@ -394,6 +406,7 @@ test("registered instrument tiles open their edit details", async () => {
   expect(edit.compareDocumentPosition(serialInput) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(within(dialog).getByText(/Editing Dyson TP02/)).toBeInTheDocument();
   expect(within(dialog).getAllByLabelText("Supporting evidence").some((input) => input.type === "file")).toBe(true);
+  expect(within(dialog).getByRole("button", { name: "Read saved label photo" })).toBeInTheDocument();
   fireEvent.change(within(dialog).getByRole("textbox", { name: "Serial / device ID" }), { target: { value: "NN6-UK-HDA1783A" } });
   fireEvent.click(within(dialog).getByRole("button", { name: "Update instrument" }));
   fireEvent.click(within(dialog).getByRole("button", { name: "Edit Dyson TP02" }));

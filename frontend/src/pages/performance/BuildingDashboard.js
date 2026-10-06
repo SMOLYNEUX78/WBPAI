@@ -82,6 +82,17 @@ const emptySensorDraft = () => ({
 });
 const sensorIdentity = (sensor) => String(sensor?.labelCode || sensor?.serialNumber || "")
   .replace(/[^a-z0-9]/gi, "").toUpperCase();
+export const sensorLabelConflict = (sensors, selected, incoming) => {
+  const serial = normaliseSerial(incoming);
+  if (!serial) return "";
+  const other = sensors.find((sensor) => sensor.id !== selected?.id &&
+    normaliseSerial(sensor.serialNumber || sensor.labelCode) === serial);
+  if (other) return `This label matches the registered ${other.location || other.model || "other device"}, not this instrument. No details were changed.`;
+  if (selected?.id && selected.serialNumber && normaliseSerial(selected.serialNumber) !== serial) {
+    return "This label's serial differs from the selected instrument. No details were changed; check which physical unit you photographed.";
+  }
+  return "";
+};
 const canRegisterSensor = (sensor) => Boolean(String(sensor?.manufacturer || "").trim()
   && (String(sensor?.model || "").trim() || sensorIdentity(sensor)));
 export const addressLines = (address, postcode) => {
@@ -1057,7 +1068,7 @@ export const parseSensorLabelText = (text) => {
     || (dyson ? value.match(/\b[A-Z0-9]{2,4}-[A-Z]{2}-[A-Z0-9]{6,12}\b/i)?.[0] : "");
   const power = value.match(/\b(\d{1,4})\s?W\b/i)?.[1];
   const voltage = value.match(/\b(\d{2,3}(?:\s?[-–]\s?\d{2,3})?)\s?V\b/i)?.[1]?.replace(/\s/g, "");
-  const frequency = value.match(/\b(\d{2,3})\s?Hz\b/i)?.[1];
+  const frequency = value.match(/\b([0-9O]{2,3})\s?Hz\b/i)?.[1]?.replace(/O/gi, "0");
   return Object.fromEntries(Object.entries({
     manufacturer: dyson ? "Dyson" : "", model: model || "", serialNumber: serial || "",
     ratedPowerW: power || "", ratedVoltage: voltage || "", ratedFrequencyHz: frequency || "",
@@ -10168,11 +10179,17 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
     setSensorDetailsVisible(true);
     if (!decoded) {
       setSensorScanStatus(isQrCode ? "QR detected, but it does not expose a model or serial number WBP can read. Enter these manually; pairing codes are not stored." : "The barcode could not be read. Enter the label details manually.");
-      return;
+      return false;
+    }
+    const conflict = sensorLabelConflict(healthSensors, sensorDraft, decoded.serialNumber || decoded.labelCode);
+    if (conflict) {
+      setSensorScanStatus(conflict);
+      return false;
     }
     sensorDraftTouchedRef.current = true;
     setSensorDraft((current) => mergeScannedSensor(current, Object.fromEntries(Object.entries(decoded).filter(([, value]) => value))));
-      setSensorScanStatus(isQrCode ? "Label details filled in. Check them against the device before registering." : "Barcode captured. Confirm the manufacturer and label code; model and room can be added later.");
+    setSensorScanStatus(isQrCode ? "Label details filled in. Check them against the device before registering." : "Barcode captured. Confirm the manufacturer and label code; model and room can be added later.");
+    return true;
   };
 
   useEffect(() => {
@@ -10188,9 +10205,9 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
           if (!active || !result) return;
           const isQrCode = result.getBarcodeFormat() === BarcodeFormat.QR_CODE;
           const decoded = decodeSensorLabel(result.getText(), isQrCode);
-          acceptSensorCode(result.getText(), isQrCode);
+          const accepted = acceptSensorCode(result.getText(), isQrCode);
           const video = sensorVideoRef.current;
-          if (!isQrCode && decoded && video?.videoWidth && video?.videoHeight) {
+          if (accepted && !isQrCode && decoded && video?.videoWidth && video?.videoHeight) {
             const frame = document.createElement("canvas");
             frame.width = video.videoWidth;
             frame.height = video.videoHeight;
@@ -10273,18 +10290,33 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
             if (span > 40) {
               labelImage = crop(left - span * 0.65, top - span * 0.15, right + span * 0.15, bottom + span * 0.5) || file;
               if (right - left > bottom - top) {
-                modelImage = crop(left - span * 0.19, top - span * 0.07, left + span * 0.02, top + span * 0.13, 3);
+                modelImage = crop(left - span * 0.26, top - span * 0.12, left + span * 0.07, top + span * 0.15, 2);
                 ratingImage = crop(left + span * 0.1, top + span * 0.12, right + span * 0.1, bottom + span * 0.5, 2);
               }
             }
           }
           const labelText = (await worker.recognize(labelImage)).data.text;
           printedDetails = parseSensorLabelText(labelText);
+          if (!printedDetails.ratedPowerW || !printedDetails.ratedFrequencyHz || !printedDetails.model) {
+            const labelBand = crop(image.naturalWidth * 0.04, image.naturalHeight * 0.44,
+              image.naturalWidth * 0.96, image.naturalHeight * 0.73, 1);
+            if (labelBand) printedDetails = { ...parseSensorLabelText((await worker.recognize(labelBand)).data.text), ...printedDetails };
+          }
           if (modelImage && !printedDetails.model) {
-            await worker.setParameters({ tessedit_pageseg_mode: PSM.SINGLE_WORD });
+            await worker.setParameters({ tessedit_pageseg_mode: PSM.SPARSE_TEXT });
             const modelText = (await worker.recognize(modelImage)).data.text;
             const model = modelText.match(/\b(?:TP|DP|HP|PH|BP)\s?[0-9O]{2}\b/i)?.[0]?.replace(/\s/g, "").toUpperCase().replace(/O/g, "0");
             if (model) printedDetails = { ...printedDetails, manufacturer: printedDetails.manufacturer || "Dyson", model };
+          }
+          if (!printedDetails.model) {
+            const modelBand = crop(image.naturalWidth * 0.25, image.naturalHeight * 0.465,
+              image.naturalWidth * 0.43, image.naturalHeight * 0.515, 3);
+            if (modelBand) {
+              await worker.setParameters({ tessedit_pageseg_mode: PSM.SPARSE_TEXT });
+              const modelText = (await worker.recognize(modelBand)).data.text;
+              const model = modelText.match(/\b(?:TP|DP|HP|PH|BP)\s?[0-9O]{2}\b/i)?.[0]?.replace(/\s/g, "").toUpperCase().replace(/O/g, "0");
+              if (model) printedDetails = { ...printedDetails, manufacturer: printedDetails.manufacturer || "Dyson", model };
+            }
           }
           if (ratingImage && !printedDetails.ratedPowerW) {
             await worker.setParameters({ tessedit_pageseg_mode: PSM.SPARSE_TEXT });
@@ -10292,14 +10324,35 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
             const power = ratingText.match(/\b(\d{1,4})\s?W\b/i)?.[1];
             if (power) printedDetails = { ...printedDetails, ratedPowerW: power };
           }
+          if (!printedDetails.ratedPowerW || !printedDetails.ratedFrequencyHz) {
+            const ratingBand = crop(image.naturalWidth * 0.68, image.naturalHeight * 0.59,
+              image.naturalWidth * 0.85, image.naturalHeight * 0.64, 2);
+            if (ratingBand) {
+              await worker.setParameters({ tessedit_pageseg_mode: PSM.SPARSE_TEXT });
+              printedDetails = { ...parseSensorLabelText((await worker.recognize(ratingBand)).data.text), ...printedDetails };
+            }
+          }
         }
         finally { await worker.terminate(); }
       } catch (error) { ocrError = error?.message || "Text recognition unavailable"; }
-      if (barcodeDetails?.labelCode && /^[-A-Z0-9]{12,24}$/i.test(barcodeDetails.labelCode) && printedDetails.manufacturer === "Dyson" && !printedDetails.serialNumber) {
+      if (barcodeDetails?.labelCode && /^[-A-Z0-9]{12,24}$/i.test(barcodeDetails.labelCode) && printedDetails.manufacturer === "Dyson" &&
+        (!printedDetails.serialNumber || normaliseSerial(printedDetails.serialNumber) !== normaliseSerial(barcodeDetails.labelCode))) {
         printedDetails.serialNumber = barcodeDetails.labelCode;
+      }
+      let uncertainSerial = false;
+      if (!barcodeDetails?.labelCode && sensorDraft.serialNumber && printedDetails.serialNumber &&
+        normaliseSerial(sensorDraft.serialNumber) !== normaliseSerial(printedDetails.serialNumber) &&
+        normaliseSerial(sensorDraft.serialNumber).slice(0, 8) === normaliseSerial(printedDetails.serialNumber).slice(0, 8)) {
+        printedDetails.serialNumber = sensorDraft.serialNumber;
+        uncertainSerial = true;
       }
       const details = { ...(barcodeDetails || {}), ...printedDetails };
       if (Object.keys(details).length) {
+        const conflict = sensorLabelConflict(healthSensors, sensorDraft, details.serialNumber || details.labelCode);
+        if (conflict) {
+          setSensorScanStatus(conflict);
+          return false;
+        }
         sensorDraftTouchedRef.current = true;
         setSensorDetailsVisible(true);
         setSensorDraft((current) => {
@@ -10307,15 +10360,18 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
           return current.id ? { ...current, ...scan } : mergeScannedSensor(current, scan);
         });
         setSensorScanStatus(Object.keys(printedDetails).length
-          ? `${source === "photo" ? "Photo" : "Camera"}: label details filled in. Check the model and serial against the printed label before saving.`
+          ? `${source === "photo" ? "Photo" : "Camera"}: label details filled in. ${uncertainSerial ? "OCR could not read the full serial, so the saved serial was kept. " : ""}Check the model and serial against the printed label before saving.`
           : ocrError ? `${source === "photo" ? "Photo" : "Camera"}: barcode captured, but printed-text reading failed: ${ocrError}. Enter the model and serial manually.`
             : `${source === "photo" ? "Photo" : "Camera"}: barcode captured, but the printed details were not clear. Try a closer photo of the label, or enter the model and serial manually.`);
+        return true;
       } else {
         setSensorScanStatus(ocrError ? `${source === "photo" ? "Photo" : "Camera"}: printed-text reading failed: ${ocrError}. Try again or enter the details manually.`
           : `${source === "photo" ? "Photo" : "Camera"}: no readable label details found. Try a closer photo of the label in good light, or enter the printed details manually.`);
+        return true;
       }
     } catch {
       setSensorScanStatus(`${source === "photo" ? "Photo" : "Camera"}: could not read the image. Try a sharper photo or enter the printed details manually.`);
+      return true;
     } finally {
       URL.revokeObjectURL(imageUrl);
       setSensorPhotoBusy(false);
@@ -10406,6 +10462,25 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       return;
     }
     window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+  };
+
+  const rereadSensorEvidence = async () => {
+    if (!sensorDraft.evidenceStorageReference || sensorPhotoBusy) return;
+    setSensorScanStatus("Opening saved label photo...");
+    const { data, error } = await supabase.storage.from("wbp-private-evidence")
+      .download(sensorDraft.evidenceStorageReference);
+    if (error || !data) {
+      setSensorScanStatus(`Could not read saved photo: ${error?.message || "File unavailable"}`);
+      return;
+    }
+    const name = sensorDraft.evidenceFileName || "sensor-label.jpg";
+    const mimeType = /^image\/(jpeg|png)$/.test(data.type) ? data.type
+      : /\.png$/i.test(name) ? "image/png" : /\.jpe?g$/i.test(name) ? "image/jpeg" : "";
+    if (!mimeType) {
+      setSensorScanStatus("The saved evidence is not a JPG or PNG label photo. Choose a photo to read its details.");
+      return;
+    }
+    await scanSensorPhoto(new File([data], name, { type: mimeType }), null, null, "photo");
   };
 
   const clearHealthSensors = async () => {
@@ -11211,15 +11286,19 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                   Supporting evidence
                   {sensorDraft.id ? <input type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
                     disabled={sensorEvidenceBusy} className="block w-full text-xs pt-1"
-                    onChange={(event) => {
+                    onChange={async (event) => {
                       const file = event.target.files?.[0];
-                      if (file?.type === "image/jpeg" || file?.type === "image/png") scanSensorPhoto(file);
-                      uploadSensorEvidence(file);
+                      if (!file) return;
+                      const canAttach = file.type === "image/jpeg" || file.type === "image/png"
+                        ? await scanSensorPhoto(file, null, null, "photo") : true;
+                      if (canAttach) await uploadSensorEvidence(file);
                     }} />
                     : <span className="block text-xs text-gray-500">Add and save the instrument first, then reopen it to upload evidence.</span>}
                   {sensorEvidenceBusy ? <span className="block text-xs">Uploading...</span> : null}
                   {sensorDraft.evidenceStorageReference ? <button type="button" className="block text-left text-xs text-blue-700 underline" onClick={openSensorEvidence}>View {sensorDraft.evidenceFileName || "uploaded evidence"}</button> : null}
+                  {sensorDraft.evidenceStorageReference && /\.(jpe?g|png)$/i.test(sensorDraft.evidenceFileName || "") ? <button type="button" disabled={sensorPhotoBusy} className="block text-left text-xs font-semibold text-emerald-800 underline disabled:opacity-50" onClick={rereadSensorEvidence}>Read saved label photo</button> : null}
                   {sensorEvidenceStatus ? <span role="status" className="block text-xs">{sensorEvidenceStatus}</span> : null}
+                  {sensorScanStatus ? <span role="status" className="block text-xs">{sensorScanStatus}</span> : null}
                 </label>
               </div>
 
