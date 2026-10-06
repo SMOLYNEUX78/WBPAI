@@ -12421,6 +12421,8 @@ const DeviceImportWorkbench = ({ isActive }) => {
   const [testReading, setTestReading] = useState(null);
   const [readingStatus, setReadingStatus] = useState("");
   const [readingBusy, setReadingBusy] = useState(false);
+  const [comparisonConfirmed, setComparisonConfirmed] = useState(false);
+  const [matchBusy, setMatchBusy] = useState(false);
 
   useEffect(() => {
     if (!isActive) return undefined;
@@ -12531,6 +12533,8 @@ const DeviceImportWorkbench = ({ isActive }) => {
           const result = readDeviceScan(JSON.stringify(data.result));
           setScan(result);
           setSelected("");
+          setTestReading(null);
+          setComparisonConfirmed(false);
           setStatus(`${result.candidates.length} network candidate(s) found.`);
         } catch { setStatus("Tablet returned a scan we could not read."); }
         setScanJobId(null);
@@ -12549,6 +12553,8 @@ const DeviceImportWorkbench = ({ isActive }) => {
       const result = readDeviceScan(await file.text());
       setScan(result);
       setSelected("");
+      setTestReading(null);
+      setComparisonConfirmed(false);
       setStatus(`${result.candidates.length} network candidate(s) found in this tablet scan.`);
     } catch (error) {
       setScan(null);
@@ -12563,6 +12569,7 @@ const DeviceImportWorkbench = ({ isActive }) => {
     if (!canIdentify) return;
     setReadingBusy(true);
     setTestReading(null);
+    setComparisonConfirmed(false);
     setReadingStatus("Checking the latest collector sample...");
     const configured = matchedCandidates.find((candidate) => candidate.address === selected)?.configured;
     const stream = configured?.connector === "dyson" && /^[a-z0-9_]+$/i.test(configured.name || "")
@@ -12572,20 +12579,73 @@ const DeviceImportWorkbench = ({ isActive }) => {
       setReadingBusy(false);
       return;
     }
-    const since = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+    const since = new Date(Date.now() - 30 * 60 * 1000).toISOString();
     const { data, error } = await supabase.from("Readings").select("*")
       .eq("building_id", "home").eq("reading_type", stream).gte("timestamp", since)
-      .order("timestamp", { ascending: false }).limit(1);
-    const row = data?.[0];
-    setTestReading(row ? { stream, row } : null);
-    setReadingStatus(error ? `Could not check the collector: ${error.message}` : row
-      ? `Recent ${dysonStreamLabel(stream)} sample received. This confirms the configured stream, not the physical label.`
-      : "No reading from this collector stream in the last 15 minutes. Check the tablet collector before confirming a connection.");
+      .order("timestamp", { ascending: false }).limit(3);
+    const seenTimestamps = new Set();
+    const rows = (data || []).filter((row) => {
+      if (seenTimestamps.has(row.timestamp) || !Object.values(SENSOR_READING_COLUMNS).some((column) => row[column] != null)) return false;
+      seenTimestamps.add(row.timestamp);
+      return true;
+    });
+    setTestReading(!error && rows.length ? { stream, rows, address: selected, instrumentId: selectedInstrumentId } : null);
+    setReadingStatus(error ? `Could not check the collector: ${error.message}` : rows.length
+      ? `Compare these ${dysonStreamLabel(stream)} readings with the device app. A matching trend supports the link but does not prove the serial.`
+      : "No usable reading from this collector stream in the last 30 minutes. Check the tablet collector before confirming a connection.");
     setReadingBusy(false);
   };
-  const confirmCandidate = () => {
-    if (!testReading || !canIdentify) return;
-    navigate(`/dashboard/home?edit=health&instrument=${encodeURIComponent(selectedInstrumentId)}&candidate=${encodeURIComponent(selected)}`);
+  const confirmCandidate = async () => {
+    if (!testReading || testReading.rows.length < 2 || !comparisonConfirmed || !canIdentify || !profile ||
+      testReading.address !== selected || testReading.instrumentId !== selectedInstrumentId) return;
+    if (!selectedInstrument.serialNumber && !selectedInstrument.labelCode) {
+      setReadingStatus("Scan or enter the physical device's serial or label code before saving a match.");
+      return;
+    }
+    setMatchBusy(true);
+    const { data: auth } = await supabase.auth.getUser();
+    const { data: existing, error: readError } = await supabase.from("WBPBuildingSetupDeclarations")
+      .select("setup_data").eq("building_record_id", profile.id).maybeSingle();
+    if (readError || !auth?.user) {
+      setReadingStatus(`Could not save this match: ${readError?.message || "Sign in again."}`);
+      setMatchBusy(false);
+      return;
+    }
+    const stored = Array.isArray(existing?.setup_data?.healthSensors) ? existing.setup_data.healthSensors : [];
+    const sensor = stored.find((item) => item.id === selectedInstrumentId);
+    if (!sensor) {
+      setReadingStatus("This instrument was changed elsewhere. Reload Connect and try again.");
+      setMatchBusy(false);
+      return;
+    }
+    if (stored.some((item) => item.id !== sensor.id &&
+      (item.networkMatch?.stream === testReading.stream || item.networkMatch?.address === selected))) {
+      setReadingStatus("This collector stream or address is already matched to another instrument. Review that match before changing it.");
+      setMatchBusy(false);
+      return;
+    }
+    const matchedAt = new Date().toISOString();
+    const updated = stored.map((item) => item.id === sensor.id ? { ...item,
+      networkAddress: selected, connectionMethod: "dyson", readingType: testReading.stream,
+      sourceBuildingId: "home", lastSampleAt: testReading.rows[0].timestamp,
+      networkMatch: { method: "customer-compared-device-app", matchedAt, address: selected,
+        serialNumber: item.serialNumber || item.labelCode || "", stream: testReading.stream,
+        sampleTimestamps: testReading.rows.map((row) => row.timestamp) },
+    } : item);
+    const setupData = { ...(existing?.setup_data || {}), healthSensors: updated };
+    const { error } = await supabase.from("WBPBuildingSetupDeclarations").upsert({
+      building_record_id: profile.id, setup_data: setupData, updated_by: auth.user.id,
+      updated_at: matchedAt,
+    }, { onConflict: "building_record_id" });
+    if (error) setReadingStatus(`Could not save this match: ${error.message}`);
+    else {
+      setPhysicalDevices(updated);
+      const recordKey = profile.record_reference ? `${profile.record_reference}:setupSections` : "";
+      if (recordKey) window.localStorage.setItem(recordKey, JSON.stringify(setupData));
+      window.dispatchEvent(new CustomEvent("wbp:setup-updated", { detail: { recordId: profile.id, setupData } }));
+      setReadingStatus("Device-to-stream match saved to this property as customer-confirmed. The network address may change; the scanned serial remains the device identity.");
+    }
+    setMatchBusy(false);
   };
 
   return <main className="mx-auto w-full max-w-7xl">
@@ -12595,7 +12655,7 @@ const DeviceImportWorkbench = ({ isActive }) => {
     </header>
     <div className="px-4 py-6 sm:px-8">
       <section className="border-b border-gray-200 pb-5"><h2 className="text-base font-bold">1. Scan the physical device</h2><p className="mt-1 text-sm text-gray-600">Record its label and room first. A network address alone cannot identify it.</p>
-        {physicalDevices.length ? <div className="mt-3 grid gap-2 sm:grid-cols-2">{physicalDevices.map((instrument) => <button key={instrument.id} type="button" onClick={() => { setSelectedInstrumentId(instrument.id); setSelected(""); setTestReading(null); setReadingStatus(""); }} aria-pressed={selectedInstrumentId === instrument.id} className={`border p-3 text-left text-sm ${selectedInstrumentId === instrument.id ? "border-emerald-700 bg-emerald-50" : "border-gray-300 bg-white"}`}><strong>{instrument.manufacturer} {instrument.model}</strong><span className="block text-xs text-gray-600">{instrument.location || "Room pending"} · {instrument.serialNumber || instrument.labelCode || "Label pending"}</span></button>)}</div> : <p className="mt-3 text-sm text-gray-600">No physical devices saved to this property yet.</p>}
+        {physicalDevices.length ? <div className="mt-3 grid gap-2 sm:grid-cols-2">{physicalDevices.map((instrument) => <button key={instrument.id} type="button" onClick={() => { setSelectedInstrumentId(instrument.id); setSelected(""); setTestReading(null); setReadingStatus(""); setComparisonConfirmed(false); }} aria-pressed={selectedInstrumentId === instrument.id} className={`border p-3 text-left text-sm ${selectedInstrumentId === instrument.id ? "border-emerald-700 bg-emerald-50" : "border-gray-300 bg-white"}`}><strong>{instrument.manufacturer} {instrument.model}</strong><span className="block text-xs text-gray-600">{instrument.location || "Room pending"} · {instrument.serialNumber || instrument.labelCode || "Label pending"}</span>{instrument.networkMatch ? <span className="mt-1 block text-xs text-emerald-900">Customer-matched to {instrument.networkMatch.stream} at {instrument.networkMatch.address}</span> : null}</button>)}</div> : <p className="mt-3 text-sm text-gray-600">No physical devices saved to this property yet.</p>}
         <button type="button" onClick={() => navigate("/dashboard/home?edit=health&instrument=new")} className="mt-3 border border-emerald-700 bg-white px-3 py-2 text-sm font-semibold text-emerald-900">Scan or add a device label</button>
       </section>
       <div className="mt-5 flex flex-wrap items-start justify-between gap-3 border-b border-gray-200 pb-4"><div><h2 className="text-base font-bold">2. Find it on the home network</h2><p className="mt-1 max-w-2xl text-sm text-gray-600">Select a physical device above, then scan for possible network matches.</p></div><button type="button" onClick={requestScan} disabled={!collectorDeviceId || scanBusy || !selectedInstrument} className="border border-emerald-700 bg-emerald-700 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">{scanBusy ? "Scanning..." : "Find network matches"}</button></div>
@@ -12607,8 +12667,28 @@ const DeviceImportWorkbench = ({ isActive }) => {
       {status ? <p role="status" className="mt-3 text-sm text-gray-700">{status}</p> : null}
       {scan ? <p className="mt-2 text-xs text-gray-500">Scanned {new Date(scan.scannedAt).toLocaleString()}. Paired scans are saved privately to this property in Supabase. A network scan may miss devices that do not respond; a complete router client list requires router-specific access.</p> : null}
       <div className="mt-5 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-        <section><h3 className="text-sm font-bold">Possible matches</h3>{matchedCandidates.length ? <div className="mt-3 grid gap-2">{matchedCandidates.map((candidate) => <button key={candidate.address} type="button" aria-pressed={selected === candidate.address} onClick={() => { setSelected(candidate.address); setTestReading(null); setReadingStatus(""); }} className={`border p-3 text-left text-sm ${selected === candidate.address ? "border-emerald-700 bg-emerald-50" : "border-gray-300 bg-white"}`}><strong>{candidate.address}</strong><span className="block text-xs text-gray-600">{candidate.suggested ? `Suggested by collector room: ${candidate.configured.name}` : candidate.compatible ? "Dyson collector address; room not matched" : candidate.kind}</span></button>)}</div> : <p className="mt-3 text-sm text-gray-600">{selectedInstrument ? "No scan loaded yet." : "Select a physical device first."}</p>}</section>
-        <section><h3 className="text-sm font-bold">3. Check the match</h3>{selectedDevice && selectedInstrument ? <><p className="mt-3 text-sm font-semibold">{selectedInstrument.manufacturer} {selectedInstrument.model} · {selectedInstrument.location || "Room pending"}</p><p className="text-xs text-gray-600">Candidate {selectedDevice.address}: {selectedDevice.kind}</p><ul className="mt-3 space-y-1 text-xs text-gray-600">{selectedDevice.signals.map((signal, index) => <li key={`${signal.method}-${index}`} className="break-all">{signal.method}: {signal.detail}</li>)}</ul><p className="mt-4 text-xs text-gray-600">A collector address is only a suggestion. Check the serial and room against the physical label, then review a recent reading before saving the connection.</p><button type="button" disabled={!canIdentify || readingBusy} onClick={reviewCandidate} className="mt-4 border border-emerald-700 bg-emerald-700 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">{readingBusy ? "Checking..." : "Review test readings"}</button>{readingStatus ? <p role="status" className="mt-3 text-xs text-gray-700">{readingStatus}</p> : null}{testReading ? <div className="mt-3 border border-emerald-200 bg-emerald-50 p-3 text-xs"><p className="font-semibold">{new Date(testReading.row.timestamp).toLocaleString()}</p><div className="mt-2 grid grid-cols-2 gap-2">{Object.entries(SENSOR_READING_COLUMNS).filter(([, column]) => testReading.row[column] != null).map(([metric, column]) => <p key={metric}>{metric.toUpperCase()}: {testReading.row[column]}</p>)}</div><button type="button" onClick={confirmCandidate} className="mt-3 border border-emerald-700 bg-white px-3 py-2 font-semibold text-emerald-900">Confirm device details</button></div> : null}</> : <p className="mt-3 text-sm text-gray-600">Select a possible match to inspect its network signals.</p>}</section>
+        <section><h3 className="text-sm font-bold">Possible matches</h3>{matchedCandidates.length ? <div className="mt-3 grid gap-2">{matchedCandidates.map((candidate) => <button key={candidate.address} type="button" aria-pressed={selected === candidate.address} onClick={() => { setSelected(candidate.address); setTestReading(null); setReadingStatus(""); setComparisonConfirmed(false); }} className={`border p-3 text-left text-sm ${selected === candidate.address ? "border-emerald-700 bg-emerald-50" : "border-gray-300 bg-white"}`}><strong>{candidate.address}</strong><span className="block text-xs text-gray-600">{candidate.suggested ? `Suggested by collector room: ${candidate.configured.name}` : candidate.compatible ? "Dyson collector address; room not matched" : candidate.kind}</span></button>)}</div> : <p className="mt-3 text-sm text-gray-600">{selectedInstrument ? "No scan loaded yet." : "Select a physical device first."}</p>}</section>
+        <section>
+          <h3 className="text-sm font-bold">3. Compare readings</h3>
+          {selectedDevice && selectedInstrument ? <>
+            <p className="mt-3 text-sm font-semibold">{selectedInstrument.manufacturer} {selectedInstrument.model} · {selectedInstrument.location || "Room pending"}</p>
+            <p className="text-xs text-gray-600">Candidate {selectedDevice.address}: {selectedDevice.kind}</p>
+            <ul className="mt-3 space-y-1 text-xs text-gray-600">{selectedDevice.signals.map((signal, index) => <li key={`${signal.method}-${index}`} className="break-all">{signal.method}: {signal.detail}</li>)}</ul>
+            <p className="mt-4 text-xs text-gray-600">Open this device in its own app and compare the same metrics and times. A collector address is only a suggestion.</p>
+            <button type="button" disabled={!canIdentify || readingBusy} onClick={reviewCandidate} className="mt-4 border border-emerald-700 bg-emerald-700 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">{readingBusy ? "Checking..." : testReading ? "Refresh readings" : "Review test readings"}</button>
+            {readingStatus ? <p role="status" className="mt-3 text-xs text-gray-700">{readingStatus}</p> : null}
+            {testReading ? <div className="mt-3 border border-emerald-200 bg-emerald-50 p-3 text-xs">
+              <p className="font-semibold">Recent WBP collector readings · {dysonStreamLabel(testReading.stream)}</p>
+              <div className="mt-2 space-y-2">{testReading.rows.map((row) => <div key={row.timestamp} className="border-t border-emerald-200 pt-2">
+                <p className="font-semibold">{new Date(row.timestamp).toLocaleString()}</p>
+                <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-1">{Object.entries(SENSOR_READING_COLUMNS).filter(([, column]) => row[column] != null).map(([metric, column]) => <p key={metric}>{metric.toUpperCase()}: {row[column]}</p>)}</div>
+              </div>)}</div>
+              {testReading.rows.length < 2 ? <p className="mt-3 text-amber-900">Wait for another reading before comparing a trend.</p> : null}
+              <label className="mt-3 flex items-start gap-2"><input type="checkbox" checked={comparisonConfirmed} onChange={(event) => setComparisonConfirmed(event.target.checked)} /><span>I compared these readings with this physical device in its own app and confirmed the match.</span></label>
+              <button type="button" onClick={confirmCandidate} disabled={!comparisonConfirmed || testReading.rows.length < 2 || matchBusy || (!selectedInstrument.serialNumber && !selectedInstrument.labelCode)} className="mt-3 border border-emerald-700 bg-white px-3 py-2 font-semibold text-emerald-900 disabled:opacity-50">{matchBusy ? "Saving..." : "Save customer-confirmed match"}</button>
+            </div> : null}
+          </> : <p className="mt-3 text-sm text-gray-600">Select a possible match to inspect its network signals.</p>}
+        </section>
       </div>
     </div>
   </main>;
