@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useLocation, useNavigate } from "react-router-dom";
 import AnalogGauge from "../../components/AnalogGauge";
@@ -12410,7 +12410,7 @@ const DeviceImportWorkbench = ({ isActive, embedded = false, requestedInstrument
     setScanBusy(false);
   };
 
-  const requestScan = async () => {
+  const requestScan = useCallback(async () => {
     if (!profile || !collectorDeviceId) return;
     setScanBusy(true);
     setScan(null);
@@ -12421,12 +12421,12 @@ const DeviceImportWorkbench = ({ isActive, embedded = false, requestedInstrument
       .select("id").single();
     if (error) { setStatus(`Could not request scan: ${error.message}`); setScanBusy(false); return; }
     setScanJobId(data.id);
-  };
+  }, [profile, collectorDeviceId]);
   useEffect(() => {
     if (!embedded || !isActive || !profile?.id || !collectorDeviceId || selectedInstrumentId !== requestedInstrumentId || autoScanRequestedRef.current) return;
     autoScanRequestedRef.current = true;
     requestScan();
-  }, [embedded, isActive, profile?.id, collectorDeviceId, requestedInstrumentId, selectedInstrumentId]);
+  }, [embedded, isActive, profile?.id, collectorDeviceId, requestedInstrumentId, selectedInstrumentId, requestScan]);
 
   const removeTablet = async () => {
     if (!collectorDeviceId || !window.confirm("Remove this tablet's access to network scans for this property?")) return;
