@@ -12419,19 +12419,6 @@ const DeviceImportWorkbench = ({ isActive, embedded = false, requestedInstrument
     requestScan();
   }, [embedded, isActive, profile?.id, collectorDeviceId, requestedInstrumentId, selectedInstrumentId, requestScan]);
 
-  const removeTablet = async () => {
-    if (!collectorDeviceId || !window.confirm("Remove this tablet's access to network scans for this property?")) return;
-    const { error } = await supabase.from("WBPCollectorDevices").delete().eq("id", collectorDeviceId);
-    if (error) { setStatus(`Could not remove tablet: ${error.message}`); return; }
-    const remaining = collectorDevices.filter((device) => device.id !== collectorDeviceId);
-    setCollectorDevices(remaining);
-    setCollectorDeviceId(remaining[0]?.id || "");
-    setPairingToken("");
-    setScanJobId(null);
-    setScanBusy(false);
-    setStatus("Tablet pairing removed. The tablet can no longer claim new scan requests.");
-  };
-
   useEffect(() => {
     if (!scanJobId || !isActive) return undefined;
     let active = true;
@@ -12469,22 +12456,6 @@ const DeviceImportWorkbench = ({ isActive, embedded = false, requestedInstrument
     return () => { active = false; clearInterval(timer); };
   }, [scanJobId, isActive]);
 
-  const importScan = async (file) => {
-    if (!file) return;
-    if (file.size > 1024 * 1024) { setStatus("Scan report is too large."); return; }
-    try {
-      const result = readDeviceScan(await file.text());
-      setScan(result);
-      setSelected("");
-      setTestReading(null);
-      setReadingsOpen(false);
-      setComparisonConfirmed(false);
-      setStatus(`${result.candidates.length} network candidate(s) found in this tablet scan.`);
-    } catch (error) {
-      setScan(null);
-      setStatus(error.message || "Could not read the tablet scan report.");
-    }
-  };
   const selectedDevice = scan?.candidates.find((candidate) => candidate.address === selected);
   const selectedInstrument = physicalDevices.find((instrument) => instrument.id === selectedInstrumentId);
   const matchedCandidates = suggestDeviceCandidates(selectedInstrument, scan);
@@ -12752,8 +12723,6 @@ const DeviceImportWorkbench = ({ isActive, embedded = false, requestedInstrument
       {profile && !collectorDeviceId ? <div className="mt-4 border border-amber-200 bg-amber-50 p-4 text-sm"><p className="font-semibold">Pair this tablet once</p><p className="mt-1 text-gray-700">This links the local scanner to this property without changing its existing collectors.</p><button type="button" onClick={pairTablet} disabled={scanBusy} className="mt-3 border border-amber-700 bg-white px-3 py-2 font-semibold text-amber-950 disabled:opacity-50">Create pairing code</button></div> : null}
       {pairingToken ? <div className="mt-4 border border-emerald-200 bg-emerald-50 p-4 text-sm"><p className="font-semibold">Tablet pairing code</p><code className="mt-2 block break-all">{pairingToken}</code><button type="button" onClick={() => navigator.clipboard?.writeText(pairingToken)} className="mt-2 border border-emerald-700 bg-white px-3 py-1.5 font-semibold">Copy code</button><p className="mt-3">In Termux, run <code>sh ~/WBPAI/scripts/termux-pair-device-scan.sh</code> and paste this code when asked. It is shown only now; do not share it.</p></div> : null}
       {collectorDevices.length > 1 ? <label className="mt-3 block text-xs text-gray-600">Tablet<select value={collectorDeviceId} onChange={(event) => setCollectorDeviceId(event.target.value)} className="ml-2 border bg-white p-2">{collectorDevices.map((device) => <option key={device.id} value={device.id}>{device.label} · {device.last_seen_at ? "online recently" : "not checked in"}</option>)}</select></label> : null}
-      {collectorDeviceId ? <button type="button" onClick={removeTablet} className="mt-3 border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700">Remove tablet pairing</button> : null}
-      <details className="mt-3 text-xs text-gray-600"><summary className="cursor-pointer">Import a scan file instead</summary><p className="mt-2">On the tablet, run <code>sh ~/WBPAI/scripts/termux-export-device-scan.sh</code> and choose <code>Downloads/WBP-device-scan.json</code>. This fallback file stays on the tablet.</p><label className="mt-2 inline-block cursor-pointer border border-gray-400 bg-white px-3 py-2 font-semibold">Choose scan file<input type="file" accept=".json,application/json" className="sr-only" onChange={(event) => importScan(event.target.files?.[0])} /></label></details>
       {!embedded && status ? <p role="status" className="mt-3 text-sm text-gray-700">{status}</p> : null}
       {scan ? <p className="mt-2 text-xs text-gray-500">Scanned {new Date(scan.scannedAt).toLocaleString()}. Paired scans are saved privately to this property in Supabase. A network scan may miss devices that do not respond; a complete router client list requires router-specific access.</p> : null}
       {(!embedded || selectedMatch) ? <section className="mt-5 border-t border-gray-200 pt-5">

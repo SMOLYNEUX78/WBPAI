@@ -419,6 +419,8 @@ test("a device's network button opens possible matches inside its tile", async (
     fireEvent.click(networkButton);
     expect(await within(dialog).findByRole("heading", { name: "Possible matches" })).toBeInTheDocument();
     expect(await within(dialog).findByRole("progressbar", { name: "Loading possible matches" })).toBeInTheDocument();
+    expect(within(dialog).queryByRole("button", { name: "Remove tablet pairing" })).not.toBeInTheDocument();
+    expect(within(dialog).queryByText("Import a scan file instead")).not.toBeInTheDocument();
     expect(within(dialog).queryByRole("heading", { name: "2. Find it on the home network" })).not.toBeInTheDocument();
   } finally {
     from.mockRestore();
