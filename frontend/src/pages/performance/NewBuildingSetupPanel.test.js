@@ -382,6 +382,7 @@ test("registered instrument tiles open their edit details", async () => {
   fireEvent.click(edit);
   const serialInput = within(dialog).getByRole("textbox", { name: "Serial / device ID" });
   expect(serialInput).toHaveValue("NN6-UK-HDA1783");
+  expect(serialInput.closest(".bg-emerald-100")).toHaveClass("border-emerald-700");
   expect(edit.compareDocumentPosition(serialInput) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(within(dialog).getByText(/Editing Dyson TP02/)).toBeInTheDocument();
   fireEvent.change(within(dialog).getByRole("textbox", { name: "Serial / device ID" }), { target: { value: "NN6-UK-HDA1783A" } });

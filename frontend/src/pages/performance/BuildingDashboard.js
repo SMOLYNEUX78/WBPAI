@@ -10902,7 +10902,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                   </div>)}</div>}
               </div>
 
-              {sensorDetailsVisible ? <div className="mt-4 space-y-3 border-t border-gray-200 pt-4"><div className="grid gap-2 sm:grid-cols-2">
+              {sensorDetailsVisible ? <div className={`mt-4 space-y-3 border p-3 transition-colors ${sensorDraft.id && healthSensors.some((sensor) => sensor.id === sensorDraft.id) ? "border-emerald-700 bg-emerald-100" : "border-gray-200 bg-white"}`}><div className="grid gap-2 sm:grid-cols-2">
                 <label className="space-y-1 text-xs text-gray-600">
                   Manufacturer
                   <input
