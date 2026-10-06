@@ -26,16 +26,20 @@ export const readDeviceScan = (text) => {
   return { scannedAt: report.scannedAt, candidates, configuredDevices };
 };
 
+export const normaliseSerial = (value) => String(value || "").replace(/[^a-z0-9]/gi, "").toUpperCase();
+
 export const suggestDeviceCandidates = (instrument, scan) => {
   if (!instrument || !scan?.candidates) return [];
   const room = String(instrument.location || "").toLowerCase();
   const isDyson = /dyson/i.test(instrument.manufacturer || "");
+  const labelSerial = normaliseSerial(instrument.serialNumber || instrument.labelCode);
   return scan.candidates.filter((candidate) => !["This tablet", "Router or gateway", "Audio device"].includes(candidate.kind))
     .map((candidate) => {
       const configured = scan.configuredDevices?.find((device) => device.address === candidate.address);
       const configuredRoom = String(configured?.name || "").toLowerCase().replaceAll("_", " ");
       const roomHint = configuredRoom && room && (room.includes(configuredRoom) || configuredRoom.includes(room));
       const connectorHint = isDyson && configured?.connector === "dyson";
-      return { ...candidate, configured, suggested: Boolean(roomHint && connectorHint), compatible: Boolean(connectorHint) };
-    }).sort((a, b) => Number(b.suggested) - Number(a.suggested) || Number(b.compatible) - Number(a.compatible));
+      const serialMatch = Boolean(connectorHint && labelSerial && normaliseSerial(configured?.serial) === labelSerial);
+      return { ...candidate, configured, serialMatch, suggested: Boolean(serialMatch || (roomHint && connectorHint)), compatible: Boolean(connectorHint) };
+    }).sort((a, b) => Number(b.serialMatch) - Number(a.serialMatch) || Number(b.suggested) - Number(a.suggested) || Number(b.compatible) - Number(a.compatible));
 };
