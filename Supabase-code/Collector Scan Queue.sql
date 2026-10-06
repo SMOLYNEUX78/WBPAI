@@ -1,7 +1,5 @@
 -- Apply after Building Passport Core.sql. The tablet uses only the public anon key
 -- plus a per-device random token; it never receives a service-role credential.
-create extension if not exists pgcrypto;
-
 create table if not exists public."WBPCollectorDevices" (
   id uuid primary key default gen_random_uuid(),
   building_record_id uuid not null references public."WBPBuildingRecords"(id) on delete cascade,
@@ -75,7 +73,7 @@ declare v_device uuid; v_job public."WBPCollectorScanJobs"%rowtype;
 begin
   if p_token !~ '^[0-9a-f]{64}$' then return null; end if;
   select id into v_device from public."WBPCollectorDevices"
-    where token_hash = encode(digest(p_token, 'sha256'), 'hex');
+    where token_hash = encode(pg_catalog.sha256(pg_catalog.convert_to(p_token, 'UTF8')), 'hex');
   if v_device is null then return null; end if;
   update public."WBPCollectorDevices" set last_seen_at = now() where id = v_device;
   select * into v_job from public."WBPCollectorScanJobs"
@@ -98,7 +96,7 @@ begin
     return false;
   end if;
   select id into v_device from public."WBPCollectorDevices"
-    where token_hash = encode(digest(p_token, 'sha256'), 'hex');
+    where token_hash = encode(pg_catalog.sha256(pg_catalog.convert_to(p_token, 'UTF8')), 'hex');
   if v_device is null then return false; end if;
   update public."WBPCollectorScanJobs" set
     status = case when p_error is null then 'complete' else 'failed' end,
