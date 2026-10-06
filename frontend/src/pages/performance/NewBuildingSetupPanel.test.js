@@ -373,7 +373,9 @@ test("registered instrument tiles open their edit details", async () => {
   const edit = await within(dialog).findByRole("button", { name: "Edit Dyson TP02" });
   expect(within(dialog).getByRole("button", { name: "Find on the home network" })).toBeInTheDocument();
   fireEvent.click(edit);
-  expect(within(dialog).getByRole("textbox", { name: "Serial / device ID" })).toHaveValue("NN6-UK-HDA1783");
+  const serialInput = within(dialog).getByRole("textbox", { name: "Serial / device ID" });
+  expect(serialInput).toHaveValue("NN6-UK-HDA1783");
+  expect(edit.compareDocumentPosition(serialInput) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(within(dialog).getByText(/Editing Dyson TP02/)).toBeInTheDocument();
   fireEvent.change(within(dialog).getByRole("textbox", { name: "Serial / device ID" }), { target: { value: "NN6-UK-HDA1783A" } });
   fireEvent.click(within(dialog).getByRole("button", { name: "Update instrument" }));
@@ -391,13 +393,14 @@ test("a device's network button opens possible matches inside its tile", async (
   const getUser = jest.spyOn(supabase.auth, "getUser").mockResolvedValue({ data: { user: { id: "owner-1" } }, error: null });
   const from = jest.spyOn(supabase, "from").mockImplementation((table) => {
     const chain = {
-      eq: () => chain, order: () => chain, limit: () => chain,
-      then: (resolve) => Promise.resolve({ data: [], error: null }).then(resolve),
+      select: () => chain, eq: () => chain, order: () => chain, limit: () => chain,
+      then: (resolve) => Promise.resolve({ data: table === "WBPCollectorDevices" ? [{ id: "tablet-1", label: "Home tablet" }] : [], error: null }).then(resolve),
+      single: async () => ({ data: { id: "scan-job-1" }, error: null }),
       maybeSingle: async () => ({ data: table === "WBPBuildingRecords"
         ? { id: "home-1", record_reference: "WBP-TEST", custodian_user_id: "owner-1" }
         : table === "WBPBuildingSetupDeclarations" ? { setup_data: { healthSensors: [sensor] } } : null, error: null }),
     };
-    return { select: () => chain, upsert: async () => ({ error: null }) };
+    return { select: () => chain, insert: () => chain, upsert: async () => ({ error: null }) };
   });
   try {
     render(<MemoryRouter><NewBuildingSetupPanel editModal syncHomeProfile isActive /></MemoryRouter>);
@@ -407,6 +410,7 @@ test("a device's network button opens possible matches inside its tile", async (
     expect(within(dialog).queryByRole("heading", { name: "Possible matches" })).not.toBeInTheDocument();
     fireEvent.click(networkButton);
     expect(await within(dialog).findByRole("heading", { name: "Possible matches" })).toBeInTheDocument();
+    expect(await within(dialog).findByRole("progressbar", { name: "Loading possible matches" })).toBeInTheDocument();
     expect(within(dialog).queryByRole("heading", { name: "2. Find it on the home network" })).not.toBeInTheDocument();
   } finally {
     from.mockRestore();

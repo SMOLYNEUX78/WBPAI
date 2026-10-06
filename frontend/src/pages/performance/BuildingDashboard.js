@@ -10864,7 +10864,43 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                 </div> : null}
               </div>
 
-              {sensorDetailsVisible ? <><div className="grid gap-2 sm:grid-cols-2">
+              <div className="mt-4 space-y-2 border-t border-gray-200 pt-4">
+                <div className="flex items-center justify-between gap-3">
+                  <h4 className="font-semibold text-sm">Registered Instruments</h4>
+                  <span className="text-xs text-gray-500">{healthSensors.length} registered</span>
+                </div>
+                {pendingLocalSensors.length ? <button type="button" className="border border-amber-700 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-950" onClick={() => {
+                  setHealthSensors((current) => Array.from(new Map([...current, ...pendingLocalSensors].map((sensor) => [sensor.id, sensor])).values()));
+                  setPendingLocalSensors([]);
+                  setSectionSaveStatus("Local sensor draft loaded. Review it, then save health monitoring to sync it to your account.");
+                }}>Load {pendingLocalSensors.length} sensor draft{pendingLocalSensors.length === 1 ? "" : "s"} from this device</button> : null}
+                {healthSensors.length === 0 ? <div className="border bg-white p-3 text-xs text-gray-600">No health-data instruments registered yet.</div>
+                  : <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">{healthSensors.map((sensor) => <div key={sensor.id} className="min-w-0 border border-gray-300 bg-white p-2 text-xs">
+                    <button type="button" className={`w-full min-w-0 border px-2 py-3 text-left ${sensorDetailsVisible && sensorDraft.id === sensor.id ? "border-emerald-700 bg-emerald-100" : "border-gray-300 bg-white"}`} onClick={() => {
+                      sensorDraftTouchedRef.current = true;
+                      setSensorDetailsVisible(true);
+                      setSensorDraft({ ...emptySensorDraft(), ...sensor });
+                      setSensorEvidenceFileName(sensor.evidenceFileName || "");
+                      setSectionSaveStatus("");
+                      requestAnimationFrame(() => sensorSerialInputRef.current?.focus());
+                    }} aria-label={`Edit ${sensor.manufacturer} ${sensor.model}`}>
+                      <strong className="block break-words">{sensor.manufacturer} {sensor.model}</strong>
+                      <span className="mt-1 block text-gray-600">{sensor.location || "Room pending"}</span>
+                      <span className="mt-1 block text-emerald-800">{sensor.networkMatch?.importedAt ? "Data linked" : sensor.networkMatch ? "Network matched" : "Not connected"}</span>
+                    </button>
+                    <button type="button" aria-expanded={showNetworkMatches && networkInstrumentId === sensor.id} className={`mt-2 w-full border border-emerald-700 px-2 py-2 text-center font-semibold ${showNetworkMatches && networkInstrumentId === sensor.id ? "bg-emerald-700 text-white" : "bg-white text-emerald-900"}`} onClick={async () => {
+                      if (showNetworkMatches && networkInstrumentId === sensor.id) { setShowNetworkMatches(false); return; }
+                      const saved = await saveSetupSection();
+                      if (!saved) return;
+                      setNetworkInstrumentId(sensor.id);
+                      setShowNetworkMatches(true);
+                      requestAnimationFrame(() => document.getElementById("wbp-device-network-step")?.scrollIntoView?.({ behavior: "smooth", block: "nearest" }));
+                    }}>{showNetworkMatches && networkInstrumentId === sensor.id ? "Close network matches" : "Find on the home network"}</button>
+                    {showNetworkMatches && networkInstrumentId === sensor.id ? <div className="mt-3 border-t border-emerald-300 pt-3"><DeviceImportWorkbench isActive={isActive} embedded requestedInstrumentId={sensor.id} /></div> : null}
+                  </div>)}</div>}
+              </div>
+
+              {sensorDetailsVisible ? <div className="mt-4 space-y-3 border-t border-gray-200 pt-4"><div className="grid gap-2 sm:grid-cols-2">
                 <label className="space-y-1 text-xs text-gray-600">
                   Manufacturer
                   <input
@@ -11029,54 +11065,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                 setSensorDetailsVisible(false);
                 sensorDraftTouchedRef.current = true;
               }}>Remove instrument</button> : null}
-              </> : null}
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex items-center justify-between gap-3">
-                <h4 className="font-semibold text-sm">Registered Instruments</h4>
-                <span className="text-xs text-gray-500">
-                  {healthSensors.length} registered
-                </span>
-              </div>
-              {pendingLocalSensors.length ? <button type="button" className="border border-amber-700 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-950" onClick={() => {
-                setHealthSensors((current) => Array.from(new Map([...current, ...pendingLocalSensors].map((sensor) => [sensor.id, sensor])).values()));
-                setPendingLocalSensors([]);
-                setSectionSaveStatus("Local sensor draft loaded. Review it, then save health monitoring to sync it to your account.");
-              }}>Load {pendingLocalSensors.length} sensor draft{pendingLocalSensors.length === 1 ? "" : "s"} from this device</button> : null}
-              {healthSensors.length === 0 ? (
-                <div className="text-xs border rounded bg-gray-50 p-3 text-gray-600">
-                  No health-data instruments registered yet.
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
-                  {healthSensors.map((sensor) => (
-                    <div key={sensor.id} className="min-w-0 border border-gray-300 bg-gray-50 p-2 text-xs">
-                      <button type="button" className={`w-full min-w-0 border px-2 py-3 text-left ${sensorDetailsVisible && sensorDraft.id === sensor.id ? "border-emerald-700 bg-emerald-100" : "border-gray-300 bg-white"}`} onClick={() => {
-                        sensorDraftTouchedRef.current = true;
-                        setSensorDetailsVisible(true);
-                        setSensorDraft({ ...emptySensorDraft(), ...sensor });
-                        setSensorEvidenceFileName(sensor.evidenceFileName || "");
-                        setSectionSaveStatus("");
-                        requestAnimationFrame(() => sensorSerialInputRef.current?.focus());
-                      }} aria-label={`Edit ${sensor.manufacturer} ${sensor.model}`}>
-                        <strong className="block break-words">{sensor.manufacturer} {sensor.model}</strong>
-                        <span className="mt-1 block text-gray-600">{sensor.location || "Room pending"}</span>
-                        <span className="mt-1 block text-emerald-800">{sensor.networkMatch?.importedAt ? "Data linked" : sensor.networkMatch ? "Network matched" : "Not connected"}</span>
-                      </button>
-                      <button type="button" aria-expanded={showNetworkMatches && networkInstrumentId === sensor.id} className={`mt-2 w-full border border-emerald-700 px-2 py-2 text-center font-semibold ${showNetworkMatches && networkInstrumentId === sensor.id ? "bg-emerald-700 text-white" : "bg-white text-emerald-900"}`} onClick={async () => {
-                        if (showNetworkMatches && networkInstrumentId === sensor.id) { setShowNetworkMatches(false); return; }
-                        const saved = await saveSetupSection();
-                        if (!saved) return;
-                        setNetworkInstrumentId(sensor.id);
-                        setShowNetworkMatches(true);
-                        requestAnimationFrame(() => document.getElementById("wbp-device-network-step")?.scrollIntoView({ behavior: "smooth", block: "nearest" }));
-                      }}>{showNetworkMatches && networkInstrumentId === sensor.id ? "Close network matches" : "Find on the home network"}</button>
-                      {showNetworkMatches && networkInstrumentId === sensor.id ? <div className="mt-3 border-t border-emerald-300 pt-3"><DeviceImportWorkbench isActive={isActive} embedded requestedInstrumentId={sensor.id} /></div> : null}
-                    </div>
-                  ))}
-                </div>
-              )}
+              </div> : null}
             </div>
             <div className="flex flex-wrap items-center justify-end gap-3 border-t border-gray-200 pt-3">
               {sectionSaveStatus ? <span role="status" className="text-xs text-gray-600">{sectionSaveStatus}</span> : null}
@@ -12449,7 +12438,7 @@ const DeviceImportWorkbench = ({ isActive, embedded = false, requestedInstrument
       const { data, error } = await supabase.from("WBPCollectorScanJobs")
         .select("status,result,error_message").eq("id", scanJobId).maybeSingle();
       if (!active) return;
-      if (error) { setStatus(`Could not read scan status: ${error.message}`); return; }
+      if (error) { setStatus(`Could not read scan status: ${error.message}`); setScanJobId(null); setScanBusy(false); return; }
       if (data?.status === "pending" && Date.now() - startedAt > 30000) {
         setStatus("The tablet has not checked in yet. Check its scan worker in Termux; this request will run when it reconnects.");
       }
@@ -12718,6 +12707,7 @@ const DeviceImportWorkbench = ({ isActive, embedded = false, requestedInstrument
         <div className="min-w-0">
           <h3 className="text-sm font-bold">Possible matches</h3>
           {embedded && status ? <p role="status" className="mt-1 text-xs text-gray-600">{status}</p> : null}
+          {scanBusy ? <div className="wbp-network-scan-progress mt-2" role="progressbar" aria-label="Loading possible matches" aria-valuetext="Scanning the home network"><span /></div> : null}
           {matchedCandidates.length ? <div className="mt-2 max-h-56 space-y-2 overflow-y-auto border border-gray-200 p-2">{matchedCandidates.map((candidate) =>
             <button key={candidate.address} type="button" aria-pressed={selected === candidate.address} onClick={() => { setSelected(candidate.address); setTestReading(null); setReadingsOpen(false); setReadingStatus(""); setImportStatus(""); setComparisonConfirmed(false); }}
               className={`block w-full min-w-0 border p-2 text-left text-xs ${candidate.serialMatch ? "border-emerald-600 bg-emerald-100" : selected === candidate.address ? "border-emerald-700 bg-emerald-50" : "border-gray-300 bg-white"}`}>

@@ -19,6 +19,25 @@
   animation: wbp-device-readings-in 360ms cubic-bezier(.22, 1, .36, 1) both;
 }
 
+.wbp-network-scan-progress {
+  height: 6px;
+  overflow: hidden;
+  background: #d1fae5;
+}
+
+.wbp-network-scan-progress span {
+  display: block;
+  width: 35%;
+  height: 100%;
+  background: #047857;
+  animation: wbp-network-scan-progress 1.4s ease-in-out infinite alternate;
+}
+
+@keyframes wbp-network-scan-progress {
+  from { transform: translateX(0); }
+  to { transform: translateX(185%); }
+}
+
 @media (min-width: 700px) {
   .wbp-device-match-grid {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
@@ -38,6 +57,7 @@
 @media (prefers-reduced-motion: reduce) {
   .wbp-device-match-grid { transition: none; }
   .wbp-device-readings { animation: none; }
+  .wbp-network-scan-progress span { width: 100%; animation: none; }
 }
 
 .wbp-setup-overlay.wbp-setup-overlay {
