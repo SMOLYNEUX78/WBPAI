@@ -381,6 +381,39 @@ test("registered instrument tiles open their edit details", async () => {
   expect(within(dialog).getByRole("textbox", { name: "Serial / device ID" })).toHaveValue("NN6-UK-HDA1783A");
 });
 
+test("a device's network button opens possible matches inside its tile", async () => {
+  const sensor = { id: "sensor-1", manufacturer: "Dyson", model: "TP02", location: "Upstairs", metrics: [], connectionMethod: "manual" };
+  window.localStorage.setItem("wbp-new-building-passport", JSON.stringify({
+    recordId: "WBP-TEST", databaseId: "home-1", legalOwnerName: "Owner",
+    propertyDiscovery: { address: "14 Bridgewood Road", postcode: "IP12 4HA", uprn: "100091142492", confirmedAt: "2026-09-24" },
+  }));
+  window.localStorage.setItem("WBP-TEST:setupSections", JSON.stringify({ healthSensors: [sensor] }));
+  const getUser = jest.spyOn(supabase.auth, "getUser").mockResolvedValue({ data: { user: { id: "owner-1" } }, error: null });
+  const from = jest.spyOn(supabase, "from").mockImplementation((table) => {
+    const chain = {
+      eq: () => chain, order: () => chain, limit: () => chain,
+      then: (resolve) => Promise.resolve({ data: [], error: null }).then(resolve),
+      maybeSingle: async () => ({ data: table === "WBPBuildingRecords"
+        ? { id: "home-1", record_reference: "WBP-TEST", custodian_user_id: "owner-1" }
+        : table === "WBPBuildingSetupDeclarations" ? { setup_data: { healthSensors: [sensor] } } : null, error: null }),
+    };
+    return { select: () => chain, upsert: async () => ({ error: null }) };
+  });
+  try {
+    render(<MemoryRouter><NewBuildingSetupPanel editModal syncHomeProfile isActive /></MemoryRouter>);
+    const dialog = screen.getByRole("dialog", { name: "Edit property profile" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Health monitoring" }));
+    const networkButton = await within(dialog).findByRole("button", { name: "Find on the home network" });
+    expect(within(dialog).queryByRole("heading", { name: "Possible matches" })).not.toBeInTheDocument();
+    fireEvent.click(networkButton);
+    expect(await within(dialog).findByRole("heading", { name: "Possible matches" })).toBeInTheDocument();
+    expect(within(dialog).queryByRole("heading", { name: "2. Find it on the home network" })).not.toBeInTheDocument();
+  } finally {
+    from.mockRestore();
+    getUser.mockRestore();
+  }
+});
+
 test("fresh New tab loads and saves health instruments through the existing home account", async () => {
   const storedSensor = {
     id: "sensor-1", manufacturer: "Dyson", model: "TP02", location: "Upstairs",

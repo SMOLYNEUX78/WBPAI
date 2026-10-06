@@ -11072,11 +11072,11 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                         setShowNetworkMatches(true);
                         requestAnimationFrame(() => document.getElementById("wbp-device-network-step")?.scrollIntoView({ behavior: "smooth", block: "nearest" }));
                       }}>{showNetworkMatches && networkInstrumentId === sensor.id ? "Close network matches" : "Find on the home network"}</button>
+                      {showNetworkMatches && networkInstrumentId === sensor.id ? <div className="mt-3 border-t border-emerald-300 pt-3"><DeviceImportWorkbench isActive={isActive} embedded requestedInstrumentId={sensor.id} /></div> : null}
                     </div>
                   ))}
                 </div>
               )}
-              {showNetworkMatches ? <div className="mt-3 border-t border-emerald-300 pt-4"><DeviceImportWorkbench isActive={isActive} embedded requestedInstrumentId={networkInstrumentId} /></div> : null}
             </div>
             <div className="flex flex-wrap items-center justify-end gap-3 border-t border-gray-200 pt-3">
               {sectionSaveStatus ? <span role="status" className="text-xs text-gray-600">{sectionSaveStatus}</span> : null}
@@ -12310,6 +12310,7 @@ const DeviceImportWorkbench = ({ isActive, embedded = false, requestedInstrument
   const [availableMetrics, setAvailableMetrics] = useState([]);
   const [selectedMetrics, setSelectedMetrics] = useState([]);
   const [metricsStatus, setMetricsStatus] = useState("");
+  const autoScanRequestedRef = useRef(false);
   const clearWorkbench = () => {
     setScanJobId(null);
     setScanBusy(false);
@@ -12354,17 +12355,19 @@ const DeviceImportWorkbench = ({ isActive, embedded = false, requestedInstrument
         setSelectedInstrumentId((current) => instruments.some((item) => item.id === requestedInstrumentId) ? requestedInstrumentId
           : instruments.some((item) => item.id === current) ? current : instruments[0]?.id || "");
       }
-      const { data: previous } = await supabase.from("WBPCollectorScanJobs")
-        .select("result").eq("building_record_id", data.id).eq("status", "complete")
-        .order("finished_at", { ascending: false }).limit(1).maybeSingle();
-      if (active && previous?.result) {
-        try { setScan(readDeviceScan(JSON.stringify(previous.result))); }
-        catch { /* A damaged older scan should not block a new one. */ }
+      if (!embedded) {
+        const { data: previous } = await supabase.from("WBPCollectorScanJobs")
+          .select("result").eq("building_record_id", data.id).eq("status", "complete")
+          .order("finished_at", { ascending: false }).limit(1).maybeSingle();
+        if (active && previous?.result) {
+          try { setScan(readDeviceScan(JSON.stringify(previous.result))); }
+          catch { /* A damaged older scan should not block a new one. */ }
+        }
       }
     };
     loadProfile();
     return () => { active = false; };
-  }, [isActive, requestedInstrumentId]);
+  }, [isActive, requestedInstrumentId, embedded]);
   useEffect(() => {
     if (!isActive || !profile?.id) return undefined;
     const syncInstruments = (event) => {
@@ -12410,6 +12413,7 @@ const DeviceImportWorkbench = ({ isActive, embedded = false, requestedInstrument
   const requestScan = async () => {
     if (!profile || !collectorDeviceId) return;
     setScanBusy(true);
+    setScan(null);
     setStatus("Asking the paired tablet to scan the home network...");
     const { data: auth } = await supabase.auth.getUser();
     const { data, error } = await supabase.from("WBPCollectorScanJobs")
@@ -12418,6 +12422,11 @@ const DeviceImportWorkbench = ({ isActive, embedded = false, requestedInstrument
     if (error) { setStatus(`Could not request scan: ${error.message}`); setScanBusy(false); return; }
     setScanJobId(data.id);
   };
+  useEffect(() => {
+    if (!embedded || !isActive || !profile?.id || !collectorDeviceId || selectedInstrumentId !== requestedInstrumentId || autoScanRequestedRef.current) return;
+    autoScanRequestedRef.current = true;
+    requestScan();
+  }, [embedded, isActive, profile?.id, collectorDeviceId, requestedInstrumentId, selectedInstrumentId]);
 
   const removeTablet = async () => {
     if (!collectorDeviceId || !window.confirm("Remove this tablet's access to network scans for this property?")) return;
@@ -12697,22 +12706,23 @@ const DeviceImportWorkbench = ({ isActive, embedded = false, requestedInstrument
         {selectedInstrument ? <button type="button" onClick={() => navigate(`/dashboard/home?edit=health&instrument=${encodeURIComponent(selectedInstrument.id)}`)} className="mt-3 border border-gray-400 bg-white px-3 py-2 text-sm font-semibold">Edit selected instrument</button> : null}
         <button type="button" onClick={() => navigate("/dashboard/home?edit=health&instrument=new")} className="mt-3 border border-emerald-700 bg-white px-3 py-2 text-sm font-semibold text-emerald-900">Scan or add a device label</button>
       </section> : null}
-      <section id="wbp-device-network-step" className={`wbp-device-match-grid border-b border-gray-200 pb-5 ${readingsOpen ? "wbp-device-match-grid--readings" : ""} ${embedded ? "" : "mt-5"}`}>
-        <div>
+      <section id="wbp-device-network-step" className={embedded ? "min-w-0 space-y-3" : `wbp-device-match-grid border-b border-gray-200 pb-5 ${readingsOpen ? "wbp-device-match-grid--readings" : ""} mt-5`}>
+        {!embedded ? <div>
           <h2 className="text-base font-bold">2. Find it on the home network</h2>
           <p className="mt-1 max-w-2xl text-sm text-gray-600">Select a physical device above, then scan for network matches.</p>
           <div className="mt-3 flex flex-wrap gap-2">
             <button type="button" onClick={requestScan} disabled={!collectorDeviceId || scanBusy || !selectedInstrument} className="border border-emerald-700 bg-emerald-700 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">{scanBusy ? "Scanning..." : "Find network matches"}</button>
             <button type="button" onClick={clearWorkbench} className="border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700">Clear</button>
           </div>
-        </div>
+        </div> : null}
         <div className="min-w-0">
           <h3 className="text-sm font-bold">Possible matches</h3>
+          {embedded && status ? <p role="status" className="mt-1 text-xs text-gray-600">{status}</p> : null}
           {matchedCandidates.length ? <div className="mt-2 max-h-56 space-y-2 overflow-y-auto border border-gray-200 p-2">{matchedCandidates.map((candidate) =>
             <button key={candidate.address} type="button" aria-pressed={selected === candidate.address} onClick={() => { setSelected(candidate.address); setTestReading(null); setReadingsOpen(false); setReadingStatus(""); setImportStatus(""); setComparisonConfirmed(false); }}
-              className={`block w-full border p-2 text-left text-sm ${candidate.serialMatch ? "border-emerald-600 bg-emerald-100" : selected === candidate.address ? "border-emerald-700 bg-emerald-50" : "border-gray-300 bg-white"}`}>
+              className={`block w-full min-w-0 border p-2 text-left text-xs ${candidate.serialMatch ? "border-emerald-600 bg-emerald-100" : selected === candidate.address ? "border-emerald-700 bg-emerald-50" : "border-gray-300 bg-white"}`}>
               <strong>{candidate.address}</strong>
-              <span className="block text-xs text-gray-600">{candidate.serialMatch ? "Serial matches selected device" : candidate.suggested ? `Collector room suggests ${candidate.configured.name}` : candidate.compatible ? "Dyson collector; serial not matched" : candidate.kind}</span>
+              <span className="block break-words text-xs text-gray-600">{candidate.serialMatch ? "Serial matches selected device" : candidate.suggested ? `Collector room suggests ${candidate.configured.name}` : candidate.compatible ? "Dyson collector; serial not matched" : candidate.kind}</span>
             </button>)}</div> : <p className="mt-2 text-sm text-gray-600">{selectedInstrument ? "No scan loaded yet." : "Select a physical device first."}</p>}
           {selectedDevice && selectedInstrument ? <div className="mt-3 flex flex-wrap gap-2">
             {serialsAgree ? <button type="button" disabled={matchBusy} onClick={saveSerialMatch} className="border border-emerald-700 bg-emerald-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{matchBusy ? "Saving..." : "Save match"}</button> : null}
@@ -12744,10 +12754,10 @@ const DeviceImportWorkbench = ({ isActive, embedded = false, requestedInstrument
       {collectorDevices.length > 1 ? <label className="mt-3 block text-xs text-gray-600">Tablet<select value={collectorDeviceId} onChange={(event) => setCollectorDeviceId(event.target.value)} className="ml-2 border bg-white p-2">{collectorDevices.map((device) => <option key={device.id} value={device.id}>{device.label} · {device.last_seen_at ? "online recently" : "not checked in"}</option>)}</select></label> : null}
       {collectorDeviceId ? <button type="button" onClick={removeTablet} className="mt-3 border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700">Remove tablet pairing</button> : null}
       <details className="mt-3 text-xs text-gray-600"><summary className="cursor-pointer">Import a scan file instead</summary><p className="mt-2">On the tablet, run <code>sh ~/WBPAI/scripts/termux-export-device-scan.sh</code> and choose <code>Downloads/WBP-device-scan.json</code>. This fallback file stays on the tablet.</p><label className="mt-2 inline-block cursor-pointer border border-gray-400 bg-white px-3 py-2 font-semibold">Choose scan file<input type="file" accept=".json,application/json" className="sr-only" onChange={(event) => importScan(event.target.files?.[0])} /></label></details>
-      {status ? <p role="status" className="mt-3 text-sm text-gray-700">{status}</p> : null}
+      {!embedded && status ? <p role="status" className="mt-3 text-sm text-gray-700">{status}</p> : null}
       {scan ? <p className="mt-2 text-xs text-gray-500">Scanned {new Date(scan.scannedAt).toLocaleString()}. Paired scans are saved privately to this property in Supabase. A network scan may miss devices that do not respond; a complete router client list requires router-specific access.</p> : null}
-      <section className="mt-5 border-t border-gray-200 pt-5">
-        <h2 className="text-base font-bold">3. Import sensor data</h2>
+      {(!embedded || selectedMatch) ? <section className="mt-5 border-t border-gray-200 pt-5">
+        <h2 className="text-base font-bold">{embedded ? "Import sensor data" : "3. Import sensor data"}</h2>
         <p className="mt-1 text-sm text-gray-600">Choose which available readings to show on this property. The existing collector data stays in Supabase.</p>
         {selectedMatch ? <p className="mt-3 text-sm">Matched: {selectedInstrument.manufacturer} {selectedInstrument.model} · {selectedMatch.address} · {dysonStreamLabel(selectedMatch.stream)}{selectedMatch.assurance === "provisional" ? " · Provisional serial match" : ""}</p>
           : <p className="mt-3 text-sm text-gray-600">Save a network match in Step 2 to enable import.</p>}
@@ -12759,7 +12769,7 @@ const DeviceImportWorkbench = ({ isActive, embedded = false, requestedInstrument
         {selectedMatch ? <button type="button" onClick={importMatchedData} disabled={importBusy || !selectedMetrics.length} className="mt-3 border border-emerald-700 bg-emerald-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{importBusy ? "Importing..." : selectedMatch.importedAt ? "Update imported data" : "Import selected data"}</button> : null}
         {selectedMatch?.importedAt ? <p className="mt-2 text-xs text-emerald-900">Linked {new Date(selectedMatch.importedAt).toLocaleString()}</p> : null}
         {importStatus ? <p role="status" className="mt-2 text-sm text-gray-700">{importStatus}</p> : null}
-      </section>
+      </section> : null}
     </div>
   </div>;
 };
