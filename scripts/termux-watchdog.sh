@@ -24,6 +24,8 @@ if command -v termux-wake-lock >/dev/null 2>&1; then
   termux-wake-lock
 fi
 
+sh "$REPO_DIR/scripts/termux-start-scan.sh" >> "$WATCHDOG_LOG" 2>&1
+
 if ! tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
   log "Collector session missing; starting it"
   sh "$REPO_DIR/scripts/termux-start.sh" >> "$WATCHDOG_LOG" 2>&1

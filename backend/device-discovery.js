@@ -59,6 +59,21 @@ async function probeLocalServices(targets = probeTargets()) {
   return results;
 }
 
+async function scanNetwork() {
+  const report = await discover();
+  const targets = probeTargets();
+  report.lanProbe = targets.length ? "TCP 1883 and 80 on one private /24 subnet" : "No supported private /24 interface; TCP probe skipped";
+  const byAddress = new Map(report.candidates.map((candidate) => [candidate.address, candidate]));
+  for (const candidate of await probeLocalServices(targets)) {
+    const existing = byAddress.get(candidate.address);
+    if (existing) existing.signals.push(...candidate.signals);
+    else byAddress.set(candidate.address, candidate);
+  }
+  report.candidates = [...byAddress.values()].sort((a, b) => a.address.localeCompare(b.address));
+  report.note = "Network presence does not prove device identity, a sensor connection, or a complete router client list.";
+  return report;
+}
+
 function configuredDevices() {
   return (process.env.DYSON_DEVICES || "").split(",").filter(Boolean).map((entry) => {
     const [name, address] = entry.split(":");
@@ -126,19 +141,8 @@ function discover() {
 }
 
 async function main() {
-  const report = await discover();
   const scanLan = process.argv.includes("--scan-lan");
-  if (scanLan) {
-    const targets = probeTargets();
-    report.lanProbe = targets.length ? "TCP 1883 and 80 on one private /24 subnet" : "No supported private /24 interface; TCP probe skipped";
-    const byAddress = new Map(report.candidates.map((candidate) => [candidate.address, candidate]));
-    for (const candidate of await probeLocalServices(targets)) {
-      const existing = byAddress.get(candidate.address);
-      if (existing) existing.signals.push(...candidate.signals);
-      else byAddress.set(candidate.address, candidate);
-    }
-    report.candidates = [...byAddress.values()].sort((a, b) => a.address.localeCompare(b.address));
-  }
+  const report = scanLan ? await scanNetwork() : await discover();
   const client = process.env.SUPABASE_URL && process.env.SUPABASE_KEY
     ? require("./supabaseClient") : null;
   const configured = await readTelemetry(report.configuredDevices, client, process.env.DYSON_BUILDING_ID || "home");
@@ -158,4 +162,4 @@ async function main() {
 }
 
 if (require.main === module) main().catch((error) => { console.error(error.message); process.exitCode = 1; });
-module.exports = { discover, configuredDevices, probeTargets, probeLocalServices };
+module.exports = { discover, configuredDevices, probeTargets, probeLocalServices, scanNetwork };

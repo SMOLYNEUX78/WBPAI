@@ -90,14 +90,18 @@ log "WBPAI auto-updater started for $REPO_DIR on $BRANCH"
 
 install_dependencies_if_needed
 start_collectors
+sh "$REPO_DIR/scripts/termux-start-scan.sh" >> "$AUTOUPDATE_LOG" 2>&1
 
 while true; do
   if pull_latest; then
     install_dependencies_if_needed
     stop_collectors
     start_collectors
+    tmux kill-session -t "${WBP_SCAN_TMUX_SESSION:-wbp-scan}" 2>/dev/null || true
+    sh "$REPO_DIR/scripts/termux-start-scan.sh" >> "$AUTOUPDATE_LOG" 2>&1
   else
     start_collectors
+    sh "$REPO_DIR/scripts/termux-start-scan.sh" >> "$AUTOUPDATE_LOG" 2>&1
   fi
 
   sleep "$CHECK_INTERVAL"

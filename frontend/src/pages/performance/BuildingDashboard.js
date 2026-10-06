@@ -12402,6 +12402,11 @@ const DeviceImportWorkbench = ({ isActive }) => {
   const [scan, setScan] = useState(null);
   const [selected, setSelected] = useState("");
   const [status, setStatus] = useState("Checking your saved property...");
+  const [collectorDevices, setCollectorDevices] = useState([]);
+  const [collectorDeviceId, setCollectorDeviceId] = useState("");
+  const [pairingToken, setPairingToken] = useState("");
+  const [scanJobId, setScanJobId] = useState(null);
+  const [scanBusy, setScanBusy] = useState(false);
 
   useEffect(() => {
     if (!isActive) return undefined;
@@ -12414,10 +12419,107 @@ const DeviceImportWorkbench = ({ isActive }) => {
       if (!active) return;
       setProfile(error ? null : data);
       setStatus(error ? "Could not load your property. Try again later." : data ? "" : "Set up a property in New before connecting devices.");
+      if (!data || error) return;
+      const { data: devices, error: devicesError } = await supabase.from("WBPCollectorDevices")
+        .select("id,label,last_seen_at").eq("building_record_id", data.id)
+        .order("created_at", { ascending: false });
+      if (!active) return;
+      if (devicesError) {
+        setStatus("Tablet pairing is not ready. Run Collector Scan Queue.sql in Supabase first.");
+        return;
+      }
+      setCollectorDevices(devices || []);
+      setCollectorDeviceId(devices?.[0]?.id || "");
+      const { data: previous } = await supabase.from("WBPCollectorScanJobs")
+        .select("result").eq("building_record_id", data.id).eq("status", "complete")
+        .order("finished_at", { ascending: false }).limit(1).maybeSingle();
+      if (active && previous?.result) {
+        try { setScan(readDeviceScan(JSON.stringify(previous.result))); }
+        catch { /* A damaged older scan should not block a new one. */ }
+      }
     };
     loadProfile();
     return () => { active = false; };
   }, [isActive]);
+
+  const pairTablet = async () => {
+    if (!profile) return;
+    setScanBusy(true);
+    const token = Array.from(crypto.getRandomValues(new Uint8Array(32)), (byte) => byte.toString(16).padStart(2, "0")).join("");
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
+    const tokenHash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+    const { data: auth } = await supabase.auth.getUser();
+    const { data, error } = await supabase.from("WBPCollectorDevices")
+      .insert({ building_record_id: profile.id, token_hash: tokenHash, created_by: auth?.user?.id, label: "Home tablet" })
+      .select("id,label,last_seen_at").single();
+    if (error) setStatus(`Could not pair tablet: ${error.message}`);
+    else {
+      setCollectorDevices((current) => [data, ...current]);
+      setCollectorDeviceId(data.id);
+      setPairingToken(token);
+      setStatus("Pairing code created. Enter it in Termux once; then Find devices will work in WBP.");
+    }
+    setScanBusy(false);
+  };
+
+  const requestScan = async () => {
+    if (!profile || !collectorDeviceId) return;
+    setScanBusy(true);
+    setStatus("Asking the paired tablet to scan the home network...");
+    const { data: auth } = await supabase.auth.getUser();
+    const { data, error } = await supabase.from("WBPCollectorScanJobs")
+      .insert({ building_record_id: profile.id, device_id: collectorDeviceId, requested_by: auth?.user?.id })
+      .select("id").single();
+    if (error) { setStatus(`Could not request scan: ${error.message}`); setScanBusy(false); return; }
+    setScanJobId(data.id);
+  };
+
+  const removeTablet = async () => {
+    if (!collectorDeviceId || !window.confirm("Remove this tablet's access to network scans for this property?")) return;
+    const { error } = await supabase.from("WBPCollectorDevices").delete().eq("id", collectorDeviceId);
+    if (error) { setStatus(`Could not remove tablet: ${error.message}`); return; }
+    const remaining = collectorDevices.filter((device) => device.id !== collectorDeviceId);
+    setCollectorDevices(remaining);
+    setCollectorDeviceId(remaining[0]?.id || "");
+    setPairingToken("");
+    setScanJobId(null);
+    setScanBusy(false);
+    setStatus("Tablet pairing removed. The tablet can no longer claim new scan requests.");
+  };
+
+  useEffect(() => {
+    if (!scanJobId || !isActive) return undefined;
+    let active = true;
+    const startedAt = Date.now();
+    const checkJob = async () => {
+      const { data, error } = await supabase.from("WBPCollectorScanJobs")
+        .select("status,result,error_message").eq("id", scanJobId).maybeSingle();
+      if (!active) return;
+      if (error) { setStatus(`Could not read scan status: ${error.message}`); return; }
+      if (data?.status === "pending" && Date.now() - startedAt > 30000) {
+        setStatus("The tablet has not checked in yet. Check its scan worker in Termux; this request will run when it reconnects.");
+      }
+      if (data?.status === "running") setStatus("Tablet is scanning the network...");
+      if (data?.status === "failed") {
+        setStatus(data.error_message || "Tablet scan failed.");
+        setScanJobId(null);
+        setScanBusy(false);
+      }
+      if (data?.status === "complete") {
+        try {
+          const result = readDeviceScan(JSON.stringify(data.result));
+          setScan(result);
+          setSelected("");
+          setStatus(`${result.candidates.length} network candidate(s) found.`);
+        } catch { setStatus("Tablet returned a scan we could not read."); }
+        setScanJobId(null);
+        setScanBusy(false);
+      }
+    };
+    checkJob();
+    const timer = setInterval(checkJob, 2500);
+    return () => { active = false; clearInterval(timer); };
+  }, [scanJobId, isActive]);
 
   const importScan = async (file) => {
     if (!file) return;
@@ -12441,10 +12543,14 @@ const DeviceImportWorkbench = ({ isActive }) => {
       <div className="grid grid-cols-3 gap-2 self-end text-center text-xs"><div className="border-t border-emerald-500 pt-2"><strong className="block">1. Find</strong>Network scan</div><div className="border-t border-emerald-500 pt-2"><strong className="block">2. Identify</strong>Physical label</div><div className="border-t border-emerald-500 pt-2"><strong className="block">3. Connect</strong>Test readings</div></div>
     </header>
     <div className="px-4 py-6 sm:px-8">
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-gray-200 pb-4"><div><h2 className="text-base font-bold">Find devices on the home network</h2><p className="mt-1 max-w-2xl text-sm text-gray-600">Start with the tablet's network scan. This list is independent of registered instruments and existing Supabase readings.</p></div><label className="cursor-pointer border border-emerald-700 bg-emerald-700 px-4 py-2 text-sm font-semibold text-white">Import tablet scan<input type="file" accept=".json,application/json" className="sr-only" onChange={(event) => importScan(event.target.files?.[0])} /></label></div>
-      <p className="mt-3 text-xs text-gray-600">On the tablet, run <code>sh ~/WBPAI/scripts/termux-export-device-scan.sh</code>, then choose <code>Downloads/WBP-device-scan.json</code>. The scan stays on this device; it does not upload network addresses to Supabase.</p>
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-gray-200 pb-4"><div><h2 className="text-base font-bold">Find devices on the home network</h2><p className="mt-1 max-w-2xl text-sm text-gray-600">Ask the paired tablet to scan. This list is independent of registered instruments and existing Supabase readings.</p></div><button type="button" onClick={requestScan} disabled={!collectorDeviceId || scanBusy} className="border border-emerald-700 bg-emerald-700 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">{scanBusy ? "Scanning..." : "Find devices"}</button></div>
+      {profile && !collectorDeviceId ? <div className="mt-4 border border-amber-200 bg-amber-50 p-4 text-sm"><p className="font-semibold">Pair this tablet once</p><p className="mt-1 text-gray-700">This links the local scanner to this property without changing its existing collectors.</p><button type="button" onClick={pairTablet} disabled={scanBusy} className="mt-3 border border-amber-700 bg-white px-3 py-2 font-semibold text-amber-950 disabled:opacity-50">Create pairing code</button></div> : null}
+      {pairingToken ? <div className="mt-4 border border-emerald-200 bg-emerald-50 p-4 text-sm"><p className="font-semibold">Tablet pairing code</p><code className="mt-2 block break-all">{pairingToken}</code><button type="button" onClick={() => navigator.clipboard?.writeText(pairingToken)} className="mt-2 border border-emerald-700 bg-white px-3 py-1.5 font-semibold">Copy code</button><p className="mt-3">In Termux, run <code>sh ~/WBPAI/scripts/termux-pair-device-scan.sh</code> and paste this code when asked. It is shown only now; do not share it.</p></div> : null}
+      {collectorDevices.length > 1 ? <label className="mt-3 block text-xs text-gray-600">Tablet<select value={collectorDeviceId} onChange={(event) => setCollectorDeviceId(event.target.value)} className="ml-2 border bg-white p-2">{collectorDevices.map((device) => <option key={device.id} value={device.id}>{device.label} · {device.last_seen_at ? "online recently" : "not checked in"}</option>)}</select></label> : null}
+      {collectorDeviceId ? <button type="button" onClick={removeTablet} className="mt-3 border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700">Remove tablet pairing</button> : null}
+      <details className="mt-3 text-xs text-gray-600"><summary className="cursor-pointer">Import a scan file instead</summary><p className="mt-2">On the tablet, run <code>sh ~/WBPAI/scripts/termux-export-device-scan.sh</code> and choose <code>Downloads/WBP-device-scan.json</code>. This fallback file stays on the tablet.</p><label className="mt-2 inline-block cursor-pointer border border-gray-400 bg-white px-3 py-2 font-semibold">Choose scan file<input type="file" accept=".json,application/json" className="sr-only" onChange={(event) => importScan(event.target.files?.[0])} /></label></details>
       {status ? <p role="status" className="mt-3 text-sm text-gray-700">{status}</p> : null}
-      {scan ? <p className="mt-2 text-xs text-gray-500">Scanned {new Date(scan.scannedAt).toLocaleString()}. A network scan may miss devices that do not respond; a complete router client list requires router-specific access.</p> : null}
+      {scan ? <p className="mt-2 text-xs text-gray-500">Scanned {new Date(scan.scannedAt).toLocaleString()}. Paired scans are saved privately to this property in Supabase. A network scan may miss devices that do not respond; a complete router client list requires router-specific access.</p> : null}
       <div className="mt-5 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <section><h3 className="text-sm font-bold">Network candidates</h3>{scan?.candidates.length ? <div className="mt-3 grid gap-2">{scan.candidates.map((candidate) => <button key={candidate.address} type="button" aria-pressed={selected === candidate.address} onClick={() => setSelected(candidate.address)} className={`border p-3 text-left text-sm ${selected === candidate.address ? "border-emerald-700 bg-emerald-50" : "border-gray-300 bg-white"}`}><strong>{candidate.address}</strong><span className="block text-xs text-gray-600">{candidate.kind}</span></button>)}</div> : <p className="mt-3 text-sm text-gray-600">No scan loaded yet.</p>}</section>
         <section><h3 className="text-sm font-bold">Identify the selected device</h3>{selectedDevice ? <><p className="mt-3 text-sm font-semibold">{selectedDevice.address}</p><p className="text-xs text-gray-600">{selectedDevice.kind}</p><ul className="mt-3 space-y-1 text-xs text-gray-600">{selectedDevice.signals.map((signal, index) => <li key={`${signal.method}-${index}`} className="break-all">{signal.method}: {signal.detail}</li>)}</ul><p className="mt-4 text-xs text-gray-600">Network presence does not prove this is a sensor or authorise its readings. Match the physical label and room before connecting.</p><button type="button" disabled={!canIdentify} onClick={() => navigate(`/dashboard/home?edit=health&candidate=${encodeURIComponent(selected)}`)} className="mt-4 border border-emerald-700 bg-emerald-700 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">Scan physical label</button>{!profile ? <p className="mt-2 text-xs text-amber-800">Save the property in New before adding instruments.</p> : null}</> : <p className="mt-3 text-sm text-gray-600">Select a candidate from the scan to inspect its network signals.</p>}</section>

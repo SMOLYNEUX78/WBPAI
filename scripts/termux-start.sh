@@ -16,6 +16,8 @@ if ! command -v tmux >/dev/null 2>&1; then
   exit 1
 fi
 
+sh "$REPO_DIR/scripts/termux-start-scan.sh"
+
 if tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
   echo "WBPAI tmux session already exists."
   echo "Attach with: tmux attach -t $SESSION_NAME"

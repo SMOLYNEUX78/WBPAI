@@ -165,6 +165,26 @@ Home Dyson purifier IAQ:
 
 ### Read-only device discovery pilot
 
+#### One-button scan after pairing
+
+1. Run `Supabase-code/Collector Scan Queue.sql` once in the Supabase SQL editor.
+2. Open the saved property in WBP's Connect tab and select **Create pairing code**.
+3. On the tablet, update the checkout (`cd ~/WBPAI && git pull --ff-only origin main`),
+   then run `sh scripts/termux-pair-device-scan.sh`. Paste the code shown in WBP.
+4. Return to Connect and press **Find devices**. The separate scan worker picks up
+   the request; the existing Dyson and energy collectors are not restarted.
+
+The pairing code is generated randomly in the browser and only its SHA-256 hash
+is stored in Supabase. The worker uses the public anon key and the locally held
+code to claim scans; it does not use `SUPABASE_KEY` or receive a service-role key.
+The scan result is scoped to the building custodian by RLS. It contains local
+IP addresses and network service clues, so treat it as private household data.
+The scan worker starts on tablet boot via `termux-start.sh` and is checked by
+the existing watchdog. Inspect `~/WBPAI/logs/device-scan-worker.log` if WBP
+continues to say the tablet has not checked in.
+
+The manual file import remains available as a fallback:
+
 To bring a fresh tablet scan into the Connect tab without relying on existing
 Supabase readings, run this on the tablet after allowing Termux storage access:
 
