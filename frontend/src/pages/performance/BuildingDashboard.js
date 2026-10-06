@@ -12421,6 +12421,8 @@ const DeviceImportWorkbench = ({ isActive }) => {
   const [testReading, setTestReading] = useState(null);
   const [readingStatus, setReadingStatus] = useState("");
   const [readingBusy, setReadingBusy] = useState(false);
+  const [availableStreams, setAvailableStreams] = useState([]);
+  const [selectedStream, setSelectedStream] = useState("");
   const [comparisonConfirmed, setComparisonConfirmed] = useState(false);
   const [matchBusy, setMatchBusy] = useState(false);
 
@@ -12452,6 +12454,14 @@ const DeviceImportWorkbench = ({ isActive }) => {
         const instruments = Array.isArray(setup?.setup_data?.healthSensors) ? setup.setup_data.healthSensors : [];
         setPhysicalDevices(instruments);
         setSelectedInstrumentId((current) => instruments.some((item) => item.id === current) ? current : instruments[0]?.id || "");
+      }
+      if (String(data.uprn) === "100091142492") {
+        const since = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+        const { data: streamRows } = await supabase.from("Readings").select("reading_type,timestamp")
+          .eq("building_id", "home").like("reading_type", "dyson:%")
+          .gte("timestamp", since).order("timestamp", { ascending: false }).limit(200);
+        if (active) setAvailableStreams([...new Set((streamRows || []).map((row) => row.reading_type)
+          .filter((type) => /^dyson:[a-z0-9_]+$/i.test(type) && type !== "dyson:whole_home"))]);
       }
       const { data: previous } = await supabase.from("WBPCollectorScanJobs")
         .select("result").eq("building_record_id", data.id).eq("status", "complete")
@@ -12571,11 +12581,14 @@ const DeviceImportWorkbench = ({ isActive }) => {
     setTestReading(null);
     setComparisonConfirmed(false);
     setReadingStatus("Checking the latest collector sample...");
-    const configured = matchedCandidates.find((candidate) => candidate.address === selected)?.configured;
-    const stream = configured?.connector === "dyson" && /^[a-z0-9_]+$/i.test(configured.name || "")
-      ? `dyson:${configured.name.toLowerCase()}` : "";
-    if (!stream || String(profile.uprn) !== "100091142492") {
-      setReadingStatus("No supported live collector stream can be tied to this candidate yet. Match the physical label and configure its connector before readings can be tested.");
+    const stream = selectedStream;
+    if (String(profile.uprn) !== "100091142492") {
+      setReadingStatus("This property does not have a live collector linked yet. Network discovery alone cannot provide test readings.");
+      setReadingBusy(false);
+      return;
+    }
+    if (!stream || !availableStreams.includes(stream)) {
+      setReadingStatus("Choose a recent Dyson collector stream to compare with the device app. The scan itself does not tell us which stream belongs to this IP.");
       setReadingBusy(false);
       return;
     }
@@ -12655,7 +12668,7 @@ const DeviceImportWorkbench = ({ isActive }) => {
     </header>
     <div className="px-4 py-6 sm:px-8">
       <section className="border-b border-gray-200 pb-5"><h2 className="text-base font-bold">1. Scan the physical device</h2><p className="mt-1 text-sm text-gray-600">Record its label and room first. A network address alone cannot identify it.</p>
-        {physicalDevices.length ? <div className="mt-3 grid gap-2 sm:grid-cols-2">{physicalDevices.map((instrument) => <button key={instrument.id} type="button" onClick={() => { setSelectedInstrumentId(instrument.id); setSelected(""); setTestReading(null); setReadingStatus(""); setComparisonConfirmed(false); }} aria-pressed={selectedInstrumentId === instrument.id} className={`border p-3 text-left text-sm ${selectedInstrumentId === instrument.id ? "border-emerald-700 bg-emerald-50" : "border-gray-300 bg-white"}`}><strong>{instrument.manufacturer} {instrument.model}</strong><span className="block text-xs text-gray-600">{instrument.location || "Room pending"} · {instrument.serialNumber || instrument.labelCode || "Label pending"}</span>{instrument.networkMatch ? <span className="mt-1 block text-xs text-emerald-900">Customer-matched to {instrument.networkMatch.stream} at {instrument.networkMatch.address}</span> : null}</button>)}</div> : <p className="mt-3 text-sm text-gray-600">No physical devices saved to this property yet.</p>}
+        {physicalDevices.length ? <div className="mt-3 grid gap-2 sm:grid-cols-2">{physicalDevices.map((instrument) => <button key={instrument.id} type="button" onClick={() => { setSelectedInstrumentId(instrument.id); setSelected(""); setSelectedStream(""); setTestReading(null); setReadingStatus(""); setComparisonConfirmed(false); }} aria-pressed={selectedInstrumentId === instrument.id} className={`border p-3 text-left text-sm ${selectedInstrumentId === instrument.id ? "border-emerald-700 bg-emerald-50" : "border-gray-300 bg-white"}`}><strong>{instrument.manufacturer} {instrument.model}</strong><span className="block text-xs text-gray-600">{instrument.location || "Room pending"} · {instrument.serialNumber || instrument.labelCode || "Label pending"}</span>{instrument.networkMatch ? <span className="mt-1 block text-xs text-emerald-900">Customer-matched to {instrument.networkMatch.stream} at {instrument.networkMatch.address}</span> : null}</button>)}</div> : <p className="mt-3 text-sm text-gray-600">No physical devices saved to this property yet.</p>}
         <button type="button" onClick={() => navigate("/dashboard/home?edit=health&instrument=new")} className="mt-3 border border-emerald-700 bg-white px-3 py-2 text-sm font-semibold text-emerald-900">Scan or add a device label</button>
       </section>
       <section className="mt-5 border-b border-gray-200 pb-4">
@@ -12671,7 +12684,7 @@ const DeviceImportWorkbench = ({ isActive }) => {
       {status ? <p role="status" className="mt-3 text-sm text-gray-700">{status}</p> : null}
       {scan ? <p className="mt-2 text-xs text-gray-500">Scanned {new Date(scan.scannedAt).toLocaleString()}. Paired scans are saved privately to this property in Supabase. A network scan may miss devices that do not respond; a complete router client list requires router-specific access.</p> : null}
       <div className="mt-5 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-        <section><h3 className="text-sm font-bold">Possible matches</h3>{matchedCandidates.length ? <div className="mt-3 grid gap-2">{matchedCandidates.map((candidate) => <button key={candidate.address} type="button" aria-pressed={selected === candidate.address} onClick={() => { setSelected(candidate.address); setTestReading(null); setReadingStatus(""); setComparisonConfirmed(false); }} className={`border p-3 text-left text-sm ${selected === candidate.address ? "border-emerald-700 bg-emerald-50" : "border-gray-300 bg-white"}`}><strong>{candidate.address}</strong><span className="block text-xs text-gray-600">{candidate.suggested ? `Suggested by collector room: ${candidate.configured.name}` : candidate.compatible ? "Dyson collector address; room not matched" : candidate.kind}</span></button>)}</div> : <p className="mt-3 text-sm text-gray-600">{selectedInstrument ? "No scan loaded yet." : "Select a physical device first."}</p>}</section>
+        <section><h3 className="text-sm font-bold">Possible matches</h3>{matchedCandidates.length ? <div className="mt-3 grid gap-2">{matchedCandidates.map((candidate) => <button key={candidate.address} type="button" aria-pressed={selected === candidate.address} onClick={() => { setSelected(candidate.address); setSelectedStream(candidate.configured?.connector === "dyson" ? `dyson:${candidate.configured.name.toLowerCase()}` : ""); setTestReading(null); setReadingStatus(""); setComparisonConfirmed(false); }} className={`border p-3 text-left text-sm ${selected === candidate.address ? "border-emerald-700 bg-emerald-50" : "border-gray-300 bg-white"}`}><strong>{candidate.address}</strong><span className="block text-xs text-gray-600">{candidate.suggested ? `Suggested by collector room: ${candidate.configured.name}` : candidate.compatible ? "Dyson collector address; room not matched" : candidate.kind}</span></button>)}</div> : <p className="mt-3 text-sm text-gray-600">{selectedInstrument ? "No scan loaded yet." : "Select a physical device first."}</p>}</section>
         <section>
           <h3 className="text-sm font-bold">3. Compare readings</h3>
           {selectedDevice && selectedInstrument ? <>
@@ -12679,7 +12692,14 @@ const DeviceImportWorkbench = ({ isActive }) => {
             <p className="text-xs text-gray-600">Candidate {selectedDevice.address}: {selectedDevice.kind}</p>
             <ul className="mt-3 space-y-1 text-xs text-gray-600">{selectedDevice.signals.map((signal, index) => <li key={`${signal.method}-${index}`} className="break-all">{signal.method}: {signal.detail}</li>)}</ul>
             <p className="mt-4 text-xs text-gray-600">Open this device in its own app and compare the same metrics and times. A collector address is only a suggestion.</p>
-            <button type="button" disabled={!canIdentify || readingBusy} onClick={reviewCandidate} className="mt-4 border border-emerald-700 bg-emerald-700 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">{readingBusy ? "Checking..." : testReading ? "Refresh readings" : "Review test readings"}</button>
+            <label className="mt-3 block text-xs font-semibold text-gray-700">Collector stream to compare
+              <select value={selectedStream} onChange={(event) => { setSelectedStream(event.target.value); setTestReading(null); setComparisonConfirmed(false); setReadingStatus(""); }} className="mt-1 block w-full border border-gray-300 bg-white p-2 text-sm font-normal">
+                <option value="">Choose a recent stream</option>
+                {availableStreams.map((stream) => <option key={stream} value={stream}>{dysonStreamLabel(stream)}</option>)}
+              </select>
+            </label>
+            {!availableStreams.length ? <p className="mt-2 text-xs text-amber-900">No Dyson streams have reported for this pilot property in the last 30 minutes.</p> : null}
+            <button type="button" disabled={!canIdentify || !availableStreams.includes(selectedStream) || readingBusy} onClick={reviewCandidate} className="mt-4 border border-emerald-700 bg-emerald-700 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">{readingBusy ? "Checking..." : testReading ? "Refresh readings" : "Review test readings"}</button>
             {readingStatus ? <p role="status" className="mt-3 text-xs text-gray-700">{readingStatus}</p> : null}
             {testReading ? <div className="mt-3 border border-emerald-200 bg-emerald-50 p-3 text-xs">
               <p className="font-semibold">Recent WBP collector readings · {dysonStreamLabel(testReading.stream)}</p>
