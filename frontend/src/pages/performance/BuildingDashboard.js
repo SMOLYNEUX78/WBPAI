@@ -9161,6 +9161,8 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   const healthRecordId = ownershipRecord?.databaseId || (syncHomeProfile ? billTarget?.id : null);
   const [sensorDraft, setSensorDraft] = useState(emptySensorDraft);
   const sensorDraftTouchedRef = useRef(false);
+  const sensorSerialInputRef = useRef(null);
+  const importedInstrumentLoadedRef = useRef(null);
   useEffect(() => {
     if (importedStream && /^dyson:[a-z0-9_]+$/.test(importedStream)) {
       sensorDraftTouchedRef.current = true;
@@ -9171,12 +9173,14 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
     }
   }, [importedStream, importedCandidate, importedInstrument]);
   useEffect(() => {
-    if (!importedInstrument) return;
+    if (!importedInstrument || importedInstrumentLoadedRef.current === importedInstrument) return;
     const instrument = healthSensors.find((item) => item.id === importedInstrument);
     if (!instrument) return;
+    importedInstrumentLoadedRef.current = importedInstrument;
     sensorDraftTouchedRef.current = true;
     setSensorDraft({ ...emptySensorDraft(), ...instrument,
       networkAddress: /^\d{1,3}(\.\d{1,3}){3}$/.test(importedCandidate || "") ? importedCandidate : instrument.networkAddress || "" });
+    requestAnimationFrame(() => sensorSerialInputRef.current?.focus());
   }, [healthSensors, importedInstrument, importedCandidate]);
   useEffect(() => {
     if (isolatedDraft) return;
@@ -10955,6 +10959,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                 <label className="space-y-1 text-xs text-gray-600">
                   Serial / device ID
                   <input
+                    ref={sensorSerialInputRef}
                     type="text"
                     className="border rounded p-2 w-full text-xs bg-white"
                     value={sensorDraft.serialNumber}
@@ -11114,6 +11119,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
               </label>
 
               <p className="text-xs text-gray-600">A manufacturer and model or unique label code are needed to register. Save Health Monitoring after adding an instrument to link it to this building profile. Metric availability is checked against a recent sample after registration.</p>
+              {sensorDraft.id ? <p className="text-xs font-semibold text-emerald-900">Editing {sensorDraft.manufacturer} {sensorDraft.model}. Update instrument, then save Health Monitoring to sync the change.</p> : null}
               <button
                 type="button"
                 className="bg-blue-600 disabled:bg-gray-300 disabled:text-gray-500 text-white px-4 py-2 rounded text-sm font-semibold"
@@ -11185,6 +11191,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                       setSensorDraft({ ...emptySensorDraft(), ...sensor });
                       setSensorEvidenceFileName(sensor.evidenceFileName || "");
                       setSectionSaveStatus("");
+                      requestAnimationFrame(() => sensorSerialInputRef.current?.focus());
                     }}>Edit</button>
                     <button
                       type="button"
@@ -12618,7 +12625,9 @@ const DeviceImportWorkbench = ({ isActive }) => {
     setReadingBusy(false);
   };
   const persistMatch = async ({ method, stream, rows }) => {
-    if (!serialsAgree || !canIdentify || !profile || !stream || !rows?.length) return;
+    if (!canIdentify || !profile || !stream || !rows?.length) return;
+    if (method === "collector-serial-and-recent-reading" && !serialsAgree) return;
+    if (method === "customer-compared-device-app" && (!comparisonConfirmed || rows.length < 2)) return;
     if (!selectedInstrument.serialNumber && !selectedInstrument.labelCode) {
       setReadingStatus("Scan or enter the physical device's serial or label code before saving a match.");
       return;
@@ -12650,7 +12659,9 @@ const DeviceImportWorkbench = ({ isActive }) => {
       networkAddress: selected, connectionMethod: "dyson", readingType: stream,
       sourceBuildingId: "home", lastSampleAt: rows[0].timestamp,
       networkMatch: { method, matchedAt, address: selected,
-        serialNumber: item.serialNumber || item.labelCode || "", stream,
+        serialNumber: item.serialNumber || item.labelCode || "", collectorSerial: selectedCollector?.serial || "",
+        serialAgreement: serialsAgree ? "exact" : "mismatch", assurance: serialsAgree ? "customer-confirmed" : "provisional",
+        stream,
         sampleTimestamps: rows.map((row) => row.timestamp) },
     } : item);
     const setupData = { ...(existing?.setup_data || {}), healthSensors: updated };
@@ -12664,7 +12675,9 @@ const DeviceImportWorkbench = ({ isActive }) => {
       const recordKey = profile.record_reference ? `${profile.record_reference}:setupSections` : "";
       if (recordKey) window.localStorage.setItem(recordKey, JSON.stringify(setupData));
       window.dispatchEvent(new CustomEvent("wbp:setup-updated", { detail: { recordId: profile.id, setupData } }));
-      setReadingStatus("IP-to-device match saved to this property. The network address may change; the scanned serial remains the device identity.");
+      setReadingStatus(serialsAgree
+        ? "IP-to-device match saved to this property. The network address may change; the scanned serial remains the device identity."
+        : "Reading comparison saved as a provisional match. The scanned and collector serials differ; correct the instrument serial and recheck before relying on this link for audit.");
     }
     setMatchBusy(false);
   };
@@ -12697,6 +12710,7 @@ const DeviceImportWorkbench = ({ isActive }) => {
     <div className="px-4 py-6 sm:px-8">
       <section className="border-b border-gray-200 pb-5"><h2 className="text-base font-bold">1. Scan the physical device</h2><p className="mt-1 text-sm text-gray-600">Record its label and room first. A network address alone cannot identify it.</p>
         {physicalDevices.length ? <div className="mt-3 grid gap-2 sm:grid-cols-2">{physicalDevices.map((instrument) => <button key={instrument.id} type="button" onClick={() => { setSelectedInstrumentId(instrument.id); setSelected(""); setTestReading(null); setReadingStatus(""); setComparisonConfirmed(false); }} aria-pressed={selectedInstrumentId === instrument.id} className={`border p-3 text-left text-sm ${selectedInstrumentId === instrument.id ? "border-emerald-700 bg-emerald-50" : "border-gray-300 bg-white"}`}><strong>{instrument.manufacturer} {instrument.model}</strong><span className="block text-xs text-gray-600">{instrument.location || "Room pending"} · {instrument.serialNumber || instrument.labelCode || "Label pending"}</span>{instrument.networkMatch ? <span className="mt-1 block text-xs text-emerald-900">Customer-matched to {instrument.networkMatch.stream} at {instrument.networkMatch.address}</span> : null}</button>)}</div> : <p className="mt-3 text-sm text-gray-600">No physical devices saved to this property yet.</p>}
+        {selectedInstrument ? <button type="button" onClick={() => navigate(`/dashboard/home?edit=health&instrument=${encodeURIComponent(selectedInstrument.id)}`)} className="mt-3 border border-gray-400 bg-white px-3 py-2 text-sm font-semibold">Edit selected instrument</button> : null}
         <button type="button" onClick={() => navigate("/dashboard/home?edit=health&instrument=new")} className="mt-3 border border-emerald-700 bg-white px-3 py-2 text-sm font-semibold text-emerald-900">Scan or add a device label</button>
       </section>
       <section className="mt-5 grid gap-5 border-b border-gray-200 pb-5 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
@@ -12737,7 +12751,7 @@ const DeviceImportWorkbench = ({ isActive }) => {
             <p className="text-xs text-gray-600">Candidate {selectedDevice.address}: {selectedDevice.kind}</p>
             <ul className="mt-3 space-y-1 text-xs text-gray-600">{selectedDevice.signals.map((signal, index) => <li key={`${signal.method}-${index}`} className="break-all">{signal.method}: {signal.detail}</li>)}</ul>
             <p className="mt-4 text-xs text-gray-600">WBP reads the collector connection configured for this IP. Compare its values and times with this machine in the Dyson app.</p>
-            {selectedCollector?.readingType ? <div className="mt-3 border border-gray-200 p-2 text-xs"><p>IP {selected} · {dysonStreamLabel(selectedCollector.readingType)}</p><p>Collector serial: {selectedCollector.serial || "Unavailable"}</p><p>Scanned serial: {selectedInstrument.serialNumber || selectedInstrument.labelCode || "Unavailable"}</p><p className={serialsAgree ? "font-semibold text-emerald-800" : "font-semibold text-amber-900"}>{serialsAgree ? "Serials match" : "Serials do not match; check the physical label before saving"}</p></div> : <p className="mt-2 text-xs text-amber-900">No collector-to-IP connection in this scan. Update the tablet scan worker, then scan again.</p>}
+            {selectedCollector?.readingType ? <div className="mt-3 border border-gray-200 p-2 text-xs"><p>IP {selected} · {dysonStreamLabel(selectedCollector.readingType)}</p><p>Collector serial: {selectedCollector.serial || "Unavailable"}</p><p>Scanned serial: {selectedInstrument.serialNumber || selectedInstrument.labelCode || "Unavailable"}</p><p className={serialsAgree ? "font-semibold text-emerald-800" : "font-semibold text-amber-900"}>{serialsAgree ? "Serials match" : "Serials differ. Correct the scanned serial in Edit selected instrument, or compare readings and save a provisional match."}</p></div> : <p className="mt-2 text-xs text-amber-900">No collector-to-IP connection in this scan. Update the tablet scan worker, then scan again.</p>}
             {readingStatus ? <p role="status" className="mt-3 text-xs text-gray-700">{readingStatus}</p> : null}
             {testReading ? <div className="mt-3 border border-emerald-200 bg-emerald-50 p-3 text-xs">
               <p className="font-semibold">Recent readings from {selected} · {dysonStreamLabel(testReading.stream)}</p>
@@ -12747,7 +12761,8 @@ const DeviceImportWorkbench = ({ isActive }) => {
               </div>)}</div>
               {testReading.rows.length < 2 ? <p className="mt-3 text-amber-900">Wait for another reading before comparing a trend.</p> : null}
               <label className="mt-3 flex items-start gap-2"><input type="checkbox" checked={comparisonConfirmed} onChange={(event) => setComparisonConfirmed(event.target.checked)} /><span>I compared these readings with this physical device in its own app and confirmed the match.</span></label>
-              <button type="button" onClick={confirmCandidate} disabled={!comparisonConfirmed || !serialsAgree || testReading.rows.length < 2 || matchBusy} className="mt-3 border border-emerald-700 bg-white px-3 py-2 font-semibold text-emerald-900 disabled:opacity-50">{matchBusy ? "Saving..." : "Save customer-confirmed match"}</button>
+              <button type="button" onClick={confirmCandidate} disabled={!comparisonConfirmed || testReading.rows.length < 2 || matchBusy} className="mt-3 border border-emerald-700 bg-white px-3 py-2 font-semibold text-emerald-900 disabled:opacity-50">{matchBusy ? "Saving..." : serialsAgree ? "Save customer-confirmed match" : "Save provisional reading match"}</button>
+              {testReading.rows.length < 2 ? <p className="mt-2 text-xs text-amber-900">Wait for another reading, then check again before saving.</p> : null}
             </div> : null}
           </> : <p className="mt-3 text-sm text-gray-600">Select a possible match to inspect its network signals.</p>}
         </section>

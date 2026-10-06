@@ -345,6 +345,28 @@ test("editing a registered instrument updates its metrics without creating anoth
   expect(saved.healthSensorDraft.manufacturer).toBe("");
 });
 
+test("registered instrument Edit opens its serial in the profile editor", async () => {
+  window.localStorage.setItem("wbp-new-building-passport", JSON.stringify({
+    recordId: "WBP-TEST", databaseId: "home-1", legalOwnerName: "Owner",
+    propertyDiscovery: { address: "14 Bridgewood Road", postcode: "IP12 4HA", uprn: "100091142492", confirmedAt: "2026-09-24" },
+  }));
+  window.localStorage.setItem("WBP-TEST:setupSections", JSON.stringify({ healthSensors: [{
+    id: "sensor-1", manufacturer: "Dyson", model: "TP02", serialNumber: "NN6-UK-HDA1783",
+    location: "Upstairs", metrics: [], connectionMethod: "manual", evidenceGrade: "indicative",
+    verificationStatus: "unverified",
+  }] }));
+  render(<MemoryRouter><NewBuildingSetupPanel editModal syncHomeProfile isActive /></MemoryRouter>);
+  const dialog = screen.getByRole("dialog", { name: "Edit property profile" });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Health monitoring" }));
+  const edit = await within(dialog).findByRole("button", { name: "Edit" });
+  fireEvent.click(edit);
+  expect(within(dialog).getByRole("textbox", { name: "Serial / device ID" })).toHaveValue("NN6-UK-HDA1783");
+  expect(within(dialog).getByText(/Editing Dyson TP02/)).toBeInTheDocument();
+  fireEvent.change(within(dialog).getByRole("textbox", { name: "Serial / device ID" }), { target: { value: "NN6-UK-HDA1783A" } });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Update instrument" }));
+  expect(within(dialog).getByText(/NN6-UK-HDA1783A/)).toBeInTheDocument();
+});
+
 test("fresh New tab loads and saves health instruments through the existing home account", async () => {
   const storedSensor = {
     id: "sensor-1", manufacturer: "Dyson", model: "TP02", location: "Upstairs",
