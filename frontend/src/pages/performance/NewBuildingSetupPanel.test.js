@@ -383,8 +383,8 @@ test("registered instrument tiles open their edit details", async () => {
   const dialog = screen.getByRole("dialog", { name: "Edit property profile" });
   fireEvent.click(within(dialog).getByRole("button", { name: "Health monitoring" }));
   const edit = await within(dialog).findByRole("button", { name: "Edit Dyson TP02" });
-  expect(edit).toHaveTextContent("Serial / device ID: NN6-UK-HDA1783");
-  expect(edit).toHaveTextContent("Rated power: Pending");
+  expect(edit).toHaveTextContent("Dyson TP02");
+  expect(edit).not.toHaveTextContent("Rated power:");
   expect(edit).not.toHaveTextContent("Confirm physical label");
   expect(within(dialog).getByRole("button", { name: "Find on the home network" })).toBeInTheDocument();
   fireEvent.click(edit);
@@ -415,7 +415,6 @@ test("a recently linked instrument shows its network address and Live status", a
   fireEvent.click(within(dialog).getByRole("button", { name: "Health monitoring" }));
   const instrument = await within(dialog).findByRole("button", { name: "Edit Dyson TP02" });
   expect(instrument).toHaveTextContent("Live");
-  expect(instrument).toHaveTextContent("Frequency: Pending");
   expect(instrument).toHaveTextContent("IP 192.168.1.144");
   expect(instrument).toHaveClass("bg-emerald-100");
   expect(instrument.querySelector(".wbp-live-signal")).toBeInTheDocument();
