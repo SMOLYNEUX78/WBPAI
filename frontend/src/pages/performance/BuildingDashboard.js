@@ -12,6 +12,7 @@ import { liveRedReadings } from "./liveRedReadings";
 import { extractEnergyBillImage, extractEnergyBillPdf, normaliseBillReview } from "./energyBill";
 import RetrofitPlanner from "./RetrofitPlanner";
 import { CC_CANDIDATE_PROFILE } from "./retrofitEconomics";
+import { readDeviceScan } from "./deviceScan";
 import "./occupyScreen.css";
 
 export const DetailSurface = ({ children, title, onClose, modal, headerExtra }) => {
@@ -97,10 +98,12 @@ export const mergeScannedSensor = (current, scanned) => {
   const previousIdentity = sensorIdentity(current);
   const nextIdentity = sensorIdentity(scanned);
   const sameDevice = previousIdentity && nextIdentity && previousIdentity === nextIdentity;
-  const selectedStream = !current.id && !previousIdentity && current.connectionMethod === "dyson"
-    ? { connectionMethod: "dyson", readingType: current.readingType, sourceBuildingId: current.sourceBuildingId, lastSampleAt: current.lastSampleAt }
+  const discovery = !current.id && !previousIdentity
+    ? { networkAddress: current.networkAddress, ...(current.connectionMethod === "dyson"
+      ? { connectionMethod: "dyson", readingType: current.readingType, sourceBuildingId: current.sourceBuildingId, lastSampleAt: current.lastSampleAt }
+      : {}) }
     : {};
-  return { ...(sameDevice ? current : { ...emptySensorDraft(), ...selectedStream }), ...scanned };
+  return { ...(sameDevice ? current : { ...emptySensorDraft(), ...discovery }), ...scanned };
 };
 export const selectDysonStream = (current, stream) => ({
   ...(current.readingType === stream.type ? current : emptySensorDraft()),
@@ -8818,11 +8821,13 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   const location = useLocation();
   const isolatedDraft = freshStart;
   const importedStream = editModal ? new URLSearchParams(location.search).get("stream") : null;
-  const [setupTab, setSetupTab] = useState(importedStream ? "health" : "ownership");
+  const importedCandidate = editModal ? new URLSearchParams(location.search).get("candidate") : null;
+  const fromConnect = Boolean(importedStream || importedCandidate);
+  const [setupTab, setSetupTab] = useState(fromConnect ? "health" : "ownership");
   const [historyStage, setHistoryStage] = useState("audit");
   const [showSetupOverlay, setShowSetupOverlay] = useState(freshStart || editModal);
   const [editingOwnership, setEditingOwnership] = useState(editModal);
-  const [editStep, setEditStep] = useState(importedStream ? 6 : 1);
+  const [editStep, setEditStep] = useState(fromConnect ? 6 : 1);
   const selectEditSection = (step) => {
     setEditStep(step);
     setSetupTab(({ 4: "measurements", 5: "energy", 6: "health" })[step] || "ownership");
@@ -9159,8 +9164,11 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
     if (importedStream && /^dyson:[a-z0-9_]+$/.test(importedStream)) {
       sensorDraftTouchedRef.current = true;
       setSensorDraft((current) => selectDysonStream(current, { type: importedStream, timestamp: "" }));
+    } else if (importedCandidate && /^\d{1,3}(\.\d{1,3}){3}$/.test(importedCandidate)) {
+      sensorDraftTouchedRef.current = true;
+      setSensorDraft({ ...emptySensorDraft(), networkAddress: importedCandidate });
     }
-  }, [importedStream]);
+  }, [importedStream, importedCandidate]);
   useEffect(() => {
     if (isolatedDraft) return;
     let active = true;
@@ -11038,6 +11046,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
 
               <div className="space-y-2 border-t pt-3">
                 <h4 className="font-semibold text-sm">3. Connect and validate</h4>
+                {sensorDraft.networkAddress ? <p className="text-xs text-emerald-900">Network candidate: {sensorDraft.networkAddress}. Identifying this device does not connect it to a collector.</p> : null}
                 <div className="grid gap-2 sm:grid-cols-2">
                   <label className="text-xs text-gray-600">Connection route
                     <select className="mt-1 w-full border bg-white p-2 text-xs" value={sensorDraft.connectionMethod}
@@ -12390,11 +12399,9 @@ const ExchangeDashboardPanel = ({ homeValue = null }) => {
 const DeviceImportWorkbench = ({ isActive }) => {
   const navigate = useNavigate();
   const [profile, setProfile] = useState(null);
-  const [streams, setStreams] = useState([]);
+  const [scan, setScan] = useState(null);
   const [selected, setSelected] = useState("");
   const [status, setStatus] = useState("Checking your saved property...");
-  const [busy, setBusy] = useState(false);
-  const isPilotHome = profile?.uprn === "100091142492";
 
   useEffect(() => {
     if (!isActive) return undefined;
@@ -12412,55 +12419,37 @@ const DeviceImportWorkbench = ({ isActive }) => {
     return () => { active = false; };
   }, [isActive]);
 
-  const findStreams = async () => {
-    if (!isPilotHome) return;
-    setBusy(true);
-    setStatus("");
-    const since = new Date(Date.now() - 15 * 60 * 1000).toISOString();
-    const { data, error } = await supabase.from("Readings").select("*")
-      .eq("building_id", "home").like("reading_type", "dyson:%")
-      .gte("timestamp", since).order("timestamp", { ascending: false }).limit(500);
-    if (error) {
-      setStreams([]);
-      setStatus("Could not read recent collector samples. Try again shortly.");
-    } else {
-      const latest = new Map();
-      (data || []).forEach((row) => {
-        if (row.reading_type !== "dyson:whole_home" && !latest.has(row.reading_type)) latest.set(row.reading_type, row);
-      });
-      setStreams([...latest.values()]);
-      setStatus(latest.size ? "Choose a reporting stream to inspect its latest sample." : "No supported sensor readings arrived in the past 15 minutes.");
+  const importScan = async (file) => {
+    if (!file) return;
+    if (file.size > 1024 * 1024) { setStatus("Scan report is too large."); return; }
+    try {
+      const result = readDeviceScan(await file.text());
+      setScan(result);
+      setSelected("");
+      setStatus(`${result.candidates.length} network candidate(s) found in this tablet scan.`);
+    } catch (error) {
+      setScan(null);
+      setStatus(error.message || "Could not read the tablet scan report.");
     }
-    setBusy(false);
   };
+  const selectedDevice = scan?.candidates.find((candidate) => candidate.address === selected);
+  const canIdentify = selectedDevice && !["This tablet", "Router or gateway", "Audio device"].includes(selectedDevice.kind) && profile;
 
-  const selectedRow = streams.find((row) => row.reading_type === selected);
-  const sampleFields = [
-    ["Temperature", "temperature_inside", "°C"], ["Humidity", "humidity", "%"],
-    ["PM2.5", "pm25", "µg/m³"], ["VOC", "vocs", ""],
-    ["PM10", "pm10", "µg/m³"], ["NO₂", "no2", ""], ["Formaldehyde", "hcho", ""],
-  ].filter(([, field]) => selectedRow?.[field] != null);
-
-  return <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-8">
-    <header className="border-b border-gray-200 pb-4">
-      <h1 className="text-xl font-bold text-gray-900">Connect devices</h1>
-      <p className="mt-1 text-sm text-gray-600">Find a reporting sensor, inspect its data, then confirm its physical label before adding it to the property.</p>
-      {profile ? <p className="mt-2 text-xs font-semibold text-emerald-900">{profile.address?.address || profile.record_reference} · UPRN {profile.uprn || "pending"}</p> : null}
+  return <main className="mx-auto w-full max-w-7xl">
+    <header className="grid min-h-[150px] gap-4 border-b border-emerald-200 bg-emerald-100 px-4 py-5 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] sm:px-8">
+      <div><p className="text-xs font-bold uppercase text-emerald-900">Property profile</p><h1 className="mt-1 text-lg font-bold text-emerald-950">{profile?.address?.address || "New property"}</h1><p className="mt-1 text-sm text-emerald-900">{profile?.address?.postcode || "Complete New to add an address"}</p><p className="mt-2 text-xs text-emerald-900">{profile ? `UPRN ${profile.uprn || "pending"}` : "No saved property yet"}</p></div>
+      <div className="grid grid-cols-3 gap-2 self-end text-center text-xs"><div className="border-t border-emerald-500 pt-2"><strong className="block">1. Find</strong>Network scan</div><div className="border-t border-emerald-500 pt-2"><strong className="block">2. Identify</strong>Physical label</div><div className="border-t border-emerald-500 pt-2"><strong className="block">3. Connect</strong>Test readings</div></div>
     </header>
-    <section className="grid gap-6 border-b border-gray-200 py-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-      <div>
-        <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-base font-bold">Reporting sensors</h2><button type="button" onClick={findStreams} disabled={!isPilotHome || busy} className="border border-emerald-700 bg-emerald-700 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">{busy ? "Checking..." : "Find reporting devices"}</button></div>
-        <p className="mt-2 text-xs text-gray-600">This checks recent WBP collector readings. It does not scan the router or pair a new device.</p>
-        {status ? <p role="status" className="mt-3 text-sm text-gray-700">{status}</p> : null}
-        {profile && !isPilotHome ? <p className="mt-3 text-sm text-amber-800">A collector has not been assigned to this property yet. Bridgewood is the only live pilot.</p> : null}
-        <div className="mt-4 grid gap-2">{streams.map((row) => <button key={row.reading_type} type="button" aria-pressed={selected === row.reading_type} onClick={() => setSelected(row.reading_type)} className={`border px-3 py-3 text-left text-sm ${selected === row.reading_type ? "border-emerald-700 bg-emerald-50" : "border-gray-300 bg-white"}`}><span className="font-semibold">{dysonStreamLabel(row.reading_type)}</span><span className="block text-xs text-gray-600">Latest sample {new Date(row.timestamp).toLocaleString()}</span></button>)}</div>
+    <div className="px-4 py-6 sm:px-8">
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-gray-200 pb-4"><div><h2 className="text-base font-bold">Find devices on the home network</h2><p className="mt-1 max-w-2xl text-sm text-gray-600">Start with the tablet's network scan. This list is independent of registered instruments and existing Supabase readings.</p></div><label className="cursor-pointer border border-emerald-700 bg-emerald-700 px-4 py-2 text-sm font-semibold text-white">Import tablet scan<input type="file" accept=".json,application/json" className="sr-only" onChange={(event) => importScan(event.target.files?.[0])} /></label></div>
+      <p className="mt-3 text-xs text-gray-600">On the tablet, run <code>sh ~/WBPAI/scripts/termux-export-device-scan.sh</code>, then choose <code>Downloads/WBP-device-scan.json</code>. The scan stays on this device; it does not upload network addresses to Supabase.</p>
+      {status ? <p role="status" className="mt-3 text-sm text-gray-700">{status}</p> : null}
+      {scan ? <p className="mt-2 text-xs text-gray-500">Scanned {new Date(scan.scannedAt).toLocaleString()}. A network scan may miss devices that do not respond; a complete router client list requires router-specific access.</p> : null}
+      <div className="mt-5 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+        <section><h3 className="text-sm font-bold">Network candidates</h3>{scan?.candidates.length ? <div className="mt-3 grid gap-2">{scan.candidates.map((candidate) => <button key={candidate.address} type="button" aria-pressed={selected === candidate.address} onClick={() => setSelected(candidate.address)} className={`border p-3 text-left text-sm ${selected === candidate.address ? "border-emerald-700 bg-emerald-50" : "border-gray-300 bg-white"}`}><strong>{candidate.address}</strong><span className="block text-xs text-gray-600">{candidate.kind}</span></button>)}</div> : <p className="mt-3 text-sm text-gray-600">No scan loaded yet.</p>}</section>
+        <section><h3 className="text-sm font-bold">Identify the selected device</h3>{selectedDevice ? <><p className="mt-3 text-sm font-semibold">{selectedDevice.address}</p><p className="text-xs text-gray-600">{selectedDevice.kind}</p><ul className="mt-3 space-y-1 text-xs text-gray-600">{selectedDevice.signals.map((signal, index) => <li key={`${signal.method}-${index}`} className="break-all">{signal.method}: {signal.detail}</li>)}</ul><p className="mt-4 text-xs text-gray-600">Network presence does not prove this is a sensor or authorise its readings. Match the physical label and room before connecting.</p><button type="button" disabled={!canIdentify} onClick={() => navigate(`/dashboard/home?edit=health&candidate=${encodeURIComponent(selected)}`)} className="mt-4 border border-emerald-700 bg-emerald-700 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">Scan physical label</button>{!profile ? <p className="mt-2 text-xs text-amber-800">Save the property in New before adding instruments.</p> : null}</> : <p className="mt-3 text-sm text-gray-600">Select a candidate from the scan to inspect its network signals.</p>}</section>
       </div>
-      <div>
-        <h2 className="text-base font-bold">Latest sample</h2>
-        {selectedRow ? <><p className="mt-2 text-xs text-gray-600">Collector stream: {selectedRow.reading_type}. A reading does not confirm the physical model or room.</p><dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">{sampleFields.map(([label, field, unit]) => <div key={field} className="border-b border-gray-200 pb-2"><dt className="text-gray-600">{label}</dt><dd className="font-semibold">{selectedRow[field]} {unit}</dd></div>)}</dl><button type="button" onClick={() => navigate(`/dashboard/home?edit=health&stream=${encodeURIComponent(selected)}`)} className="mt-5 border border-emerald-700 bg-emerald-700 px-4 py-2 text-sm font-semibold text-white">Confirm label and add to profile</button></> : <p className="mt-2 text-sm text-gray-600">Select a reporting sensor to inspect its readings.</p>}
-      </div>
-    </section>
-    <section className="py-5"><h2 className="text-base font-bold">Nearby devices</h2><p className="mt-2 max-w-3xl text-sm text-gray-600">The tablet's local-network discovery currently runs in its collector, not in this browser-installed app. It can inventory advertised devices, but cannot identify or import every sensor automatically. A tablet companion service will bring that inventory here; only supported connectors will be offered for pairing.</p></section>
+    </div>
   </main>;
 };
 

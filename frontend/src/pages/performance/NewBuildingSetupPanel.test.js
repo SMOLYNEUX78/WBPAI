@@ -320,6 +320,12 @@ test("discovery-first selection survives the first physical label scan", () => {
   expect(scanned).toMatchObject({ model: "TP02", serialNumber: "NN6-UK-HDA1783A", readingType: "dyson:living_room", sourceBuildingId: "home" });
 });
 
+test("network candidate survives its first physical label scan without implying a connection", () => {
+  const scanned = mergeScannedSensor({ connectionMethod: "manual", networkAddress: "192.168.1.144" },
+    { manufacturer: "Dyson", model: "TP02", serialNumber: "NN6-UK-HDA1783A" });
+  expect(scanned).toMatchObject({ networkAddress: "192.168.1.144", connectionMethod: "manual", readingType: "" });
+});
+
 test("complete scans register once while incomplete scans remain drafts", () => {
   const draft = { manufacturer: "Dyson", model: "Pure Cool Link", location: "Upstairs", labelCode: "NN6-UK-HDA1783A" };
   const registered = registerSensorDraft([], draft, "label.jpg");

@@ -1,4 +1,5 @@
 const dgram = require("dgram");
+const net = require("net");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
@@ -13,6 +14,49 @@ function localAddresses() {
   return Object.values(os.networkInterfaces()).flat()
     .filter((item) => item && item.family === "IPv4" && !item.internal)
     .map((item) => item.address);
+}
+
+function probeTargets() {
+  const network = Object.values(os.networkInterfaces()).flat().find((item) =>
+    item && item.family === "IPv4" && !item.internal && item.netmask === "255.255.255.0" &&
+    (/^192\.168\./.test(item.address) || /^10\./.test(item.address) || /^172\.(1[6-9]|2\d|3[01])\./.test(item.address)));
+  if (!network) return [];
+  const prefix = network.address.split(".").slice(0, 3).join(".");
+  return Array.from({ length: 254 }, (_, index) => `${prefix}.${index + 1}`)
+    .filter((address) => address !== network.address);
+}
+
+function probePort(address, port) {
+  return new Promise((resolve) => {
+    const socket = net.createConnection({ host: address, port });
+    let settled = false;
+    const finish = (open) => {
+      if (settled) return;
+      settled = true;
+      socket.destroy();
+      resolve(open);
+    };
+    socket.setTimeout(450, () => finish(false));
+    socket.once("connect", () => finish(true));
+    socket.once("error", () => finish(false));
+  });
+}
+
+async function probeLocalServices(targets = probeTargets()) {
+  const results = [];
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(32, targets.length) }, async () => {
+    while (next < targets.length) {
+      const address = targets[next++];
+      const ports = await Promise.all([1883, 80].map(async (port) =>
+        await probePort(address, port) ? port : null));
+      const open = ports.filter(Boolean);
+      if (open.length) results.push({ address, signals: open.map((port) => ({
+        method: "tcp", detail: `Port ${port} open; device identity unconfirmed`,
+      })) });
+    }
+  }));
+  return results;
 }
 
 function configuredDevices() {
@@ -83,11 +127,23 @@ function discover() {
 
 async function main() {
   const report = await discover();
+  const scanLan = process.argv.includes("--scan-lan");
+  if (scanLan) {
+    const targets = probeTargets();
+    report.lanProbe = targets.length ? "TCP 1883 and 80 on one private /24 subnet" : "No supported private /24 interface; TCP probe skipped";
+    const byAddress = new Map(report.candidates.map((candidate) => [candidate.address, candidate]));
+    for (const candidate of await probeLocalServices(targets)) {
+      const existing = byAddress.get(candidate.address);
+      if (existing) existing.signals.push(...candidate.signals);
+      else byAddress.set(candidate.address, candidate);
+    }
+    report.candidates = [...byAddress.values()].sort((a, b) => a.address.localeCompare(b.address));
+  }
   const client = process.env.SUPABASE_URL && process.env.SUPABASE_KEY
     ? require("./supabaseClient") : null;
   const configured = await readTelemetry(report.configuredDevices, client, process.env.DYSON_BUILDING_ID || "home");
   report.inventory = buildInventory(report, configured);
-  report.note = "Local network advertisements and configured collectors are separate signals. Only fresh telemetry confirms a reporting stream; neither proves physical device identity.";
+  report.note = "Advertisements and open ports are network clues, not a complete router client list. Configured collectors are separate signals; only fresh telemetry confirms a reporting stream. None proves physical device identity.";
   fs.mkdirSync(path.dirname(OUTPUT), { recursive: true });
   const temporary = `${OUTPUT}.${process.pid}.tmp`;
   fs.writeFileSync(temporary, JSON.stringify(report, null, 2), { mode: 0o600 });
@@ -102,4 +158,4 @@ async function main() {
 }
 
 if (require.main === module) main().catch((error) => { console.error(error.message); process.exitCode = 1; });
-module.exports = { discover, configuredDevices };
+module.exports = { discover, configuredDevices, probeTargets, probeLocalServices };

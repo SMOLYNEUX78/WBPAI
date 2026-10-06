@@ -165,6 +165,20 @@ Home Dyson purifier IAQ:
 
 ### Read-only device discovery pilot
 
+To bring a fresh tablet scan into the Connect tab without relying on existing
+Supabase readings, run this on the tablet after allowing Termux storage access:
+
+```sh
+termux-setup-storage
+sh ~/WBPAI/scripts/termux-export-device-scan.sh
+```
+
+In WBP Connect, import `Downloads/WBP-device-scan.json`. The file contains
+local network addresses and service advertisements, not collector passwords,
+and stays on the tablet unless you choose to share it. The optional bounded
+LAN probe tests ports 1883 and 80 on one private /24 subnet. It does not log
+into the router, pair devices, or guarantee a complete router client list.
+
 The tablet can inventory devices that *advertise* mDNS/DNS-SD or SSDP services
 without changing any running collectors. On the home tablet, update the checkout
 and run:
