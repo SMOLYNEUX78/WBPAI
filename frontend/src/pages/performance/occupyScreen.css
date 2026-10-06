@@ -68,6 +68,7 @@
   height: 100dvh;
   margin: 0;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   place-items: center;
   overflow: hidden;
   overscroll-behavior: contain;
@@ -80,9 +81,12 @@
 .wbp-setup-overlay > .wbp-occupy-setup-dialog {
   box-sizing: border-box;
   width: min(100%, 720px);
+  min-width: 0;
   height: min(760px, calc(100dvh - 32px));
   max-height: calc(100dvh - 32px);
   overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
   background: #fff;
   border-top: 5px solid #047857;
   box-shadow: 0 20px 60px rgb(0 0 0 / 20%);
