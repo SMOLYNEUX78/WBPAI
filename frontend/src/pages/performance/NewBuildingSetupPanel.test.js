@@ -411,6 +411,44 @@ test("a recently linked instrument shows its network address and Live status", a
   expect(instrument.querySelector(".wbp-live-signal")).toBeInTheDocument();
 });
 
+test("clearing sensors requires confirmation and saves an empty instrument list", async () => {
+  const sensor = { id: "sensor-1", manufacturer: "Dyson", model: "TP02", location: "Upstairs",
+    networkMatch: { address: "192.168.1.144", importedAt: new Date().toISOString() } };
+  let setupData = { healthSensors: [sensor], billReview: { supplier: "Good Energy" } };
+  window.localStorage.setItem("wbp-new-building-passport", JSON.stringify({
+    recordId: "WBP-TEST", databaseId: "home-1", legalOwnerName: "Owner",
+    propertyDiscovery: { address: "14 Bridgewood Road", postcode: "IP12 4HA", uprn: "100091142492" },
+  }));
+  window.localStorage.setItem("WBP-TEST:setupSections", JSON.stringify(setupData));
+  const getUser = jest.spyOn(supabase.auth, "getUser").mockResolvedValue({ data: { user: { id: "owner-1" } }, error: null });
+  const from = jest.spyOn(supabase, "from").mockImplementation((table) => {
+    const chain = {
+      select: () => chain, eq: () => chain, order: () => chain, limit: () => chain,
+      maybeSingle: async () => ({ data: table === "WBPBuildingRecords"
+        ? { id: "home-1", record_reference: "WBP-TEST", custodian_user_id: "owner-1", lifecycle_stage: "occupy" }
+        : { setup_data: setupData }, error: null }),
+    };
+    return { select: () => chain, upsert: async (row) => { setupData = row.setup_data; return { error: null }; } };
+  });
+  try {
+    render(<MemoryRouter><NewBuildingSetupPanel editModal syncHomeProfile isActive /></MemoryRouter>);
+    const dialog = screen.getByRole("dialog", { name: "Edit property profile" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Health monitoring" }));
+    expect(await within(dialog).findByRole("button", { name: "Edit Dyson TP02" })).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Clear sensors" }));
+    expect(setupData.healthSensors).toHaveLength(1);
+    const confirmation = within(dialog).getByRole("group", { name: "Confirm clear sensors" });
+    fireEvent.click(within(confirmation).getByRole("button", { name: "Clear sensors" }));
+    await waitFor(() => expect(within(dialog).getByText("No health-data instruments registered yet.")).toBeInTheDocument());
+    expect(setupData.healthSensors).toEqual([]);
+    expect(setupData.billReview.supplier).toBe("Good Energy");
+    expect(within(dialog).getByText(/Historical readings were not deleted/)).toBeInTheDocument();
+  } finally {
+    from.mockRestore();
+    getUser.mockRestore();
+  }
+});
+
 test("a device's network button opens possible matches inside its tile", async () => {
   const sensor = { id: "sensor-1", manufacturer: "Dyson", model: "TP02", location: "Upstairs", metrics: [], connectionMethod: "manual" };
   window.localStorage.setItem("wbp-new-building-passport", JSON.stringify({
