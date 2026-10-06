@@ -6,6 +6,8 @@ function sanitiseScan(report) {
       name: String(device.name || "").slice(0, 64),
       address: String(device.address || "").slice(0, 45),
       connector: String(device.connector || "").slice(0, 24),
+      serial: String(device.serial || "").slice(0, 80),
+      readingType: String(device.readingType || "").slice(0, 80),
     })),
     candidates: (report.candidates || []).slice(0, 128).map((candidate) => ({
       address: String(candidate.address || "").slice(0, 45),

@@ -39,7 +39,9 @@ test("configured device inventory omits local credentials", () => {
     const devices = configuredDevices();
     assert.equal(devices[0].name, "upstairs");
     assert.equal(devices[0].address, "192.168.1.20");
-    assert.doesNotMatch(JSON.stringify(devices), /PRIVATE-PASSWORD|SERIAL/);
+    assert.equal(devices[0].serial, "SERIAL");
+    assert.equal(devices[0].readingType, "dyson:upstairs");
+    assert.doesNotMatch(JSON.stringify(devices), /PRIVATE-PASSWORD/);
   } finally {
     if (previous === undefined) delete process.env.DYSON_DEVICES;
     else process.env.DYSON_DEVICES = previous;

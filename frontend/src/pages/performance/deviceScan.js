@@ -21,7 +21,8 @@ export const readDeviceScan = (text) => {
     });
   const configuredDevices = Array.isArray(report.configuredDevices) ? report.configuredDevices.slice(0, 32)
     .filter((device) => typeof device?.name === "string" && typeof device?.address === "string")
-    .map((device) => ({ name: device.name, address: device.address, connector: String(device.connector || "") })) : [];
+    .map((device) => ({ name: device.name, address: device.address, connector: String(device.connector || ""),
+      serial: String(device.serial || ""), readingType: String(device.readingType || "") })) : [];
   return { scannedAt: report.scannedAt, candidates, configuredDevices };
 };
 

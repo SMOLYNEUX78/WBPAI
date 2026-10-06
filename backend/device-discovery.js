@@ -76,8 +76,9 @@ async function scanNetwork() {
 
 function configuredDevices() {
   return (process.env.DYSON_DEVICES || "").split(",").filter(Boolean).map((entry) => {
-    const [name, address] = entry.split(":");
-    return { name, address, connector: "dyson", state: "configured, not verified by this scan" };
+    const [name, address, , serial] = entry.split(":");
+    return { name, address, serial, readingType: `dyson:${name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "")}`,
+      connector: "dyson", state: "configured, not verified by this scan" };
   }).filter((item) => item.name && item.address);
 }
 
