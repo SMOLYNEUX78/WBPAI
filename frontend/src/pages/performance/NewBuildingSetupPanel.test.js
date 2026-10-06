@@ -41,7 +41,7 @@ test("existing property editing stays in a jumpable dialog", () => {
   expect(onClose).toHaveBeenCalledTimes(1);
 });
 
-test("Connect opens the shared Health Monitoring editor at scan, match and import", () => {
+test("Connect opens the shared Health Monitoring editor with matching collapsed", () => {
   const getUser = jest.spyOn(supabase.auth, "getUser").mockResolvedValue({ data: { user: null }, error: null });
   render(<MemoryRouter><NewBuildingSetupPanel editModal initialEditStep={6} isActive /></MemoryRouter>);
   const dialog = screen.getByRole("dialog", { name: "Edit property profile" });
@@ -49,8 +49,7 @@ test("Connect opens the shared Health Monitoring editor at scan, match and impor
   expect(within(dialog).getByRole("heading", { name: "1. Scan monitoring device" })).toBeInTheDocument();
   expect(within(dialog).getByRole("button", { name: "Scan QR or barcode" })).toBeInTheDocument();
   expect(within(dialog).queryByRole("textbox", { name: "Serial / device ID" })).not.toBeInTheDocument();
-  expect(within(dialog).getByRole("heading", { name: "2. Find it on the home network" })).toBeInTheDocument();
-  expect(within(dialog).getByRole("heading", { name: "3. Import sensor data" })).toBeInTheDocument();
+  expect(within(dialog).queryByRole("heading", { name: "2. Find it on the home network" })).not.toBeInTheDocument();
   getUser.mockRestore();
 });
 
@@ -358,7 +357,7 @@ test("editing a registered instrument updates its metrics without creating anoth
   expect(saved.healthSensorDraft.manufacturer).toBe("");
 });
 
-test("registered instrument Edit opens its serial in the profile editor", async () => {
+test("registered instrument tiles open their edit details", async () => {
   window.localStorage.setItem("wbp-new-building-passport", JSON.stringify({
     recordId: "WBP-TEST", databaseId: "home-1", legalOwnerName: "Owner",
     propertyDiscovery: { address: "14 Bridgewood Road", postcode: "IP12 4HA", uprn: "100091142492", confirmedAt: "2026-09-24" },
@@ -371,13 +370,15 @@ test("registered instrument Edit opens its serial in the profile editor", async 
   render(<MemoryRouter><NewBuildingSetupPanel editModal syncHomeProfile isActive /></MemoryRouter>);
   const dialog = screen.getByRole("dialog", { name: "Edit property profile" });
   fireEvent.click(within(dialog).getByRole("button", { name: "Health monitoring" }));
-  const edit = await within(dialog).findByRole("button", { name: "Edit" });
+  const edit = await within(dialog).findByRole("button", { name: "Edit Dyson TP02" });
+  expect(within(dialog).getByRole("button", { name: "Find on the home network" })).toBeInTheDocument();
   fireEvent.click(edit);
   expect(within(dialog).getByRole("textbox", { name: "Serial / device ID" })).toHaveValue("NN6-UK-HDA1783");
   expect(within(dialog).getByText(/Editing Dyson TP02/)).toBeInTheDocument();
   fireEvent.change(within(dialog).getByRole("textbox", { name: "Serial / device ID" }), { target: { value: "NN6-UK-HDA1783A" } });
   fireEvent.click(within(dialog).getByRole("button", { name: "Update instrument" }));
-  expect(within(dialog).getByText(/NN6-UK-HDA1783A/)).toBeInTheDocument();
+  fireEvent.click(within(dialog).getByRole("button", { name: "Edit Dyson TP02" }));
+  expect(within(dialog).getByRole("textbox", { name: "Serial / device ID" })).toHaveValue("NN6-UK-HDA1783A");
 });
 
 test("fresh New tab loads and saves health instruments through the existing home account", async () => {

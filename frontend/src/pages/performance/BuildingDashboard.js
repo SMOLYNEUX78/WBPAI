@@ -9140,6 +9140,8 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   const [sensorScanStatus, setSensorScanStatus] = useState("");
   const [sensorScannerOpen, setSensorScannerOpen] = useState(false);
   const [sensorDetailsVisible, setSensorDetailsVisible] = useState(false);
+  const [networkInstrumentId, setNetworkInstrumentId] = useState("");
+  const [showNetworkMatches, setShowNetworkMatches] = useState(false);
   const [sensorPhotoBusy, setSensorPhotoBusy] = useState(false);
   const sensorVideoRef = useRef(null);
   useEffect(() => {
@@ -11019,6 +11021,14 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                 setSensorScanStatus("");
                 sensorDraftTouchedRef.current = true;
               }}>Cancel</button>
+              {sensorDraft.id ? <button type="button" className="ml-2 px-3 py-2 text-sm font-semibold text-red-700 underline" onClick={() => {
+                setHealthSensors((current) => current.filter((item) => item.id !== sensorDraft.id));
+                if (networkInstrumentId === sensorDraft.id) { setShowNetworkMatches(false); setNetworkInstrumentId(""); }
+                setSensorDraft(emptySensorDraft());
+                setSensorEvidenceFileName("");
+                setSensorDetailsVisible(false);
+                sensorDraftTouchedRef.current = true;
+              }}>Remove instrument</button> : null}
               </> : null}
             </div>
 
@@ -11039,45 +11049,40 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                   No health-data instruments registered yet.
                 </div>
               ) : (
-                healthSensors.map((sensor) => (
-                  <div key={sensor.id} className="border rounded p-3 text-xs">
-                    <p className="font-semibold break-words">{sensor.manufacturer} {sensor.model}</p>
-                    <p className="mt-1 text-gray-600">{sensor.location || "Room pending"}{sensor.networkMatch?.importedAt ? " · Data linked" : sensor.networkMatch ? " · Network matched" : " · Not connected"}</p>
-                    <div className="mt-3 flex flex-wrap items-center gap-3">
-                    <button type="button" className="border border-emerald-700 bg-white px-3 py-2 font-semibold text-emerald-900" onClick={async () => {
-                      const saved = await saveSetupSection();
-                      if (!saved) return;
-                      window.dispatchEvent(new CustomEvent("wbp:select-health-instrument", { detail: { recordId: ownershipRecord?.databaseId || billTarget?.id, instrumentId: sensor.id } }));
-                      document.getElementById("wbp-device-network-step")?.scrollIntoView({ behavior: "smooth", block: "start" });
-                    }}>Find on the home network</button>
-                    <button type="button" className="font-semibold text-emerald-800 underline" onClick={() => {
-                      sensorDraftTouchedRef.current = true;
-                      setSensorDetailsVisible(true);
-                      setSensorDraft({ ...emptySensorDraft(), ...sensor });
-                      setSensorEvidenceFileName(sensor.evidenceFileName || "");
-                      setSectionSaveStatus("");
-                      requestAnimationFrame(() => sensorSerialInputRef.current?.focus());
-                    }}>Edit</button>
-                    <button type="button" className="text-red-700 underline"
-                      onClick={() =>
-                        setHealthSensors((current) =>
-                          current.filter((item) => item.id !== sensor.id)
-                        )
-                      }
-                    >
-                      Remove
-                    </button>
+                <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+                  {healthSensors.map((sensor) => (
+                    <div key={sensor.id} className="min-w-0 border border-gray-300 bg-gray-50 p-2 text-xs">
+                      <button type="button" className={`w-full min-w-0 border px-2 py-3 text-left ${sensorDetailsVisible && sensorDraft.id === sensor.id ? "border-emerald-700 bg-emerald-100" : "border-gray-300 bg-white"}`} onClick={() => {
+                        sensorDraftTouchedRef.current = true;
+                        setSensorDetailsVisible(true);
+                        setSensorDraft({ ...emptySensorDraft(), ...sensor });
+                        setSensorEvidenceFileName(sensor.evidenceFileName || "");
+                        setSectionSaveStatus("");
+                        requestAnimationFrame(() => sensorSerialInputRef.current?.focus());
+                      }} aria-label={`Edit ${sensor.manufacturer} ${sensor.model}`}>
+                        <strong className="block break-words">{sensor.manufacturer} {sensor.model}</strong>
+                        <span className="mt-1 block text-gray-600">{sensor.location || "Room pending"}</span>
+                        <span className="mt-1 block text-emerald-800">{sensor.networkMatch?.importedAt ? "Data linked" : sensor.networkMatch ? "Network matched" : "Not connected"}</span>
+                      </button>
+                      <button type="button" aria-expanded={showNetworkMatches && networkInstrumentId === sensor.id} className={`mt-2 w-full border border-emerald-700 px-2 py-2 text-center font-semibold ${showNetworkMatches && networkInstrumentId === sensor.id ? "bg-emerald-700 text-white" : "bg-white text-emerald-900"}`} onClick={async () => {
+                        if (showNetworkMatches && networkInstrumentId === sensor.id) { setShowNetworkMatches(false); return; }
+                        const saved = await saveSetupSection();
+                        if (!saved) return;
+                        setNetworkInstrumentId(sensor.id);
+                        setShowNetworkMatches(true);
+                        requestAnimationFrame(() => document.getElementById("wbp-device-network-step")?.scrollIntoView({ behavior: "smooth", block: "nearest" }));
+                      }}>{showNetworkMatches && networkInstrumentId === sensor.id ? "Close network matches" : "Find on the home network"}</button>
                     </div>
-                  </div>
-                ))
+                  ))}
+                </div>
               )}
+              {showNetworkMatches ? <div className="mt-3 border-t border-emerald-300 pt-4"><DeviceImportWorkbench isActive={isActive} embedded requestedInstrumentId={networkInstrumentId} /></div> : null}
             </div>
             <div className="flex flex-wrap items-center justify-end gap-3 border-t border-gray-200 pt-3">
               {sectionSaveStatus ? <span role="status" className="text-xs text-gray-600">{sectionSaveStatus}</span> : null}
               <button type="button" onClick={() => saveSetupSection()} className="bg-emerald-700 px-4 py-2 text-sm font-bold text-white">Save health monitoring</button>
             </div>
           </div>
-          {setupTab === "health" ? <DeviceImportWorkbench isActive={isActive} embedded /> : null}
         </div>
 
       </div>
@@ -12281,7 +12286,7 @@ const ExchangeDashboardPanel = ({ homeValue = null }) => {
   );
 };
 
-const DeviceImportWorkbench = ({ isActive, embedded = false }) => {
+const DeviceImportWorkbench = ({ isActive, embedded = false, requestedInstrumentId = "" }) => {
   const navigate = useNavigate();
   const [profile, setProfile] = useState(null);
   const [scan, setScan] = useState(null);
@@ -12346,7 +12351,8 @@ const DeviceImportWorkbench = ({ isActive, embedded = false }) => {
       if (active) {
         const instruments = Array.isArray(setup?.setup_data?.healthSensors) ? setup.setup_data.healthSensors : [];
         setPhysicalDevices(instruments);
-        setSelectedInstrumentId((current) => instruments.some((item) => item.id === current) ? current : instruments[0]?.id || "");
+        setSelectedInstrumentId((current) => instruments.some((item) => item.id === requestedInstrumentId) ? requestedInstrumentId
+          : instruments.some((item) => item.id === current) ? current : instruments[0]?.id || "");
       }
       const { data: previous } = await supabase.from("WBPCollectorScanJobs")
         .select("result").eq("building_record_id", data.id).eq("status", "complete")
@@ -12358,7 +12364,7 @@ const DeviceImportWorkbench = ({ isActive, embedded = false }) => {
     };
     loadProfile();
     return () => { active = false; };
-  }, [isActive]);
+  }, [isActive, requestedInstrumentId]);
   useEffect(() => {
     if (!isActive || !profile?.id) return undefined;
     const syncInstruments = (event) => {
@@ -12373,18 +12379,13 @@ const DeviceImportWorkbench = ({ isActive, embedded = false }) => {
     return () => window.removeEventListener("wbp:setup-updated", syncInstruments);
   }, [isActive, profile?.id]);
   useEffect(() => {
-    if (!isActive || !profile?.id) return undefined;
-    const selectInstrument = (event) => {
-      if (event.detail?.recordId !== profile.id) return;
-      setSelectedInstrumentId(event.detail.instrumentId);
-      setSelected("");
-      setReadingsOpen(false);
-      setComparisonConfirmed(false);
-      setImportStatus("");
-    };
-    window.addEventListener("wbp:select-health-instrument", selectInstrument);
-    return () => window.removeEventListener("wbp:select-health-instrument", selectInstrument);
-  }, [isActive, profile?.id]);
+    if (!requestedInstrumentId) return;
+    setSelectedInstrumentId(requestedInstrumentId);
+    setSelected("");
+    setReadingsOpen(false);
+    setComparisonConfirmed(false);
+    setImportStatus("");
+  }, [requestedInstrumentId]);
 
   const pairTablet = async () => {
     if (!profile) return;
