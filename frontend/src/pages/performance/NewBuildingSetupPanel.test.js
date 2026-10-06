@@ -411,9 +411,10 @@ test("a recently linked instrument shows its network address and Live status", a
   expect(instrument.querySelector(".wbp-live-signal")).toBeInTheDocument();
 });
 
-test("clearing sensors requires confirmation and saves an empty instrument list", async () => {
-  const sensor = { id: "sensor-1", manufacturer: "Dyson", model: "TP02", location: "Upstairs",
-    networkMatch: { address: "192.168.1.144", importedAt: new Date().toISOString() } };
+test("resetting connections keeps scanned instrument details", async () => {
+  const sensor = { id: "sensor-1", manufacturer: "Dyson", model: "TP02", location: "Upstairs", serialNumber: "NN6-UK-HDA1783A",
+    networkAddress: "192.168.1.144", readingType: "dyson:upstairs", sourceBuildingId: "home",
+    lastSampleAt: new Date().toISOString(), networkMatch: { address: "192.168.1.144", importedAt: new Date().toISOString() } };
   let setupData = { healthSensors: [sensor], billReview: { supplier: "Good Energy" } };
   window.localStorage.setItem("wbp-new-building-passport", JSON.stringify({
     recordId: "WBP-TEST", databaseId: "home-1", legalOwnerName: "Owner",
@@ -435,14 +436,15 @@ test("clearing sensors requires confirmation and saves an empty instrument list"
     const dialog = screen.getByRole("dialog", { name: "Edit property profile" });
     fireEvent.click(within(dialog).getByRole("button", { name: "Health monitoring" }));
     expect(await within(dialog).findByRole("button", { name: "Edit Dyson TP02" })).toBeInTheDocument();
-    fireEvent.click(within(dialog).getByRole("button", { name: "Clear sensors" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Reset connections" }));
     expect(setupData.healthSensors).toHaveLength(1);
     const confirmation = within(dialog).getByRole("group", { name: "Confirm clear sensors" });
-    fireEvent.click(within(confirmation).getByRole("button", { name: "Clear sensors" }));
-    await waitFor(() => expect(within(dialog).getByText("No health-data instruments registered yet.")).toBeInTheDocument());
-    expect(setupData.healthSensors).toEqual([]);
+    fireEvent.click(within(confirmation).getByRole("button", { name: "Reset connections" }));
+    await waitFor(() => expect(within(dialog).getByText(/Scanned device details and historical readings were kept/)).toBeInTheDocument());
+    expect(within(dialog).getByRole("button", { name: "Edit Dyson TP02" })).toHaveTextContent("Not connected");
+    expect(within(dialog).getByRole("button", { name: "Find on the home network" })).toBeInTheDocument();
+    expect(setupData.healthSensors).toEqual([{ id: "sensor-1", manufacturer: "Dyson", model: "TP02", location: "Upstairs", serialNumber: "NN6-UK-HDA1783A" }]);
     expect(setupData.billReview.supplier).toBe("Good Energy");
-    expect(within(dialog).getByText(/Historical readings were not deleted/)).toBeInTheDocument();
   } finally {
     from.mockRestore();
     getUser.mockRestore();

@@ -10336,8 +10336,9 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       const { data: existing, error: readError } = await supabase.from("WBPBuildingSetupDeclarations")
         .select("setup_data").eq("building_record_id", recordId).maybeSingle();
       if (readError) throw readError;
-      const setupData = { ...(existing?.setup_data || {}), healthSensors: [],
-        healthSensorDraft: emptySensorDraft(), sensorEvidenceFileName: "" };
+      const resetSensors = (Array.isArray(existing?.setup_data?.healthSensors) ? existing.setup_data.healthSensors : healthSensors)
+        .map(({ networkMatch, networkAddress, readingType, sourceBuildingId, lastSampleAt, ...sensor }) => sensor);
+      const setupData = { ...(existing?.setup_data || {}), healthSensors: resetSensors };
       const { error: saveError } = await supabase.from("WBPBuildingSetupDeclarations").upsert({
         building_record_id: recordId, setup_data: setupData, updated_by: auth.user.id,
         updated_at: new Date().toISOString(),
@@ -10345,19 +10346,16 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       if (saveError) throw saveError;
       const recordReference = ownershipRecord?.recordId || billTarget?.record_reference;
       if (recordReference) window.localStorage.setItem(`${recordReference}:setupSections`, JSON.stringify(setupData));
-      window.localStorage.removeItem("wbp-new-building-setup-draft");
       window.dispatchEvent(new CustomEvent("wbp:setup-updated", { detail: { recordId, setupData } }));
-      setHealthSensors([]);
+      setHealthSensors(resetSensors);
       setHealthSensorsLoadedId(recordId);
-      setPendingLocalSensors([]);
-      setSensorDraft(emptySensorDraft());
-      setSensorEvidenceFileName("");
+      setSensorDraft((current) => current.id ? { ...emptySensorDraft(), ...resetSensors.find((sensor) => sensor.id === current.id) } : current);
       setSensorDetailsVisible(false);
       setSensorScannerOpen(false);
       setShowNetworkMatches(false);
       setNetworkInstrumentId("");
       setClearSensorsConfirm(false);
-      setSectionSaveStatus("Sensors cleared from this property. Historical readings were not deleted.");
+      setSectionSaveStatus("Sensor connections reset. Scanned device details and historical readings were kept.");
     } catch (error) {
       setSectionSaveStatus(`Could not clear sensors: ${error.message}`);
     } finally {
@@ -10914,13 +10912,13 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                   <h4 className="font-semibold text-sm">Registered Instruments</h4>
                   <div className="flex items-center gap-3">
                     <span className="text-xs text-gray-500">{healthSensors.length} registered</span>
-                    {healthSensors.length ? <button type="button" className="text-xs font-semibold text-red-700 underline" onClick={() => setClearSensorsConfirm(true)}>Clear sensors</button> : null}
+                    {healthSensors.some((sensor) => sensor.networkMatch || sensor.networkAddress || sensor.readingType) ? <button type="button" className="text-xs font-semibold text-emerald-800 underline" onClick={() => setClearSensorsConfirm(true)}>Reset connections</button> : null}
                   </div>
                 </div>
                 {clearSensorsConfirm ? <div className="border border-red-300 bg-red-50 p-3 text-xs text-red-950" role="group" aria-label="Confirm clear sensors">
-                  <p>Remove all registered sensors and their network matches from this property? Existing readings will stay in Supabase.</p>
+                  <p>Reset network matches and imported/live status? Scanned device details and historical readings will stay.</p>
                   <div className="mt-2 flex gap-3">
-                    <button type="button" className="border border-red-700 bg-red-700 px-3 py-2 font-semibold text-white disabled:opacity-50" disabled={clearingSensors} onClick={clearHealthSensors}>{clearingSensors ? "Clearing..." : "Clear sensors"}</button>
+                    <button type="button" className="border border-emerald-700 bg-emerald-700 px-3 py-2 font-semibold text-white disabled:opacity-50" disabled={clearingSensors} onClick={clearHealthSensors}>{clearingSensors ? "Resetting..." : "Reset connections"}</button>
                     <button type="button" className="border border-gray-300 bg-white px-3 py-2 font-semibold text-gray-800" disabled={clearingSensors} onClick={() => setClearSensorsConfirm(false)}>Cancel</button>
                   </div>
                 </div> : null}
