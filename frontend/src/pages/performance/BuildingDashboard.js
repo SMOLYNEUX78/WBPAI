@@ -9142,7 +9142,6 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   const [sensorDetailsVisible, setSensorDetailsVisible] = useState(false);
   const [sensorPhotoBusy, setSensorPhotoBusy] = useState(false);
   const sensorVideoRef = useRef(null);
-  const [sensorCheckBusy, setSensorCheckBusy] = useState("");
   useEffect(() => {
     if (!syncHomeProfile || !isolatedDraft) return undefined;
     let active = true;
@@ -9157,6 +9156,16 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   }, [syncHomeProfile, isolatedDraft]);
   const billRecordId = ownershipRecord?.databaseId || billTarget?.id;
   const healthRecordId = ownershipRecord?.databaseId || (syncHomeProfile ? billTarget?.id : null);
+  useEffect(() => {
+    if (!healthRecordId) return undefined;
+    const syncInstruments = (event) => {
+      if (event.detail?.recordId !== healthRecordId || !Array.isArray(event.detail?.setupData?.healthSensors)) return;
+      setHealthSensors(event.detail.setupData.healthSensors);
+      setHealthSensorsLoadedId(healthRecordId);
+    };
+    window.addEventListener("wbp:setup-updated", syncInstruments);
+    return () => window.removeEventListener("wbp:setup-updated", syncInstruments);
+  }, [healthRecordId]);
   const [sensorDraft, setSensorDraft] = useState(emptySensorDraft);
   const sensorDraftTouchedRef = useRef(false);
   const sensorSerialInputRef = useRef(null);
@@ -9257,17 +9266,6 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
     loadAccountPassport();
     return () => { active = false; };
   }, [isolatedDraft, syncHomeProfile, editModal]);
-  const healthMetricOptions = [
-    ["temperature", "Temperature"],
-    ["humidity", "Humidity"],
-    ["pm25", "PM2.5"],
-    ["pm10", "PM10"],
-    ["voc", "VOC"],
-    ["no2", "NO2"],
-    ["co2", "CO2"],
-    ["hcho", "HCHO"],
-  ];
-
   const modelId = useMemo(() => extractMatterportModelId(modelInput), [modelInput]);
   const modelUrl = useMemo(() => normalizeMatterportUrl(modelInput), [modelInput]);
   const ownershipProperty = propertyDiscovery || ownershipRecord?.propertyDiscovery;
@@ -9440,7 +9438,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
           window.dispatchEvent(new CustomEvent("wbp:setup-updated", { detail: { recordId: targetRecordId, setupData: savedSetup } }));
           setSectionSaveStatus(`${setupTab} saved to account`);
           if (setupTab === "measurements") setModelAreaEdited(false);
-          return;
+          return true;
         }
         setSectionSaveStatus(`Save failed: ${error.message}`);
         return;
@@ -10310,24 +10308,6 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
     }
   };
 
-  const checkSensorReading = async (sensor) => {
-    if (sensor.connectionMethod !== "dyson" || !sensor.readingType) return;
-    setSensorCheckBusy(sensor.id);
-    const since = new Date(Date.now() - 15 * 60 * 1000).toISOString();
-    const { data, error } = await supabase.from("Readings")
-      .select("*")
-      .eq("building_id", sensor.sourceBuildingId || "home").eq("reading_type", sensor.readingType)
-      .gte("timestamp", since).order("timestamp", { ascending: false }).limit(1);
-    const row = data?.[0];
-    const metricStatus = Object.fromEntries(sensor.metrics.map((metric) => [metric,
-      row?.[SENSOR_READING_COLUMNS[metric]] != null ? "observed" : "not observed"]));
-    setHealthSensors((current) => current.map((item) => item.id === sensor.id ? {
-      ...item, connectionStatus: error ? "check failed" : row ? "live stream confirmed" : "no recent sample",
-      lastSampleAt: row?.timestamp || "", metricStatus: error ? {} : metricStatus,
-    } : item));
-    setSensorCheckBusy("");
-  };
-
   const addHealthSensor = () => {
     const registered = registerSensorDraft(healthSensors, sensorDraft, sensorEvidenceFileName);
     if (registered.healthSensorDraft === sensorDraft) return;
@@ -11031,6 +11011,14 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
               >
                 {sensorDraft.id ? "Update instrument" : "Add instrument to profile"}
               </button>
+              <button type="button" className="ml-2 border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700" onClick={() => {
+                setSensorScannerOpen(false);
+                setSensorDetailsVisible(false);
+                setSensorDraft(emptySensorDraft());
+                setSensorEvidenceFileName("");
+                setSensorScanStatus("");
+                sensorDraftTouchedRef.current = true;
+              }}>Cancel</button>
               </> : null}
             </div>
 
@@ -11052,45 +11040,17 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                 </div>
               ) : (
                 healthSensors.map((sensor) => (
-                  <div key={sensor.id} className="border rounded p-3 text-xs space-y-2">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="font-semibold break-words">
-                          {sensor.manufacturer} {sensor.model}
-                        </p>
-                        <p className="text-gray-600 break-words">
-                          {sensor.location || "Room pending"}
-                          {sensor.serialNumber ? ` | ${sensor.serialNumber}` : ""}
-                        </p>
-                        {sensor.labelCode ? <p className="text-gray-600 break-words">Label code: {sensor.labelCode}</p> : null}
-                        {sensor.ratedPowerW || sensor.ratedVoltage || sensor.ratedFrequencyHz ? <p className="text-gray-600">Label rating: {[sensor.ratedVoltage && `${sensor.ratedVoltage} V`, sensor.ratedFrequencyHz && `${sensor.ratedFrequencyHz} Hz`, sensor.ratedPowerW && `${sensor.ratedPowerW} W`].filter(Boolean).join(" · ")}</p> : null}
-                      </div>
-                      <span className="shrink-0 border rounded px-2 py-1 uppercase text-[10px] text-gray-600">
-                        {sensor.evidenceGrade}
-                      </span>
-                    </div>
-                    <p className="text-gray-700">
-                      <strong>Metrics:</strong>{" "}
-                      {(sensor.metrics || []).length ? (sensor.metrics || [])
-                        .map(
-                          (metric) =>
-                            healthMetricOptions.find(([value]) => value === metric)?.[1] ||
-                            metric
-                        )
-                        .join(", ") : "Not specified"}
-                    </p>
-                    <p className="text-gray-700"><strong>Connection:</strong> {sensor.connectionMethod === "dyson" ? sensor.readingType || "Dyson stream not selected" : sensor.connectionMethod || "Not set"} · {sensor.connectionStatus || "not checked"}{sensor.lastSampleAt ? ` · ${new Date(sensor.lastSampleAt).toLocaleString()}` : ""}</p>
-                    {(sensor.metrics || []).map((metric) => <p key={metric} className="text-gray-600">{healthMetricOptions.find(([value]) => value === metric)?.[1] || metric}: {sensor.metricStatus?.[metric] || "Not validated"}</p>)}
-                    {sensor.connectionMethod === "dyson" && sensor.readingType ? <button type="button" disabled={sensorCheckBusy === sensor.id} onClick={() => checkSensorReading(sensor)} className="border border-emerald-700 px-2 py-1 font-semibold text-emerald-900 disabled:opacity-50">{sensorCheckBusy === sensor.id ? "Checking..." : "Check recent sample"}</button> : null}
-                    <p className="text-gray-600">
-                      <strong>Assurance:</strong>{" "}
-                      {(sensor.verificationStatus || "unverified").replaceAll("-", " ")}
-                      {sensor.verificationDate ? ` on ${sensor.verificationDate}` : ""}
-                      {sensor.evidenceFileName
-                        ? ` | Evidence: ${sensor.evidenceFileName}`
-                        : ""}
-                    </p>
-                    <button type="button" className="mr-3 font-semibold text-emerald-800 underline" onClick={() => {
+                  <div key={sensor.id} className="border rounded p-3 text-xs">
+                    <p className="font-semibold break-words">{sensor.manufacturer} {sensor.model}</p>
+                    <p className="mt-1 text-gray-600">{sensor.location || "Room pending"}{sensor.networkMatch?.importedAt ? " · Data linked" : sensor.networkMatch ? " · Network matched" : " · Not connected"}</p>
+                    <div className="mt-3 flex flex-wrap items-center gap-3">
+                    <button type="button" className="border border-emerald-700 bg-white px-3 py-2 font-semibold text-emerald-900" onClick={async () => {
+                      const saved = await saveSetupSection();
+                      if (!saved) return;
+                      window.dispatchEvent(new CustomEvent("wbp:select-health-instrument", { detail: { recordId: ownershipRecord?.databaseId || billTarget?.id, instrumentId: sensor.id } }));
+                      document.getElementById("wbp-device-network-step")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                    }}>Find on the home network</button>
+                    <button type="button" className="font-semibold text-emerald-800 underline" onClick={() => {
                       sensorDraftTouchedRef.current = true;
                       setSensorDetailsVisible(true);
                       setSensorDraft({ ...emptySensorDraft(), ...sensor });
@@ -11098,9 +11058,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                       setSectionSaveStatus("");
                       requestAnimationFrame(() => sensorSerialInputRef.current?.focus());
                     }}>Edit</button>
-                    <button
-                      type="button"
-                      className="text-red-700 underline"
+                    <button type="button" className="text-red-700 underline"
                       onClick={() =>
                         setHealthSensors((current) =>
                           current.filter((item) => item.id !== sensor.id)
@@ -11109,6 +11067,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                     >
                       Remove
                     </button>
+                    </div>
                   </div>
                 ))
               )}
@@ -12343,6 +12302,9 @@ const DeviceImportWorkbench = ({ isActive, embedded = false }) => {
   const [matchBusy, setMatchBusy] = useState(false);
   const [importBusy, setImportBusy] = useState(false);
   const [importStatus, setImportStatus] = useState("");
+  const [availableMetrics, setAvailableMetrics] = useState([]);
+  const [selectedMetrics, setSelectedMetrics] = useState([]);
+  const [metricsStatus, setMetricsStatus] = useState("");
   const clearWorkbench = () => {
     setScanJobId(null);
     setScanBusy(false);
@@ -12409,6 +12371,19 @@ const DeviceImportWorkbench = ({ isActive, embedded = false }) => {
     };
     window.addEventListener("wbp:setup-updated", syncInstruments);
     return () => window.removeEventListener("wbp:setup-updated", syncInstruments);
+  }, [isActive, profile?.id]);
+  useEffect(() => {
+    if (!isActive || !profile?.id) return undefined;
+    const selectInstrument = (event) => {
+      if (event.detail?.recordId !== profile.id) return;
+      setSelectedInstrumentId(event.detail.instrumentId);
+      setSelected("");
+      setReadingsOpen(false);
+      setComparisonConfirmed(false);
+      setImportStatus("");
+    };
+    window.addEventListener("wbp:select-health-instrument", selectInstrument);
+    return () => window.removeEventListener("wbp:select-health-instrument", selectInstrument);
   }, [isActive, profile?.id]);
 
   const pairTablet = async () => {
@@ -12521,6 +12496,25 @@ const DeviceImportWorkbench = ({ isActive, embedded = false }) => {
   const canIdentify = selectedDevice && selectedInstrument && !["This tablet", "Router or gateway", "Audio device"].includes(selectedDevice.kind) && profile;
   const selectedCollector = matchedCandidates.find((candidate) => candidate.address === selected)?.configured;
   const selectedMatch = selectedInstrument?.networkMatch?.address === selected ? selectedInstrument.networkMatch : null;
+  useEffect(() => {
+    let active = true;
+    setAvailableMetrics([]);
+    setSelectedMetrics([]);
+    setMetricsStatus("");
+    if (!isActive || !selectedMatch?.stream || String(profile?.uprn) !== "100091142492") return undefined;
+    setMetricsStatus("Checking available sensor readings...");
+    supabase.from("Readings").select("*").eq("building_id", "home")
+      .eq("reading_type", selectedMatch.stream).order("timestamp", { ascending: false }).limit(1)
+      .then(({ data, error }) => {
+        if (!active) return;
+        const metrics = error ? [] : Object.entries(SENSOR_READING_COLUMNS)
+          .filter(([, column]) => data?.[0]?.[column] != null).map(([metric]) => metric);
+        setAvailableMetrics(metrics);
+        setSelectedMetrics(metrics);
+        setMetricsStatus(error ? `Could not check readings: ${error.message}` : metrics.length ? "" : "No sensor readings are available yet.");
+      });
+    return () => { active = false; };
+  }, [isActive, profile?.uprn, selectedMatch?.stream]);
   const scannedSerial = normaliseSerial(selectedInstrument?.serialNumber || selectedInstrument?.labelCode);
   const collectorSerial = normaliseSerial(selectedCollector?.serial);
   const serialsAgree = Boolean(scannedSerial && collectorSerial && scannedSerial === collectorSerial);
@@ -12616,7 +12610,7 @@ const DeviceImportWorkbench = ({ isActive, embedded = false }) => {
     setMatchBusy(false);
   };
   const importMatchedData = async () => {
-    if (!profile || !selectedMatch?.stream || importBusy) return;
+    if (!profile || !selectedMatch?.stream || importBusy || !selectedMetrics.length) return;
     if (String(profile.uprn) !== "100091142492") {
       setImportStatus("This property does not have its own live collector yet. Import is available for the Bridgewood pilot only.");
       return;
@@ -12644,11 +12638,16 @@ const DeviceImportWorkbench = ({ isActive, embedded = false }) => {
     }
     const importedAt = new Date().toISOString();
     const observedMetrics = Object.entries(SENSOR_READING_COLUMNS)
-      .filter(([, column]) => readings[0][column] != null).map(([metric]) => metric);
+      .filter(([metric, column]) => selectedMetrics.includes(metric) && readings[0][column] != null).map(([metric]) => metric);
+    if (!observedMetrics.length) {
+      setImportStatus("The selected readings are no longer available. Check the device and try again.");
+      setImportBusy(false);
+      return;
+    }
     const updated = stored.map((item) => item.id === instrument.id ? { ...item,
       connectionMethod: "dyson", readingType: selectedMatch.stream, sourceBuildingId: "home",
       lastSampleAt: readings[0].timestamp,
-      metrics: Array.from(new Set([...(item.metrics || []), ...observedMetrics])),
+      metrics: observedMetrics,
       metricStatus: { ...(item.metricStatus || {}), ...Object.fromEntries(observedMetrics.map((metric) => [metric, "observed"])) },
       networkMatch: { ...item.networkMatch, importedAt },
     } : item);
@@ -12697,7 +12696,7 @@ const DeviceImportWorkbench = ({ isActive, embedded = false }) => {
         {selectedInstrument ? <button type="button" onClick={() => navigate(`/dashboard/home?edit=health&instrument=${encodeURIComponent(selectedInstrument.id)}`)} className="mt-3 border border-gray-400 bg-white px-3 py-2 text-sm font-semibold">Edit selected instrument</button> : null}
         <button type="button" onClick={() => navigate("/dashboard/home?edit=health&instrument=new")} className="mt-3 border border-emerald-700 bg-white px-3 py-2 text-sm font-semibold text-emerald-900">Scan or add a device label</button>
       </section> : null}
-      <section className={`wbp-device-match-grid border-b border-gray-200 pb-5 ${readingsOpen ? "wbp-device-match-grid--readings" : ""} ${embedded ? "" : "mt-5"}`}>
+      <section id="wbp-device-network-step" className={`wbp-device-match-grid border-b border-gray-200 pb-5 ${readingsOpen ? "wbp-device-match-grid--readings" : ""} ${embedded ? "" : "mt-5"}`}>
         <div>
           <h2 className="text-base font-bold">2. Find it on the home network</h2>
           <p className="mt-1 max-w-2xl text-sm text-gray-600">Select a physical device above, then scan for network matches.</p>
@@ -12748,10 +12747,15 @@ const DeviceImportWorkbench = ({ isActive, embedded = false }) => {
       {scan ? <p className="mt-2 text-xs text-gray-500">Scanned {new Date(scan.scannedAt).toLocaleString()}. Paired scans are saved privately to this property in Supabase. A network scan may miss devices that do not respond; a complete router client list requires router-specific access.</p> : null}
       <section className="mt-5 border-t border-gray-200 pt-5">
         <h2 className="text-base font-bold">3. Import sensor data</h2>
-        <p className="mt-1 text-sm text-gray-600">Link this device's existing collector readings to the property profile. This does not copy readings or configure a new collector.</p>
+        <p className="mt-1 text-sm text-gray-600">Choose which available readings to show on this property. The existing collector data stays in Supabase.</p>
         {selectedMatch ? <p className="mt-3 text-sm">Matched: {selectedInstrument.manufacturer} {selectedInstrument.model} · {selectedMatch.address} · {dysonStreamLabel(selectedMatch.stream)}{selectedMatch.assurance === "provisional" ? " · Provisional serial match" : ""}</p>
           : <p className="mt-3 text-sm text-gray-600">Save a network match in Step 2 to enable import.</p>}
-        {selectedMatch ? <button type="button" onClick={importMatchedData} disabled={importBusy} className="mt-3 border border-emerald-700 bg-emerald-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{importBusy ? "Importing..." : selectedMatch.importedAt ? "Refresh data link" : "Import data to profile"}</button> : null}
+        {selectedMatch && availableMetrics.length ? <div className="mt-3 grid gap-2 sm:grid-cols-2" role="group" aria-label="Sensor data to import">
+          <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={selectedMetrics.length === availableMetrics.length} onChange={(event) => setSelectedMetrics(event.target.checked ? availableMetrics : [])} />All sensor data</label>
+          {availableMetrics.map((metric) => <label key={metric} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={selectedMetrics.includes(metric)} onChange={(event) => setSelectedMetrics((current) => event.target.checked ? [...current, metric] : current.filter((item) => item !== metric))} />{metric === "pm25" ? "PM2.5" : metric.toUpperCase()}</label>)}
+        </div> : null}
+        {metricsStatus ? <p role="status" className="mt-2 text-sm text-gray-600">{metricsStatus}</p> : null}
+        {selectedMatch ? <button type="button" onClick={importMatchedData} disabled={importBusy || !selectedMetrics.length} className="mt-3 border border-emerald-700 bg-emerald-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{importBusy ? "Importing..." : selectedMatch.importedAt ? "Update imported data" : "Import selected data"}</button> : null}
         {selectedMatch?.importedAt ? <p className="mt-2 text-xs text-emerald-900">Linked {new Date(selectedMatch.importedAt).toLocaleString()}</p> : null}
         {importStatus ? <p role="status" className="mt-2 text-sm text-gray-700">{importStatus}</p> : null}
       </section>

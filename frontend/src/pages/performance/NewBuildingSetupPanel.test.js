@@ -279,16 +279,16 @@ test("energy monitoring contains bill and carbon context while health has its ow
   expect(screen.getByRole("button", { name: "Scan or upload energy bill", hidden: true })).not.toBeVisible();
 });
 
-test("health setup distinguishes label scanning, connection and metric validation", () => {
+test("health setup keeps device details collapsed until scanning and allows cancellation", () => {
   render(<MemoryRouter><NewBuildingSetupPanel /></MemoryRouter>);
   fireEvent.click(screen.getByRole("tab", { name: "Health Monitoring" }));
-  expect(screen.getByText("1. Import your health data")).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "1. Scan monitoring device" })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Scan QR or barcode" })).toBeInTheDocument();
-  expect(screen.getByLabelText("Scan a sensor label photo")).toHaveAttribute("accept", "image/*");
+  expect(screen.queryByRole("textbox", { name: "Label code" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Scan QR or barcode" }));
   expect(screen.getByRole("textbox", { name: "Label code" })).toBeInTheDocument();
-  expect(screen.getByRole("combobox", { name: "Connection route" })).toHaveValue("manual");
-  expect(screen.queryByRole("combobox", { name: "Collector stream" })).not.toBeInTheDocument();
-  expect(screen.getByText("3. Metrics to validate")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  expect(screen.queryByRole("textbox", { name: "Label code" })).not.toBeInTheDocument();
 });
 
 test("barcode labels keep a reviewable code without claiming it is a serial or connection", () => {
