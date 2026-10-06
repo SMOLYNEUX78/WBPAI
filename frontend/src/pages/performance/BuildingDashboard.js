@@ -1026,6 +1026,8 @@ const SENSOR_READING_COLUMNS = {
   temperature: "temperature_inside", humidity: "humidity", pm25: "pm25",
   pm10: "pm10", voc: "vocs", no2: "no2", co2: "co2", hcho: "hcho",
 };
+export const observedSensorMetrics = (readings = []) => Object.entries(SENSOR_READING_COLUMNS)
+  .filter(([, column]) => readings.some((row) => row[column] != null)).map(([metric]) => metric);
 const dysonStreamLabel = (type) => `Dyson ${String(type || "").replace(/^dyson:/, "").replaceAll("_", " ")}`;
 export const decodeSensorLabel = (raw, isQrCode) => {
   const value = String(raw || "").trim();
@@ -12297,7 +12299,6 @@ const DeviceImportWorkbench = ({ isActive, embedded = false, requestedInstrument
   const [importBusy, setImportBusy] = useState(false);
   const [importStatus, setImportStatus] = useState("");
   const [availableMetrics, setAvailableMetrics] = useState([]);
-  const [selectedMetrics, setSelectedMetrics] = useState([]);
   const [metricsStatus, setMetricsStatus] = useState("");
   const autoScanRequestedRef = useRef(false);
   const clearWorkbench = () => {
@@ -12498,18 +12499,15 @@ const DeviceImportWorkbench = ({ isActive, embedded = false, requestedInstrument
   useEffect(() => {
     let active = true;
     setAvailableMetrics([]);
-    setSelectedMetrics([]);
     setMetricsStatus("");
     if (!isActive || !selectedMatch?.stream || String(profile?.uprn) !== "100091142492") return undefined;
     setMetricsStatus("Checking available sensor readings...");
     supabase.from("Readings").select("*").eq("building_id", "home")
-      .eq("reading_type", selectedMatch.stream).order("timestamp", { ascending: false }).limit(1)
+      .eq("reading_type", selectedMatch.stream).order("timestamp", { ascending: false }).limit(10)
       .then(({ data, error }) => {
         if (!active) return;
-        const metrics = error ? [] : Object.entries(SENSOR_READING_COLUMNS)
-          .filter(([, column]) => data?.[0]?.[column] != null).map(([metric]) => metric);
+        const metrics = error ? [] : observedSensorMetrics(data || []);
         setAvailableMetrics(metrics);
-        setSelectedMetrics(metrics);
         setMetricsStatus(error ? `Could not check readings: ${error.message}` : metrics.length ? "" : "No sensor readings are available yet.");
       });
     return () => { active = false; };
@@ -12609,7 +12607,7 @@ const DeviceImportWorkbench = ({ isActive, embedded = false, requestedInstrument
     setMatchBusy(false);
   };
   const importMatchedData = async () => {
-    if (!profile || !selectedMatch?.stream || importBusy || !selectedMetrics.length) return;
+    if (!profile || !selectedMatch?.stream || importBusy) return;
     if (String(profile.uprn) !== "100091142492") {
       setImportStatus("This property does not have its own live collector yet. Import is available for the Bridgewood pilot only.");
       return;
@@ -12629,17 +12627,16 @@ const DeviceImportWorkbench = ({ isActive, embedded = false, requestedInstrument
     }
     const { data: readings, error: readingError } = await supabase.from("Readings").select("*")
       .eq("building_id", "home").eq("reading_type", selectedMatch.stream)
-      .order("timestamp", { ascending: false }).limit(1);
+      .order("timestamp", { ascending: false }).limit(10);
     if (readingError || !readings?.length) {
       setImportStatus(readingError ? `Could not check readings: ${readingError.message}` : "No readings are available from this collector stream yet.");
       setImportBusy(false);
       return;
     }
     const importedAt = new Date().toISOString();
-    const observedMetrics = Object.entries(SENSOR_READING_COLUMNS)
-      .filter(([metric, column]) => selectedMetrics.includes(metric) && readings[0][column] != null).map(([metric]) => metric);
+    const observedMetrics = observedSensorMetrics(readings);
     if (!observedMetrics.length) {
-      setImportStatus("The selected readings are no longer available. Check the device and try again.");
+      setImportStatus("No supported readings are available from this sensor yet. Check the device and try again.");
       setImportBusy(false);
       return;
     }
@@ -12748,15 +12745,12 @@ const DeviceImportWorkbench = ({ isActive, embedded = false, requestedInstrument
       {scan ? <p className="mt-2 text-xs text-gray-500">Scanned {new Date(scan.scannedAt).toLocaleString()}. Paired scans are saved privately to this property in Supabase. A network scan may miss devices that do not respond; a complete router client list requires router-specific access.</p> : null}
       {(!embedded || selectedMatch) ? <section className="mt-5 border-t border-gray-200 pt-5">
         <h2 className="text-base font-bold">{embedded ? "Import sensor data" : "3. Import sensor data"}</h2>
-        <p className="mt-1 text-sm text-gray-600">Choose which available readings to show on this property. The existing collector data stays in Supabase.</p>
+        <p className="mt-1 text-sm text-gray-600">All supported readings from the matched sensor are linked to this property. Existing collector data stays in Supabase.</p>
         {selectedMatch ? <p className="mt-3 text-sm">Matched: {selectedInstrument.manufacturer} {selectedInstrument.model} · {selectedMatch.address} · {dysonStreamLabel(selectedMatch.stream)}{selectedMatch.assurance === "provisional" ? " · Provisional serial match" : ""}</p>
           : <p className="mt-3 text-sm text-gray-600">Save a network match in Step 2 to enable import.</p>}
-        {selectedMatch && availableMetrics.length ? <div className="mt-3 grid gap-2 sm:grid-cols-2" role="group" aria-label="Sensor data to import">
-          <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={selectedMetrics.length === availableMetrics.length} onChange={(event) => setSelectedMetrics(event.target.checked ? availableMetrics : [])} />All sensor data</label>
-          {availableMetrics.map((metric) => <label key={metric} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={selectedMetrics.includes(metric)} onChange={(event) => setSelectedMetrics((current) => event.target.checked ? [...current, metric] : current.filter((item) => item !== metric))} />{metric === "pm25" ? "PM2.5" : metric.toUpperCase()}</label>)}
-        </div> : null}
+        {selectedMatch && availableMetrics.length ? <p className="mt-3 text-sm text-gray-700">Detected: {availableMetrics.map((metric) => metric === "pm25" ? "PM2.5" : metric.toUpperCase()).join(", ")}</p> : null}
         {metricsStatus ? <p role="status" className="mt-2 text-sm text-gray-600">{metricsStatus}</p> : null}
-        {selectedMatch ? <button type="button" onClick={importMatchedData} disabled={importBusy || !selectedMetrics.length} className="mt-3 border border-emerald-700 bg-emerald-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{importBusy ? "Importing..." : selectedMatch.importedAt ? "Update imported data" : "Import selected data"}</button> : null}
+        {selectedMatch ? <button type="button" onClick={importMatchedData} disabled={importBusy || !availableMetrics.length} className="mt-3 border border-emerald-700 bg-emerald-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{importBusy ? "Importing..." : selectedMatch.importedAt ? "Update sensor data" : "Import sensor data"}</button> : null}
         {selectedMatch?.importedAt ? <p className="mt-2 text-xs text-emerald-900">Linked {new Date(selectedMatch.importedAt).toLocaleString()}</p> : null}
         {importStatus ? <p role="status" className="mt-2 text-sm text-gray-700">{importStatus}</p> : null}
       </section> : null}

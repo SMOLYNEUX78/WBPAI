@@ -1,9 +1,16 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router-dom";
-import { NewBuildingSetupPanel, OccupyHistoryTabs, ProfileSummaryColumns, addressLines, decodeSensorLabel, parseSensorLabelText, mergeScannedSensor, selectDysonStream, registerSensorDraft, findAccountHomeRecord, findHomeProfileForOverwrite, readCachedBridgewoodValue } from "./BuildingDashboard";
+import { NewBuildingSetupPanel, OccupyHistoryTabs, ProfileSummaryColumns, addressLines, decodeSensorLabel, parseSensorLabelText, mergeScannedSensor, selectDysonStream, registerSensorDraft, findAccountHomeRecord, findHomeProfileForOverwrite, readCachedBridgewoodValue, observedSensorMetrics } from "./BuildingDashboard";
 import supabase from "../../supabaseClient";
 
 beforeEach(() => window.localStorage.clear());
+
+test("sensor import includes every supported reading observed across recent samples", () => {
+  expect(observedSensorMetrics([
+    { temperature_inside: 20.1, humidity: null, vocs: 5 },
+    { temperature_inside: 20, humidity: 47, pm25: 2 },
+  ])).toEqual(["temperature", "humidity", "pm25", "voc"]);
+});
 
 test("new property setup starts with an empty address search", () => {
   render(<MemoryRouter><NewBuildingSetupPanel freshStart isActive /></MemoryRouter>);
