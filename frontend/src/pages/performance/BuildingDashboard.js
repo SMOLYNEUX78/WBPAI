@@ -9146,6 +9146,8 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   const [showNetworkMatches, setShowNetworkMatches] = useState(false);
   const [clearSensorsConfirm, setClearSensorsConfirm] = useState(false);
   const [clearingSensors, setClearingSensors] = useState(false);
+  const [resetSensorId, setResetSensorId] = useState("");
+  const [restoringSensors, setRestoringSensors] = useState(false);
   const [sensorPhotoBusy, setSensorPhotoBusy] = useState(false);
   const sensorVideoRef = useRef(null);
   useEffect(() => {
@@ -10325,7 +10327,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   };
 
   const clearHealthSensors = async () => {
-    if (!clearSensorsConfirm || clearingSensors) return;
+    if (!resetSensorId || clearingSensors) return;
     setClearingSensors(true);
     setSectionSaveStatus("");
     try {
@@ -10337,7 +10339,11 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
         .select("setup_data").eq("building_record_id", recordId).maybeSingle();
       if (readError) throw readError;
       const resetSensors = (Array.isArray(existing?.setup_data?.healthSensors) ? existing.setup_data.healthSensors : healthSensors)
-        .map(({ networkMatch, networkAddress, readingType, sourceBuildingId, lastSampleAt, ...sensor }) => sensor);
+        .map((sensor) => {
+          if (sensor.id !== resetSensorId) return sensor;
+          const { networkMatch, networkAddress, readingType, sourceBuildingId, lastSampleAt, ...scannedDetails } = sensor;
+          return scannedDetails;
+        });
       const setupData = { ...(existing?.setup_data || {}), healthSensors: resetSensors };
       const { error: saveError } = await supabase.from("WBPBuildingSetupDeclarations").upsert({
         building_record_id: recordId, setup_data: setupData, updated_by: auth.user.id,
@@ -10355,11 +10361,59 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       setShowNetworkMatches(false);
       setNetworkInstrumentId("");
       setClearSensorsConfirm(false);
-      setSectionSaveStatus("Sensor connections reset. Scanned device details and historical readings were kept.");
+      setResetSensorId("");
+      setSectionSaveStatus("Connection reset. Scanned device details and historical readings were kept.");
     } catch (error) {
       setSectionSaveStatus(`Could not clear sensors: ${error.message}`);
     } finally {
       setClearingSensors(false);
+    }
+  };
+
+  const restoreSensorsFromTabletScan = async () => {
+    if (restoringSensors) return;
+    setRestoringSensors(true);
+    setSectionSaveStatus("");
+    try {
+      const { data: auth, error: authError } = await supabase.auth.getUser();
+      if (authError || !auth?.user) throw new Error("Sign in again to restore devices.");
+      const recordId = healthRecordId || (await findAccountHomeRecord(supabase, auth.user.id, readSavedHomePassport()?.databaseId))?.data?.id;
+      if (!recordId) throw new Error("Save the home profile before restoring devices.");
+      const { data: job, error: scanError } = await supabase.from("WBPCollectorScanJobs")
+        .select("result").eq("building_record_id", recordId).eq("status", "complete")
+        .order("finished_at", { ascending: false }).limit(1).maybeSingle();
+      if (scanError) throw scanError;
+      const configured = Array.isArray(job?.result?.configuredDevices) ? job.result.configuredDevices : [];
+      if (!configured.length) throw new Error("No configured sensors were found in the tablet's saved scan. Scan their labels again instead.");
+      const { data: existing, error: readError } = await supabase.from("WBPBuildingSetupDeclarations")
+        .select("setup_data").eq("building_record_id", recordId).maybeSingle();
+      if (readError) throw readError;
+      const stored = Array.isArray(existing?.setup_data?.healthSensors) ? existing.setup_data.healthSensors : [];
+      const recovered = configured.filter((device) => device.connector === "dyson" && device.name).map((device, index) => ({
+        id: `tablet-scan-${recordId}-${index}`,
+        manufacturer: "Dyson", model: "", location: device.name.replaceAll("_", " "),
+        serialNumber: device.serial || "", labelCode: "",
+        identificationMethod: "tablet-config-recovery", verificationStatus: "unverified",
+        connectionStatus: "not checked", metrics: [], metricStatus: {},
+      })).filter((device) => !stored.some((sensor) => sensor.id === device.id ||
+        (device.serialNumber && sensor.serialNumber === device.serialNumber)));
+      if (!recovered.length) throw new Error("No new device details could be recovered from the saved scan.");
+      const setupData = { ...(existing?.setup_data || {}), healthSensors: [...stored, ...recovered] };
+      const { error: saveError } = await supabase.from("WBPBuildingSetupDeclarations").upsert({
+        building_record_id: recordId, setup_data: setupData, updated_by: auth.user.id,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "building_record_id" });
+      if (saveError) throw saveError;
+      const recordReference = ownershipRecord?.recordId || billTarget?.record_reference;
+      if (recordReference) window.localStorage.setItem(`${recordReference}:setupSections`, JSON.stringify(setupData));
+      window.dispatchEvent(new CustomEvent("wbp:setup-updated", { detail: { recordId, setupData } }));
+      setHealthSensors(setupData.healthSensors);
+      setHealthSensorsLoadedId(recordId);
+      setSectionSaveStatus(`${recovered.length} device${recovered.length === 1 ? "" : "s"} restored from the tablet scan. Confirm each physical label before matching it to the network.`);
+    } catch (error) {
+      setSectionSaveStatus(`Could not restore devices: ${error.message}`);
+    } finally {
+      setRestoringSensors(false);
     }
   };
 
@@ -10910,16 +10964,13 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
               <div className="mt-4 space-y-2 border-t border-gray-200 pt-4">
                 <div className="flex items-center justify-between gap-3">
                   <h4 className="font-semibold text-sm">Registered Instruments</h4>
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs text-gray-500">{healthSensors.length} registered</span>
-                    {healthSensors.some((sensor) => sensor.networkMatch || sensor.networkAddress || sensor.readingType) ? <button type="button" className="text-xs font-semibold text-emerald-800 underline" onClick={() => setClearSensorsConfirm(true)}>Reset connections</button> : null}
-                  </div>
+                  <span className="text-xs text-gray-500">{healthSensors.length} registered</span>
                 </div>
                 {clearSensorsConfirm ? <div className="border border-red-300 bg-red-50 p-3 text-xs text-red-950" role="group" aria-label="Confirm clear sensors">
-                  <p>Reset network matches and imported/live status? Scanned device details and historical readings will stay.</p>
+                  <p>Reset this device's network match and imported/live status? Its scanned details and historical readings will stay.</p>
                   <div className="mt-2 flex gap-3">
-                    <button type="button" className="border border-emerald-700 bg-emerald-700 px-3 py-2 font-semibold text-white disabled:opacity-50" disabled={clearingSensors} onClick={clearHealthSensors}>{clearingSensors ? "Resetting..." : "Reset connections"}</button>
-                    <button type="button" className="border border-gray-300 bg-white px-3 py-2 font-semibold text-gray-800" disabled={clearingSensors} onClick={() => setClearSensorsConfirm(false)}>Cancel</button>
+                    <button type="button" className="border border-emerald-700 bg-emerald-700 px-3 py-2 font-semibold text-white disabled:opacity-50" disabled={clearingSensors} onClick={clearHealthSensors}>{clearingSensors ? "Resetting..." : "Reset connection"}</button>
+                    <button type="button" className="border border-gray-300 bg-white px-3 py-2 font-semibold text-gray-800" disabled={clearingSensors} onClick={() => { setClearSensorsConfirm(false); setResetSensorId(""); }}>Cancel</button>
                   </div>
                 </div> : null}
                 {pendingLocalSensors.length ? <button type="button" className="border border-amber-700 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-950" onClick={() => {
@@ -10927,7 +10978,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                   setPendingLocalSensors([]);
                   setSectionSaveStatus("Local sensor draft loaded. Review it, then save health monitoring to sync it to your account.");
                 }}>Load {pendingLocalSensors.length} sensor draft{pendingLocalSensors.length === 1 ? "" : "s"} from this device</button> : null}
-                {healthSensors.length === 0 ? <div className="border bg-white p-3 text-xs text-gray-600">No health-data instruments registered yet.</div>
+                {healthSensors.length === 0 ? <div className="space-y-2 border bg-white p-3 text-xs text-gray-600"><p>No health-data instruments registered yet.</p><button type="button" className="border border-emerald-700 bg-white px-3 py-2 font-semibold text-emerald-900 disabled:opacity-50" disabled={restoringSensors} onClick={restoreSensorsFromTabletScan}>{restoringSensors ? "Checking saved scan..." : "Restore devices from tablet scan"}</button></div>
                   : <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">{healthSensors.map((sensor) => <div key={sensor.id} className="min-w-0 border border-gray-300 bg-white p-2 text-xs">
                     <button type="button" className={`w-full min-w-0 border px-2 py-3 text-left transition-colors ${sensor.networkMatch?.importedAt ? "border-emerald-700 bg-emerald-100" : sensorDetailsVisible && sensorDraft.id === sensor.id ? "border-emerald-700 bg-emerald-100" : "border-gray-300 bg-white"}`} onClick={() => {
                       sensorDraftTouchedRef.current = true;
@@ -10939,9 +10990,11 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                     }} aria-label={`Edit ${sensor.manufacturer} ${sensor.model}`}>
                       <strong className="block break-words">{sensor.manufacturer} {sensor.model}</strong>
                       <span className="mt-1 block text-gray-600">{sensor.location || "Room pending"}</span>
+                      {sensor.identificationMethod === "tablet-config-recovery" ? <span className="mt-1 block text-amber-800">Confirm physical label</span> : null}
                       {sensor.networkMatch?.importedAt && Date.now() - Date.parse(sensor.lastSampleAt || "") < 30 * 60 * 1000 ? <span className="mt-1 flex items-center gap-1 font-bold text-red-700"><span className="wbp-live-signal" aria-hidden="true"><i /><i /><i /><b /></span>Live</span> : <span className="mt-1 block text-emerald-800">{sensor.networkMatch?.importedAt ? "Data linked" : sensor.networkMatch ? "Device found" : "Not connected"}</span>}
                       {sensor.networkMatch?.address ? <span className="mt-1 block text-gray-700">IP {sensor.networkMatch.address}</span> : null}
                     </button>
+                    {sensor.networkMatch || sensor.networkAddress || sensor.readingType ? <button type="button" className="mt-2 block text-xs font-semibold text-emerald-800 underline" onClick={() => { setResetSensorId(sensor.id); setClearSensorsConfirm(true); }}>Reset connection</button> : null}
                     {sensor.networkMatch?.importedAt ? null : showNetworkMatches && networkInstrumentId === sensor.id ? <div className="mt-2"><DeviceImportWorkbench isActive={isActive} embedded requestedInstrumentId={sensor.id} /></div> : <button type="button" className="mt-2 w-full border border-emerald-700 bg-white px-2 py-2 text-center font-semibold text-emerald-900" onClick={async () => {
                       const saved = await saveSetupSection();
                       if (!saved) return;

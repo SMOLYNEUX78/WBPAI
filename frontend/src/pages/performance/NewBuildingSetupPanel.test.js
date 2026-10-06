@@ -436,15 +436,49 @@ test("resetting connections keeps scanned instrument details", async () => {
     const dialog = screen.getByRole("dialog", { name: "Edit property profile" });
     fireEvent.click(within(dialog).getByRole("button", { name: "Health monitoring" }));
     expect(await within(dialog).findByRole("button", { name: "Edit Dyson TP02" })).toBeInTheDocument();
-    fireEvent.click(within(dialog).getByRole("button", { name: "Reset connections" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Reset connection" }));
     expect(setupData.healthSensors).toHaveLength(1);
     const confirmation = within(dialog).getByRole("group", { name: "Confirm clear sensors" });
-    fireEvent.click(within(confirmation).getByRole("button", { name: "Reset connections" }));
+    fireEvent.click(within(confirmation).getByRole("button", { name: "Reset connection" }));
     await waitFor(() => expect(within(dialog).getByText(/Scanned device details and historical readings were kept/)).toBeInTheDocument());
     expect(within(dialog).getByRole("button", { name: "Edit Dyson TP02" })).toHaveTextContent("Not connected");
     expect(within(dialog).getByRole("button", { name: "Find on the home network" })).toBeInTheDocument();
     expect(setupData.healthSensors).toEqual([{ id: "sensor-1", manufacturer: "Dyson", model: "TP02", location: "Upstairs", serialNumber: "NN6-UK-HDA1783A" }]);
     expect(setupData.billReview.supplier).toBe("Good Energy");
+  } finally {
+    from.mockRestore();
+    getUser.mockRestore();
+  }
+});
+
+test("an empty profile can restore unverified devices from the saved tablet scan", async () => {
+  let setupData = { healthSensors: [], billReview: { supplier: "Good Energy" } };
+  window.localStorage.setItem("wbp-new-building-passport", JSON.stringify({
+    recordId: "WBP-TEST", databaseId: "home-1", legalOwnerName: "Owner",
+    propertyDiscovery: { address: "14 Bridgewood Road", postcode: "IP12 4HA", uprn: "100091142492" },
+  }));
+  const getUser = jest.spyOn(supabase.auth, "getUser").mockResolvedValue({ data: { user: { id: "owner-1" } }, error: null });
+  const from = jest.spyOn(supabase, "from").mockImplementation((table) => {
+    const chain = { select: () => chain, eq: () => chain, order: () => chain, limit: () => chain,
+      maybeSingle: async () => ({ data: table === "WBPBuildingRecords"
+        ? { id: "home-1", record_reference: "WBP-TEST", custodian_user_id: "owner-1", lifecycle_stage: "occupy" }
+        : table === "WBPCollectorScanJobs" ? { result: { configuredDevices: [
+          { name: "Upstairs", connector: "dyson", serial: "NN6-UK-HDA1783A" },
+          { name: "Living_room", connector: "dyson", serial: "" },
+        ] } } : { setup_data: setupData }, error: null }),
+    };
+    return { select: () => chain, upsert: async (row) => { setupData = row.setup_data; return { error: null }; } };
+  });
+  try {
+    render(<MemoryRouter><NewBuildingSetupPanel editModal syncHomeProfile isActive /></MemoryRouter>);
+    const dialog = screen.getByRole("dialog", { name: "Edit property profile" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Health monitoring" }));
+    fireEvent.click(await within(dialog).findByRole("button", { name: "Restore devices from tablet scan" }));
+    await waitFor(() => expect(setupData.healthSensors).toHaveLength(2));
+    expect(setupData.healthSensors[0]).toMatchObject({ manufacturer: "Dyson", location: "Upstairs", serialNumber: "NN6-UK-HDA1783A", verificationStatus: "unverified" });
+    expect(setupData.healthSensors[1]).toMatchObject({ manufacturer: "Dyson", location: "Living room", model: "", verificationStatus: "unverified" });
+    expect(setupData.billReview.supplier).toBe("Good Energy");
+    expect(within(dialog).getByText(/Confirm each physical label/)).toBeInTheDocument();
   } finally {
     from.mockRestore();
     getUser.mockRestore();
