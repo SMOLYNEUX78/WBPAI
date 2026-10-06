@@ -10228,6 +10228,8 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       }
     });
     return () => { active = false; controls?.stop(); };
+    // Keep the camera session tied to the open state; draft changes should not restart it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sensorScannerOpen]);
 
   const scanSensorPhoto = async (file, knownBarcode = null, knownPoints = null, source = "barcode") => {
