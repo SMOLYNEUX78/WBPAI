@@ -5,7 +5,7 @@ import PrototypeTabs from "./PrototypeTabs";
 test("occupant prototype navigation starts with New and has no design or build tabs", () => {
   render(<MemoryRouter><PrototypeTabs activePath="/dashboard/new" /></MemoryRouter>);
   const tabs = screen.getByRole("navigation", { name: "Prototype pages" });
-  expect(tabs.querySelector("button")).toHaveTextContent("New");
+  expect([...tabs.querySelectorAll("button")].slice(0, 3).map((button) => button.textContent)).toEqual(["New", "Connect", "WBP-001"]);
   expect(screen.queryByRole("button", { name: "Design" })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Build" })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Portfolio" })).not.toBeInTheDocument();
