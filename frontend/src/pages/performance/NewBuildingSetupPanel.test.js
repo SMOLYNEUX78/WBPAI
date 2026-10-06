@@ -385,6 +385,7 @@ test("registered instrument tiles open their edit details", async () => {
   expect(serialInput.closest(".bg-emerald-100")).toHaveClass("border-emerald-700");
   expect(edit.compareDocumentPosition(serialInput) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(within(dialog).getByText(/Editing Dyson TP02/)).toBeInTheDocument();
+  expect(within(dialog).getAllByLabelText("Supporting evidence").some((input) => input.type === "file")).toBe(true);
   fireEvent.change(within(dialog).getByRole("textbox", { name: "Serial / device ID" }), { target: { value: "NN6-UK-HDA1783A" } });
   fireEvent.click(within(dialog).getByRole("button", { name: "Update instrument" }));
   fireEvent.click(within(dialog).getByRole("button", { name: "Edit Dyson TP02" }));

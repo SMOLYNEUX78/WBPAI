@@ -9139,6 +9139,8 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   const [healthSensorsLoadedId, setHealthSensorsLoadedId] = useState(null);
   const [pendingLocalSensors, setPendingLocalSensors] = useState([]);
   const [sensorEvidenceFileName, setSensorEvidenceFileName] = useState("");
+  const [sensorEvidenceBusy, setSensorEvidenceBusy] = useState(false);
+  const [sensorEvidenceStatus, setSensorEvidenceStatus] = useState("");
   const [sensorScanStatus, setSensorScanStatus] = useState("");
   const [sensorScannerOpen, setSensorScannerOpen] = useState(false);
   const [sensorDetailsVisible, setSensorDetailsVisible] = useState(false);
@@ -10299,7 +10301,10 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       if (Object.keys(details).length) {
         sensorDraftTouchedRef.current = true;
         setSensorDetailsVisible(true);
-        setSensorDraft((current) => mergeScannedSensor(current, { ...details, identificationMethod: Object.keys(printedDetails).length ? "label-photo" : barcodeDetails?.identificationMethod || "label-photo" }));
+        setSensorDraft((current) => {
+          const scan = { ...details, identificationMethod: Object.keys(printedDetails).length ? "label-photo" : barcodeDetails?.identificationMethod || "label-photo" };
+          return current.id ? { ...current, ...scan } : mergeScannedSensor(current, scan);
+        });
         setSensorScanStatus(Object.keys(printedDetails).length
           ? "Label details filled in. Check the model and serial against the printed label before adding the instrument."
           : ocrError ? `Barcode captured, but printed-text reading failed: ${ocrError}. Enter the model and serial manually.`
@@ -10324,6 +10329,82 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
     setSensorDraft(registered.healthSensorDraft);
     setSensorDetailsVisible(false);
     setSensorEvidenceFileName(registered.sensorEvidenceFileName);
+  };
+
+  const uploadSensorEvidence = async (file) => {
+    if (!file || !sensorDraft.id || sensorEvidenceBusy) return;
+    if (!["image/jpeg", "image/png", "application/pdf"].includes(file.type) || file.size > 10 * 1024 * 1024) {
+      setSensorEvidenceStatus("Choose a JPG, PNG or PDF no larger than 10 MB.");
+      return;
+    }
+    setSensorEvidenceBusy(true);
+    setSensorEvidenceStatus("Uploading privately...");
+    let path = "";
+    let metadataSaved = false;
+    try {
+      const { data: auth, error: authError } = await supabase.auth.getUser();
+      if (authError || !auth?.user) throw new Error("Sign in again before uploading.");
+      const recordId = healthRecordId || (await findAccountHomeRecord(supabase, auth.user.id, readSavedHomePassport()?.databaseId))?.data?.id;
+      if (!recordId) throw new Error("Save the home profile before uploading sensor evidence.");
+      if (!window.crypto?.subtle) throw new Error("Secure file hashing is unavailable in this browser.");
+      const evidenceType = `sensor-label:${sensorDraft.id}`;
+      const digest = await window.crypto.subtle.digest("SHA-256", await file.arrayBuffer());
+      const hash = Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+      const { data: previous, error: versionError } = await supabase.from("WBPEvidenceVersions")
+        .select("version_number").eq("building_record_id", recordId).eq("evidence_type", evidenceType)
+        .order("version_number", { ascending: false }).limit(1);
+      if (versionError) throw versionError;
+      path = `${auth.user.id}/${recordId}/${window.crypto.randomUUID()}`;
+      const { error: uploadError } = await supabase.storage.from("wbp-private-evidence")
+        .upload(path, file, { contentType: file.type, upsert: false });
+      if (uploadError) throw uploadError;
+      const { data: evidence, error: metadataError } = await supabase.from("WBPEvidenceVersions").insert({
+        building_record_id: recordId, evidence_type: evidenceType, lifecycle_stage: "occupy",
+        version_number: (previous?.[0]?.version_number || 0) + 1,
+        storage_reference: path, evidence_hash: hash, original_file_name: file.name,
+        mime_type: file.type, byte_size: file.size, classification: "occupant-private",
+        assurance_status: "self-declared", submitted_by: auth.user.id,
+      }).select("id,storage_reference,original_file_name").single();
+      if (metadataError) throw metadataError;
+      metadataSaved = true;
+      const { data: existing, error: readError } = await supabase.from("WBPBuildingSetupDeclarations")
+        .select("setup_data").eq("building_record_id", recordId).maybeSingle();
+      if (readError) throw readError;
+      const stored = Array.isArray(existing?.setup_data?.healthSensors) ? existing.setup_data.healthSensors : [];
+      if (!stored.some((sensor) => sensor.id === sensorDraft.id)) throw new Error("Save this instrument to the account before uploading its evidence.");
+      const updated = stored.map((sensor) => sensor.id === sensorDraft.id
+        ? { ...sensor, evidenceFileName: file.name, evidenceId: evidence.id, evidenceStorageReference: evidence.storage_reference }
+        : sensor);
+      const setupData = { ...(existing?.setup_data || {}), healthSensors: updated };
+      const { error: saveError } = await supabase.from("WBPBuildingSetupDeclarations").upsert({
+        building_record_id: recordId, setup_data: setupData, updated_by: auth.user.id,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "building_record_id" });
+      if (saveError) throw saveError;
+      const recordReference = ownershipRecord?.recordId || billTarget?.record_reference;
+      if (recordReference) window.localStorage.setItem(`${recordReference}:setupSections`, JSON.stringify(setupData));
+      window.dispatchEvent(new CustomEvent("wbp:setup-updated", { detail: { recordId, setupData } }));
+      setHealthSensors(updated);
+      setSensorDraft((current) => ({ ...current, evidenceFileName: file.name, evidenceId: evidence.id, evidenceStorageReference: evidence.storage_reference }));
+      setSensorEvidenceFileName(file.name);
+      setSensorEvidenceStatus(`${file.name} uploaded privately to this instrument. It has not been verified.`);
+    } catch (error) {
+      if (path && !metadataSaved) await supabase.storage.from("wbp-private-evidence").remove([path]);
+      setSensorEvidenceStatus(`Upload failed: ${error.message}`);
+    } finally {
+      setSensorEvidenceBusy(false);
+    }
+  };
+
+  const openSensorEvidence = async () => {
+    if (!sensorDraft.evidenceStorageReference) return;
+    const { data, error } = await supabase.storage.from("wbp-private-evidence")
+      .createSignedUrl(sensorDraft.evidenceStorageReference, 60);
+    if (error || !data?.signedUrl) {
+      setSensorEvidenceStatus(`Could not open evidence: ${error?.message || "Link unavailable"}`);
+      return;
+    }
+    window.open(data.signedUrl, "_blank", "noopener,noreferrer");
   };
 
   const clearHealthSensors = async () => {
@@ -11120,15 +11201,17 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                 </label>
                 <label className="space-y-1 text-xs text-gray-600">
                   Supporting evidence
-                  <input
-                    key={sensorEvidenceFileName || "empty-sensor-evidence"}
-                    type="file"
-                    accept=".pdf,.jpg,.jpeg,.png,.csv,application/pdf,image/*,text/csv"
-                    className="block w-full text-xs pt-1"
-                    onChange={(event) =>
-                      setSensorEvidenceFileName(event.target.files?.[0]?.name || "")
-                    }
-                  />
+                  {sensorDraft.id ? <input type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+                    disabled={sensorEvidenceBusy} className="block w-full text-xs pt-1"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (file?.type === "image/jpeg" || file?.type === "image/png") scanSensorPhoto(file);
+                      uploadSensorEvidence(file);
+                    }} />
+                    : <span className="block text-xs text-gray-500">Add and save the instrument first, then reopen it to upload evidence.</span>}
+                  {sensorEvidenceBusy ? <span className="block text-xs">Uploading...</span> : null}
+                  {sensorDraft.evidenceStorageReference ? <button type="button" className="block text-left text-xs text-blue-700 underline" onClick={openSensorEvidence}>View {sensorDraft.evidenceFileName || "uploaded evidence"}</button> : null}
+                  {sensorEvidenceStatus ? <span role="status" className="block text-xs">{sensorEvidenceStatus}</span> : null}
                 </label>
               </div>
 
