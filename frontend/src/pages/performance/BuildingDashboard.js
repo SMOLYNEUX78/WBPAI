@@ -11078,9 +11078,21 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                       setSectionSaveStatus("");
                       requestAnimationFrame(() => sensorSerialInputRef.current?.focus());
                     }} aria-label={`Edit ${sensor.manufacturer} ${sensor.model}`}>
-                      <strong className="block break-words">{sensor.manufacturer} {sensor.model}</strong>
+                      <strong className="block break-words">{sensor.manufacturer} {sensor.model || "Model pending"}</strong>
                       <span className="mt-1 block text-gray-600">{sensor.location || "Room pending"}</span>
-                      {sensor.identificationMethod === "tablet-config-recovery" ? <span className="mt-1 block text-amber-800">Confirm physical label</span> : null}
+                      <span className="mt-2 block border-t border-gray-200 pt-2 text-gray-700">
+                        {[
+                          ["Serial / device ID", sensor.serialNumber || "Pending"],
+                          ["Label code", sensor.labelCode && sensor.labelCode !== sensor.serialNumber ? sensor.labelCode : null],
+                          ["Rated power", sensor.ratedPowerW ? `${sensor.ratedPowerW} W` : "Pending"],
+                          ["Voltage", sensor.ratedVoltage ? `${sensor.ratedVoltage} V` : "Pending"],
+                          ["Frequency", sensor.ratedFrequencyHz ? `${sensor.ratedFrequencyHz} Hz` : "Pending"],
+                          ["Metrics", sensor.metrics?.length ? sensor.metrics.join(", ") : "Pending"],
+                          ["Device grade", sensor.evidenceGrade || "Pending"],
+                          ["Check", sensor.verificationStatus || "Not yet checked"],
+                          ["Evidence", sensor.evidenceStorageReference ? sensor.evidenceFileName || "Uploaded" : "Pending"],
+                        ].filter(([, value]) => value).map(([label, value]) => <span key={label} className="block break-words"><span className="font-semibold">{label}:</span> {value}</span>)}
+                      </span>
                       {sensor.networkMatch?.importedAt && Date.now() - Date.parse(sensor.lastSampleAt || "") < 30 * 60 * 1000 ? <span className="mt-1 flex items-center gap-1 font-bold text-red-700"><span className="wbp-live-signal" aria-hidden="true"><i /><i /><i /><b /></span>Live</span> : <span className="mt-1 block text-emerald-800">{sensor.networkMatch?.importedAt ? "Data linked" : sensor.networkMatch ? "Device found" : "Not connected"}</span>}
                       {sensor.networkMatch?.address ? <span className="mt-1 block text-gray-700">IP {sensor.networkMatch.address}</span> : null}
                     </button>
