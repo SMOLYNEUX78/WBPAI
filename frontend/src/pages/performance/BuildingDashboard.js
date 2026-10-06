@@ -10891,15 +10891,13 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                       {sensor.networkMatch?.importedAt && Date.now() - Date.parse(sensor.lastSampleAt || "") < 30 * 60 * 1000 ? <span className="mt-1 flex items-center gap-1 font-bold text-red-700"><span className="wbp-live-signal" aria-hidden="true"><i /><i /><i /><b /></span>Live</span> : <span className="mt-1 block text-emerald-800">{sensor.networkMatch?.importedAt ? "Data linked" : sensor.networkMatch ? "Device found" : "Not connected"}</span>}
                       {sensor.networkMatch?.address ? <span className="mt-1 block text-gray-700">IP {sensor.networkMatch.address}</span> : null}
                     </button>
-                    <button type="button" aria-expanded={showNetworkMatches && networkInstrumentId === sensor.id} className={`mt-2 w-full border border-emerald-700 px-2 py-2 text-center font-semibold ${showNetworkMatches && networkInstrumentId === sensor.id ? "bg-emerald-700 text-white" : "bg-white text-emerald-900"}`} onClick={async () => {
-                      if (showNetworkMatches && networkInstrumentId === sensor.id) { setShowNetworkMatches(false); return; }
+                    {sensor.networkMatch?.importedAt ? null : showNetworkMatches && networkInstrumentId === sensor.id ? <div className="mt-2"><DeviceImportWorkbench isActive={isActive} embedded requestedInstrumentId={sensor.id} /></div> : <button type="button" className="mt-2 w-full border border-emerald-700 bg-white px-2 py-2 text-center font-semibold text-emerald-900" onClick={async () => {
                       const saved = await saveSetupSection();
                       if (!saved) return;
                       setNetworkInstrumentId(sensor.id);
                       setShowNetworkMatches(true);
                       requestAnimationFrame(() => document.getElementById("wbp-device-network-step")?.scrollIntoView?.({ behavior: "smooth", block: "nearest" }));
-                    }}>{showNetworkMatches && networkInstrumentId === sensor.id ? "Close network matches" : "Find on the home network"}</button>
-                    {showNetworkMatches && networkInstrumentId === sensor.id ? <div className="mt-3 border-t border-emerald-300 pt-3"><DeviceImportWorkbench isActive={isActive} embedded requestedInstrumentId={sensor.id} /></div> : null}
+                    }}>Find on the home network</button>}
                   </div>)}</div>}
               </div>
 
@@ -12687,6 +12685,9 @@ const DeviceImportWorkbench = ({ isActive, embedded = false, requestedInstrument
   </section> : null;
   const autoMatchPending = !selectedMatch && !readingStatus && String(profile?.uprn) === "100091142492" &&
     Boolean(selectedCollector?.readingType) && displayedCandidates.length === 1 && displayedCandidates[0].serialMatch;
+  const progressText = scanBusy ? status || "Scanning the home network..."
+    : matchBusy ? readingStatus || "Confirming this device..."
+      : autoMatchPending ? "Matching the scanned serial to the collector..." : "";
 
   return <div className={embedded ? "w-full min-w-0" : "mx-auto w-full max-w-7xl"}>
     {!embedded ? <header className="grid min-h-[150px] gap-4 border-b border-emerald-200 bg-emerald-100 px-4 py-5 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] sm:px-8">
@@ -12711,7 +12712,7 @@ const DeviceImportWorkbench = ({ isActive, embedded = false, requestedInstrument
         <div className="min-w-0">
           {selectedMatch ? deviceFoundNotice ? <div role="status" className="wbp-device-found border border-emerald-700 bg-emerald-100 px-3 py-2 text-center text-sm font-bold text-emerald-950">Device found</div> : importSection : <>
           {!scanBusy && !autoMatchPending ? <h3 className="text-sm font-bold">Possible matches</h3> : null}
-          {(scanBusy || autoMatchPending || matchBusy) ? <div className="wbp-network-scan-progress mt-2" role="progressbar" aria-label="Loading possible matches" aria-valuetext={scanBusy ? "Scanning the home network" : "Confirming device connection"}><span /></div> : null}
+          {progressText ? <div className="min-h-[44px]"><p role="status" className="mb-2 text-xs text-gray-700">{progressText}</p><div className="wbp-network-scan-progress" role="progressbar" aria-label="Loading possible matches" aria-valuetext={progressText}><span /></div></div> : null}
           {!scanBusy && !autoMatchPending && embedded && status ? <p role="status" className="mt-1 text-xs text-gray-600">{readingStatus ? "Connection needs attention" : status}</p> : null}
           {!scanBusy && !autoMatchPending && displayedCandidates.length ? <div className="mt-2 max-h-56 space-y-2 overflow-y-auto border border-gray-200 p-2">{displayedCandidates.map((candidate) =>
             <button key={candidate.address} type="button" aria-pressed={selected === candidate.address} onClick={() => { setSelected(candidate.address); setTestReading(null); setReadingsOpen(false); setReadingStatus(""); setImportStatus(""); setComparisonConfirmed(false); }}

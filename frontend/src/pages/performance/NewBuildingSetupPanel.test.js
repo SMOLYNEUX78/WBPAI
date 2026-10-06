@@ -435,9 +435,12 @@ test("a device's network button opens possible matches inside its tile", async (
     const dialog = screen.getByRole("dialog", { name: "Edit property profile" });
     fireEvent.click(within(dialog).getByRole("button", { name: "Health monitoring" }));
     const networkButton = await within(dialog).findByRole("button", { name: "Find on the home network" });
+    const instrumentCard = networkButton.parentElement;
     expect(within(dialog).queryByRole("heading", { name: "Possible matches" })).not.toBeInTheDocument();
     fireEvent.click(networkButton);
-    expect(await within(dialog).findByRole("progressbar", { name: "Loading possible matches" })).toBeInTheDocument();
+    expect(await within(instrumentCard).findByRole("progressbar", { name: "Loading possible matches" })).toBeInTheDocument();
+    expect(within(instrumentCard).queryByRole("button", { name: "Find on the home network" })).not.toBeInTheDocument();
+    expect(within(instrumentCard).getByText(/Asking the paired tablet|Tablet is scanning/)).toBeInTheDocument();
     expect(within(dialog).queryByRole("heading", { name: "Possible matches" })).not.toBeInTheDocument();
     expect(within(dialog).queryByRole("button", { name: "Remove tablet pairing" })).not.toBeInTheDocument();
     expect(within(dialog).queryByText("Import a scan file instead")).not.toBeInTheDocument();
@@ -483,12 +486,14 @@ test("an exact serial match becomes a brief confirmation, then imports into a Li
     render(<MemoryRouter><NewBuildingSetupPanel editModal syncHomeProfile isActive /></MemoryRouter>);
     const dialog = screen.getByRole("dialog", { name: "Edit property profile" });
     fireEvent.click(within(dialog).getByRole("button", { name: "Health monitoring" }));
-    fireEvent.click(await within(dialog).findByRole("button", { name: "Find on the home network" }));
-    await waitFor(() => expect(dialog.querySelector(".wbp-device-found")).toHaveTextContent("Device found"));
+    const networkButton = await within(dialog).findByRole("button", { name: "Find on the home network" });
+    const instrumentCard = networkButton.parentElement;
+    fireEvent.click(networkButton);
+    await waitFor(() => expect(instrumentCard.querySelector(".wbp-device-found")).toHaveTextContent("Device found"));
     expect(within(dialog).queryByText("Possible matches")).not.toBeInTheDocument();
     expect(within(dialog).queryByText(/Detected:/)).not.toBeInTheDocument();
-    await waitFor(() => expect(within(dialog).getByRole("button", { name: "Import sensor data" })).toBeInTheDocument(), { timeout: 3000 });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Import sensor data" }));
+    await waitFor(() => expect(within(instrumentCard).getByRole("button", { name: "Import sensor data" })).toBeInTheDocument(), { timeout: 3000 });
+    fireEvent.click(within(instrumentCard).getByRole("button", { name: "Import sensor data" }));
     await waitFor(() => expect(within(dialog).getByRole("button", { name: "Edit Dyson TP02" })).toHaveTextContent("Live"));
     expect(within(dialog).queryByRole("button", { name: "Import sensor data" })).not.toBeInTheDocument();
   } finally {
