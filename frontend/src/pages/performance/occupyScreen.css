@@ -58,16 +58,14 @@
 }
 
 .wbp-setup-overlay > .wbp-occupy-setup-dialog {
-  width: min(100%, 540px);
+  box-sizing: border-box;
+  width: min(100%, 760px);
+  height: min(760px, calc(100dvh - 32px));
   max-height: calc(100dvh - 32px);
   overflow-y: auto;
   background: #fff;
   border-top: 5px solid #047857;
   box-shadow: 0 20px 60px rgb(0 0 0 / 20%);
-}
-
-.wbp-setup-overlay > .wbp-occupy-setup-dialog--health {
-  width: min(100%, 980px);
 }
 
 .wbp-occupy-setup-heading {
@@ -96,7 +94,7 @@
 
 @media (max-width: 640px) {
   .wbp-setup-overlay.wbp-setup-overlay { place-items: end center; padding: 0; }
-  .wbp-setup-overlay > .wbp-occupy-setup-dialog { width: 100%; max-height: 92dvh; }
+  .wbp-setup-overlay > .wbp-occupy-setup-dialog { width: 100%; height: 92dvh; max-height: 92dvh; }
   .wbp-occupy-setup-heading { padding: 18px 18px 0; }
   .wbp-setup-overlay #new-building-panel { padding: 14px 18px 22px; }
 }
