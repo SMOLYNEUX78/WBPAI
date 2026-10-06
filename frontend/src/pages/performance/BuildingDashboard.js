@@ -9152,6 +9152,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   const [restoringSensors, setRestoringSensors] = useState(false);
   const [sensorPhotoBusy, setSensorPhotoBusy] = useState(false);
   const sensorVideoRef = useRef(null);
+  const sensorPhotoInputRef = useRef(null);
   useEffect(() => {
     if (!syncHomeProfile || !isolatedDraft) return undefined;
     let active = true;
@@ -10212,10 +10213,10 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
     return () => { active = false; controls?.stop(); };
   }, [sensorScannerOpen]);
 
-  const scanSensorPhoto = async (file, knownBarcode = null, knownPoints = null) => {
+  const scanSensorPhoto = async (file, knownBarcode = null, knownPoints = null, source = "barcode") => {
     if (!file) return;
     setSensorPhotoBusy(true);
-    setSensorScanStatus(knownBarcode ? "Barcode captured. Reading printed label..." : "Reading barcode and printed label...");
+    setSensorScanStatus(source === "photo" ? "Photo: reading barcode and printed label..." : knownBarcode ? "Barcode captured. Reading printed label..." : "Reading barcode and printed label...");
     const imageUrl = URL.createObjectURL(file);
     try {
       let barcodeDetails = knownBarcode;
@@ -10306,15 +10307,15 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
           return current.id ? { ...current, ...scan } : mergeScannedSensor(current, scan);
         });
         setSensorScanStatus(Object.keys(printedDetails).length
-          ? "Label details filled in. Check the model and serial against the printed label before adding the instrument."
-          : ocrError ? `Barcode captured, but printed-text reading failed: ${ocrError}. Enter the model and serial manually.`
-            : "Barcode captured, but the printed details were not clear. Try a closer photo of the label, or enter the model and serial manually.");
+          ? `${source === "photo" ? "Photo" : "Camera"}: label details filled in. Check the model and serial against the printed label before saving.`
+          : ocrError ? `${source === "photo" ? "Photo" : "Camera"}: barcode captured, but printed-text reading failed: ${ocrError}. Enter the model and serial manually.`
+            : `${source === "photo" ? "Photo" : "Camera"}: barcode captured, but the printed details were not clear. Try a closer photo of the label, or enter the model and serial manually.`);
       } else {
-        setSensorScanStatus(ocrError ? `Printed-text reading failed: ${ocrError}. Try again or enter the details manually.`
-          : "No readable label details found. Try a closer photo of the label in good light, or enter the printed details manually.");
+        setSensorScanStatus(ocrError ? `${source === "photo" ? "Photo" : "Camera"}: printed-text reading failed: ${ocrError}. Try again or enter the details manually.`
+          : `${source === "photo" ? "Photo" : "Camera"}: no readable label details found. Try a closer photo of the label in good light, or enter the printed details manually.`);
       }
     } catch {
-      setSensorScanStatus("Could not read that photo. Try a sharper photo or enter the printed details manually.");
+      setSensorScanStatus(`${source === "photo" ? "Photo" : "Camera"}: could not read the image. Try a sharper photo or enter the printed details manually.`);
     } finally {
       URL.revokeObjectURL(imageUrl);
       setSensorPhotoBusy(false);
@@ -11029,11 +11030,19 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
 
             <div className="border rounded p-3 bg-gray-50 space-y-3">
               <div>
-                <button type="button" title="Reads QR or barcode and nearby printed label; does not connect the sensor" className="mt-2 border border-emerald-700 bg-white px-3 py-2 text-xs font-semibold text-emerald-950"
+                <div className="flex flex-wrap gap-2">
+                <button type="button" title="Reads QR or barcode and nearby printed label; does not connect the sensor" className="border border-emerald-700 bg-white px-3 py-2 text-xs font-semibold text-emerald-950"
                   onClick={() => {
                     if (!navigator.mediaDevices?.getUserMedia) { setSensorScanStatus("Camera access is unavailable here. Open WBP over HTTPS or enter details manually."); setSensorDetailsVisible(true); return; }
                     setSensorScanStatus(""); setSensorScannerOpen(true);
                   }}>Scan QR or barcode</button>
+                <button type="button" disabled={sensorPhotoBusy} className="border border-emerald-700 bg-white px-3 py-2 text-xs font-semibold text-emerald-950 disabled:opacity-50" onClick={() => sensorPhotoInputRef.current?.click()}>Scan photo</button>
+                <input ref={sensorPhotoInputRef} type="file" accept="image/*" className="hidden" aria-label="Choose sensor label photo" onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) scanSensorPhoto(file, null, null, "photo");
+                  event.target.value = "";
+                }} />
+                </div>
                 {sensorPhotoBusy ? <p className="mt-1 text-xs text-gray-600">Reading printed label...</p> : null}
                 {sensorScanStatus ? <p role="status" className="mt-1 text-xs text-gray-700">{sensorScanStatus}</p> : null}
                 {sensorScannerOpen ? <div className="mt-2 space-y-2 border border-emerald-300 bg-gray-900 p-2">

@@ -55,6 +55,11 @@ test("Connect opens the shared Health Monitoring editor with matching collapsed"
   expect(within(dialog).getByRole("button", { name: "Health monitoring" })).toHaveAttribute("aria-current", "step");
   expect(within(dialog).getByRole("heading", { name: "1. Scan monitoring device" })).toBeInTheDocument();
   expect(within(dialog).getByRole("button", { name: "Scan QR or barcode" })).toBeInTheDocument();
+  expect(within(dialog).getByRole("button", { name: "Scan photo" })).toBeInTheDocument();
+  const photoInput = within(dialog).getByLabelText("Choose sensor label photo");
+  const openPicker = jest.spyOn(photoInput, "click");
+  fireEvent.click(within(dialog).getByRole("button", { name: "Scan photo" }));
+  expect(openPicker).toHaveBeenCalledTimes(1);
   expect(within(dialog).queryByRole("textbox", { name: "Serial / device ID" })).not.toBeInTheDocument();
   expect(within(dialog).queryByRole("heading", { name: "2. Find it on the home network" })).not.toBeInTheDocument();
   getUser.mockRestore();
