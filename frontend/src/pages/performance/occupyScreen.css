@@ -79,7 +79,7 @@
 
 .wbp-setup-overlay > .wbp-occupy-setup-dialog {
   box-sizing: border-box;
-  width: min(100%, 760px);
+  width: min(100%, 720px);
   height: min(760px, calc(100dvh - 32px));
   max-height: calc(100dvh - 32px);
   overflow-y: auto;
