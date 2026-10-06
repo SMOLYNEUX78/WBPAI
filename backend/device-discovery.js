@@ -1,0 +1,95 @@
+const dgram = require("dgram");
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
+require("dotenv").config();
+const { SERVICE_ENUMERATION, dnsQuery, ptrRecords, ssdpHeaders } = require("./device-discovery-protocols");
+
+const DURATION_MS = 6000;
+const OUTPUT = path.join(__dirname, "logs", "device-discovery.json");
+
+function localAddresses() {
+  return Object.values(os.networkInterfaces()).flat()
+    .filter((item) => item && item.family === "IPv4" && !item.internal)
+    .map((item) => item.address);
+}
+
+function configuredDevices() {
+  return (process.env.DYSON_DEVICES || "").split(",").filter(Boolean).map((entry) => {
+    const [name, address] = entry.split(":");
+    return { name, address, connector: "dyson", state: "configured, not verified by this scan" };
+  }).filter((item) => item.name && item.address);
+}
+
+function discover() {
+  const candidates = new Map();
+  const serviceTypes = new Set();
+  const sockets = [];
+  let mdns;
+
+  function record(address, method, detail) {
+    if (!address) return;
+    const candidate = candidates.get(address) || { address, signals: [] };
+    if (!candidate.signals.some((item) => item.method === method && item.detail === detail)) {
+      candidate.signals.push({ method, detail });
+    }
+    candidates.set(address, candidate);
+  }
+
+  function startSocket(label, target, port, payload, onMessage) {
+    const socket = dgram.createSocket("udp4");
+    sockets.push(socket);
+    socket.on("error", (error) => console.warn(`[discovery] ${label}: ${error.message}`));
+    socket.on("message", onMessage);
+    socket.bind(0, () => {
+      socket.send(payload, port, target, (error) => {
+        if (error) console.warn(`[discovery] ${label}: ${error.message}`);
+      });
+    });
+    return socket;
+  }
+
+  const ssdpRequest = Buffer.from([
+    "M-SEARCH * HTTP/1.1", "HOST: 239.255.255.250:1900", 'MAN: "ssdp:discover"',
+    "MX: 2", "ST: ssdp:all", "", "",
+  ].join("\r\n"));
+  startSocket("SSDP", "239.255.255.250", 1900, ssdpRequest, (packet, peer) => {
+    const headers = ssdpHeaders(packet);
+    if (headers) record(peer.address, "ssdp", headers.usn || headers.st || headers.server || "advertised service");
+  });
+
+  mdns = startSocket("mDNS", "224.0.0.251", 5353, dnsQuery(SERVICE_ENUMERATION), (packet, peer) => {
+    for (const { owner, target } of ptrRecords(packet)) {
+      if (owner.toLowerCase() === SERVICE_ENUMERATION && serviceTypes.size < 40) serviceTypes.add(target);
+      else if (owner.startsWith("_") && owner.endsWith(".local")) record(peer.address, "mdns", target);
+    }
+  });
+
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      for (const service of serviceTypes) {
+        try { mdns.send(dnsQuery(service), 5353, "224.0.0.251"); } catch { /* closed network */ }
+      }
+    }, 1800);
+    setTimeout(() => {
+      sockets.forEach((socket) => socket.close());
+      resolve({ scannedAt: new Date().toISOString(), tabletAddresses: localAddresses(),
+        configuredDevices: configuredDevices(), candidates: [...candidates.values()].sort((a, b) => a.address.localeCompare(b.address)),
+        note: "Advertisement inventory only. Presence does not grant access to sensor readings or prove device identity." });
+    }, DURATION_MS);
+  });
+}
+
+async function main() {
+  const report = await discover();
+  fs.mkdirSync(path.dirname(OUTPUT), { recursive: true });
+  const temporary = `${OUTPUT}.${process.pid}.tmp`;
+  fs.writeFileSync(temporary, JSON.stringify(report, null, 2), { mode: 0o600 });
+  fs.renameSync(temporary, OUTPUT);
+  console.log(`Found ${report.candidates.length} advertised network address(es).`);
+  console.log(`Report: ${OUTPUT}`);
+  console.log(report.note);
+}
+
+if (require.main === module) main().catch((error) => { console.error(error.message); process.exitCode = 1; });
+module.exports = { discover, configuredDevices };

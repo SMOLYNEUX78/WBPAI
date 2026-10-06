@@ -163,6 +163,28 @@ MILESIGHT_POLL_INTERVAL_MS=60000
 
 Home Dyson purifier IAQ:
 
+### Read-only device discovery pilot
+
+The tablet can inventory devices that *advertise* mDNS/DNS-SD or SSDP services
+without changing any running collectors. On the home tablet, update the checkout
+and run:
+
+```sh
+cd ~/WBPAI
+git pull origin main
+cd backend
+npm run discover:devices
+```
+
+The local report is `backend/logs/device-discovery.json`. It is ignored by Git
+and is not sent to Supabase. Run the command while the tablet and sensors are on
+the same home Wi-Fi. No router login or collector restart is needed. The report
+lists advertised network addresses and devices already configured in the Dyson
+collector (without passwords). A missing device may simply not advertise these
+protocols; a discovered address is not evidence that its readings are accessible.
+This pilot does not pair, reconfigure, or automatically collect from new devices.
+
+
 For a new Dyson device, run `python backend/dyson-discover.py` on the home
 collector tablet while it is connected to the same Wi-Fi as the purifier.
 Install `libdyson-rest` locally first if it is missing. The command requests

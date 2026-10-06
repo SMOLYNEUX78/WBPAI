@@ -17,6 +17,7 @@
     "start:dashboard-summary": "node dashboard-summary-calculator.js --schedule",
     "start:milesight": "node milesight-handler.js",
     "start:dyson": "node dyson-handler.js",
+    "discover:devices": "node device-discovery.js",
     "start:thingsboard": "node thingsboard-handler.js"
   },
   "dependencies": {
