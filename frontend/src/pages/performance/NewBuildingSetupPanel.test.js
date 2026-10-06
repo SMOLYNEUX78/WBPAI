@@ -407,6 +407,8 @@ test("a recently linked instrument shows its network address and Live status", a
   const instrument = await within(dialog).findByRole("button", { name: "Edit Dyson TP02" });
   expect(instrument).toHaveTextContent("Live");
   expect(instrument).toHaveTextContent("IP 192.168.1.144");
+  expect(instrument).toHaveClass("bg-emerald-100");
+  expect(instrument.querySelector(".wbp-live-signal")).toBeInTheDocument();
 });
 
 test("a device's network button opens possible matches inside its tile", async () => {
@@ -435,11 +437,60 @@ test("a device's network button opens possible matches inside its tile", async (
     const networkButton = await within(dialog).findByRole("button", { name: "Find on the home network" });
     expect(within(dialog).queryByRole("heading", { name: "Possible matches" })).not.toBeInTheDocument();
     fireEvent.click(networkButton);
-    expect(await within(dialog).findByRole("heading", { name: "Possible matches" })).toBeInTheDocument();
     expect(await within(dialog).findByRole("progressbar", { name: "Loading possible matches" })).toBeInTheDocument();
+    expect(within(dialog).queryByRole("heading", { name: "Possible matches" })).not.toBeInTheDocument();
     expect(within(dialog).queryByRole("button", { name: "Remove tablet pairing" })).not.toBeInTheDocument();
     expect(within(dialog).queryByText("Import a scan file instead")).not.toBeInTheDocument();
     expect(within(dialog).queryByRole("heading", { name: "2. Find it on the home network" })).not.toBeInTheDocument();
+  } finally {
+    from.mockRestore();
+    getUser.mockRestore();
+  }
+});
+
+test("an exact serial match becomes a brief confirmation, then imports into a Live instrument", async () => {
+  const now = new Date().toISOString();
+  const sensor = { id: "sensor-1", manufacturer: "Dyson", model: "TP02", location: "Upstairs",
+    serialNumber: "NN6-UK-HDA1783A", metrics: [], connectionMethod: "manual" };
+  let setupData = { healthSensors: [sensor] };
+  const scan = { scannedAt: now, tabletAddresses: [], configuredDevices: [{
+    name: "Upstairs", address: "192.168.1.144", connector: "dyson",
+    serial: sensor.serialNumber, readingType: "dyson:upstairs",
+  }], candidates: [{ address: "192.168.1.144", signals: [{ method: "tcp", detail: "Port 1883 open" }] }] };
+  window.localStorage.setItem("wbp-new-building-passport", JSON.stringify({
+    recordId: "WBP-TEST", databaseId: "home-1", legalOwnerName: "Owner",
+    propertyDiscovery: { address: "14 Bridgewood Road", postcode: "IP12 4HA", uprn: "100091142492", confirmedAt: now },
+  }));
+  window.localStorage.setItem("WBP-TEST:setupSections", JSON.stringify(setupData));
+  const getUser = jest.spyOn(supabase.auth, "getUser").mockResolvedValue({ data: { user: { id: "owner-1" } }, error: null });
+  const from = jest.spyOn(supabase, "from").mockImplementation((table) => {
+    const chain = {
+      select: () => chain, eq: () => chain, order: () => chain, limit: () => chain, gte: () => chain,
+      then: (resolve) => Promise.resolve({ data: table === "WBPCollectorDevices" ? [{ id: "tablet-1", label: "Home tablet" }]
+        : table === "Readings" ? [{ timestamp: now, temperature_inside: 20, humidity: 45, pm25: 2 }] : [], error: null }).then(resolve),
+      single: async () => ({ data: { id: "scan-job-1" }, error: null }),
+      maybeSingle: async () => ({ data: table === "WBPBuildingRecords"
+        ? { id: "home-1", record_reference: "WBP-TEST", uprn: "100091142492", custodian_user_id: "owner-1" }
+        : table === "WBPBuildingSetupDeclarations" ? { setup_data: setupData }
+          : table === "WBPCollectorScanJobs" ? { status: "complete", result: scan } : null, error: null }),
+    };
+    return { select: () => chain, insert: () => chain, upsert: async (payload) => {
+      if (table === "WBPBuildingSetupDeclarations") setupData = payload.setup_data;
+      return { error: null };
+    } };
+  });
+  try {
+    render(<MemoryRouter><NewBuildingSetupPanel editModal syncHomeProfile isActive /></MemoryRouter>);
+    const dialog = screen.getByRole("dialog", { name: "Edit property profile" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Health monitoring" }));
+    fireEvent.click(await within(dialog).findByRole("button", { name: "Find on the home network" }));
+    await waitFor(() => expect(dialog.querySelector(".wbp-device-found")).toHaveTextContent("Device found"));
+    expect(within(dialog).queryByText("Possible matches")).not.toBeInTheDocument();
+    expect(within(dialog).queryByText(/Detected:/)).not.toBeInTheDocument();
+    await waitFor(() => expect(within(dialog).getByRole("button", { name: "Import sensor data" })).toBeInTheDocument(), { timeout: 3000 });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Import sensor data" }));
+    await waitFor(() => expect(within(dialog).getByRole("button", { name: "Edit Dyson TP02" })).toHaveTextContent("Live"));
+    expect(within(dialog).queryByRole("button", { name: "Import sensor data" })).not.toBeInTheDocument();
   } finally {
     from.mockRestore();
     getUser.mockRestore();

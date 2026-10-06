@@ -9144,7 +9144,6 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   const [sensorDetailsVisible, setSensorDetailsVisible] = useState(false);
   const [networkInstrumentId, setNetworkInstrumentId] = useState("");
   const [showNetworkMatches, setShowNetworkMatches] = useState(false);
-  const [healthImportTarget, setHealthImportTarget] = useState(null);
   const [sensorPhotoBusy, setSensorPhotoBusy] = useState(false);
   const sensorVideoRef = useRef(null);
   useEffect(() => {
@@ -10879,7 +10878,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                 }}>Load {pendingLocalSensors.length} sensor draft{pendingLocalSensors.length === 1 ? "" : "s"} from this device</button> : null}
                 {healthSensors.length === 0 ? <div className="border bg-white p-3 text-xs text-gray-600">No health-data instruments registered yet.</div>
                   : <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">{healthSensors.map((sensor) => <div key={sensor.id} className="min-w-0 border border-gray-300 bg-white p-2 text-xs">
-                    <button type="button" className={`w-full min-w-0 border px-2 py-3 text-left ${sensorDetailsVisible && sensorDraft.id === sensor.id ? "border-emerald-700 bg-emerald-100" : "border-gray-300 bg-white"}`} onClick={() => {
+                    <button type="button" className={`w-full min-w-0 border px-2 py-3 text-left transition-colors ${sensor.networkMatch?.importedAt ? "border-emerald-700 bg-emerald-100" : sensorDetailsVisible && sensorDraft.id === sensor.id ? "border-emerald-700 bg-emerald-100" : "border-gray-300 bg-white"}`} onClick={() => {
                       sensorDraftTouchedRef.current = true;
                       setSensorDetailsVisible(true);
                       setSensorDraft({ ...emptySensorDraft(), ...sensor });
@@ -10889,7 +10888,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                     }} aria-label={`Edit ${sensor.manufacturer} ${sensor.model}`}>
                       <strong className="block break-words">{sensor.manufacturer} {sensor.model}</strong>
                       <span className="mt-1 block text-gray-600">{sensor.location || "Room pending"}</span>
-                      <span className="mt-1 block text-emerald-800">{sensor.networkMatch?.importedAt && Date.now() - Date.parse(sensor.lastSampleAt || "") < 30 * 60 * 1000 ? "Live" : sensor.networkMatch?.importedAt ? "Data linked" : sensor.networkMatch ? "Device found" : "Not connected"}</span>
+                      {sensor.networkMatch?.importedAt && Date.now() - Date.parse(sensor.lastSampleAt || "") < 30 * 60 * 1000 ? <span className="mt-1 flex items-center gap-1 font-bold text-red-700"><span className="wbp-live-signal" aria-hidden="true"><i /><i /><i /><b /></span>Live</span> : <span className="mt-1 block text-emerald-800">{sensor.networkMatch?.importedAt ? "Data linked" : sensor.networkMatch ? "Device found" : "Not connected"}</span>}
                       {sensor.networkMatch?.address ? <span className="mt-1 block text-gray-700">IP {sensor.networkMatch.address}</span> : null}
                     </button>
                     <button type="button" aria-expanded={showNetworkMatches && networkInstrumentId === sensor.id} className={`mt-2 w-full border border-emerald-700 px-2 py-2 text-center font-semibold ${showNetworkMatches && networkInstrumentId === sensor.id ? "bg-emerald-700 text-white" : "bg-white text-emerald-900"}`} onClick={async () => {
@@ -10900,7 +10899,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                       setShowNetworkMatches(true);
                       requestAnimationFrame(() => document.getElementById("wbp-device-network-step")?.scrollIntoView?.({ behavior: "smooth", block: "nearest" }));
                     }}>{showNetworkMatches && networkInstrumentId === sensor.id ? "Close network matches" : "Find on the home network"}</button>
-                    {showNetworkMatches && networkInstrumentId === sensor.id ? <div className="mt-3 border-t border-emerald-300 pt-3"><DeviceImportWorkbench isActive={isActive} embedded requestedInstrumentId={sensor.id} importTarget={healthImportTarget} /></div> : null}
+                    {showNetworkMatches && networkInstrumentId === sensor.id ? <div className="mt-3 border-t border-emerald-300 pt-3"><DeviceImportWorkbench isActive={isActive} embedded requestedInstrumentId={sensor.id} /></div> : null}
                   </div>)}</div>}
               </div>
 
@@ -11071,7 +11070,6 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
               }}>Remove instrument</button> : null}
               </div> : null}
             </div>
-            <div ref={setHealthImportTarget} />
             <div className="flex flex-wrap items-center justify-end gap-3 border-t border-gray-200 pt-3">
               {sectionSaveStatus ? <span role="status" className="text-xs text-gray-600">{sectionSaveStatus}</span> : null}
               <button type="button" onClick={() => saveSetupSection()} className="bg-emerald-700 px-4 py-2 text-sm font-bold text-white">Save health monitoring</button>
@@ -12280,7 +12278,7 @@ const ExchangeDashboardPanel = ({ homeValue = null }) => {
   );
 };
 
-const DeviceImportWorkbench = ({ isActive, embedded = false, requestedInstrumentId = "", importTarget = null }) => {
+const DeviceImportWorkbench = ({ isActive, embedded = false, requestedInstrumentId = "" }) => {
   const navigate = useNavigate();
   const [profile, setProfile] = useState(null);
   const [scan, setScan] = useState(null);
@@ -12301,10 +12299,16 @@ const DeviceImportWorkbench = ({ isActive, embedded = false, requestedInstrument
   const [matchBusy, setMatchBusy] = useState(false);
   const [importBusy, setImportBusy] = useState(false);
   const [importStatus, setImportStatus] = useState("");
+  const [deviceFoundNotice, setDeviceFoundNotice] = useState(false);
   const [availableMetrics, setAvailableMetrics] = useState([]);
   const [metricsStatus, setMetricsStatus] = useState("");
   const autoScanRequestedRef = useRef(false);
   const autoMatchAttemptRef = useRef("");
+  useEffect(() => {
+    if (!deviceFoundNotice) return undefined;
+    const timer = setTimeout(() => setDeviceFoundNotice(false), 1400);
+    return () => clearTimeout(timer);
+  }, [deviceFoundNotice]);
   const clearWorkbench = () => {
     setScanJobId(null);
     setScanBusy(false);
@@ -12316,6 +12320,7 @@ const DeviceImportWorkbench = ({ isActive, embedded = false, requestedInstrument
     setComparisonConfirmed(false);
     setReadingStatus("");
     setImportStatus("");
+    setDeviceFoundNotice(false);
     setStatus("Comparison cleared. Saved physical devices and confirmed matches remain on the property.");
   };
 
@@ -12577,6 +12582,7 @@ const DeviceImportWorkbench = ({ isActive, embedded = false, requestedInstrument
       const recordKey = profile.record_reference ? `${profile.record_reference}:setupSections` : "";
       if (recordKey) window.localStorage.setItem(recordKey, JSON.stringify(setupData));
       window.dispatchEvent(new CustomEvent("wbp:setup-updated", { detail: { recordId: profile.id, setupData } }));
+      setDeviceFoundNotice(true);
       setReadingStatus(serialsAgree
         ? "IP-to-device match saved to this property. The network address may change; the scanned serial remains the device identity."
         : "Reading comparison saved as a provisional match. The scanned and collector serials differ; correct the instrument serial and recheck before relying on this link for audit.");
@@ -12673,13 +12679,14 @@ const DeviceImportWorkbench = ({ isActive, embedded = false, requestedInstrument
     saveSerialMatch();
   }, [isActive, displayedCandidates, selectedInstrumentId, selected, selectedMatch, matchBusy, selectedInstrument, scan?.scannedAt, saveSerialMatch]);
 
-  const importSection = (!embedded || selectedMatch) ? <section className="mt-4 border-t border-gray-200 pt-4">
-    {selectedMatch && availableMetrics.length ? <p className="mb-2 text-sm text-gray-700">Detected: {availableMetrics.map((metric) => metric === "pm25" ? "PM2.5" : metric.toUpperCase()).join(", ")}</p> : null}
-    {metricsStatus ? <p role="status" className="mb-2 text-sm text-gray-600">{metricsStatus}</p> : null}
-    {selectedMatch ? <button type="button" onClick={importMatchedData} disabled={importBusy || !availableMetrics.length} className="border border-emerald-700 bg-emerald-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{importBusy ? "Importing..." : "Import sensor data"}</button> : null}
+  const importSection = selectedMatch && !selectedMatch.importedAt ? <section className="mt-2">
+    <button type="button" onClick={importMatchedData} disabled={importBusy || !availableMetrics.length} className="w-full border border-emerald-700 bg-emerald-700 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">{importBusy ? "Importing..." : "Import sensor data"}</button>
     {importBusy ? <div className="wbp-network-scan-progress mt-2" role="progressbar" aria-label="Linking sensor data to Supabase" aria-valuetext="Waiting for Supabase to confirm"><span /></div> : null}
+    {metricsStatus ? <p role="status" className="mt-2 text-xs text-gray-700">{metricsStatus}</p> : null}
     {importStatus ? <p role="status" className="mt-2 text-sm text-gray-700">{importStatus}</p> : null}
   </section> : null;
+  const autoMatchPending = !selectedMatch && !readingStatus && String(profile?.uprn) === "100091142492" &&
+    Boolean(selectedCollector?.readingType) && displayedCandidates.length === 1 && displayedCandidates[0].serialMatch;
 
   return <div className={embedded ? "w-full min-w-0" : "mx-auto w-full max-w-7xl"}>
     {!embedded ? <header className="grid min-h-[150px] gap-4 border-b border-emerald-200 bg-emerald-100 px-4 py-5 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] sm:px-8">
@@ -12702,20 +12709,22 @@ const DeviceImportWorkbench = ({ isActive, embedded = false, requestedInstrument
           </div>
         </div> : null}
         <div className="min-w-0">
-          <h3 className="text-sm font-bold">Possible matches</h3>
-          {embedded && (status || selectedMatch) ? <p role="status" className="mt-1 text-xs text-gray-600">{selectedMatch ? "Device found" : readingStatus ? "Connection needs attention" : matchBusy || (displayedCandidates.length === 1 && displayedCandidates[0].serialMatch) ? "Checking device..." : status}</p> : null}
-          {scanBusy ? <div className="wbp-network-scan-progress mt-2" role="progressbar" aria-label="Loading possible matches" aria-valuetext="Scanning the home network"><span /></div> : null}
-          {displayedCandidates.length ? <div className="mt-2 max-h-56 space-y-2 overflow-y-auto border border-gray-200 p-2">{displayedCandidates.map((candidate) =>
+          {selectedMatch ? deviceFoundNotice ? <div role="status" className="wbp-device-found border border-emerald-700 bg-emerald-100 px-3 py-2 text-center text-sm font-bold text-emerald-950">Device found</div> : importSection : <>
+          {!scanBusy && !autoMatchPending ? <h3 className="text-sm font-bold">Possible matches</h3> : null}
+          {(scanBusy || autoMatchPending || matchBusy) ? <div className="wbp-network-scan-progress mt-2" role="progressbar" aria-label="Loading possible matches" aria-valuetext={scanBusy ? "Scanning the home network" : "Confirming device connection"}><span /></div> : null}
+          {!scanBusy && !autoMatchPending && embedded && status ? <p role="status" className="mt-1 text-xs text-gray-600">{readingStatus ? "Connection needs attention" : status}</p> : null}
+          {!scanBusy && !autoMatchPending && displayedCandidates.length ? <div className="mt-2 max-h-56 space-y-2 overflow-y-auto border border-gray-200 p-2">{displayedCandidates.map((candidate) =>
             <button key={candidate.address} type="button" aria-pressed={selected === candidate.address} onClick={() => { setSelected(candidate.address); setTestReading(null); setReadingsOpen(false); setReadingStatus(""); setImportStatus(""); setComparisonConfirmed(false); }}
               className={`block w-full min-w-0 border p-2 text-left text-xs ${candidate.serialMatch ? "border-emerald-600 bg-emerald-100" : selected === candidate.address ? "border-emerald-700 bg-emerald-50" : "border-gray-300 bg-white"}`}>
               <strong>{candidate.address}</strong>
               <span className="block break-words text-xs text-gray-600">{candidate.serialMatch ? "Serial matches selected device" : candidate.suggested ? `Collector room suggests ${candidate.configured.name}` : candidate.compatible ? "Dyson collector; serial not matched" : candidate.kind}</span>
-            </button>)}</div> : <p className="mt-2 text-sm text-gray-600">{selectedInstrument ? "No scan loaded yet." : "Select a physical device first."}</p>}
-          {selectedDevice && selectedInstrument && !selectedMatch ? <div className="mt-3 flex flex-wrap gap-2">
+            </button>)}</div> : !scanBusy && !autoMatchPending ? <p className="mt-2 text-sm text-gray-600">{selectedInstrument ? "No scan loaded yet." : "Select a physical device first."}</p> : null}
+          {selectedDevice && selectedInstrument ? <div className="mt-3 flex flex-wrap gap-2">
             {serialsAgree && (autoMatchAttemptRef.current !== `${selectedInstrumentId}:${scan?.scannedAt}:${selected}` || (!matchBusy && Boolean(readingStatus))) ? <button type="button" disabled={matchBusy} onClick={saveSerialMatch} className="border border-emerald-700 bg-emerald-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{matchBusy ? "Saving..." : "Retry match"}</button> : null}
             {!serialsAgree ? <button type="button" disabled={!canIdentify || !selectedCollector?.readingType || readingBusy} onClick={reviewCandidate} className="border border-emerald-700 bg-white px-4 py-2 text-sm font-semibold text-emerald-900 disabled:opacity-50">{readingBusy ? "Checking..." : "Check readings against device app"}</button> : null}
           </div> : null}
-          {!selectedMatch && !readingsOpen && readingStatus ? <p role="status" className="mt-3 text-xs text-gray-700">{readingStatus}</p> : null}
+          {!readingsOpen && readingStatus ? <p role="status" className="mt-3 text-xs text-gray-700">{readingStatus}</p> : null}
+          </>}
         </div>
         {readingsOpen ? <div className="wbp-device-readings min-w-0 border border-emerald-200 bg-emerald-50 p-3 text-xs">
           <div className="flex items-start justify-between gap-2"><h3 className="text-sm font-bold">Device app comparison</h3><button type="button" onClick={() => { setReadingsOpen(false); setTestReading(null); setComparisonConfirmed(false); }} aria-label="Close readings" className="px-2 text-lg leading-none" title="Close readings">&times;</button></div>
@@ -12740,7 +12749,6 @@ const DeviceImportWorkbench = ({ isActive, embedded = false, requestedInstrument
       {pairingToken ? <div className="mt-4 border border-emerald-200 bg-emerald-50 p-4 text-sm"><p className="font-semibold">Tablet pairing code</p><code className="mt-2 block break-all">{pairingToken}</code><button type="button" onClick={() => navigator.clipboard?.writeText(pairingToken)} className="mt-2 border border-emerald-700 bg-white px-3 py-1.5 font-semibold">Copy code</button><p className="mt-3">In Termux, run <code>sh ~/WBPAI/scripts/termux-pair-device-scan.sh</code> and paste this code when asked. It is shown only now; do not share it.</p></div> : null}
       {collectorDevices.length > 1 ? <label className="mt-3 block text-xs text-gray-600">Tablet<select value={collectorDeviceId} onChange={(event) => setCollectorDeviceId(event.target.value)} className="ml-2 border bg-white p-2">{collectorDevices.map((device) => <option key={device.id} value={device.id}>{device.label} · {device.last_seen_at ? "online recently" : "not checked in"}</option>)}</select></label> : null}
       {!embedded && status ? <p role="status" className="mt-3 text-sm text-gray-700">{status}</p> : null}
-      {embedded ? importTarget && importSection ? createPortal(importSection, importTarget) : null : importSection}
     </div>
   </div>;
 };
