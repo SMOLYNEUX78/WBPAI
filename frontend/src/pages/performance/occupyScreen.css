@@ -66,6 +66,10 @@
   box-shadow: 0 20px 60px rgb(0 0 0 / 20%);
 }
 
+.wbp-setup-overlay > .wbp-occupy-setup-dialog--health {
+  width: min(100%, 980px);
+}
+
 .wbp-occupy-setup-heading {
   display: flex;
   align-items: flex-start;

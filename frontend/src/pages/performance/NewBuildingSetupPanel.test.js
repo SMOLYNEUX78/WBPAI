@@ -41,6 +41,17 @@ test("existing property editing stays in a jumpable dialog", () => {
   expect(onClose).toHaveBeenCalledTimes(1);
 });
 
+test("Connect opens the shared Health Monitoring editor at scan, match and import", () => {
+  const getUser = jest.spyOn(supabase.auth, "getUser").mockResolvedValue({ data: { user: null }, error: null });
+  render(<MemoryRouter><NewBuildingSetupPanel editModal initialEditStep={6} isActive /></MemoryRouter>);
+  const dialog = screen.getByRole("dialog", { name: "Edit property profile" });
+  expect(within(dialog).getByRole("button", { name: "Health monitoring" })).toHaveAttribute("aria-current", "step");
+  expect(within(dialog).getByRole("heading", { name: "1. Scan monitoring device" })).toBeInTheDocument();
+  expect(within(dialog).getByRole("heading", { name: "2. Find it on the home network" })).toBeInTheDocument();
+  expect(within(dialog).getByRole("heading", { name: "3. Import sensor data" })).toBeInTheDocument();
+  getUser.mockRestore();
+});
+
 test("single-home exchange cache uses the CC summary and leaves missing values pending", () => {
   expect(readCachedBridgewoodValue()).toEqual({ credits: null, savedKwh: null, energyValue: null, savedKgCo2e: null });
   window.localStorage.setItem("home:carbonIntervalSavingsSummary:v4", JSON.stringify({

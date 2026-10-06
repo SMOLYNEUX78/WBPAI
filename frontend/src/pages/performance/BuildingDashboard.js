@@ -8816,7 +8816,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
   );
 };
 
-export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = false, isActive = false, editModal = false, onClose }) => {
+export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = false, isActive = false, editModal = false, initialEditStep = 1, onClose }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const isolatedDraft = freshStart;
@@ -8824,11 +8824,11 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   const importedCandidate = editModal ? new URLSearchParams(location.search).get("candidate") : null;
   const importedInstrument = editModal ? new URLSearchParams(location.search).get("instrument") : null;
   const fromConnect = Boolean(importedStream || importedCandidate || importedInstrument);
-  const [setupTab, setSetupTab] = useState(fromConnect ? "health" : "ownership");
+  const [setupTab, setSetupTab] = useState(fromConnect || initialEditStep === 6 ? "health" : "ownership");
   const [historyStage, setHistoryStage] = useState("audit");
   const [showSetupOverlay, setShowSetupOverlay] = useState(freshStart || editModal);
   const [editingOwnership, setEditingOwnership] = useState(editModal);
-  const [editStep, setEditStep] = useState(fromConnect ? 6 : 1);
+  const [editStep, setEditStep] = useState(fromConnect ? 6 : initialEditStep);
   const selectEditSection = (step) => {
     setEditStep(step);
     setSetupTab(({ 4: "measurements", 5: "energy", 6: "health" })[step] || "ownership");
@@ -10451,7 +10451,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       </section> : null}
       <PortalWhen active={overlayVisible}>
       <section className={`mx-4 mb-4 bg-gray-100 p-4 shadow ${overlayVisible ? `wbp-setup-overlay ${setupOverlayExiting ? "wbp-setup-overlay--exiting" : ""}` : ""}`} role={overlayVisible ? "dialog" : undefined} aria-modal={overlayVisible ? "true" : undefined} aria-label={overlayVisible ? editModal ? "Edit property profile" : "Let's set up your home" : undefined}>
-      <div className={overlayVisible ? "wbp-occupy-setup-dialog" : undefined}>
+      <div className={overlayVisible ? `wbp-occupy-setup-dialog ${editModal && setupTab === "health" ? "wbp-occupy-setup-dialog--health" : ""}` : undefined}>
       {historyStage === "audit" ? <>
       {showSetupOverlay ? <><div className="wbp-occupy-setup-heading"><div><span>Occupy · {editModal ? "Edit profile" : `${ownershipRecord ? 3 : propertyDiscovery?.confirmedAt ? 2 : 1} of 3`}</span><h2>{editModal ? "Edit property profile" : "Let’s set up your home"}</h2></div><button type="button" onClick={() => { if (editModal) onClose?.(); else { setShowSetupOverlay(false); navigate("/dashboard/home"); } }} className="wbp-occupy-setup-close" aria-label="Close setup" title="Close setup">&times;</button></div>{editModal ? <nav className="mx-6 mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3" aria-label="Profile edit steps">{[[1, "Property"], [2, "Owner details"], [3, "Evidence"], [4, "3D model"], [5, "Energy monitoring"], [6, "Health monitoring"]].map(([step, label]) => <button key={step} type="button" onClick={() => selectEditSection(step)} aria-current={editStep === step ? "step" : undefined} className={`border px-2 py-2 text-xs font-semibold ${editStep === step ? "border-emerald-700 bg-emerald-50 text-emerald-950" : "border-gray-300 text-gray-700"}`}>{label}</button>)}</nav> : null}</> : null}
       <header className={`border-b border-gray-300 ${showSetupOverlay ? "hidden" : ""}`}>
@@ -10892,11 +10892,11 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
 
           <div className="bg-white rounded border p-4 space-y-4" style={{ display: setupTab === "health" ? undefined : "none" }}>
             <div>
-              <h3 className="font-semibold mb-2">Health Data</h3>
+              <h3 className="font-semibold mb-2">1. Scan monitoring device</h3>
             </div>
 
-            <div className="border rounded p-3 bg-gray-50 space-y-3">
-              <h4 className="font-semibold text-sm">1. Find online devices</h4>
+            <details className="border rounded p-3 bg-gray-50 space-y-3">
+              <summary className="cursor-pointer text-sm font-semibold">Find an existing collector stream instead</summary>
               <p className="text-xs text-gray-600">Find supported sensors already reporting through the tablet collector. Only the Bridgewood pilot is connected for now; other properties need their own collector. Network devices without a supported data connection will not appear here yet.</p>
               <button type="button" disabled={dysonStreamBusy} onClick={findDysonStreams} className="border border-emerald-700 bg-white px-3 py-2 text-xs font-semibold text-emerald-900 disabled:opacity-50">{dysonStreamBusy ? "Finding devices..." : "Find devices"}</button>
               {dysonStreamStatus ? <p className="text-xs text-gray-700" role="status">{dysonStreamStatus}</p> : null}
@@ -10910,11 +10910,11 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                 <span className="block font-semibold text-emerald-800">{sensorDraft.readingType === stream.type ? "Selected for setup" : "Select device"}</span>
               </button>)}</div> : null}
               {sensorDraft.readingType ? <p className="text-xs text-emerald-900">Selected: {dysonStreamLabel(sensorDraft.readingType)}. Confirm its physical label and room below before adding it to the profile.</p> : null}
-            </div>
+            </details>
 
             <div className="border rounded p-3 bg-gray-50 space-y-3">
               <div>
-                <h4 className="font-semibold text-sm">2. Confirm the physical device</h4>
+                <h4 className="font-semibold text-sm">Scan or enter the physical label</h4>
                 <button type="button" title="Reads QR or barcode and nearby printed label; does not connect the sensor" className="mt-2 border border-emerald-700 bg-white px-3 py-2 text-xs font-semibold text-emerald-950"
                   onClick={() => {
                     if (!navigator.mediaDevices?.getUserMedia) { setSensorScanStatus("Camera access is unavailable here. Open WBP over HTTPS or enter details manually."); return; }
@@ -11059,7 +11059,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
               </div>
 
               <div className="space-y-2 border-t pt-3">
-                <h4 className="font-semibold text-sm">3. Connect and validate</h4>
+                <h4 className="font-semibold text-sm">Connection details</h4>
                 {sensorDraft.networkAddress ? <p className="text-xs text-emerald-900">Network candidate: {sensorDraft.networkAddress}. Identifying this device does not connect it to a collector.</p> : null}
                 <div className="grid gap-2 sm:grid-cols-2">
                   <label className="text-xs text-gray-600">Connection route
@@ -11087,7 +11087,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
 
               <fieldset className="space-y-2">
                 <legend className="text-xs font-semibold text-gray-700">
-                  4. Metrics to validate
+                  Metrics to validate
                 </legend>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {healthMetricOptions.map(([value, label]) => (
@@ -11208,7 +11208,12 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                 ))
               )}
             </div>
+            <div className="flex flex-wrap items-center justify-end gap-3 border-t border-gray-200 pt-3">
+              {sectionSaveStatus ? <span role="status" className="text-xs text-gray-600">{sectionSaveStatus}</span> : null}
+              <button type="button" onClick={() => saveSetupSection()} className="bg-emerald-700 px-4 py-2 text-sm font-bold text-white">Save health monitoring</button>
+            </div>
           </div>
+          {setupTab === "health" ? <DeviceImportWorkbench isActive={isActive} embedded /> : null}
         </div>
 
       </div>
@@ -11289,7 +11294,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
 
       </div>
       </div>
-      {setupTab !== "ownership" ? <div className="mt-4 flex items-center justify-end gap-3 border-t border-gray-200 pt-4"><span role="status" className="text-xs text-gray-600">{sectionSaveStatus === `${setupTab} saved on this device` ? "Saved on this device" : sectionSaveStatus === `${setupTab} saved to account` ? "Saved to account" : (sectionSaveStatus.startsWith("Save failed:") || (setupTab === "health" && (sectionSaveStatus.startsWith("Saved only") || sectionSaveStatus.startsWith("Local sensor draft")))) ? sectionSaveStatus : ""}</span><button type="button" onClick={() => saveSetupSection()} className="bg-emerald-700 px-4 py-2 text-sm font-bold text-white">Save {setupTab === "measurements" ? "3D model" : setupTab === "energy" ? "energy monitoring" : "health monitoring"}</button></div> : null}
+      {setupTab !== "ownership" && setupTab !== "health" ? <div className="mt-4 flex items-center justify-end gap-3 border-t border-gray-200 pt-4"><span role="status" className="text-xs text-gray-600">{sectionSaveStatus === `${setupTab} saved on this device` ? "Saved on this device" : sectionSaveStatus === `${setupTab} saved to account` ? "Saved to account" : sectionSaveStatus.startsWith("Save failed:") ? sectionSaveStatus : ""}</span><button type="button" onClick={() => saveSetupSection()} className="bg-emerald-700 px-4 py-2 text-sm font-bold text-white">Save {setupTab === "measurements" ? "3D model" : "energy monitoring"}</button></div> : null}
       </div>
       </div>
       </> : <div ref={setupPanelRef} className="overflow-hidden"><div ref={setupContentRef}>
@@ -12412,7 +12417,7 @@ const ExchangeDashboardPanel = ({ homeValue = null }) => {
   );
 };
 
-const DeviceImportWorkbench = ({ isActive }) => {
+const DeviceImportWorkbench = ({ isActive, embedded = false }) => {
   const navigate = useNavigate();
   const [profile, setProfile] = useState(null);
   const [scan, setScan] = useState(null);
@@ -12487,6 +12492,19 @@ const DeviceImportWorkbench = ({ isActive }) => {
     loadProfile();
     return () => { active = false; };
   }, [isActive]);
+  useEffect(() => {
+    if (!isActive || !profile?.id) return undefined;
+    const syncInstruments = (event) => {
+      if (event.detail?.recordId !== profile.id) return;
+      const instruments = event.detail?.setupData?.healthSensors;
+      if (Array.isArray(instruments)) {
+        setPhysicalDevices(instruments);
+        setSelectedInstrumentId((current) => instruments.some((item) => item.id === current) ? current : instruments[0]?.id || "");
+      }
+    };
+    window.addEventListener("wbp:setup-updated", syncInstruments);
+    return () => window.removeEventListener("wbp:setup-updated", syncInstruments);
+  }, [isActive, profile?.id]);
 
   const pairTablet = async () => {
     if (!profile) return;
@@ -12759,18 +12777,18 @@ const DeviceImportWorkbench = ({ isActive }) => {
     await persistMatch({ method: "collector-serial-and-recent-reading", stream: selectedCollector.readingType, rows: data });
   };
 
-  return <main className="mx-auto w-full max-w-7xl">
-    <header className="grid min-h-[150px] gap-4 border-b border-emerald-200 bg-emerald-100 px-4 py-5 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] sm:px-8">
+  return <div className={embedded ? "w-full min-w-0" : "mx-auto w-full max-w-7xl"}>
+    {!embedded ? <header className="grid min-h-[150px] gap-4 border-b border-emerald-200 bg-emerald-100 px-4 py-5 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] sm:px-8">
       <div><p className="text-xs font-bold uppercase text-emerald-900">Property profile</p><h1 className="mt-1 text-lg font-bold text-emerald-950">{profile?.address?.address || "New property"}</h1><p className="mt-1 text-sm text-emerald-900">{profile?.address?.postcode || "Complete New to add an address"}</p><p className="mt-2 text-xs text-emerald-900">{profile ? `UPRN ${profile.uprn || "pending"}` : "No saved property yet"}</p></div>
       <div className="grid grid-cols-3 gap-2 self-end text-center text-xs"><div className="border-t border-emerald-500 pt-2"><strong className="block">1. Scan</strong>Physical label</div><div className="border-t border-emerald-500 pt-2"><strong className="block">2. Match</strong>Network device</div><div className="border-t border-emerald-500 pt-2"><strong className="block">3. Import</strong>Sensor data</div></div>
-    </header>
-    <div className="px-4 py-6 sm:px-8">
-      <section className="border-b border-gray-200 pb-5"><h2 className="text-base font-bold">1. Scan the physical device</h2><p className="mt-1 text-sm text-gray-600">Record its label and room first. A network address alone cannot identify it.</p>
+    </header> : null}
+    <div className={embedded ? "min-w-0" : "px-4 py-6 sm:px-8"}>
+      {!embedded ? <section className="border-b border-gray-200 pb-5"><h2 className="text-base font-bold">1. Scan the physical device</h2><p className="mt-1 text-sm text-gray-600">Record its label and room first. A network address alone cannot identify it.</p>
         {physicalDevices.length ? <div className="mt-3 grid gap-2 sm:grid-cols-2">{physicalDevices.map((instrument) => <button key={instrument.id} type="button" onClick={() => { setSelectedInstrumentId(instrument.id); setSelected(""); setTestReading(null); setReadingsOpen(false); setReadingStatus(""); setImportStatus(""); setComparisonConfirmed(false); }} aria-pressed={selectedInstrumentId === instrument.id} className={`border p-3 text-left text-sm ${selectedInstrumentId === instrument.id ? "border-emerald-700 bg-emerald-50" : "border-gray-300 bg-white"}`}><strong>{instrument.manufacturer} {instrument.model}</strong><span className="block text-xs text-gray-600">{instrument.location || "Room pending"} · {instrument.serialNumber || instrument.labelCode || "Label pending"}</span>{instrument.networkMatch ? <span className="mt-1 block text-xs text-emerald-900">Customer-matched to {instrument.networkMatch.stream} at {instrument.networkMatch.address}</span> : null}</button>)}</div> : <p className="mt-3 text-sm text-gray-600">No physical devices saved to this property yet.</p>}
         {selectedInstrument ? <button type="button" onClick={() => navigate(`/dashboard/home?edit=health&instrument=${encodeURIComponent(selectedInstrument.id)}`)} className="mt-3 border border-gray-400 bg-white px-3 py-2 text-sm font-semibold">Edit selected instrument</button> : null}
         <button type="button" onClick={() => navigate("/dashboard/home?edit=health&instrument=new")} className="mt-3 border border-emerald-700 bg-white px-3 py-2 text-sm font-semibold text-emerald-900">Scan or add a device label</button>
-      </section>
-      <section className={`wbp-device-match-grid mt-5 border-b border-gray-200 pb-5 ${readingsOpen ? "wbp-device-match-grid--readings" : ""}`}>
+      </section> : null}
+      <section className={`wbp-device-match-grid border-b border-gray-200 pb-5 ${readingsOpen ? "wbp-device-match-grid--readings" : ""} ${embedded ? "" : "mt-5"}`}>
         <div>
           <h2 className="text-base font-bold">2. Find it on the home network</h2>
           <p className="mt-1 max-w-2xl text-sm text-gray-600">Select a physical device above, then scan for network matches.</p>
@@ -12829,7 +12847,7 @@ const DeviceImportWorkbench = ({ isActive }) => {
         {importStatus ? <p role="status" className="mt-2 text-sm text-gray-700">{importStatus}</p> : null}
       </section>
     </div>
-  </main>;
+  </div>;
 };
 
 const BuildingDashboard = () => {
@@ -12985,7 +13003,7 @@ const BuildingDashboard = () => {
                 {building.setupOnly ? (
                   <NewBuildingSetupPanel key={new URLSearchParams(location.search).get("record") === "existing" ? "existing" : "fresh"} freshStart={new URLSearchParams(location.search).get("record") !== "existing"} syncHomeProfile isActive={isActiveSlide} />
                 ) : building.connectOnly ? (
-                  <DeviceImportWorkbench isActive={isActiveSlide} />
+                  <NewBuildingSetupPanel editModal initialEditStep={6} syncHomeProfile isActive={isActiveSlide} onClose={() => openSectionById("home")} />
                 ) : building.portfolioOnly ? (
                   <PortfolioDashboardPanel
                     bridgewoodTokens={bridgewoodTokens}
