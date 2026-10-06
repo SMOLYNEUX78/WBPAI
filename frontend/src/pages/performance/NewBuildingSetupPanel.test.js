@@ -391,6 +391,24 @@ test("registered instrument tiles open their edit details", async () => {
   expect(within(dialog).getByRole("textbox", { name: "Serial / device ID" })).toHaveValue("NN6-UK-HDA1783A");
 });
 
+test("a recently linked instrument shows its network address and Live status", async () => {
+  const now = new Date().toISOString();
+  window.localStorage.setItem("wbp-new-building-passport", JSON.stringify({
+    recordId: "WBP-TEST", databaseId: "home-1", legalOwnerName: "Owner",
+    propertyDiscovery: { address: "14 Bridgewood Road", postcode: "IP12 4HA", uprn: "100091142492", confirmedAt: now },
+  }));
+  window.localStorage.setItem("WBP-TEST:setupSections", JSON.stringify({ healthSensors: [{
+    id: "sensor-1", manufacturer: "Dyson", model: "TP02", location: "Upstairs", lastSampleAt: now,
+    networkMatch: { address: "192.168.1.144", importedAt: now },
+  }] }));
+  render(<MemoryRouter><NewBuildingSetupPanel editModal syncHomeProfile isActive /></MemoryRouter>);
+  const dialog = screen.getByRole("dialog", { name: "Edit property profile" });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Health monitoring" }));
+  const instrument = await within(dialog).findByRole("button", { name: "Edit Dyson TP02" });
+  expect(instrument).toHaveTextContent("Live");
+  expect(instrument).toHaveTextContent("IP 192.168.1.144");
+});
+
 test("a device's network button opens possible matches inside its tile", async () => {
   const sensor = { id: "sensor-1", manufacturer: "Dyson", model: "TP02", location: "Upstairs", metrics: [], connectionMethod: "manual" };
   window.localStorage.setItem("wbp-new-building-passport", JSON.stringify({

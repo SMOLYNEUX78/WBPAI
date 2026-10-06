@@ -9144,6 +9144,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   const [sensorDetailsVisible, setSensorDetailsVisible] = useState(false);
   const [networkInstrumentId, setNetworkInstrumentId] = useState("");
   const [showNetworkMatches, setShowNetworkMatches] = useState(false);
+  const [healthImportTarget, setHealthImportTarget] = useState(null);
   const [sensorPhotoBusy, setSensorPhotoBusy] = useState(false);
   const sensorVideoRef = useRef(null);
   useEffect(() => {
@@ -10888,7 +10889,8 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                     }} aria-label={`Edit ${sensor.manufacturer} ${sensor.model}`}>
                       <strong className="block break-words">{sensor.manufacturer} {sensor.model}</strong>
                       <span className="mt-1 block text-gray-600">{sensor.location || "Room pending"}</span>
-                      <span className="mt-1 block text-emerald-800">{sensor.networkMatch?.importedAt ? "Data linked" : sensor.networkMatch ? "Network matched" : "Not connected"}</span>
+                      <span className="mt-1 block text-emerald-800">{sensor.networkMatch?.importedAt && Date.now() - Date.parse(sensor.lastSampleAt || "") < 30 * 60 * 1000 ? "Live" : sensor.networkMatch?.importedAt ? "Data linked" : sensor.networkMatch ? "Device found" : "Not connected"}</span>
+                      {sensor.networkMatch?.address ? <span className="mt-1 block text-gray-700">IP {sensor.networkMatch.address}</span> : null}
                     </button>
                     <button type="button" aria-expanded={showNetworkMatches && networkInstrumentId === sensor.id} className={`mt-2 w-full border border-emerald-700 px-2 py-2 text-center font-semibold ${showNetworkMatches && networkInstrumentId === sensor.id ? "bg-emerald-700 text-white" : "bg-white text-emerald-900"}`} onClick={async () => {
                       if (showNetworkMatches && networkInstrumentId === sensor.id) { setShowNetworkMatches(false); return; }
@@ -10898,7 +10900,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                       setShowNetworkMatches(true);
                       requestAnimationFrame(() => document.getElementById("wbp-device-network-step")?.scrollIntoView?.({ behavior: "smooth", block: "nearest" }));
                     }}>{showNetworkMatches && networkInstrumentId === sensor.id ? "Close network matches" : "Find on the home network"}</button>
-                    {showNetworkMatches && networkInstrumentId === sensor.id ? <div className="mt-3 border-t border-emerald-300 pt-3"><DeviceImportWorkbench isActive={isActive} embedded requestedInstrumentId={sensor.id} /></div> : null}
+                    {showNetworkMatches && networkInstrumentId === sensor.id ? <div className="mt-3 border-t border-emerald-300 pt-3"><DeviceImportWorkbench isActive={isActive} embedded requestedInstrumentId={sensor.id} importTarget={healthImportTarget} /></div> : null}
                   </div>)}</div>}
               </div>
 
@@ -11069,6 +11071,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
               }}>Remove instrument</button> : null}
               </div> : null}
             </div>
+            <div ref={setHealthImportTarget} />
             <div className="flex flex-wrap items-center justify-end gap-3 border-t border-gray-200 pt-3">
               {sectionSaveStatus ? <span role="status" className="text-xs text-gray-600">{sectionSaveStatus}</span> : null}
               <button type="button" onClick={() => saveSetupSection()} className="bg-emerald-700 px-4 py-2 text-sm font-bold text-white">Save health monitoring</button>
@@ -12277,7 +12280,7 @@ const ExchangeDashboardPanel = ({ homeValue = null }) => {
   );
 };
 
-const DeviceImportWorkbench = ({ isActive, embedded = false, requestedInstrumentId = "" }) => {
+const DeviceImportWorkbench = ({ isActive, embedded = false, requestedInstrumentId = "", importTarget = null }) => {
   const navigate = useNavigate();
   const [profile, setProfile] = useState(null);
   const [scan, setScan] = useState(null);
@@ -12607,6 +12610,11 @@ const DeviceImportWorkbench = ({ isActive, embedded = false, requestedInstrument
       setImportBusy(false);
       return;
     }
+    if (!readings[0].timestamp || Date.now() - Date.parse(readings[0].timestamp) > 30 * 60 * 1000) {
+      setImportStatus("No recent readings from this sensor. Check the tablet collector before linking it as live.");
+      setImportBusy(false);
+      return;
+    }
     const importedAt = new Date().toISOString();
     const observedMetrics = observedSensorMetrics(readings);
     if (!observedMetrics.length) {
@@ -12665,6 +12673,14 @@ const DeviceImportWorkbench = ({ isActive, embedded = false, requestedInstrument
     saveSerialMatch();
   }, [isActive, displayedCandidates, selectedInstrumentId, selected, selectedMatch, matchBusy, selectedInstrument, scan?.scannedAt, saveSerialMatch]);
 
+  const importSection = (!embedded || selectedMatch) ? <section className="mt-4 border-t border-gray-200 pt-4">
+    {selectedMatch && availableMetrics.length ? <p className="mb-2 text-sm text-gray-700">Detected: {availableMetrics.map((metric) => metric === "pm25" ? "PM2.5" : metric.toUpperCase()).join(", ")}</p> : null}
+    {metricsStatus ? <p role="status" className="mb-2 text-sm text-gray-600">{metricsStatus}</p> : null}
+    {selectedMatch ? <button type="button" onClick={importMatchedData} disabled={importBusy || !availableMetrics.length} className="border border-emerald-700 bg-emerald-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{importBusy ? "Importing..." : "Import sensor data"}</button> : null}
+    {importBusy ? <div className="wbp-network-scan-progress mt-2" role="progressbar" aria-label="Linking sensor data to Supabase" aria-valuetext="Waiting for Supabase to confirm"><span /></div> : null}
+    {importStatus ? <p role="status" className="mt-2 text-sm text-gray-700">{importStatus}</p> : null}
+  </section> : null;
+
   return <div className={embedded ? "w-full min-w-0" : "mx-auto w-full max-w-7xl"}>
     {!embedded ? <header className="grid min-h-[150px] gap-4 border-b border-emerald-200 bg-emerald-100 px-4 py-5 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] sm:px-8">
       <div><p className="text-xs font-bold uppercase text-emerald-900">Property profile</p><h1 className="mt-1 text-lg font-bold text-emerald-950">{profile?.address?.address || "New property"}</h1><p className="mt-1 text-sm text-emerald-900">{profile?.address?.postcode || "Complete New to add an address"}</p><p className="mt-2 text-xs text-emerald-900">{profile ? `UPRN ${profile.uprn || "pending"}` : "No saved property yet"}</p></div>
@@ -12687,7 +12703,7 @@ const DeviceImportWorkbench = ({ isActive, embedded = false, requestedInstrument
         </div> : null}
         <div className="min-w-0">
           <h3 className="text-sm font-bold">Possible matches</h3>
-          {embedded && status ? <p role="status" className="mt-1 text-xs text-gray-600">{status}</p> : null}
+          {embedded && (status || selectedMatch) ? <p role="status" className="mt-1 text-xs text-gray-600">{selectedMatch ? "Device found" : readingStatus ? "Connection needs attention" : matchBusy || (displayedCandidates.length === 1 && displayedCandidates[0].serialMatch) ? "Checking device..." : status}</p> : null}
           {scanBusy ? <div className="wbp-network-scan-progress mt-2" role="progressbar" aria-label="Loading possible matches" aria-valuetext="Scanning the home network"><span /></div> : null}
           {displayedCandidates.length ? <div className="mt-2 max-h-56 space-y-2 overflow-y-auto border border-gray-200 p-2">{displayedCandidates.map((candidate) =>
             <button key={candidate.address} type="button" aria-pressed={selected === candidate.address} onClick={() => { setSelected(candidate.address); setTestReading(null); setReadingsOpen(false); setReadingStatus(""); setImportStatus(""); setComparisonConfirmed(false); }}
@@ -12724,18 +12740,7 @@ const DeviceImportWorkbench = ({ isActive, embedded = false, requestedInstrument
       {pairingToken ? <div className="mt-4 border border-emerald-200 bg-emerald-50 p-4 text-sm"><p className="font-semibold">Tablet pairing code</p><code className="mt-2 block break-all">{pairingToken}</code><button type="button" onClick={() => navigator.clipboard?.writeText(pairingToken)} className="mt-2 border border-emerald-700 bg-white px-3 py-1.5 font-semibold">Copy code</button><p className="mt-3">In Termux, run <code>sh ~/WBPAI/scripts/termux-pair-device-scan.sh</code> and paste this code when asked. It is shown only now; do not share it.</p></div> : null}
       {collectorDevices.length > 1 ? <label className="mt-3 block text-xs text-gray-600">Tablet<select value={collectorDeviceId} onChange={(event) => setCollectorDeviceId(event.target.value)} className="ml-2 border bg-white p-2">{collectorDevices.map((device) => <option key={device.id} value={device.id}>{device.label} · {device.last_seen_at ? "online recently" : "not checked in"}</option>)}</select></label> : null}
       {!embedded && status ? <p role="status" className="mt-3 text-sm text-gray-700">{status}</p> : null}
-      {scan ? <p className="mt-2 text-xs text-gray-500">Scanned {new Date(scan.scannedAt).toLocaleString()}. Paired scans are saved privately to this property in Supabase. A network scan may miss devices that do not respond; a complete router client list requires router-specific access.</p> : null}
-      {(!embedded || selectedMatch) ? <section className="mt-5 border-t border-gray-200 pt-5">
-        <h2 className="text-base font-bold">{embedded ? "Import sensor data" : "3. Import sensor data"}</h2>
-        <p className="mt-1 text-sm text-gray-600">All supported readings from the matched sensor are linked to this property. Existing collector data stays in Supabase.</p>
-        {!selectedMatch ? <p className="mt-3 text-sm text-gray-600">Connect a network device above to enable import.</p> : null}
-        {selectedMatch && availableMetrics.length ? <p className="mt-3 text-sm text-gray-700">Detected: {availableMetrics.map((metric) => metric === "pm25" ? "PM2.5" : metric.toUpperCase()).join(", ")}</p> : null}
-        {metricsStatus ? <p role="status" className="mt-2 text-sm text-gray-600">{metricsStatus}</p> : null}
-        {selectedMatch ? <button type="button" onClick={importMatchedData} disabled={importBusy || !availableMetrics.length} className="mt-3 border border-emerald-700 bg-emerald-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{importBusy ? "Importing..." : selectedMatch.importedAt ? "Update sensor data" : "Import sensor data"}</button> : null}
-        {importBusy ? <div className="wbp-network-scan-progress mt-2" role="progressbar" aria-label="Linking sensor data to Supabase" aria-valuetext="Waiting for Supabase to confirm"><span /></div> : null}
-        {selectedMatch?.importedAt ? <p className="mt-2 text-xs text-emerald-900">Linked {new Date(selectedMatch.importedAt).toLocaleString()}</p> : null}
-        {importStatus ? <p role="status" className="mt-2 text-sm text-gray-700">{importStatus}</p> : null}
-      </section> : null}
+      {embedded ? importTarget && importSection ? createPortal(importSection, importTarget) : null : importSection}
     </div>
   </div>;
 };
