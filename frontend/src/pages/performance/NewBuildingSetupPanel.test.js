@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router-dom";
-import { NewBuildingSetupPanel, OccupyHistoryTabs, ProfileSummaryColumns, addressLines, decodeSensorLabel, parseSensorLabelText, mergeScannedSensor, registerSensorDraft, findAccountHomeRecord, findHomeProfileForOverwrite, readCachedBridgewoodValue } from "./BuildingDashboard";
+import { NewBuildingSetupPanel, OccupyHistoryTabs, ProfileSummaryColumns, addressLines, decodeSensorLabel, parseSensorLabelText, mergeScannedSensor, selectDysonStream, registerSensorDraft, findAccountHomeRecord, findHomeProfileForOverwrite, readCachedBridgewoodValue } from "./BuildingDashboard";
 import supabase from "../../supabaseClient";
 
 beforeEach(() => window.localStorage.clear());
@@ -309,6 +309,15 @@ test("scanning another sensor clears the previous room and connection details", 
   expect(mergeScannedSensor(previous, { labelCode: "DOWNSTAIRS-1", ratedPowerW: "58" })).toMatchObject({
     location: "Downstairs living room", connectionMethod: "dyson", ratedPowerW: "58",
   });
+});
+
+test("discovery-first selection survives the first physical label scan", () => {
+  const selected = selectDysonStream({ connectionMethod: "manual", readingType: "" }, {
+    type: "dyson:living_room", timestamp: "2026-10-06T10:00:00Z",
+  });
+  expect(selected).toMatchObject({ manufacturer: "Dyson", connectionMethod: "dyson", readingType: "dyson:living_room", sourceBuildingId: "home" });
+  const scanned = mergeScannedSensor(selected, { model: "TP02", serialNumber: "NN6-UK-HDA1783A" });
+  expect(scanned).toMatchObject({ model: "TP02", serialNumber: "NN6-UK-HDA1783A", readingType: "dyson:living_room", sourceBuildingId: "home" });
 });
 
 test("complete scans register once while incomplete scans remain drafts", () => {

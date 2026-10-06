@@ -96,8 +96,19 @@ export const addressLines = (address, postcode) => {
 export const mergeScannedSensor = (current, scanned) => {
   const previousIdentity = sensorIdentity(current);
   const nextIdentity = sensorIdentity(scanned);
-  return { ...(previousIdentity && nextIdentity && previousIdentity === nextIdentity ? current : emptySensorDraft()), ...scanned };
+  const sameDevice = previousIdentity && nextIdentity && previousIdentity === nextIdentity;
+  const selectedStream = !current.id && !previousIdentity && current.connectionMethod === "dyson"
+    ? { connectionMethod: "dyson", readingType: current.readingType, sourceBuildingId: current.sourceBuildingId, lastSampleAt: current.lastSampleAt }
+    : {};
+  return { ...(sameDevice ? current : { ...emptySensorDraft(), ...selectedStream }), ...scanned };
 };
+export const selectDysonStream = (current, stream) => ({
+  ...(current.readingType === stream.type ? current : emptySensorDraft()),
+  manufacturer: "Dyson",
+  location: current.readingType === stream.type ? current.location : stream.type.replace(/^dyson:/, "").replaceAll("_", " "),
+  connectionMethod: "dyson", readingType: stream.type, sourceBuildingId: "home",
+  lastSampleAt: stream.timestamp, identificationMethod: "collector-stream",
+});
 export const registerSensorDraft = (sensors, draft, evidenceFileName) => {
   if (!canRegisterSensor(draft)) return { healthSensors: sensors, healthSensorDraft: draft, sensorEvidenceFileName: evidenceFileName };
   const identity = sensorIdentity(draft);
@@ -10251,7 +10262,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
     const since = new Date(Date.now() - 15 * 60 * 1000).toISOString();
     const { data, error } = await supabase.from("Readings")
       .select("*")
-      .eq("building_id", "home").eq("reading_type", sensor.readingType)
+      .eq("building_id", sensor.sourceBuildingId || "home").eq("reading_type", sensor.readingType)
       .gte("timestamp", since).order("timestamp", { ascending: false }).limit(1);
     const row = data?.[0];
     const metricStatus = Object.fromEntries(sensor.metrics.map((metric) => [metric,
@@ -10264,6 +10275,11 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   };
 
   const findDysonStreams = async () => {
+    if (!healthRecordId || !isBridgewoodProfile) {
+      setDysonStreamStatus("Device discovery is not yet configured for this property. Save its profile first; a property-specific collector is needed before connecting sensors.");
+      setDysonStreams([]);
+      return;
+    }
     setDysonStreamBusy(true);
     setDysonStreamStatus("");
     const since = new Date(Date.now() - 15 * 60 * 1000).toISOString();
@@ -10837,8 +10853,25 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
             </div>
 
             <div className="border rounded p-3 bg-gray-50 space-y-3">
+              <h4 className="font-semibold text-sm">1. Find online devices</h4>
+              <p className="text-xs text-gray-600">Find supported sensors already reporting through the tablet collector. Only the Bridgewood pilot is connected for now; other properties need their own collector. Network devices without a supported data connection will not appear here yet.</p>
+              <button type="button" disabled={dysonStreamBusy} onClick={findDysonStreams} className="border border-emerald-700 bg-white px-3 py-2 text-xs font-semibold text-emerald-900 disabled:opacity-50">{dysonStreamBusy ? "Finding devices..." : "Find devices"}</button>
+              {dysonStreamStatus ? <p className="text-xs text-gray-700" role="status">{dysonStreamStatus}</p> : null}
+              {dysonStreams.length ? <div className="grid gap-2 sm:grid-cols-2">{dysonStreams.map((stream) => <button key={stream.type} type="button" onClick={() => {
+                sensorDraftTouchedRef.current = true;
+                setSensorDraft((current) => selectDysonStream(current, stream));
+                setSensorEvidenceFileName("");
+                setSensorScanStatus("");
+              }} className={`border p-3 text-left text-xs ${sensorDraft.readingType === stream.type ? "border-emerald-700 bg-emerald-100" : "border-gray-300 bg-white"}`}>
+                <strong>{dysonStreamLabel(stream.type)}</strong><span className="block text-gray-600">Last reading: {new Date(stream.timestamp).toLocaleString()}</span>
+                <span className="block font-semibold text-emerald-800">{sensorDraft.readingType === stream.type ? "Selected for setup" : "Select device"}</span>
+              </button>)}</div> : null}
+              {sensorDraft.readingType ? <p className="text-xs text-emerald-900">Selected: {dysonStreamLabel(sensorDraft.readingType)}. Confirm its physical label and room below before adding it to the profile.</p> : null}
+            </div>
+
+            <div className="border rounded p-3 bg-gray-50 space-y-3">
               <div>
-                <h4 className="font-semibold text-sm">1. Import your health data</h4>
+                <h4 className="font-semibold text-sm">2. Confirm the physical device</h4>
                 <button type="button" title="Reads QR or barcode and nearby printed label; does not connect the sensor" className="mt-2 border border-emerald-700 bg-white px-3 py-2 text-xs font-semibold text-emerald-950"
                   onClick={() => {
                     if (!navigator.mediaDevices?.getUserMedia) { setSensorScanStatus("Camera access is unavailable here. Open WBP over HTTPS or enter details manually."); return; }
@@ -10982,7 +11015,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
               </div>
 
               <div className="space-y-2 border-t pt-3">
-                <h4 className="font-semibold text-sm">2. Connect sensor</h4>
+                <h4 className="font-semibold text-sm">3. Connect and validate</h4>
                 <div className="grid gap-2 sm:grid-cols-2">
                   <label className="text-xs text-gray-600">Connection route
                     <select className="mt-1 w-full border bg-white p-2 text-xs" value={sensorDraft.connectionMethod}
@@ -11004,19 +11037,12 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                     </select>
                   </label> : null}
                 </div>
-                {sensorDraft.connectionMethod === "dyson" ? <div className="space-y-2">
-                  <button type="button" disabled={dysonStreamBusy} onClick={findDysonStreams} className="border border-emerald-700 px-3 py-2 text-xs font-semibold text-emerald-900 disabled:opacity-50">{dysonStreamBusy ? "Connecting..." : "Connect via tablet collector"}</button>
-                  {dysonStreamStatus ? <p className="text-xs text-gray-700" role="status">{dysonStreamStatus}</p> : null}
-                  {dysonStreams.length ? <div className="grid gap-2 sm:grid-cols-2">{dysonStreams.map(({ type, timestamp }) => <button key={type} type="button" onClick={() => handleSensorDraftChange("readingType", type)} className={`border p-2 text-left text-xs ${sensorDraft.readingType === type ? "border-emerald-700 bg-emerald-100" : "border-gray-300 bg-white"}`}>
-                    <strong>{dysonStreamLabel(type)}</strong><br />Last reading: {new Date(timestamp).toLocaleString()}
-                  </button>)}</div> : null}
-                </div> : null}
                 {sensorDraft.connectionMethod === "dyson" ? <p className="text-xs text-gray-600">The tablet and purifier must share the home Wi-Fi. No router sign-in is needed. This connects an already streaming Dyson to the profile; pairing a new purifier with the collector is not yet available in-app. Confirm the selected room and serial against its label.</p> : <p className="text-xs text-gray-600">Other routes need a supported connector before readings can be imported.</p>}
               </div>
 
               <fieldset className="space-y-2">
                 <legend className="text-xs font-semibold text-gray-700">
-                  3. Metrics to validate
+                  4. Metrics to validate
                 </legend>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {healthMetricOptions.map(([value, label]) => (
@@ -11047,14 +11073,14 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                 />
               </label>
 
-              <p className="text-xs text-gray-600">A manufacturer and model or unique label code are needed to register. Missing model and room details can be added with Edit. Metric availability is checked against a recent sample after registration.</p>
+              <p className="text-xs text-gray-600">A manufacturer and model or unique label code are needed to register. Save Health Monitoring after adding an instrument to link it to this building profile. Metric availability is checked against a recent sample after registration.</p>
               <button
                 type="button"
                 className="bg-blue-600 disabled:bg-gray-300 disabled:text-gray-500 text-white px-4 py-2 rounded text-sm font-semibold"
                 disabled={!canRegisterSensor(sensorDraft)}
                 onClick={addHealthSensor}
               >
-                {sensorDraft.id ? "Update Instrument" : "Add Instrument"}
+                {sensorDraft.id ? "Update instrument" : "Add instrument to profile"}
               </button>
             </div>
 
