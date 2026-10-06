@@ -12,7 +12,7 @@ import { liveRedReadings } from "./liveRedReadings";
 import { extractEnergyBillImage, extractEnergyBillPdf, normaliseBillReview } from "./energyBill";
 import RetrofitPlanner from "./RetrofitPlanner";
 import { CC_CANDIDATE_PROFILE } from "./retrofitEconomics";
-import { normaliseSerial, readDeviceScan, suggestDeviceCandidates } from "./deviceScan";
+import { normaliseSerial, readDeviceScan, suggestDeviceCandidates, visibleDeviceCandidates } from "./deviceScan";
 import "./occupyScreen.css";
 
 export const DetailSurface = ({ children, title, onClose, modal, headerExtra }) => {
@@ -12301,6 +12301,7 @@ const DeviceImportWorkbench = ({ isActive, embedded = false, requestedInstrument
   const [availableMetrics, setAvailableMetrics] = useState([]);
   const [metricsStatus, setMetricsStatus] = useState("");
   const autoScanRequestedRef = useRef(false);
+  const autoMatchAttemptRef = useRef("");
   const clearWorkbench = () => {
     setScanJobId(null);
     setScanBusy(false);
@@ -12487,6 +12488,7 @@ const DeviceImportWorkbench = ({ isActive, embedded = false, requestedInstrument
   const selectedDevice = scan?.candidates.find((candidate) => candidate.address === selected);
   const selectedInstrument = physicalDevices.find((instrument) => instrument.id === selectedInstrumentId);
   const matchedCandidates = suggestDeviceCandidates(selectedInstrument, scan);
+  const displayedCandidates = visibleDeviceCandidates(matchedCandidates);
   const exactMatchAddress = matchedCandidates.find((candidate) => candidate.serialMatch)?.address || "";
   const savedMatchAddress = matchedCandidates.some((candidate) => candidate.address === selectedInstrument?.networkMatch?.address)
     ? selectedInstrument.networkMatch.address : "";
@@ -12549,7 +12551,7 @@ const DeviceImportWorkbench = ({ isActive, embedded = false, requestedInstrument
       : "No usable reading from this collector stream in the last 30 minutes. Check the tablet collector before confirming a connection.");
     setReadingBusy(false);
   };
-  const persistMatch = async ({ method, stream, rows }) => {
+  const persistMatch = useCallback(async ({ method, stream, rows }) => {
     if (!canIdentify || !profile || !stream || !rows?.length) return;
     if (method === "collector-serial-and-recent-reading" && !serialsAgree) return;
     if (method === "customer-compared-device-app" && (!comparisonConfirmed || rows.length < 2)) return;
@@ -12585,7 +12587,8 @@ const DeviceImportWorkbench = ({ isActive, embedded = false, requestedInstrument
       ...(item.networkMatch?.stream === stream ? {} : { readingType: "", sourceBuildingId: "" }),
       networkMatch: { method, matchedAt, address: selected,
         serialNumber: item.serialNumber || item.labelCode || "", collectorSerial: selectedCollector?.serial || "",
-        serialAgreement: serialsAgree ? "exact" : "mismatch", assurance: serialsAgree ? "customer-confirmed" : "provisional",
+        serialAgreement: serialsAgree ? "exact" : "mismatch",
+        assurance: serialsAgree ? "serial-correlated" : "provisional",
         stream,
         sampleTimestamps: rows.map((row) => row.timestamp) },
     } : item);
@@ -12605,7 +12608,7 @@ const DeviceImportWorkbench = ({ isActive, embedded = false, requestedInstrument
         : "Reading comparison saved as a provisional match. The scanned and collector serials differ; correct the instrument serial and recheck before relying on this link for audit.");
     }
     setMatchBusy(false);
-  };
+  }, [canIdentify, profile, serialsAgree, comparisonConfirmed, selectedInstrument, selectedInstrumentId, selected, selectedCollector?.serial]);
   const importMatchedData = async () => {
     if (!profile || !selectedMatch?.stream || importBusy) return;
     if (String(profile.uprn) !== "100091142492") {
@@ -12665,7 +12668,7 @@ const DeviceImportWorkbench = ({ isActive, embedded = false, requestedInstrument
       testReading.address !== selected || testReading.instrumentId !== selectedInstrumentId) return;
     persistMatch({ method: "customer-compared-device-app", stream: testReading.stream, rows: testReading.rows });
   };
-  const saveSerialMatch = async () => {
+  const saveSerialMatch = useCallback(async () => {
     if (!serialsAgree || !selectedCollector?.readingType || String(profile?.uprn) !== "100091142492") return;
     setMatchBusy(true);
     setReadingStatus("Checking for a recent reading from this IP's collector connection...");
@@ -12679,7 +12682,17 @@ const DeviceImportWorkbench = ({ isActive, embedded = false, requestedInstrument
       return;
     }
     await persistMatch({ method: "collector-serial-and-recent-reading", stream: selectedCollector.readingType, rows: data });
-  };
+  }, [serialsAgree, selectedCollector?.readingType, profile?.uprn, persistMatch]);
+  useEffect(() => {
+    const exactCandidate = displayedCandidates.length === 1 && displayedCandidates[0].serialMatch ? displayedCandidates[0] : null;
+    if (!isActive || !exactCandidate?.configured?.readingType || !selectedInstrumentId ||
+      selected !== exactCandidate.address || selectedMatch || matchBusy ||
+      (selectedInstrument?.networkMatch?.address && selectedInstrument.networkMatch.address !== exactCandidate.address)) return;
+    const attempt = `${selectedInstrumentId}:${scan?.scannedAt}:${exactCandidate.address}`;
+    if (autoMatchAttemptRef.current === attempt) return;
+    autoMatchAttemptRef.current = attempt;
+    saveSerialMatch();
+  }, [isActive, displayedCandidates, selectedInstrumentId, selected, selectedMatch, matchBusy, selectedInstrument, scan?.scannedAt, saveSerialMatch]);
 
   return <div className={embedded ? "w-full min-w-0" : "mx-auto w-full max-w-7xl"}>
     {!embedded ? <header className="grid min-h-[150px] gap-4 border-b border-emerald-200 bg-emerald-100 px-4 py-5 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] sm:px-8">
@@ -12705,17 +12718,17 @@ const DeviceImportWorkbench = ({ isActive, embedded = false, requestedInstrument
           <h3 className="text-sm font-bold">Possible matches</h3>
           {embedded && status ? <p role="status" className="mt-1 text-xs text-gray-600">{status}</p> : null}
           {scanBusy ? <div className="wbp-network-scan-progress mt-2" role="progressbar" aria-label="Loading possible matches" aria-valuetext="Scanning the home network"><span /></div> : null}
-          {matchedCandidates.length ? <div className="mt-2 max-h-56 space-y-2 overflow-y-auto border border-gray-200 p-2">{matchedCandidates.map((candidate) =>
+          {displayedCandidates.length ? <div className="mt-2 max-h-56 space-y-2 overflow-y-auto border border-gray-200 p-2">{displayedCandidates.map((candidate) =>
             <button key={candidate.address} type="button" aria-pressed={selected === candidate.address} onClick={() => { setSelected(candidate.address); setTestReading(null); setReadingsOpen(false); setReadingStatus(""); setImportStatus(""); setComparisonConfirmed(false); }}
               className={`block w-full min-w-0 border p-2 text-left text-xs ${candidate.serialMatch ? "border-emerald-600 bg-emerald-100" : selected === candidate.address ? "border-emerald-700 bg-emerald-50" : "border-gray-300 bg-white"}`}>
               <strong>{candidate.address}</strong>
               <span className="block break-words text-xs text-gray-600">{candidate.serialMatch ? "Serial matches selected device" : candidate.suggested ? `Collector room suggests ${candidate.configured.name}` : candidate.compatible ? "Dyson collector; serial not matched" : candidate.kind}</span>
             </button>)}</div> : <p className="mt-2 text-sm text-gray-600">{selectedInstrument ? "No scan loaded yet." : "Select a physical device first."}</p>}
-          {selectedDevice && selectedInstrument ? <div className="mt-3 flex flex-wrap gap-2">
-            {serialsAgree ? <button type="button" disabled={matchBusy} onClick={saveSerialMatch} className="border border-emerald-700 bg-emerald-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{matchBusy ? "Saving..." : "Save match"}</button> : null}
-            <button type="button" disabled={!canIdentify || !selectedCollector?.readingType || readingBusy} onClick={reviewCandidate} className="border border-emerald-700 bg-white px-4 py-2 text-sm font-semibold text-emerald-900 disabled:opacity-50">{readingBusy ? "Checking..." : "Check readings against device app"}</button>
+          {selectedDevice && selectedInstrument && !selectedMatch ? <div className="mt-3 flex flex-wrap gap-2">
+            {serialsAgree && (autoMatchAttemptRef.current !== `${selectedInstrumentId}:${scan?.scannedAt}:${selected}` || (!matchBusy && Boolean(readingStatus))) ? <button type="button" disabled={matchBusy} onClick={saveSerialMatch} className="border border-emerald-700 bg-emerald-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{matchBusy ? "Saving..." : "Retry match"}</button> : null}
+            {!serialsAgree ? <button type="button" disabled={!canIdentify || !selectedCollector?.readingType || readingBusy} onClick={reviewCandidate} className="border border-emerald-700 bg-white px-4 py-2 text-sm font-semibold text-emerald-900 disabled:opacity-50">{readingBusy ? "Checking..." : "Check readings against device app"}</button> : null}
           </div> : null}
-          {!readingsOpen && readingStatus ? <p role="status" className="mt-3 text-xs text-gray-700">{readingStatus}</p> : null}
+          {!selectedMatch && !readingsOpen && readingStatus ? <p role="status" className="mt-3 text-xs text-gray-700">{readingStatus}</p> : null}
         </div>
         {readingsOpen ? <div className="wbp-device-readings min-w-0 border border-emerald-200 bg-emerald-50 p-3 text-xs">
           <div className="flex items-start justify-between gap-2"><h3 className="text-sm font-bold">Device app comparison</h3><button type="button" onClick={() => { setReadingsOpen(false); setTestReading(null); setComparisonConfirmed(false); }} aria-label="Close readings" className="px-2 text-lg leading-none" title="Close readings">&times;</button></div>
@@ -12746,11 +12759,11 @@ const DeviceImportWorkbench = ({ isActive, embedded = false, requestedInstrument
       {(!embedded || selectedMatch) ? <section className="mt-5 border-t border-gray-200 pt-5">
         <h2 className="text-base font-bold">{embedded ? "Import sensor data" : "3. Import sensor data"}</h2>
         <p className="mt-1 text-sm text-gray-600">All supported readings from the matched sensor are linked to this property. Existing collector data stays in Supabase.</p>
-        {selectedMatch ? <p className="mt-3 text-sm">Matched: {selectedInstrument.manufacturer} {selectedInstrument.model} · {selectedMatch.address} · {dysonStreamLabel(selectedMatch.stream)}{selectedMatch.assurance === "provisional" ? " · Provisional serial match" : ""}</p>
-          : <p className="mt-3 text-sm text-gray-600">Save a network match in Step 2 to enable import.</p>}
+        {!selectedMatch ? <p className="mt-3 text-sm text-gray-600">Connect a network device above to enable import.</p> : null}
         {selectedMatch && availableMetrics.length ? <p className="mt-3 text-sm text-gray-700">Detected: {availableMetrics.map((metric) => metric === "pm25" ? "PM2.5" : metric.toUpperCase()).join(", ")}</p> : null}
         {metricsStatus ? <p role="status" className="mt-2 text-sm text-gray-600">{metricsStatus}</p> : null}
         {selectedMatch ? <button type="button" onClick={importMatchedData} disabled={importBusy || !availableMetrics.length} className="mt-3 border border-emerald-700 bg-emerald-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{importBusy ? "Importing..." : selectedMatch.importedAt ? "Update sensor data" : "Import sensor data"}</button> : null}
+        {importBusy ? <div className="wbp-network-scan-progress mt-2" role="progressbar" aria-label="Linking sensor data to Supabase" aria-valuetext="Waiting for Supabase to confirm"><span /></div> : null}
         {selectedMatch?.importedAt ? <p className="mt-2 text-xs text-emerald-900">Linked {new Date(selectedMatch.importedAt).toLocaleString()}</p> : null}
         {importStatus ? <p role="status" className="mt-2 text-sm text-gray-700">{importStatus}</p> : null}
       </section> : null}

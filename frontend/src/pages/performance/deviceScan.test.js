@@ -1,4 +1,4 @@
-import { readDeviceScan, suggestDeviceCandidates } from "./deviceScan";
+import { readDeviceScan, suggestDeviceCandidates, visibleDeviceCandidates } from "./deviceScan";
 
 test("tablet scan keeps configured hints separate from network identity", () => {
   const report = readDeviceScan(JSON.stringify({
@@ -39,4 +39,6 @@ test("exact collector serial match appears ahead of a room-name hint", () => {
   const matches = suggestDeviceCandidates({ manufacturer: "Dyson", location: "Upstairs", serialNumber: "nn6 uk hda1783a" }, scan);
   expect(matches[0]).toMatchObject({ address: "192.168.1.156", serialMatch: true });
   expect(matches[1]).toMatchObject({ address: "192.168.1.144", serialMatch: false, suggested: true });
+  expect(visibleDeviceCandidates(matches).map((candidate) => candidate.address)).toEqual(["192.168.1.156"]);
+  expect(visibleDeviceCandidates(matches.map((candidate) => ({ ...candidate, serialMatch: false })))).toHaveLength(2);
 });

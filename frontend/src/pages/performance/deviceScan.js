@@ -43,3 +43,8 @@ export const suggestDeviceCandidates = (instrument, scan) => {
       return { ...candidate, configured, serialMatch, suggested: Boolean(serialMatch || (roomHint && connectorHint)), compatible: Boolean(connectorHint) };
     }).sort((a, b) => Number(b.serialMatch) - Number(a.serialMatch) || Number(b.suggested) - Number(a.suggested) || Number(b.compatible) - Number(a.compatible));
 };
+
+export const visibleDeviceCandidates = (candidates) => {
+  const serialMatches = candidates.filter((candidate) => candidate.serialMatch);
+  return serialMatches.length ? serialMatches : candidates;
+};
