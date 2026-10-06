@@ -176,13 +176,16 @@ cd backend
 npm run discover:devices
 ```
 
-The local report is `backend/logs/device-discovery.json`. It is ignored by Git
-and is not sent to Supabase. Run the command while the tablet and sensors are on
-the same home Wi-Fi. No router login or collector restart is needed. The report
-lists advertised network addresses and devices already configured in the Dyson
-collector (without passwords). A missing device may simply not advertise these
-protocols; a discovered address is not evidence that its readings are accessible.
-This pilot does not pair, reconfigure, or automatically collect from new devices.
+The terminal prints a short inventory; the detailed local report is
+`backend/logs/device-discovery.json`. It is ignored by Git and is not sent to
+Supabase. Run the command while the tablet and sensors are on the same home
+Wi-Fi. No router login or collector restart is needed. The inventory merges
+advertised addresses with configured Dyson devices (without passwords) and
+checks their latest per-device `Readings` row in Supabase. "Reporting" means a
+reading arrived within 15 minutes; it does not verify the physical label or
+prove that a network advertisement provides sensor data. A missing device may
+simply not advertise mDNS or SSDP. This pilot does not pair, reconfigure, or
+automatically collect from new devices.
 
 
 For a new Dyson device, run `python backend/dyson-discover.py` on the home

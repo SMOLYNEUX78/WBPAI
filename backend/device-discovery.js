@@ -4,6 +4,7 @@ const os = require("os");
 const path = require("path");
 require("dotenv").config();
 const { SERVICE_ENUMERATION, dnsQuery, ptrRecords, ssdpHeaders } = require("./device-discovery-protocols");
+const { readTelemetry, buildInventory } = require("./device-inventory");
 
 const DURATION_MS = 6000;
 const OUTPUT = path.join(__dirname, "logs", "device-discovery.json");
@@ -82,11 +83,20 @@ function discover() {
 
 async function main() {
   const report = await discover();
+  const client = process.env.SUPABASE_URL && process.env.SUPABASE_KEY
+    ? require("./supabaseClient") : null;
+  const configured = await readTelemetry(report.configuredDevices, client, process.env.DYSON_BUILDING_ID || "home");
+  report.inventory = buildInventory(report, configured);
+  report.note = "Local network advertisements and configured collectors are separate signals. Only fresh telemetry confirms a reporting stream; neither proves physical device identity.";
   fs.mkdirSync(path.dirname(OUTPUT), { recursive: true });
   const temporary = `${OUTPUT}.${process.pid}.tmp`;
   fs.writeFileSync(temporary, JSON.stringify(report, null, 2), { mode: 0o600 });
   fs.renameSync(temporary, OUTPUT);
   console.log(`Found ${report.candidates.length} advertised network address(es).`);
+  console.log(`Inventory: ${report.inventory.length} address(es), ${configured.filter((device) => device.telemetry.status === "reporting").length} configured sensor(s) reporting recently.`);
+  for (const item of report.inventory) {
+    console.log(`- ${item.name || item.kind} (${item.address}): ${item.telemetry?.status || item.kind}`);
+  }
   console.log(`Report: ${OUTPUT}`);
   console.log(report.note);
 }
