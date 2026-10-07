@@ -12869,7 +12869,7 @@ const AirGradientLocalConnect = ({ sensor, isActive, onSerialCaptured }) => {
   };
 
   return <div className="space-y-2 border border-emerald-200 bg-white p-3 text-xs text-gray-800">
-    <p>Connect your sensor to the same router as your tablet and scan the device label.</p>
+    <p>Connect your sensor to the same Wi-Fi as your tablet and scan the device label.</p>
     {scanning ? <div className="space-y-2"><video ref={videoRef} autoPlay muted playsInline aria-label="Scan AirGradient QR code or barcode" className="max-h-64 w-full bg-gray-900 object-contain" /><button type="button" className="border px-3 py-2" onClick={() => setScanning(false)}>Close camera</button></div> : <button type="button" className="border border-emerald-700 px-3 py-2 font-semibold text-emerald-900" onClick={() => setScanning(true)}>Scan device label</button>}
     {validSerial ? <p>Serial {serial}</p> : null}
     {!tablet ? <p>Pair the home tablet in Connect before testing this monitor.</p> : null}
