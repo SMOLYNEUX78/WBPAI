@@ -11291,7 +11291,11 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                         </div>
                         </details>
                         {connectionRoute === "network" && connectionForSensor(sensor)?.id === "dyson" ? showNetworkMatches && networkInstrumentId === sensor.id ? <DeviceImportWorkbench isActive={isActive} embedded requestedInstrumentId={sensor.id} /> : <p className="text-xs text-gray-700">Checking the paired tablet for this device...</p> : null}
-                        {connectionRoute === "network" && connectionForSensor(sensor)?.id === "airgradient" ? <AirGradientLocalConnect sensor={sensor} isActive={isActive} /> : null}
+                        {connectionRoute === "network" && connectionForSensor(sensor)?.id === "airgradient" ? <AirGradientLocalConnect sensor={sensor} isActive={isActive} onSerialCaptured={(serial) => {
+                          setHealthSensors((current) => current.map((item) => item.id === sensor.id ? { ...item, serialNumber: serial, labelCode: serial } : item));
+                          setSensorDraft((current) => current.id === sensor.id ? { ...current, serialNumber: serial, labelCode: serial } : current);
+                          setSectionSaveStatus("AirGradient serial captured. Save Health Monitoring to sync its label with your account.");
+                        }} /> : null}
                         {connectionRoute === "api" ? <p className="text-xs text-gray-700">WBP has not connected this manufacturer's account API yet. No credentials or data are collected here.</p> : null}
                         {connectionRoute === "hub" ? <p className="text-xs text-gray-700">For sensors managed by a manufacturer app or a Zigbee, Thread or other hub. WBP needs a supported provider connection and permission to read its data. This route is not connected yet; the device remains registered but not live.</p> : null}
                         {connectionRoute === "bluetooth" ? <>
@@ -12728,7 +12732,7 @@ export const SensorLiveReadings = ({ sensor }) => {
   </div>;
 };
 
-const AirGradientLocalConnect = ({ sensor, isActive }) => {
+const AirGradientLocalConnect = ({ sensor, isActive, onSerialCaptured }) => {
   const serial = String(sensor?.serialNumber || sensor?.labelCode || "").replace(/[^0-9a-f]/gi, "").toLowerCase();
   const validSerial = /^[0-9a-f]{12}$/.test(serial);
   const [profile, setProfile] = useState(null);
@@ -12738,6 +12742,36 @@ const AirGradientLocalConnect = ({ sensor, isActive }) => {
   const [sample, setSample] = useState(null);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
+  const [scanning, setScanning] = useState(!validSerial);
+  const videoRef = useRef(null);
+  const onSerialCapturedRef = useRef(onSerialCaptured);
+  onSerialCapturedRef.current = onSerialCaptured;
+
+  useEffect(() => {
+    if (!scanning || validSerial || !isActive) return undefined;
+    let active = true;
+    let controls;
+    import("@zxing/browser").then(async ({ BrowserMultiFormatReader }) => {
+      if (!active || !videoRef.current) return;
+      controls = await new BrowserMultiFormatReader().decodeFromConstraints(
+        { video: { facingMode: { ideal: "environment" } }, audio: false }, videoRef.current,
+        (result) => {
+          if (!active || !result) return;
+          const raw = result.getText();
+          const match = raw.match(/(?:airgradient[_\s-]*)?([0-9a-f]{12})(?![0-9a-f])/i);
+          if (!match) {
+            setStatus("The code did not contain a 12-character AirGradient serial. Check the printed label or enter its serial in the instrument details.");
+            return;
+          }
+          onSerialCapturedRef.current(match[1].toLowerCase());
+          setStatus("Serial captured. Confirm the device details and save Health Monitoring before importing readings.");
+          setScanning(false);
+        }
+      );
+      if (!active) controls.stop();
+    }).catch(() => { if (active) { setScanning(false); setStatus("Camera unavailable. Allow access or enter the serial in the instrument details."); } });
+    return () => { active = false; controls?.stop(); };
+  }, [scanning, validSerial, isActive]);
 
   useEffect(() => {
     if (!isActive || !sensor?.id) return undefined;
@@ -12835,7 +12869,8 @@ const AirGradientLocalConnect = ({ sensor, isActive }) => {
   };
 
   return <div className="space-y-2 border border-emerald-200 bg-white p-3 text-xs text-gray-800">
-    <p>AirGradient local connection · {validSerial ? `Serial ${serial}` : "Enter the 12-character serial from the device label first."}</p>
+    <p>AirGradient local connection · {validSerial ? `Serial ${serial}` : "Scan the device label to find its serial."}</p>
+    {!validSerial ? scanning ? <div className="space-y-2"><video ref={videoRef} autoPlay muted playsInline aria-label="Scan AirGradient QR code or barcode" className="max-h-64 w-full bg-gray-900 object-contain" /><button type="button" className="border px-3 py-2" onClick={() => setScanning(false)}>Close camera</button></div> : <button type="button" className="border border-emerald-700 px-3 py-2 font-semibold text-emerald-900" onClick={() => setScanning(true)}>Scan device label</button> : null}
     {!tablet ? <p>Pair the home tablet in Connect before testing this monitor.</p> : null}
     {connection?.active ? <>
       <p className="font-semibold text-emerald-800">Import enabled{connection.last_sample_at ? ` · Last saved ${new Date(connection.last_sample_at).toLocaleString()}` : " · Waiting for first reading"}</p>
