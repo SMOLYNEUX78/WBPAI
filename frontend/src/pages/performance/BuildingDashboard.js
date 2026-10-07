@@ -11267,15 +11267,15 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                         setConnectionRoute(opening ? connector?.route || "" : "");
                         setBluetoothCandidate(null);
                         setBluetoothStatus("");
-                        if (opening && connector?.route === "network") void findRegisteredSensor(sensor.id);
+                        if (opening && connector?.ready && connector.route === "network") void findRegisteredSensor(sensor.id);
                       }}>Connect sensor</button>
                       {connectionRouteSensorId === sensor.id ? <div className="mt-2 space-y-2 border-t border-emerald-200 pt-2">
                         <p className="text-xs text-gray-700">{connectionForSensor(sensor)
-                          ? `Connection selected for ${sensor.manufacturer} ${sensor.model}: ${connectionForSensor(sensor).name}. Confirm the device match before importing readings.`
+                          ? `${connectionForSensor(sensor).ready ? "Supported connector" : "Recommended route"} for ${sensor.manufacturer} ${sensor.model}: ${connectionForSensor(sensor).name}. ${connectionForSensor(sensor).nextStep}`
                           : "No supported reading connector is registered for this model yet. The instrument is saved, but WBP cannot import its data until a compatible connector is configured."}</p>
-                        <details className="text-xs text-gray-700"><summary className="cursor-pointer font-semibold">Connection options</summary>
+                        <details className="text-xs text-gray-700"><summary className="cursor-pointer font-semibold">Other connection methods</summary>
                         <div className="grid grid-cols-2 gap-1" role="group" aria-label={`Connection route for ${sensor.location || sensor.model || "device"}`}>
-                          {[["network", "Home network"], ["hub", "Manufacturer / hub"], ["bluetooth", "Bluetooth"], ["feed", "Existing data feed"]].map(([route, label]) => <button key={route} type="button" disabled={route === "network" && !connectionForSensor(sensor)} aria-pressed={connectionRoute === route} className={`min-w-0 border px-1 py-2 text-center text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${connectionRoute === route ? "border-emerald-700 bg-emerald-100 text-emerald-950" : "border-gray-300 bg-white text-gray-700"}`} onClick={async () => {
+                          {[["network", "Home network"], ["api", "Manufacturer API"], ["hub", "Manufacturer / hub"], ["bluetooth", "Bluetooth"], ["feed", "Existing data feed"]].map(([route, label]) => <button key={route} type="button" disabled={route === "network" && !connectionForSensor(sensor)?.ready} aria-pressed={connectionRoute === route} className={`min-w-0 border px-1 py-2 text-center text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${connectionRoute === route ? "border-emerald-700 bg-emerald-100 text-emerald-950" : "border-gray-300 bg-white text-gray-700"}`} onClick={async () => {
                             setConnectionRoute(route);
                             if (route === "bluetooth") {
                               chooseBluetoothDevice();
@@ -11286,7 +11286,8 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                           }}>{label}</button>)}
                         </div>
                         </details>
-                        {connectionRoute === "network" ? showNetworkMatches && networkInstrumentId === sensor.id ? <DeviceImportWorkbench isActive={isActive} embedded requestedInstrumentId={sensor.id} /> : <p className="text-xs text-gray-700">Checking the paired tablet for this device...</p> : null}
+                        {connectionRoute === "network" && connectionForSensor(sensor)?.ready ? showNetworkMatches && networkInstrumentId === sensor.id ? <DeviceImportWorkbench isActive={isActive} embedded requestedInstrumentId={sensor.id} /> : <p className="text-xs text-gray-700">Checking the paired tablet for this device...</p> : null}
+                        {connectionRoute === "api" ? <p className="text-xs text-gray-700">WBP has not connected this manufacturer's account API yet. No credentials or data are collected here.</p> : null}
                         {connectionRoute === "hub" ? <p className="text-xs text-gray-700">For sensors managed by a manufacturer app or a Zigbee, Thread or other hub. WBP needs a supported provider connection and permission to read its data. This route is not connected yet; the device remains registered but not live.</p> : null}
                         {connectionRoute === "bluetooth" ? <>
                           {bluetoothCandidate ? <p className="break-words text-xs text-gray-700">Selected: {bluetoothCandidate.name} ({bluetoothCandidate.id}). Compare it with the physical device before using a supported connector.</p> : null}
