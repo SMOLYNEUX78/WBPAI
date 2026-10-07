@@ -447,7 +447,7 @@ test("registered instrument tiles open their edit details", async () => {
   fireEvent.click(edit);
   const serialInput = within(dialog).getByRole("textbox", { name: "Serial / device ID" });
   expect(serialInput).toHaveValue("NN6-UK-HDA1783");
-  expect(serialInput.closest(".bg-emerald-50")).toHaveClass("border-emerald-700");
+  expect(serialInput.closest(".border-emerald-700.bg-emerald-50")).toHaveClass("border-t-0");
   expect(edit.compareDocumentPosition(serialInput) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(within(dialog).getByText(/Editing Dyson TP02/)).toBeInTheDocument();
   expect(dialog.querySelector('input[type="file"][accept*="image/jpeg"]')).toBeInTheDocument();
@@ -477,6 +477,8 @@ test("registered instrument tiles open their edit details", async () => {
   expect(within(dialog).getByRole("button", { name: "Edit IAQ are us Test" }).closest(".border-gray-300.bg-white")).not.toContainElement(editForm);
   expect(editForm).toHaveClass("bg-emerald-50");
   expect(within(dialog).getByRole("button", { name: "Edit Dyson TP02" })).toHaveClass("bg-emerald-50");
+  expect(dysonCard).toHaveClass("border-b-0", "bg-emerald-50");
+  expect(editForm.parentElement).toHaveClass("-mt-3", "bg-emerald-50");
   fireEvent.click(linkButton);
   const linkForm = within(dialog).getByRole("heading", { name: "Edit Dyson Pure Cool Link" }).parentElement;
   expect(linkButton.compareDocumentPosition(linkForm) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
