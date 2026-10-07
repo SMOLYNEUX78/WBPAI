@@ -421,7 +421,7 @@ test("registered instrument tiles open their edit details", async () => {
   fireEvent.click(edit);
   const serialInput = within(dialog).getByRole("textbox", { name: "Serial / device ID" });
   expect(serialInput).toHaveValue("NN6-UK-HDA1783");
-  expect(serialInput.closest(".bg-emerald-100")).toHaveClass("border-emerald-700");
+  expect(serialInput.closest(".bg-emerald-50")).toHaveClass("border-emerald-700");
   expect(edit.compareDocumentPosition(serialInput) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(within(dialog).getByText(/Editing Dyson TP02/)).toBeInTheDocument();
   expect(dialog.querySelector('input[type="file"][accept*="image/jpeg"]')).toBeInTheDocument();
@@ -433,6 +433,15 @@ test("registered instrument tiles open their edit details", async () => {
   fireEvent.click(within(dialog).getByRole("button", { name: "Update instrument" }));
   fireEvent.click(within(dialog).getByRole("button", { name: "Edit Dyson TP02" }));
   expect(within(dialog).getByRole("textbox", { name: "Serial / device ID" })).toHaveValue("NN6-UK-HDA1783A");
+  fireEvent.click(within(dialog).getByRole("button", { name: "Scan photo" }));
+  expect(within(dialog).getByRole("heading", { name: "New device" })).toBeInTheDocument();
+  expect(within(dialog).getByRole("textbox", { name: "Serial / device ID" })).toHaveValue("");
+  const newForm = within(dialog).getByRole("heading", { name: "New device" }).parentElement;
+  expect(newForm).toHaveClass("order-2");
+  fireEvent.click(within(dialog).getByRole("button", { name: "Edit Dyson TP02" }));
+  const editForm = within(dialog).getByRole("heading", { name: "Edit Dyson TP02" }).parentElement;
+  expect(editForm).toHaveClass("order-3", "bg-emerald-50");
+  expect(within(dialog).getByRole("button", { name: "Edit Dyson TP02" })).toHaveClass("bg-emerald-50");
 });
 
 test("a recently linked instrument shows its network address and Live status", async () => {

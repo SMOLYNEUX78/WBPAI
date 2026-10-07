@@ -10408,6 +10408,14 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
     setSensorEvidenceFileName(registered.sensorEvidenceFileName);
   };
 
+  const beginNewSensorScan = () => {
+    sensorDraftTouchedRef.current = true;
+    setSensorDraft(emptySensorDraft());
+    setSensorEvidenceFileName("");
+    setSensorScanStatus("");
+    setSensorDetailsVisible(true);
+  };
+
   const uploadSensorEvidence = async (file, labelDetails = null) => {
     if (!file || !sensorDraft.id || sensorEvidenceBusy) return;
     if (!["image/jpeg", "image/png", "application/pdf"].includes(file.type) || file.size > 10 * 1024 * 1024) {
@@ -11076,8 +11084,8 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
               <h3 className="font-semibold mb-2">Energy Data</h3>
             </div>
 
-            <div className="border rounded p-3 bg-gray-50 space-y-3">
-              <div>
+            <div className="flex flex-col gap-3 rounded border bg-gray-50 p-3">
+              <div className="order-1">
                 <h4 className="font-semibold text-sm">1. Import your energy data</h4>
               </div>
 
@@ -11159,10 +11167,11 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                 <div className="flex flex-wrap gap-2">
                 <button type="button" title="Reads QR or barcode and nearby printed label; does not connect the sensor" className="border border-emerald-700 bg-white px-3 py-2 text-xs font-semibold text-emerald-950"
                   onClick={() => {
-                    if (!navigator.mediaDevices?.getUserMedia) { setSensorScanStatus("Camera access is unavailable here. Open WBP over HTTPS or enter details manually."); setSensorDetailsVisible(true); return; }
-                    setSensorScanStatus(""); setSensorScannerOpen(true);
+                    beginNewSensorScan();
+                    if (!navigator.mediaDevices?.getUserMedia) { setSensorScanStatus("Camera access is unavailable here. Open WBP over HTTPS or enter details manually."); return; }
+                    setSensorScannerOpen(true);
                   }}>Scan QR or barcode</button>
-                <button type="button" disabled={sensorPhotoBusy} className="border border-emerald-700 bg-white px-3 py-2 text-xs font-semibold text-emerald-950 disabled:opacity-50" onClick={() => sensorPhotoInputRef.current?.click()}>Scan photo</button>
+                <button type="button" disabled={sensorPhotoBusy} className="border border-emerald-700 bg-white px-3 py-2 text-xs font-semibold text-emerald-950 disabled:opacity-50" onClick={() => { beginNewSensorScan(); sensorPhotoInputRef.current?.click(); }}>Scan photo</button>
                 <input ref={sensorPhotoInputRef} type="file" accept="image/*" className="hidden" aria-label="Choose sensor label photo" onChange={(event) => {
                   const file = event.target.files?.[0];
                   if (file) scanSensorPhoto(file, null, null, "photo");
@@ -11177,7 +11186,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                 </div> : null}
               </div>
 
-              <div className="mt-4 space-y-2 border-t border-gray-200 pt-4">
+              <div className={`space-y-2 border-t border-gray-200 pt-4 ${sensorDetailsVisible && !sensorDraft.id ? "order-3" : "order-2"}`}>
                 <div className="flex items-center justify-between gap-3">
                   <h4 className="font-semibold text-sm">Registered Instruments</h4>
                   <span className="text-xs text-gray-500">{healthSensors.length} registered</span>
@@ -11196,7 +11205,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                 }}>Load {pendingLocalSensors.length} sensor draft{pendingLocalSensors.length === 1 ? "" : "s"} from this device</button> : null}
                 {healthSensors.length === 0 ? <div className="space-y-2 border bg-white p-3 text-xs text-gray-600"><p>No health-data instruments registered yet.</p><button type="button" className="border border-emerald-700 bg-white px-3 py-2 font-semibold text-emerald-900 disabled:opacity-50" disabled={restoringSensors} onClick={restoreSensorsFromTabletScan}>{restoringSensors ? "Checking saved scan..." : "Restore devices from tablet scan"}</button></div>
                   : <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">{healthSensors.map((sensor) => <div key={sensor.id} className="min-w-0 border border-gray-300 bg-white p-2 text-xs">
-                    <button type="button" aria-expanded={sensorDetailsVisible && sensorDraft.id === sensor.id} className={`w-full min-w-0 border px-2 py-3 text-left transition-colors ${sensor.networkMatch?.importedAt || (sensorDetailsVisible && sensorDraft.id === sensor.id) ? "border-emerald-700 bg-emerald-100" : "border-gray-300 bg-white"}`} onClick={() => {
+                    <button type="button" aria-expanded={sensorDetailsVisible && sensorDraft.id === sensor.id} className={`w-full min-w-0 border px-2 py-3 text-left transition-colors ${sensorDetailsVisible && sensorDraft.id === sensor.id ? "border-emerald-700 bg-emerald-50" : "border-emerald-300 bg-emerald-100"}`} onClick={() => {
                       if (sensorDetailsVisible && sensorDraft.id === sensor.id) {
                         setSensorDetailsVisible(false);
                         return;
@@ -11205,6 +11214,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                       setSensorDetailsVisible(true);
                       setSensorDraft({ ...emptySensorDraft(), ...sensor });
                       setSensorEvidenceFileName(sensor.evidenceFileName || "");
+                      setSensorScanStatus("");
                       setSectionSaveStatus("");
                       requestAnimationFrame(() => sensorSerialInputRef.current?.focus());
                     }} aria-label={`Edit ${sensor.manufacturer} ${sensor.model}`}>
@@ -11227,7 +11237,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                   </div>)}</div>}
               </div>
 
-              {sensorDetailsVisible ? <div className={`mt-4 space-y-3 border p-3 transition-colors ${sensorDraft.id && healthSensors.some((sensor) => sensor.id === sensorDraft.id) ? "border-emerald-700 bg-emerald-100" : "border-gray-200 bg-white"}`}><div className="grid gap-2 sm:grid-cols-2">
+              {sensorDetailsVisible ? <div className={`space-y-3 border p-3 transition-colors ${sensorDraft.id ? "order-3 border-emerald-700 bg-emerald-50" : "order-2 border-gray-200 bg-white"}`}><h4 className="text-sm font-semibold text-gray-900">{sensorDraft.id ? `Edit ${sensorDraft.manufacturer || "device"} ${sensorDraft.model || ""}` : "New device"}</h4><div className="grid gap-2 sm:grid-cols-2">
                 <label className="space-y-1 text-xs text-gray-600">
                   Manufacturer
                   <input
