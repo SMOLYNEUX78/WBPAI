@@ -11270,9 +11270,9 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                         if (opening && connector?.id === "dyson") void findRegisteredSensor(sensor.id);
                       }}>Connect sensor</button>
                       {connectionRouteSensorId === sensor.id ? <div className="mt-2 space-y-2 border-t border-emerald-200 pt-2">
-                        <p className="text-xs text-gray-700">{connectionForSensor(sensor)
+                        {connectionForSensor(sensor)?.id !== "airgradient" ? <p className="text-xs text-gray-700">{connectionForSensor(sensor)
                           ? `${connectionForSensor(sensor).ready ? "Supported connector" : "Recommended route"} for ${sensor.manufacturer} ${sensor.model}: ${connectionForSensor(sensor).name}. ${connectionForSensor(sensor).nextStep}`
-                          : "No supported reading connector is registered for this model yet. The instrument is saved, but WBP cannot import its data until a compatible connector is configured."}</p>
+                          : "No supported reading connector is registered for this model yet. The instrument is saved, but WBP cannot import its data until a compatible connector is configured."}</p> : null}
                         {connectionForSensor(sensor)?.steps ? <div className="border border-emerald-200 bg-white p-3 text-xs text-gray-800">
                           <ol className="list-inside list-decimal space-y-2">{connectionForSensor(sensor).steps.map((step) => <li key={step}>{step}</li>)}</ol>
                           <a href={connectionForSensor(sensor).guideUrl} target="_blank" rel="noopener noreferrer" className="mt-3 inline-block font-semibold text-emerald-800 underline">{connectionForSensor(sensor).guideLabel}</a>
@@ -12742,13 +12742,13 @@ const AirGradientLocalConnect = ({ sensor, isActive, onSerialCaptured }) => {
   const [sample, setSample] = useState(null);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
-  const [scanning, setScanning] = useState(!validSerial);
+  const [scanning, setScanning] = useState(false);
   const videoRef = useRef(null);
   const onSerialCapturedRef = useRef(onSerialCaptured);
   onSerialCapturedRef.current = onSerialCaptured;
 
   useEffect(() => {
-    if (!scanning || validSerial || !isActive) return undefined;
+    if (!scanning || !isActive) return undefined;
     let active = true;
     let controls;
     import("@zxing/browser").then(async ({ BrowserMultiFormatReader }) => {
@@ -12771,7 +12771,7 @@ const AirGradientLocalConnect = ({ sensor, isActive, onSerialCaptured }) => {
       if (!active) controls.stop();
     }).catch(() => { if (active) { setScanning(false); setStatus("Camera unavailable. Allow access or enter the serial in the instrument details."); } });
     return () => { active = false; controls?.stop(); };
-  }, [scanning, validSerial, isActive]);
+  }, [scanning, isActive]);
 
   useEffect(() => {
     if (!isActive || !sensor?.id) return undefined;
@@ -12869,8 +12869,9 @@ const AirGradientLocalConnect = ({ sensor, isActive, onSerialCaptured }) => {
   };
 
   return <div className="space-y-2 border border-emerald-200 bg-white p-3 text-xs text-gray-800">
-    <p>AirGradient local connection · {validSerial ? `Serial ${serial}` : "Scan the device label to find its serial."}</p>
-    {!validSerial ? scanning ? <div className="space-y-2"><video ref={videoRef} autoPlay muted playsInline aria-label="Scan AirGradient QR code or barcode" className="max-h-64 w-full bg-gray-900 object-contain" /><button type="button" className="border px-3 py-2" onClick={() => setScanning(false)}>Close camera</button></div> : <button type="button" className="border border-emerald-700 px-3 py-2 font-semibold text-emerald-900" onClick={() => setScanning(true)}>Scan device label</button> : null}
+    <p>Connect your sensor to the same router as your tablet and scan the device label.</p>
+    {scanning ? <div className="space-y-2"><video ref={videoRef} autoPlay muted playsInline aria-label="Scan AirGradient QR code or barcode" className="max-h-64 w-full bg-gray-900 object-contain" /><button type="button" className="border px-3 py-2" onClick={() => setScanning(false)}>Close camera</button></div> : <button type="button" className="border border-emerald-700 px-3 py-2 font-semibold text-emerald-900" onClick={() => setScanning(true)}>Scan device label</button>}
+    {validSerial ? <p>Serial {serial}</p> : null}
     {!tablet ? <p>Pair the home tablet in Connect before testing this monitor.</p> : null}
     {connection?.active ? <>
       <p className="font-semibold text-emerald-800">Import enabled{connection.last_sample_at ? ` · Last saved ${new Date(connection.last_sample_at).toLocaleString()}` : " · Waiting for first reading"}</p>
