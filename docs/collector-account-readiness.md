@@ -12,7 +12,7 @@ which sources are not tied to a saved property UUID or reference.
 | --- | --- | --- |
 | Local Wi-Fi Dyson | Device-specific local MQTT collector | Configure this household's device list and explicit building ID; verify samples from each serial. |
 | Glow energy | Configured resource IDs and API credentials | Obtain account consent and resource IDs for that household; no default resources. |
-| Generic MQTT | Smart-meter payload parser only | Implement a decoder for the actual sensor payload and a topic-to-device binding. An open port or topic is not enough. |
+| Generic MQTT/HTTP JSON | Tested metric mapper and AirGradient ONE preset, but no running transport or database writer | Bind topic or endpoint to a registered instrument; implement a scoped reader and ingestion endpoint. An open port or topic is not enough. |
 | Manufacturer or hub API | ThingsBoard integration for the pilot; Milesight is a placeholder | Integrate and test each provider's authorization, payload and refresh behavior. |
 | Bluetooth | Browser device chooser only | Implement a device-specific protocol and a reliable tablet-side reader. |
 | LoRaWAN | No direct collector | Connect a named network/application server via its API or MQTT and decode its device payload. |

@@ -8,6 +8,7 @@ const METRICS = Object.freeze({
   co2: { unit: "ppm", legacyColumn: "co2" },
   tvoc_index: { unit: "device_index", legacyColumn: "vocs" },
   no2_index: { unit: "device_index", legacyColumn: "no2" },
+  nox_index: { unit: "device_index" },
   formaldehyde_raw: { unit: "device_raw", legacyColumn: "hcho" },
 });
 
