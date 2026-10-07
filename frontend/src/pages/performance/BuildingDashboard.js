@@ -93,6 +93,11 @@ export const sensorLabelConflict = (sensors, selected, incoming) => {
   }
   return "";
 };
+export const sensorLabelRatings = (sensor, details) => Object.fromEntries(
+  ["ratedPowerW", "ratedVoltage", "ratedFrequencyHz"].filter((field) =>
+    details?.[field] && !sensor?.[field]
+  ).map((field) => [field, details[field]])
+);
 const canRegisterSensor = (sensor) => Boolean(String(sensor?.manufacturer || "").trim()
   && (String(sensor?.model || "").trim() || sensorIdentity(sensor)));
 export const addressLines = (address, postcode) => {
@@ -10365,7 +10370,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
           ? `${source === "photo" ? "Photo" : "Camera"}: label details filled in. ${uncertainSerial ? "OCR could not read the full serial, so the saved serial was kept. " : ""}Check the model and serial against the printed label before saving.`
           : ocrError ? `${source === "photo" ? "Photo" : "Camera"}: barcode captured, but printed-text reading failed: ${ocrError}. Enter the model and serial manually.`
             : `${source === "photo" ? "Photo" : "Camera"}: barcode captured, but the printed details were not clear. Try a closer photo of the label, or enter the model and serial manually.`);
-        return true;
+        return details;
       } else {
         setSensorScanStatus(ocrError ? `${source === "photo" ? "Photo" : "Camera"}: printed-text reading failed: ${ocrError}. Try again or enter the details manually.`
           : `${source === "photo" ? "Photo" : "Camera"}: no readable label details found. Try a closer photo of the label in good light, or enter the printed details manually.`);
@@ -10390,7 +10395,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
     setSensorEvidenceFileName(registered.sensorEvidenceFileName);
   };
 
-  const uploadSensorEvidence = async (file) => {
+  const uploadSensorEvidence = async (file, labelDetails = null) => {
     if (!file || !sensorDraft.id || sensorEvidenceBusy) return;
     if (!["image/jpeg", "image/png", "application/pdf"].includes(file.type) || file.size > 10 * 1024 * 1024) {
       setSensorEvidenceStatus("Choose a JPG, PNG or PDF no larger than 10 MB.");
@@ -10432,7 +10437,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       const stored = Array.isArray(existing?.setup_data?.healthSensors) ? existing.setup_data.healthSensors : [];
       if (!stored.some((sensor) => sensor.id === sensorDraft.id)) throw new Error("Save this instrument to the account before uploading its evidence.");
       const updated = stored.map((sensor) => sensor.id === sensorDraft.id
-        ? { ...sensor, evidenceFileName: file.name, evidenceId: evidence.id, evidenceStorageReference: evidence.storage_reference }
+        ? { ...sensor, ...sensorLabelRatings(sensor, labelDetails), evidenceFileName: file.name, evidenceId: evidence.id, evidenceStorageReference: evidence.storage_reference }
         : sensor);
       const setupData = { ...(existing?.setup_data || {}), healthSensors: updated };
       const { error: saveError } = await supabase.from("WBPBuildingSetupDeclarations").upsert({
@@ -10444,7 +10449,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       if (recordReference) window.localStorage.setItem(`${recordReference}:setupSections`, JSON.stringify(setupData));
       window.dispatchEvent(new CustomEvent("wbp:setup-updated", { detail: { recordId, setupData } }));
       setHealthSensors(updated);
-      setSensorDraft((current) => ({ ...current, evidenceFileName: file.name, evidenceId: evidence.id, evidenceStorageReference: evidence.storage_reference }));
+      setSensorDraft((current) => ({ ...current, ...sensorLabelRatings(current, labelDetails), evidenceFileName: file.name, evidenceId: evidence.id, evidenceStorageReference: evidence.storage_reference }));
       setSensorEvidenceFileName(file.name);
       setSensorEvidenceStatus(`${file.name} uploaded privately to this instrument. It has not been verified.`);
     } catch (error) {
@@ -10482,7 +10487,38 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       setSensorScanStatus("The saved evidence is not a JPG or PNG label photo. Choose a photo to read its details.");
       return;
     }
-    await scanSensorPhoto(new File([data], name, { type: mimeType }), null, null, "photo");
+    const details = await scanSensorPhoto(new File([data], name, { type: mimeType }), null, null, "photo");
+    if (!details || details === true || !sensorDraft.id) return;
+    const ratings = sensorLabelRatings(sensorDraft, details);
+    if (!Object.keys(ratings).length) return;
+    const { data: auth } = await supabase.auth.getUser();
+    const recordId = healthRecordId || ownershipRecord?.databaseId;
+    if (!auth?.user || !recordId) {
+      setSensorScanStatus("Label read into the form. Sign in and save Health Monitoring to sync these details.");
+      return;
+    }
+    const { data: existing, error: readError } = await supabase.from("WBPBuildingSetupDeclarations")
+      .select("setup_data").eq("building_record_id", recordId).maybeSingle();
+    if (readError || !existing?.setup_data) {
+      setSensorScanStatus(`Label read into the form, but account sync failed: ${readError?.message || "Record unavailable"}`);
+      return;
+    }
+    const stored = Array.isArray(existing.setup_data.healthSensors) ? existing.setup_data.healthSensors : [];
+    if (!stored.some((sensor) => sensor.id === sensorDraft.id)) return;
+    const updated = stored.map((sensor) => sensor.id === sensorDraft.id
+      ? { ...sensor, ...sensorLabelRatings(sensor, details) } : sensor);
+    const setupData = { ...existing.setup_data, healthSensors: updated };
+    const { error: saveError } = await supabase.from("WBPBuildingSetupDeclarations").upsert({
+      building_record_id: recordId, setup_data: setupData, updated_by: auth.user.id,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "building_record_id" });
+    if (saveError) {
+      setSensorScanStatus(`Label read into the form, but account sync failed: ${saveError.message}`);
+      return;
+    }
+    setHealthSensors(updated);
+    window.dispatchEvent(new CustomEvent("wbp:setup-updated", { detail: { recordId, setupData } }));
+    setSensorScanStatus("Label ratings saved to this instrument. Check them against the photo.");
   };
 
   const clearHealthSensors = async () => {
@@ -11293,7 +11329,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                       if (!file) return;
                       const canAttach = file.type === "image/jpeg" || file.type === "image/png"
                         ? await scanSensorPhoto(file, null, null, "photo") : true;
-                      if (canAttach) await uploadSensorEvidence(file);
+                      if (canAttach) await uploadSensorEvidence(file, canAttach === true ? null : canAttach);
                     }} />
                     : <span className="block text-xs text-gray-500">Add and save the instrument first, then reopen it to upload evidence.</span>}
                   {sensorEvidenceBusy ? <span className="block text-xs">Uploading...</span> : null}

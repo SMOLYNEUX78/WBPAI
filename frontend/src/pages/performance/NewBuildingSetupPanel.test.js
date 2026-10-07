@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router-dom";
-import { NewBuildingSetupPanel, OccupyHistoryTabs, ProfileSummaryColumns, addressLines, decodeSensorLabel, parseSensorLabelText, mergeScannedSensor, selectDysonStream, registerSensorDraft, sensorLabelConflict, findAccountHomeRecord, findHomeProfileForOverwrite, readCachedBridgewoodValue, observedSensorMetrics } from "./BuildingDashboard";
+import { NewBuildingSetupPanel, OccupyHistoryTabs, ProfileSummaryColumns, addressLines, decodeSensorLabel, parseSensorLabelText, mergeScannedSensor, selectDysonStream, registerSensorDraft, sensorLabelConflict, sensorLabelRatings, findAccountHomeRecord, findHomeProfileForOverwrite, readCachedBridgewoodValue, observedSensorMetrics } from "./BuildingDashboard";
 import supabase from "../../supabaseClient";
 
 beforeEach(() => window.localStorage.clear());
@@ -335,6 +335,14 @@ test("a downstairs label cannot overwrite the upstairs instrument", () => {
   ];
   expect(sensorLabelConflict(sensors, sensors[0], "NN6-UK-HDA1783A")).toMatch(/registered Living room/);
   expect(sensorLabelConflict(sensors, sensors[1], "NN6-UK-HDA1783A")).toBe("");
+});
+
+test("label ratings fill missing instrument fields without replacing confirmed values", () => {
+  const label = { ratedPowerW: "58", ratedVoltage: "230-240", ratedFrequencyHz: "50" };
+  expect(sensorLabelRatings({ serialNumber: "NN6-UK-HDA1783A" }, label)).toEqual(label);
+  expect(sensorLabelRatings({ ratedPowerW: "60", ratedVoltage: "" }, label)).toEqual({
+    ratedVoltage: "230-240", ratedFrequencyHz: "50",
+  });
 });
 
 test("scanning another sensor clears the previous room and connection details", () => {
