@@ -11186,7 +11186,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                 </div> : null}
               </div>
 
-              <div className={`space-y-2 border-t border-gray-200 pt-4 ${sensorDetailsVisible && !sensorDraft.id ? "order-3" : "order-2"}`}>
+              <div className="space-y-2 border-t border-gray-200 pt-4" style={{ order: sensorDetailsVisible && !sensorDraft.id ? 3 : 2 }}>
                 <div className="flex items-center justify-between gap-3">
                   <h4 className="font-semibold text-sm">Registered Instruments</h4>
                   <span className="text-xs text-gray-500">{healthSensors.length} registered</span>
@@ -11237,7 +11237,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                   </div>)}</div>}
               </div>
 
-              {sensorDetailsVisible ? <div className={`space-y-3 border p-3 transition-colors ${sensorDraft.id ? "order-3 border-emerald-700 bg-emerald-50" : "order-2 border-gray-200 bg-white"}`}><h4 className="text-sm font-semibold text-gray-900">{sensorDraft.id ? `Edit ${sensorDraft.manufacturer || "device"} ${sensorDraft.model || ""}` : "New device"}</h4><div className="grid gap-2 sm:grid-cols-2">
+              {sensorDetailsVisible ? <div style={{ order: sensorDraft.id ? 3 : 2 }} className={`space-y-3 border p-3 transition-colors ${sensorDraft.id ? "border-emerald-700 bg-emerald-50" : "border-gray-200 bg-white"}`}><h4 className="text-sm font-semibold text-gray-900">{sensorDraft.id ? `Edit ${sensorDraft.manufacturer || "device"} ${sensorDraft.model || ""}` : "New device"}</h4><div className="grid gap-2 sm:grid-cols-2">
                 <label className="space-y-1 text-xs text-gray-600">
                   Manufacturer
                   <input
