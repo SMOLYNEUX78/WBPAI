@@ -11330,6 +11330,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                     placeholder="Model name or number"
                   />
                 </label>
+                {connectionForSensor(sensorDraft) ? <p className="sm:col-span-2 text-xs text-emerald-900" role="status">{connectionForSensor(sensorDraft).ready ? "Supported connector" : "Recommended route"}: {connectionForSensor(sensorDraft).name}</p> : null}
                 <label className="space-y-1 text-xs text-gray-600">
                   Serial / device ID
                   <input

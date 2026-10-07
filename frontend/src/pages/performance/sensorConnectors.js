@@ -1,6 +1,6 @@
 const CONNECTOR_CATALOG = [
   {
-    manufacturer: "dyson",
+    manufacturer: /\bdyson\b/i,
     models: [/\bpure cool (?:link|formaldehyde)\b/i, /\bTP0[29]\b/i],
     route: "network",
     name: "Dyson home-network collector",
@@ -8,7 +8,7 @@ const CONNECTOR_CATALOG = [
     nextStep: "Match this device with the paired tablet's network scan.",
   },
   {
-    manufacturer: "milesight",
+    manufacturer: /\bmilesight\b/i,
     models: [/\bAM3\d\d(?:L)?\b/i],
     route: "feed",
     name: "LoRaWAN gateway or network-server feed",
@@ -16,7 +16,7 @@ const CONNECTOR_CATALOG = [
     nextStep: "Register the Device EUI with a LoRaWAN network server, then authorise its decoded uplinks for WBP. A Device EUI alone cannot provide readings.",
   },
   {
-    manufacturer: "airgradient",
+    manufacturer: /\bairgradient\b/i,
     models: [/\b(?:ONE|Open Air)\b/i],
     route: "network",
     name: "Local API or MQTT feed",
@@ -24,7 +24,7 @@ const CONNECTOR_CATALOG = [
     nextStep: "Connect the monitor to Wi-Fi. WBP still needs an AirGradient reader before it can import local API or MQTT measurements.",
   },
   {
-    manufacturer: "aranet",
+    manufacturer: /\baranet\b/i,
     models: [/\bAranet4\b/i],
     route: "bluetooth",
     name: "Bluetooth reading connector",
@@ -32,7 +32,7 @@ const CONNECTOR_CATALOG = [
     nextStep: "Keep the tablet within Bluetooth range. WBP still needs an Aranet4 reader; Bluetooth discovery alone does not import measurements.",
   },
   {
-    manufacturer: "netatmo",
+    manufacturer: /\bnetatmo\b/i,
     models: [/\b(?:Smart Indoor Air Quality Monitor|Healthy Home Coach)\b/i],
     route: "api",
     name: "Manufacturer account API",
@@ -42,9 +42,10 @@ const CONNECTOR_CATALOG = [
 ];
 
 export const connectionForSensor = (sensor) => {
-  const manufacturer = String(sensor?.manufacturer || "").trim().toLowerCase();
+  const manufacturer = String(sensor?.manufacturer || "").trim();
   const model = String(sensor?.model || "").trim();
-  if (!manufacturer || !model) return null;
-  return CONNECTOR_CATALOG.find((entry) => manufacturer === entry.manufacturer
-    && entry.models.some((pattern) => pattern.test(model))) || null;
+  const identity = `${manufacturer} ${model}`;
+  if (!manufacturer) return null;
+  return CONNECTOR_CATALOG.find((entry) => entry.manufacturer.test(manufacturer)
+    && entry.models.some((pattern) => pattern.test(identity))) || null;
 };

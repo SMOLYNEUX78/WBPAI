@@ -12,6 +12,11 @@ test("does not infer a connector from a brand or an unknown model", () => {
   expect(connectionForSensor({ manufacturer: "Other", model: "TP02" })).toBeNull();
 });
 
+test("recognises a Milesight model in a longer label or manufacturer field", () => {
+  expect(connectionForSensor({ manufacturer: "Milesight IoT", model: "AM300 Series", serialNumber: "24e1611234567890" })).toMatchObject({ route: "feed", ready: false });
+  expect(connectionForSensor({ manufacturer: "Milesight AM300", model: "", serialNumber: "24e1611234567890" })).toMatchObject({ route: "feed", ready: false });
+});
+
 test.each([
   ["Milesight", "AM300", "feed"],
   ["Milesight", "AM307L", "feed"],
