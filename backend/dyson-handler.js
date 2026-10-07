@@ -2,6 +2,7 @@ const mqtt = require("mqtt");
 const fs = require("fs");
 const path = require("path");
 const supabase = require("./supabaseClient");
+const { normalizeSensorSample, legacyReadingValues } = require("./sensor-normalization");
 require("dotenv").config();
 
 const BUILDING_ID = process.env.DYSON_BUILDING_ID || process.env.BUILDING_ID;
@@ -172,10 +173,25 @@ function connectDevice(device) {
         device,
         mapEnvironmentalData(payload.data)
       );
+      const observedAt = payload.time || new Date().toISOString();
+      const sample = normalizeSensorSample({
+        connector: "dyson-local",
+        deviceId: device.serial,
+        observedAt,
+        readings: [
+          { metric: "temperature", value: mappedValues.temperature_inside, unit: "C" },
+          { metric: "relative_humidity", value: mappedValues.humidity, unit: "%" },
+          { metric: "pm2_5_raw", value: mappedValues.pm25, unit: "device_raw" },
+          { metric: "pm10_raw", value: mappedValues.pm10, unit: "device_raw" },
+          { metric: "tvoc_index", value: mappedValues.vocs, unit: "device_index" },
+          { metric: "formaldehyde_raw", value: mappedValues.hcho, unit: "device_raw" },
+          { metric: "no2_index", value: mappedValues.no2, unit: "device_index" },
+        ],
+      });
       latestByDevice.set(device.name, {
-        ...mappedValues,
+        ...legacyReadingValues(sample),
         device: device.name,
-        timestamp: payload.time || new Date().toISOString(),
+        timestamp: sample.observedAt,
         raw: payload.data,
       });
 
