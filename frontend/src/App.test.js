@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import App from "./App";
 import supabase from "./supabaseClient";
 
@@ -27,6 +27,27 @@ beforeEach(() => {
     upsert: () => Promise.resolve({ error: null }),
   }));
   supabase.rpc.mockResolvedValue({ data: [], error: null });
+});
+
+test("splash confirms sooner and exits after the staggered bars", () => {
+  jest.useFakeTimers();
+  supabase.auth.getSession.mockResolvedValue({ data: { session: null }, error: null });
+  supabase.auth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: jest.fn() } } });
+  window.history.pushState({}, "", "/");
+  try {
+    render(<App />);
+    const splash = screen.getByLabelText("Whole Build Profile loading");
+    act(() => jest.advanceTimersByTime(2949));
+    expect(splash.querySelector(".wbp-splash-ident")).toHaveClass("stage-4");
+    act(() => jest.advanceTimersByTime(1));
+    expect(splash.querySelector(".wbp-splash-ident")).toHaveClass("stage-5");
+    act(() => jest.advanceTimersByTime(2650));
+    expect(splash).toHaveClass("is-exiting");
+    act(() => jest.advanceTimersByTime(400));
+    expect(window.location.pathname).toBe("/login");
+  } finally {
+    jest.useRealTimers();
+  }
 });
 
 test.each(["architect", "builder"])("%s portfolio shows saved organisation details", async (role) => {
