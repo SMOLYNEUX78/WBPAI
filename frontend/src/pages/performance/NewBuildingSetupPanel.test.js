@@ -410,8 +410,12 @@ test("registered instrument tiles open their edit details", async () => {
     location: "Upstairs", metrics: [], connectionMethod: "manual", evidenceGrade: "indicative",
     verificationStatus: "unverified", evidenceStorageReference: "owner/home/label", evidenceFileName: "dyson-label.jpg",
   }, {
-    id: "sensor-2", manufacturer: "IAQ are us", model: "Test", serialNumber: "TEST-002",
+    id: "sensor-2", manufacturer: "Dyson", model: "Pure Cool Link", serialNumber: "LINK-002",
     location: "Downstairs", metrics: [], connectionMethod: "manual", evidenceGrade: "indicative",
+    verificationStatus: "unverified",
+  }, {
+    id: "sensor-3", manufacturer: "IAQ are us", model: "Test", serialNumber: "TEST-003",
+    location: "Office", metrics: [], connectionMethod: "manual", evidenceGrade: "indicative",
     verificationStatus: "unverified",
   }] }));
   render(<MemoryRouter><NewBuildingSetupPanel editModal syncHomeProfile isActive /></MemoryRouter>);
@@ -466,9 +470,17 @@ test("registered instrument tiles open their edit details", async () => {
   expect(registered.compareDocumentPosition(editForm) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(registered).toContainElement(editForm);
   expect(dysonCard).not.toContainElement(editForm);
+  const linkButton = within(dialog).getByRole("button", { name: "Edit Dyson Pure Cool Link" });
+  const iaqButton = within(dialog).getByRole("button", { name: "Edit IAQ are us Test" });
+  expect(linkButton.compareDocumentPosition(editForm) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(editForm.compareDocumentPosition(iaqButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(within(dialog).getByRole("button", { name: "Edit IAQ are us Test" }).closest(".border-gray-300.bg-white")).not.toContainElement(editForm);
   expect(editForm).toHaveClass("bg-emerald-50");
   expect(within(dialog).getByRole("button", { name: "Edit Dyson TP02" })).toHaveClass("bg-emerald-50");
+  fireEvent.click(linkButton);
+  const linkForm = within(dialog).getByRole("heading", { name: "Edit Dyson Pure Cool Link" }).parentElement;
+  expect(linkButton.compareDocumentPosition(linkForm) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(linkForm.compareDocumentPosition(iaqButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   fireEvent.click(within(dialog).getByRole("button", { name: "Edit IAQ are us Test" }));
   expect(within(dialog).getByRole("heading", { name: "Edit IAQ are us Test" })).toBeInTheDocument();
   expect(within(dialog).getByRole("button", { name: "Edit IAQ are us Test" })).toHaveClass("bg-emerald-50");

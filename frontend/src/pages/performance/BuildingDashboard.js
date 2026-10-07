@@ -11235,7 +11235,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                   setSectionSaveStatus("Local sensor draft loaded. Review it, then save health monitoring to sync it to your account.");
                 }}>Load {pendingLocalSensors.length} sensor draft{pendingLocalSensors.length === 1 ? "" : "s"} from this device</button> : null}
                 {healthSensors.length === 0 ? <div className="space-y-2 border bg-white p-3 text-xs text-gray-600"><p>No health-data instruments registered yet.</p><button type="button" className="border border-emerald-700 bg-white px-3 py-2 font-semibold text-emerald-900 disabled:opacity-50" disabled={restoringSensors} onClick={restoreSensorsFromTabletScan}>{restoringSensors ? "Checking saved scan..." : "Restore devices from tablet scan"}</button></div>
-                  : <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">{healthSensors.map((sensor) => <div key={sensor.id} className="min-w-0 border border-gray-300 bg-white p-2 text-xs">
+                  : <div className="grid grid-cols-2 gap-3">{healthSensors.map((sensor, index) => <React.Fragment key={sensor.id}><div className="min-w-0 border border-gray-300 bg-white p-2 text-xs">
                     <button type="button" aria-expanded={sensorDetailsVisible && sensorDraft.id === sensor.id} className={`w-full min-w-0 border px-2 py-3 text-left transition-colors ${sensorDetailsVisible && sensorDraft.id === sensor.id ? "border-emerald-700 bg-emerald-50" : "border-emerald-300 bg-emerald-100"}`} onClick={() => {
                       if (sensorDetailsVisible && sensorDraft.id === sensor.id) {
                         setSensorDetailsVisible(false);
@@ -11289,8 +11289,11 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                         {connectionRoute === "feed" ? <p className="text-xs text-gray-700">For an existing MQTT broker or LoRaWAN platform. WBP would need a secure subscription, decoded readings and a device ID matching this physical sensor. No feed connector is configured yet; the device remains registered but not live.</p> : null}
                       </div> : null}
                     </>}
-                  </div>)}</div>}
-                {sensorDetailsVisible && sensorDraft.id ? <div ref={setEditSensorFormSlot} className="mt-3" /> : null}
+                  </div>
+                  {sensorDetailsVisible && sensorDraft.id && (index % 2 === 1 || index === healthSensors.length - 1)
+                    && Math.floor(healthSensors.findIndex((item) => item.id === sensorDraft.id) / 2) === Math.floor(index / 2)
+                    ? <div ref={setEditSensorFormSlot} className="col-span-2" /> : null}
+                  </React.Fragment>)}</div>}
               </div>
 
               {sensorDetailsVisible ? <SensorFormPlacement target={sensorDraft.id ? editSensorFormSlot : newSensorFormSlot}><div className={`space-y-3 border p-3 transition-colors ${sensorDraft.id ? "border-emerald-700 bg-emerald-50" : "border-gray-200 bg-white"}`}><h4 className="text-sm font-semibold text-gray-900">{sensorDraft.id ? `Edit ${sensorDraft.manufacturer || "device"} ${sensorDraft.model || ""}` : "New device"}</h4><div className="grid gap-2 sm:grid-cols-2">
