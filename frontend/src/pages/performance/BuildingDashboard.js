@@ -11260,15 +11260,16 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                       }}>Connect sensor</button>
                       {connectionRouteSensorId === sensor.id ? <div className="mt-2 space-y-2 border-t border-emerald-200 pt-2">
                         <div className="grid grid-cols-2 gap-1" role="group" aria-label={`Connection route for ${sensor.location || sensor.model || "device"}`}>
-                          {[["network", "Home network"], ["hub", "Manufacturer / hub"], ["bluetooth", "Bluetooth"], ["feed", "Existing data feed"]].map(([route, label]) => <button key={route} type="button" aria-pressed={connectionRoute === route} className={`min-w-0 border px-1 py-2 text-center text-xs font-semibold ${connectionRoute === route ? "border-emerald-700 bg-emerald-100 text-emerald-950" : "border-gray-300 bg-white text-gray-700"}`} onClick={() => setConnectionRoute(route)}>{label}</button>)}
+                          {[["network", "Home network"], ["hub", "Manufacturer / hub"], ["bluetooth", "Bluetooth"], ["feed", "Existing data feed"]].map(([route, label]) => <button key={route} type="button" aria-pressed={connectionRoute === route} className={`min-w-0 border px-1 py-2 text-center text-xs font-semibold ${connectionRoute === route ? "border-emerald-700 bg-emerald-100 text-emerald-950" : "border-gray-300 bg-white text-gray-700"}`} onClick={async () => {
+                            setConnectionRoute(route);
+                            if (route !== "network" || (showNetworkMatches && networkInstrumentId === sensor.id)) return;
+                            const saved = await saveSetupSection();
+                            if (!saved) return;
+                            setNetworkInstrumentId(sensor.id);
+                            setShowNetworkMatches(true);
+                          }}>{label}</button>)}
                         </div>
-                        {connectionRoute === "network" ? showNetworkMatches && networkInstrumentId === sensor.id ? <DeviceImportWorkbench isActive={isActive} embedded requestedInstrumentId={sensor.id} /> : <button type="button" className="w-full border border-emerald-700 bg-white px-2 py-2 text-center font-semibold text-emerald-900" onClick={async () => {
-                          const saved = await saveSetupSection();
-                          if (!saved) return;
-                          setNetworkInstrumentId(sensor.id);
-                          setShowNetworkMatches(true);
-                          requestAnimationFrame(() => document.getElementById("wbp-device-network-step")?.scrollIntoView?.({ behavior: "smooth", block: "nearest" }));
-                        }}>Find on the home network</button> : null}
+                        {connectionRoute === "network" ? showNetworkMatches && networkInstrumentId === sensor.id ? <DeviceImportWorkbench isActive={isActive} embedded requestedInstrumentId={sensor.id} /> : <p className="text-xs text-gray-700">Select Home network to check this device against the paired tablet's scan.</p> : null}
                         {connectionRoute === "hub" ? <p className="text-xs text-gray-700">For sensors managed by a manufacturer app or a Zigbee, Thread or other hub. WBP needs a supported provider connection and permission to read its data. This route is not connected yet; the device remains registered but not live.</p> : null}
                         {connectionRoute === "bluetooth" ? <>
                           <button type="button" className="w-full border border-emerald-700 bg-white px-2 py-2 text-center font-semibold text-emerald-900" onClick={chooseBluetoothDevice}>Find nearby Bluetooth device</button>
