@@ -4,7 +4,7 @@ const path = require("path");
 const supabase = require("./supabaseClient");
 require("dotenv").config();
 
-const BUILDING_ID = process.env.DYSON_BUILDING_ID || "home";
+const BUILDING_ID = process.env.DYSON_BUILDING_ID || process.env.BUILDING_ID;
 const DYSON_POLL_INTERVAL_MS = Number(
   process.env.DYSON_POLL_INTERVAL_MS || 60000
 );
@@ -306,6 +306,11 @@ async function persistReadings() {
     `[dyson] Inserted ${rows.length} purifier telemetry row(s) for ${BUILDING_ID}`
   );
   recordHeartbeat();
+}
+
+if (!BUILDING_ID) {
+  console.error("[dyson] Set DYSON_BUILDING_ID or BUILDING_ID before collecting readings.");
+  process.exit(1);
 }
 
 if (DYSON_DEVICES.length === 0) {

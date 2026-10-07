@@ -22,6 +22,11 @@ const mqttTopics = MQTT_TOPIC.split(",")
   .map((topic) => topic.trim())
   .filter(Boolean);
 
+if (!BUILDING_ID && mqttTopics.some((topic) => !topicBuildingMap[topic])) {
+  console.error("Set BUILDING_ID or map every MQTT_TOPIC to a building in MQTT_TOPIC_BUILDING_MAP.");
+  process.exit(1);
+}
+
 console.log(
   `Starting MQTT collector (${COLLECTOR_INSTANCE}) for ${BUILDING_ID || "unscoped building"} on ${MQTT_URL}`
 );
@@ -272,11 +277,16 @@ client.on('message', async (topic, message) => {
   const timestamp = new Date().toISOString();
   console.debug(`[${timestamp}] Received topic: ${topic}`);
 
+  if (!getBuildingIdForTopic(topic)) {
+    console.warn(`[${timestamp}] Skipping unmapped MQTT topic: ${topic}`);
+    return;
+  }
+
   let payload;
   try {
     payload = JSON.parse(message.toString());
   } catch (err) {
-    console.error(`[${timestamp}] Failed to parse message:`, message.toString());
+    console.error(`[${timestamp}] Failed to parse MQTT JSON on topic ${topic}:`, err.message);
     return;
   }
 

@@ -8,6 +8,11 @@ const enabledProcessNames = (process.env.COLLECTOR_PROCESSES || "")
   .map((name) => name.trim())
   .filter(Boolean);
 
+if (enabledProcessNames.length === 0) {
+  console.error("Set COLLECTOR_PROCESSES explicitly for this tablet before starting collectors.");
+  process.exit(1);
+}
+
 const allProcesses = [
   { name: "api", script: "server.js" },
   { name: "weather", script: "weather-handler.js" },
@@ -19,12 +24,16 @@ const allProcesses = [
   { name: "dyson", script: "dyson-handler.js" },
   { name: "thingsboard", script: "thingsboard-handler.js" },
 ];
-const processes =
-  enabledProcessNames.length > 0
-    ? allProcesses.filter((processConfig) =>
-        enabledProcessNames.includes(processConfig.name)
-      )
-    : allProcesses;
+const unknownProcessNames = enabledProcessNames.filter((name) =>
+  !allProcesses.some((processConfig) => processConfig.name === name)
+);
+if (unknownProcessNames.length > 0) {
+  console.error(`Unknown collector process(es): ${unknownProcessNames.join(", ")}`);
+  process.exit(1);
+}
+const processes = allProcesses.filter((processConfig) =>
+  enabledProcessNames.includes(processConfig.name)
+);
 
 if (processes.length === 0) {
   console.error(

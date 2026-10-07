@@ -10,7 +10,10 @@ From `backend/`, run:
 npm run start:collectors
 ```
 
-That starts and restarts:
+Set `COLLECTOR_PROCESSES` explicitly before running this command; without it,
+the runner exits rather than starting every available collector. See
+`docs/collector-account-readiness.md` before pairing a tablet to another
+account. Available collectors are:
 
 - `server.js` for backend routes and external temperature writes
 - `weather-handler.js` for per-building external temperature writes

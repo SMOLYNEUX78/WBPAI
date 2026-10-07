@@ -3,7 +3,7 @@ require("dotenv").config();
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
-const BUILDING_ID = process.env.BUILDING_ID || "home";
+const BUILDING_ID = process.env.BUILDING_ID;
 const MILESIGHT_API_BASE_URL = process.env.MILESIGHT_API_BASE_URL;
 const MILESIGHT_USERNAME = process.env.MILESIGHT_USERNAME;
 const MILESIGHT_PASSWORD = process.env.MILESIGHT_PASSWORD;
@@ -15,6 +15,7 @@ const MILESIGHT_POLL_INTERVAL_MS = Number(
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const requiredConfig = [
+  ["BUILDING_ID", BUILDING_ID],
   ["MILESIGHT_API_BASE_URL", MILESIGHT_API_BASE_URL],
   ["MILESIGHT_USERNAME or MILESIGHT_API_TOKEN", MILESIGHT_USERNAME || MILESIGHT_API_TOKEN],
 ];

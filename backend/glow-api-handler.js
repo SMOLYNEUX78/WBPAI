@@ -36,7 +36,7 @@ const CARBON_SAVINGS_AFTER_GLOW_INTERVAL_MS = Number(
   process.env.CARBON_SAVINGS_AFTER_GLOW_INTERVAL_MS || 0
 );
 const CARBON_SAVINGS_BUILDING_ID =
-  process.env.CARBON_SAVINGS_BUILDING_ID || "home";
+  process.env.CARBON_SAVINGS_BUILDING_ID || "";
 const COLLECTOR_INSTANCE = process.env.COLLECTOR_INSTANCE || "unknown";
 const SOURCE_NAME = `glow-api:${COLLECTOR_INSTANCE}`;
 const GLOW_API_RESOURCES = process.env.GLOW_API_RESOURCES || "";
@@ -55,30 +55,12 @@ const lastInstantPowerPollByResource = new Map();
 let lastCarbonSavingsRefreshAt = 0;
 let carbonSavingsRefreshInFlight = false;
 
-const defaultResources = [
-  {
-    buildingId: "home",
-    fuelType: "electricity",
-    resourceId: "042517ae-601f-4928-b3d2-e49b1de0e695",
-  },
-  {
-    buildingId: "home",
-    fuelType: "gas",
-    resourceId: "a2130979-fb09-48bf-89f9-5703c30037b8",
-  },
-  {
-    buildingId: "museum",
-    fuelType: "electricity",
-    resourceId: "12e31e6d-11dc-4bc3-a70b-dab6f76fc73c",
-  },
-];
-
 const resources = parseResourceConfig(GLOW_API_RESOURCES);
 const startupCatchupComplete = new Set();
 
 function parseResourceConfig(value) {
   if (!value.trim()) {
-    return defaultResources;
+    return [];
   }
 
   return value
@@ -474,6 +456,11 @@ function scheduleCarbonSavingsRefresh(rows, timestamp) {
 
 if (!GLOW_USERNAME || !GLOW_PASSWORD) {
   console.error("Glow API credentials are missing.");
+  process.exit(1);
+}
+
+if (resources.length === 0) {
+  console.error("Set GLOW_API_RESOURCES before starting the Glow collector.");
   process.exit(1);
 }
 

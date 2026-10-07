@@ -16,11 +16,11 @@ let supportsRainfallColumns = true;
 
 const defaultLocations = [
   {
-    buildingId: process.env.BUILDING_ID || "museum",
+    buildingId: process.env.BUILDING_ID,
     lat: process.env.DEFAULT_LAT,
     lon: process.env.DEFAULT_LON,
   },
-].filter((location) => location.lat && location.lon);
+].filter((location) => location.buildingId && location.lat && location.lon);
 
 const locations = parseWeatherLocations(WEATHER_LOCATIONS);
 

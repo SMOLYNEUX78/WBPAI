@@ -8,7 +8,7 @@ const THINGSBOARD_BASE_URL =
   process.env.THINGSBOARD_BASE_URL || "https://dashboard.thingitude-apps.com";
 const DEVICE_ID =
   process.env.THINGSBOARD_DEVICE_ID ||
-  "c0bb9ea0-2ab2-11ed-8a5f-e9c2e37e229b";
+  "";
 const THINGSBOARD_PUBLIC_ID = process.env.THINGSBOARD_PUBLIC_ID || null;
 const SAVE_INTERVAL_MS = Number(
   process.env.THINGSBOARD_SAVE_INTERVAL_MS || 60000
@@ -20,7 +20,12 @@ const STALE_TELEMETRY_MS = Number(
   process.env.THINGSBOARD_STALE_TELEMETRY_MS || 5 * 60 * 1000
 );
 const BUILDING_ID =
-  process.env.THINGSBOARD_BUILDING_ID || process.env.BUILDING_ID || "museum";
+  process.env.THINGSBOARD_BUILDING_ID || process.env.BUILDING_ID;
+
+if (!BUILDING_ID || !DEVICE_ID) {
+  console.error("Set THINGSBOARD_DEVICE_ID and THINGSBOARD_BUILDING_ID or BUILDING_ID before collecting readings.");
+  process.exit(1);
+}
 
 const latestValues = {
   temperature: null,
