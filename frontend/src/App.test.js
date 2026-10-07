@@ -45,7 +45,9 @@ test("splash starts bars with the title, then confirms and exits", () => {
     expect(splash.querySelector(".wbp-splash-ident")).toHaveClass("stage-4");
     act(() => jest.advanceTimersByTime(1));
     expect(splash.querySelector(".wbp-splash-ident")).toHaveClass("stage-5");
-    act(() => jest.advanceTimersByTime(2650));
+    act(() => jest.advanceTimersByTime(2149));
+    expect(splash).not.toHaveClass("is-exiting");
+    act(() => jest.advanceTimersByTime(1));
     expect(splash).toHaveClass("is-exiting");
     act(() => jest.advanceTimersByTime(400));
     expect(window.location.pathname).toBe("/login");
