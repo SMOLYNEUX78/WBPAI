@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router-dom";
-import { NewBuildingSetupPanel, OccupyHistoryTabs, ProfileSummaryColumns, addressLines, decodeSensorLabel, parseSensorLabelText, mergeScannedSensor, selectDysonStream, registerSensorDraft, sensorLabelConflict, sensorLabelRatings, findAccountHomeRecord, findHomeProfileForOverwrite, readCachedBridgewoodValue, observedSensorMetrics } from "./BuildingDashboard";
+import { NewBuildingSetupPanel, OccupyHistoryTabs, ProfileSummaryColumns, addressLines, decodeSensorLabel, parseSensorLabelText, mergeScannedSensor, selectDysonStream, registerSensorDraft, sensorLabelConflict, sensorLabelRatings, likelyOcrSerial, mergeAccountSensors, findAccountHomeRecord, findHomeProfileForOverwrite, readCachedBridgewoodValue, observedSensorMetrics } from "./BuildingDashboard";
 import supabase from "../../supabaseClient";
 
 beforeEach(() => window.localStorage.clear());
@@ -333,8 +333,19 @@ test("a downstairs label cannot overwrite the upstairs instrument", () => {
     { id: "upstairs", location: "Upstairs", serialNumber: "7BD-UK-TAA0665A" },
     { id: "downstairs", location: "Living room", serialNumber: "NN6-UK-HDA1783A" },
   ];
-  expect(sensorLabelConflict(sensors, sensors[0], "NN6-UK-HDA1783A")).toMatch(/registered Living room/);
+  expect(sensorLabelConflict(sensors, sensors[0], "NN6-UK-HDA1783A")).toMatch(/Photo reads NN6-UK-HDA1783A.*registered Living room.*7BD-UK-TAA0665A/);
   expect(sensorLabelConflict(sensors, sensors[1], "NN6-UK-HDA1783A")).toBe("");
+});
+
+test("small OCR errors are distinguishable from the other Dyson serial", () => {
+  expect(likelyOcrSerial("7BD-UK-TAA0665A", "7BD-UK-TAAO665A")).toBe(true);
+  expect(likelyOcrSerial("7BD-UK-TAA0665A", "NN6-UK-HDA1783A")).toBe(false);
+});
+
+test("secure account evidence wins over a stale browser sensor copy", () => {
+  const account = [{ id: "upstairs", serialNumber: "7BD-UK-TAA0665A", evidenceStorageReference: "correct-photo" }];
+  const stale = [{ id: "upstairs", serialNumber: "7BD-UK-TAA0665A", evidenceStorageReference: "old-photo" }];
+  expect(mergeAccountSensors(account, stale, stale)).toEqual(account);
 });
 
 test("label ratings fill missing instrument fields without replacing confirmed values", () => {
@@ -413,7 +424,7 @@ test("registered instrument tiles open their edit details", async () => {
   expect(serialInput.closest(".bg-emerald-100")).toHaveClass("border-emerald-700");
   expect(edit.compareDocumentPosition(serialInput) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(within(dialog).getByText(/Editing Dyson TP02/)).toBeInTheDocument();
-  expect(within(dialog).getAllByLabelText("Supporting evidence").some((input) => input.type === "file")).toBe(true);
+  expect(dialog.querySelector('input[type="file"][accept*="image/jpeg"]')).toBeInTheDocument();
   expect(within(dialog).getByRole("button", { name: "Read saved label photo" })).toBeInTheDocument();
   fireEvent.change(within(dialog).getByRole("textbox", { name: "Serial / device ID" }), { target: { value: "NN6-UK-HDA1783A" } });
   fireEvent.click(within(dialog).getByRole("button", { name: "Update instrument" }));

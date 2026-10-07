@@ -87,16 +87,25 @@ export const sensorLabelConflict = (sensors, selected, incoming) => {
   if (!serial) return "";
   const other = sensors.find((sensor) => sensor.id !== selected?.id &&
     normaliseSerial(sensor.serialNumber || sensor.labelCode) === serial);
-  if (other) return `This label matches the registered ${other.location || other.model || "other device"}, not this instrument. No details were changed.`;
+  if (other) return `Photo reads ${incoming}, which matches the registered ${other.location || other.model || "other device"}; the selected ${selected?.location || "instrument"} is ${selected?.serialNumber || selected?.labelCode || "not identified"}. No details were changed. Open the saved photo to check whether it was attached to the wrong device.`;
   if (selected?.id && selected.serialNumber && normaliseSerial(selected.serialNumber) !== serial) {
-    return "This label's serial differs from the selected instrument. No details were changed; check which physical unit you photographed.";
+    return `Photo reads ${incoming}, but the selected ${selected.location || "instrument"} is ${selected.serialNumber}. No details were changed. Open the saved photo to check the printed serial; OCR may have misread it.`;
   }
   return "";
+};
+export const likelyOcrSerial = (saved, scanned) => {
+  const left = normaliseSerial(saved);
+  const right = normaliseSerial(scanned);
+  return left.length >= 12 && left.length === right.length &&
+    [...left].filter((character, index) => character !== right[index]).length <= 2;
 };
 export const sensorLabelRatings = (sensor, details) => Object.fromEntries(
   ["ratedPowerW", "ratedVoltage", "ratedFrequencyHz"].filter((field) =>
     details?.[field] && !sensor?.[field]
   ).map((field) => [field, details[field]])
+);
+export const mergeAccountSensors = (accountSensors, localSensors, currentSensors) => Array.from(
+  new Map([...localSensors, ...currentSensors, ...accountSensors].map((sensor) => [sensor.id, sensor])).values()
 );
 const canRegisterSensor = (sensor) => Boolean(String(sensor?.manufacturer || "").trim()
   && (String(sensor?.model || "").trim() || sensorIdentity(sensor)));
@@ -9388,7 +9397,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
         if (data.setup_data.healthSensorDraft.manufacturer || data.setup_data.healthSensorDraft.labelCode) setSensorDetailsVisible(true);
       }
       const sameHome = cachedPassport?.ownerUserId === auth.user.id && cachedPassport.databaseId === healthRecordId;
-      setHealthSensors((current) => Array.from(new Map([...accountSensors, ...(sameHome ? localSensors : []), ...current].map((sensor) => [sensor.id, sensor])).values()));
+      setHealthSensors((current) => mergeAccountSensors(accountSensors, sameHome ? localSensors : [], current));
       if (localSensors.length && sameHome) setSectionSaveStatus("Local sensor draft ready to sync. Save health monitoring to add it to your account.");
       if (localSensors.length && !sameHome) setPendingLocalSensors(localSensors);
     };
@@ -10349,7 +10358,10 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
       let uncertainSerial = false;
       if (!barcodeDetails?.labelCode && sensorDraft.serialNumber && printedDetails.serialNumber &&
         normaliseSerial(sensorDraft.serialNumber) !== normaliseSerial(printedDetails.serialNumber) &&
-        normaliseSerial(sensorDraft.serialNumber).slice(0, 8) === normaliseSerial(printedDetails.serialNumber).slice(0, 8)) {
+        !healthSensors.some((sensor) => sensor.id !== sensorDraft.id &&
+          normaliseSerial(sensor.serialNumber || sensor.labelCode) === normaliseSerial(printedDetails.serialNumber)) &&
+        (normaliseSerial(sensorDraft.serialNumber).slice(0, 8) === normaliseSerial(printedDetails.serialNumber).slice(0, 8)
+          || likelyOcrSerial(sensorDraft.serialNumber, printedDetails.serialNumber))) {
         printedDetails.serialNumber = sensorDraft.serialNumber;
         uncertainSerial = true;
       }
@@ -11334,6 +11346,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                     : <span className="block text-xs text-gray-500">Add and save the instrument first, then reopen it to upload evidence.</span>}
                   {sensorEvidenceBusy ? <span className="block text-xs">Uploading...</span> : null}
                   {sensorDraft.evidenceStorageReference ? <button type="button" className="block text-left text-xs text-blue-700 underline" onClick={openSensorEvidence}>View {sensorDraft.evidenceFileName || "uploaded evidence"}</button> : null}
+                  {sensorDraft.evidenceStorageReference ? <span className="block text-xs text-gray-600">Saved for {sensorDraft.location || "this instrument"} · {sensorDraft.serialNumber || sensorDraft.labelCode || "serial not recorded"}</span> : null}
                   {sensorDraft.evidenceStorageReference && /\.(jpe?g|png)$/i.test(sensorDraft.evidenceFileName || "") ? <button type="button" disabled={sensorPhotoBusy} className="block text-left text-xs font-semibold text-emerald-800 underline disabled:opacity-50" onClick={rereadSensorEvidence}>Read saved label photo</button> : null}
                   {sensorEvidenceStatus ? <span role="status" className="block text-xs">{sensorEvidenceStatus}</span> : null}
                   {sensorScanStatus ? <span role="status" className="block text-xs">{sensorScanStatus}</span> : null}
