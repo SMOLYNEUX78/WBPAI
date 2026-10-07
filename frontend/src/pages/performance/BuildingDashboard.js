@@ -11273,6 +11273,10 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                         <p className="text-xs text-gray-700">{connectionForSensor(sensor)
                           ? `${connectionForSensor(sensor).ready ? "Supported connector" : "Recommended route"} for ${sensor.manufacturer} ${sensor.model}: ${connectionForSensor(sensor).name}. ${connectionForSensor(sensor).nextStep}`
                           : "No supported reading connector is registered for this model yet. The instrument is saved, but WBP cannot import its data until a compatible connector is configured."}</p>
+                        {connectionForSensor(sensor)?.steps ? <div className="border border-emerald-200 bg-white p-3 text-xs text-gray-800">
+                          <ol className="list-inside list-decimal space-y-2">{connectionForSensor(sensor).steps.map((step) => <li key={step}>{step}</li>)}</ol>
+                          <a href={connectionForSensor(sensor).guideUrl} target="_blank" rel="noopener noreferrer" className="mt-3 inline-block font-semibold text-emerald-800 underline">{connectionForSensor(sensor).guideLabel}</a>
+                        </div> : null}
                         <details className="text-xs text-gray-700"><summary className="cursor-pointer font-semibold">Other connection methods</summary>
                         <div className="grid grid-cols-2 gap-1" role="group" aria-label={`Connection route for ${sensor.location || sensor.model || "device"}`}>
                           {[["network", "Home network"], ["api", "Manufacturer API"], ["hub", "Manufacturer / hub"], ["bluetooth", "Bluetooth"], ["feed", "Existing data feed"]].map(([route, label]) => <button key={route} type="button" disabled={route === "network" && !connectionForSensor(sensor)?.ready} aria-pressed={connectionRoute === route} className={`min-w-0 border px-1 py-2 text-center text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${connectionRoute === route ? "border-emerald-700 bg-emerald-100 text-emerald-950" : "border-gray-300 bg-white text-gray-700"}`} onClick={async () => {
@@ -11293,7 +11297,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                           {bluetoothCandidate ? <p className="break-words text-xs text-gray-700">Selected: {bluetoothCandidate.name} ({bluetoothCandidate.id}). Compare it with the physical device before using a supported connector.</p> : null}
                           {bluetoothStatus ? <p role="status" className="text-xs text-gray-700">{bluetoothStatus}</p> : null}
                         </> : null}
-                        {connectionRoute === "feed" ? <p className="text-xs text-gray-700">For an existing MQTT broker or LoRaWAN platform. WBP would need a secure subscription, decoded readings and a device ID matching this physical sensor. No feed connector is configured yet; the device remains registered but not live.</p> : null}
+                        {connectionRoute === "feed" && !connectionForSensor(sensor)?.steps ? <p className="text-xs text-gray-700">For an existing MQTT broker or LoRaWAN platform. WBP would need a secure subscription, decoded readings and a device ID matching this physical sensor. No feed connector is configured yet; the device remains registered but not live.</p> : null}
                       </div> : null}
                     </>}
                   </div>

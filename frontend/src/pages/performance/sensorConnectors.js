@@ -13,7 +13,14 @@ const CONNECTOR_CATALOG = [
     route: "feed",
     name: "LoRaWAN gateway or network-server feed",
     ready: false,
-    nextStep: "Register the Device EUI with a LoRaWAN network server, then authorise its decoded uplinks for WBP. A Device EUI alone cannot provide readings.",
+    nextStep: "This sensor needs a LoRaWAN gateway. It cannot send readings straight to your tablet or home Wi-Fi.",
+    steps: [
+      "Add the sensor to a Milesight gateway and Milesight IoT Cloud account.",
+      "Check that readings appear in the Milesight app.",
+      "Keep this device registered here. WBP import is not available yet; no gateway password or device key is needed in this form.",
+    ],
+    guideUrl: "https://www.milesight.com/getting-start/en/am300-series-quick-start-guide.html",
+    guideLabel: "Open Milesight AM300 setup guide",
   },
   {
     manufacturer: /\bairgradient\b/i,
