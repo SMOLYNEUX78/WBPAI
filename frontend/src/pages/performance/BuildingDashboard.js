@@ -11267,7 +11267,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                         setConnectionRoute(opening ? connector?.route || "" : "");
                         setBluetoothCandidate(null);
                         setBluetoothStatus("");
-                        if (opening && connector?.ready && connector.route === "network") void findRegisteredSensor(sensor.id);
+                        if (opening && connector?.id === "dyson") void findRegisteredSensor(sensor.id);
                       }}>Connect sensor</button>
                       {connectionRouteSensorId === sensor.id ? <div className="mt-2 space-y-2 border-t border-emerald-200 pt-2">
                         <p className="text-xs text-gray-700">{connectionForSensor(sensor)
@@ -11285,12 +11285,13 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                               chooseBluetoothDevice();
                               return;
                             }
-                            if (route !== "network" || (showNetworkMatches && networkInstrumentId === sensor.id)) return;
+                            if (route !== "network" || connectionForSensor(sensor)?.id !== "dyson" || (showNetworkMatches && networkInstrumentId === sensor.id)) return;
                             await findRegisteredSensor(sensor.id);
                           }}>{label}</button>)}
                         </div>
                         </details>
-                        {connectionRoute === "network" && connectionForSensor(sensor)?.ready ? showNetworkMatches && networkInstrumentId === sensor.id ? <DeviceImportWorkbench isActive={isActive} embedded requestedInstrumentId={sensor.id} /> : <p className="text-xs text-gray-700">Checking the paired tablet for this device...</p> : null}
+                        {connectionRoute === "network" && connectionForSensor(sensor)?.id === "dyson" ? showNetworkMatches && networkInstrumentId === sensor.id ? <DeviceImportWorkbench isActive={isActive} embedded requestedInstrumentId={sensor.id} /> : <p className="text-xs text-gray-700">Checking the paired tablet for this device...</p> : null}
+                        {connectionRoute === "network" && connectionForSensor(sensor)?.id === "airgradient" ? <AirGradientLocalConnect sensor={sensor} isActive={isActive} /> : null}
                         {connectionRoute === "api" ? <p className="text-xs text-gray-700">WBP has not connected this manufacturer's account API yet. No credentials or data are collected here.</p> : null}
                         {connectionRoute === "hub" ? <p className="text-xs text-gray-700">For sensors managed by a manufacturer app or a Zigbee, Thread or other hub. WBP needs a supported provider connection and permission to read its data. This route is not connected yet; the device remains registered but not live.</p> : null}
                         {connectionRoute === "bluetooth" ? <>
@@ -12724,6 +12725,127 @@ export const SensorLiveReadings = ({ sensor }) => {
         <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">{Object.entries(SENSOR_READING_COLUMNS).filter(([, column]) => row[column] != null).map(([metric, column]) => <span key={metric}>{metric.toUpperCase()} {row[column]}</span>)}</div>
       </div>)}</div>
     </>}
+  </div>;
+};
+
+const AirGradientLocalConnect = ({ sensor, isActive }) => {
+  const serial = String(sensor?.serialNumber || sensor?.labelCode || "").replace(/[^0-9a-f]/gi, "").toLowerCase();
+  const validSerial = /^[0-9a-f]{12}$/.test(serial);
+  const [profile, setProfile] = useState(null);
+  const [tablet, setTablet] = useState(null);
+  const [connection, setConnection] = useState(null);
+  const [probeId, setProbeId] = useState("");
+  const [sample, setSample] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState("");
+
+  useEffect(() => {
+    if (!isActive || !sensor?.id) return undefined;
+    let active = true;
+    const load = async () => {
+      const { data: auth } = await supabase.auth.getUser();
+      if (!auth?.user) { if (active) setStatus("Sign in to connect this monitor."); return; }
+      const { data: home, error } = await findAccountHomeRecord(supabase, auth.user.id, readSavedHomePassport()?.databaseId);
+      if (!active) return;
+      if (error || !home?.id) { setStatus("Save the property profile before connecting a monitor."); return; }
+      setProfile(home);
+      const [{ data: tablets, error: tabletError }, { data: linked }] = await Promise.all([
+        supabase.from("WBPCollectorDevices").select("id,last_seen_at").eq("building_record_id", home.id).order("created_at", { ascending: false }).limit(1),
+        supabase.from("WBPAirGradientConnections").select("id,serial,active,last_sample_at").eq("building_record_id", home.id).eq("instrument_id", sensor.id).maybeSingle(),
+      ]);
+      if (!active) return;
+      setTablet(tablets?.[0] || null);
+      setConnection(linked || null);
+      if (tabletError) setStatus("Tablet pairing is not available. Pair the home tablet first.");
+    };
+    load();
+    return () => { active = false; };
+  }, [isActive, sensor?.id]);
+
+  useEffect(() => {
+    if (!probeId || !isActive) return undefined;
+    let active = true;
+    const startedAt = Date.now();
+    const check = async () => {
+      const { data, error } = await supabase.from("WBPAirGradientProbeJobs")
+        .select("status,result,error_message").eq("id", probeId).maybeSingle();
+      if (!active) return;
+      if (error || data?.status === "failed") {
+        setStatus(error ? `Could not check the tablet: ${error.message}` : data.error_message || "The local test failed.");
+        setProbeId(""); setBusy(false);
+      } else if (data?.status === "complete") {
+        setSample(data.result);
+        setStatus("Local reading returned with a matching serial. Check it against the monitor display before starting import.");
+        setProbeId(""); setBusy(false);
+      } else if (data?.status === "running") setStatus("Tablet is reading the monitor on your Wi-Fi...");
+      else if (Date.now() - startedAt > 30000) setStatus("The paired tablet has not answered yet. Check that its scan worker is running and updated.");
+    };
+    check();
+    const timer = setInterval(check, 2500);
+    return () => { active = false; clearInterval(timer); };
+  }, [probeId, isActive]);
+
+  useEffect(() => {
+    if (!isActive || !connection?.active || !profile?.id) return undefined;
+    let active = true;
+    const refresh = async () => {
+      const { data } = await supabase.from("WBPAirGradientConnections")
+        .select("id,serial,active,last_sample_at").eq("id", connection.id).maybeSingle();
+      if (active && data) setConnection(data);
+    };
+    const timer = setInterval(refresh, 15000);
+    return () => { active = false; clearInterval(timer); };
+  }, [isActive, connection?.id, connection?.active, profile?.id]);
+
+  const testReading = async () => {
+    if (!profile?.id || !tablet?.id || !validSerial) return;
+    setBusy(true); setSample(null); setStatus("Asking the paired tablet to test this monitor...");
+    const { data: auth } = await supabase.auth.getUser();
+    const { data, error } = await supabase.from("WBPAirGradientProbeJobs")
+      .insert({ building_record_id: profile.id, device_id: tablet.id, requested_by: auth?.user?.id, serial })
+      .select("id").single();
+    if (error) { setStatus(`Could not start test: ${error.message}. Apply AirGradient Local Connector.sql in Supabase.`); setBusy(false); }
+    else setProbeId(data.id);
+  };
+
+  const startImport = async () => {
+    if (!sample || !profile?.id || !tablet?.id || !validSerial) return;
+    setBusy(true);
+    if (connection && connection.serial !== serial) {
+      setStatus("This instrument is linked to a different serial. Check the scanned label before changing devices.");
+      setBusy(false);
+      return;
+    }
+    const query = connection
+      ? supabase.from("WBPAirGradientConnections").update({ active: true }).eq("id", connection.id)
+      : supabase.from("WBPAirGradientConnections").insert({ building_record_id: profile.id, device_id: tablet.id, instrument_id: sensor.id, serial });
+    const { data, error } = await query.select("id,serial,active,last_sample_at").single();
+    if (error) setStatus(`Could not start import: ${error.message}`);
+    else { setConnection(data); setStatus("Import enabled. The paired tablet will save readings about once a minute while it is running and on the same Wi-Fi."); }
+    setBusy(false);
+  };
+
+  const stopImport = async () => {
+    if (!connection?.id) return;
+    setBusy(true);
+    const { error } = await supabase.from("WBPAirGradientConnections").update({ active: false }).eq("id", connection.id);
+    if (error) setStatus(`Could not stop import: ${error.message}`);
+    else { setConnection((current) => ({ ...current, active: false })); setStatus("Import stopped. Stored readings remain on the property profile."); }
+    setBusy(false);
+  };
+
+  return <div className="space-y-2 border border-emerald-200 bg-white p-3 text-xs text-gray-800">
+    <p>AirGradient local connection · {validSerial ? `Serial ${serial}` : "Enter the 12-character serial from the device label first."}</p>
+    {!tablet ? <p>Pair the home tablet in Connect before testing this monitor.</p> : null}
+    {connection?.active ? <>
+      <p className="font-semibold text-emerald-800">Import enabled{connection.last_sample_at ? ` · Last saved ${new Date(connection.last_sample_at).toLocaleString()}` : " · Waiting for first reading"}</p>
+      <button type="button" disabled={busy} onClick={stopImport} className="border border-gray-400 bg-white px-3 py-2 font-semibold disabled:opacity-50">Stop import</button>
+    </> : <>
+      <button type="button" disabled={!tablet || !validSerial || busy} onClick={testReading} className="border border-emerald-700 bg-white px-3 py-2 font-semibold text-emerald-900 disabled:opacity-50">{busy ? "Testing..." : "Test local reading"}</button>
+      {sample ? <p>Reading found: {sample.measurements?.temperature_inside ?? "-"} C · {sample.measurements?.humidity ?? "-"}% RH · {sample.co2 ?? "-"} ppm CO2</p> : null}
+      {sample ? <button type="button" disabled={busy} onClick={startImport} className="ml-2 border border-emerald-700 bg-emerald-700 px-3 py-2 font-semibold text-white disabled:opacity-50">Start import</button> : null}
+    </>}
+    {status ? <p role="status">{status}</p> : null}
   </div>;
 };
 

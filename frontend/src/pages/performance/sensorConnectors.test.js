@@ -21,10 +21,12 @@ test("recognises a Milesight model in a longer label or manufacturer field", () 
 test.each([
   ["Milesight", "AM300", "feed"],
   ["Milesight", "AM307L", "feed"],
-  ["AirGradient", "ONE", "network"],
-  ["AirGradient", "Open Air", "network"],
   ["Aranet", "Aranet4", "bluetooth"],
   ["Netatmo", "Smart Indoor Air Quality Monitor", "api"],
 ])("recognises %s %s without claiming a live connector", (manufacturer, model, route) => {
   expect(connectionForSensor({ manufacturer, model })).toMatchObject({ route, ready: false });
+});
+
+test.each(["ONE", "Open Air", "I-9PSL-DE", "O-1PST"])("selects the AirGradient local connector for %s", (model) => {
+  expect(connectionForSensor({ manufacturer: "AirGradient", model })).toMatchObject({ route: "network", ready: true });
 });

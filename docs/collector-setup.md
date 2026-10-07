@@ -337,6 +337,20 @@ For the full available history, widen `GLOW_HISTORY_FROM`. The script requests
 `PT30M` readings in chunks, skips existing timestamps for the same building and
 fuel, and writes rows with `reading_type=interval_30m`.
 
+## AirGradient local API
+
+Apply `Supabase-code/AirGradient Local Connector.sql` after `Collector Scan Queue.sql`.
+Update the paired tablet checkout and restart its `wbp-scan` tmux session so the
+new worker code runs. Existing Dyson, weather and energy collectors do not need
+to restart. In WBP, scan and save an AirGradient ONE/Open Air monitor, open
+**Connect sensor**, and select **Test local reading**. Only a serial-matched
+reading unlocks **Start import**. The tablet then polls the local API about
+once a minute and writes to `Readings` under that property's record reference.
+No AirGradient cloud API token or MQTT broker is required. The monitor and
+tablet must stay on the same Wi-Fi, and the tablet must resolve the monitor's
+`airgradient_<serial>.local` mDNS name. This path has unit tests but cannot be
+verified end-to-end without a physical AirGradient monitor.
+
 ## Supabase requirement
 
 The shared architecture expects `Readings` to include a nullable text column:

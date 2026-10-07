@@ -1,5 +1,6 @@
 const CONNECTOR_CATALOG = [
   {
+    id: "dyson",
     manufacturer: /\bdyson\b/i,
     models: [/\bpure cool (?:link|formaldehyde)\b/i, /\bTP0[29]\b/i],
     route: "network",
@@ -8,6 +9,7 @@ const CONNECTOR_CATALOG = [
     nextStep: "Match this device with the paired tablet's network scan.",
   },
   {
+    id: "milesight",
     manufacturer: /\bmilesight\b/i,
     models: [/\bAM3\d\d(?:L)?\b/i],
     route: "feed",
@@ -23,14 +25,16 @@ const CONNECTOR_CATALOG = [
     guideLabel: "Open Milesight AM300 setup guide",
   },
   {
+    id: "airgradient",
     manufacturer: /\bairgradient\b/i,
-    models: [/\b(?:ONE|Open Air)\b/i],
+    models: [/\b(?:ONE|Open Air)\b/i, /\bI-9PSL(?:-DE)?\b/i, /\bO-1PST\b/i],
     route: "network",
-    name: "Local API or MQTT feed",
-    ready: false,
-    nextStep: "Connect the monitor to Wi-Fi. WBP still needs an AirGradient reader before it can import local API or MQTT measurements.",
+    name: "Local Wi-Fi API",
+    ready: true,
+    nextStep: "Connect the monitor to the same Wi-Fi as your paired tablet, then test a local reading below. No AirGradient API token is needed.",
   },
   {
+    id: "aranet",
     manufacturer: /\baranet\b/i,
     models: [/\bAranet4\b/i],
     route: "bluetooth",
@@ -39,6 +43,7 @@ const CONNECTOR_CATALOG = [
     nextStep: "Keep the tablet within Bluetooth range. WBP still needs an Aranet4 reader; Bluetooth discovery alone does not import measurements.",
   },
   {
+    id: "netatmo",
     manufacturer: /\bnetatmo\b/i,
     models: [/\b(?:Smart Indoor Air Quality Monitor|Healthy Home Coach)\b/i],
     route: "api",
