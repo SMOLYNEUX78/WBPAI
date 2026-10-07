@@ -478,11 +478,14 @@ test("registered instrument tiles open their edit details", async () => {
   expect(editForm).toHaveClass("bg-emerald-50");
   expect(within(dialog).getByRole("button", { name: "Edit Dyson TP02" })).toHaveClass("bg-emerald-50");
   expect(dysonCard).toHaveClass("border-b-0", "bg-emerald-50");
+  expect(edit).toHaveClass("border-0");
   expect(editForm.parentElement).toHaveClass("-mt-3", "bg-emerald-50");
+  expect(editForm.parentElement.querySelector('span[aria-hidden="true"]')).toHaveClass("left-[calc(50%+0.375rem)]");
   fireEvent.click(linkButton);
   const linkForm = within(dialog).getByRole("heading", { name: "Edit Dyson Pure Cool Link" }).parentElement;
   expect(linkButton.compareDocumentPosition(linkForm) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(linkForm.compareDocumentPosition(iaqButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(linkForm.parentElement.querySelector('span[aria-hidden="true"]')).toHaveClass("right-[calc(50%+0.375rem)]");
   fireEvent.click(within(dialog).getByRole("button", { name: "Edit IAQ are us Test" }));
   expect(within(dialog).getByRole("heading", { name: "Edit IAQ are us Test" })).toBeInTheDocument();
   expect(within(dialog).getByRole("button", { name: "Edit IAQ are us Test" })).toHaveClass("bg-emerald-50");

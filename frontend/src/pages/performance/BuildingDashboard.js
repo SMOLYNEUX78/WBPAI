@@ -11236,7 +11236,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                 }}>Load {pendingLocalSensors.length} sensor draft{pendingLocalSensors.length === 1 ? "" : "s"} from this device</button> : null}
                 {healthSensors.length === 0 ? <div className="space-y-2 border bg-white p-3 text-xs text-gray-600"><p>No health-data instruments registered yet.</p><button type="button" className="border border-emerald-700 bg-white px-3 py-2 font-semibold text-emerald-900 disabled:opacity-50" disabled={restoringSensors} onClick={restoreSensorsFromTabletScan}>{restoringSensors ? "Checking saved scan..." : "Restore devices from tablet scan"}</button></div>
                   : <div className="grid grid-cols-2 gap-3">{healthSensors.map((sensor, index) => <React.Fragment key={sensor.id}><div className={`min-w-0 border p-2 text-xs ${sensorDetailsVisible && sensorDraft.id === sensor.id ? "border-emerald-700 border-b-0 bg-emerald-50 pb-0" : "border-gray-300 bg-white"}`}>
-                    <button type="button" aria-expanded={sensorDetailsVisible && sensorDraft.id === sensor.id} className={`w-full min-w-0 border px-2 py-3 text-left transition-colors ${sensorDetailsVisible && sensorDraft.id === sensor.id ? "border-emerald-700 border-b-0 bg-emerald-50" : "border-emerald-300 bg-emerald-100"}`} onClick={() => {
+                    <button type="button" aria-expanded={sensorDetailsVisible && sensorDraft.id === sensor.id} className={`w-full min-w-0 px-2 py-3 text-left transition-colors ${sensorDetailsVisible && sensorDraft.id === sensor.id ? "border-0 bg-emerald-50" : "border border-emerald-300 bg-emerald-100"}`} onClick={() => {
                       if (sensorDetailsVisible && sensorDraft.id === sensor.id) {
                         setSensorDetailsVisible(false);
                         return;
@@ -11292,7 +11292,9 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                   </div>
                   {sensorDetailsVisible && sensorDraft.id && (index % 2 === 1 || index === healthSensors.length - 1)
                     && Math.floor(healthSensors.findIndex((item) => item.id === sensorDraft.id) / 2) === Math.floor(index / 2)
-                    ? <div ref={setEditSensorFormSlot} className="col-span-2 -mt-3 border border-t-0 border-emerald-700 bg-emerald-50" /> : null}
+                    ? <div ref={setEditSensorFormSlot} className="relative col-span-2 -mt-3 border border-t-0 border-emerald-700 bg-emerald-50">
+                      {index % 2 === 1 ? <span aria-hidden="true" className={`absolute top-0 h-px bg-emerald-700 ${healthSensors.findIndex((item) => item.id === sensorDraft.id) % 2 === 0 ? "left-[calc(50%+0.375rem)] right-0" : "left-0 right-[calc(50%+0.375rem)]"}`} /> : null}
+                    </div> : null}
                   </React.Fragment>)}</div>}
               </div>
 
