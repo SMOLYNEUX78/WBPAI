@@ -11293,7 +11293,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                   {sensorDetailsVisible && sensorDraft.id && (index % 2 === 1 || index === healthSensors.length - 1)
                     && Math.floor(healthSensors.findIndex((item) => item.id === sensorDraft.id) / 2) === Math.floor(index / 2)
                     ? <div ref={setEditSensorFormSlot} className="relative col-span-2 -mt-3 border border-t-0 border-emerald-700 bg-emerald-50">
-                      {index % 2 === 1 ? <span aria-hidden="true" className={`absolute top-0 h-px bg-emerald-700 ${healthSensors.findIndex((item) => item.id === sensorDraft.id) % 2 === 0 ? "left-[calc(50%+0.375rem)] right-0" : "left-0 right-[calc(50%+0.375rem)]"}`} /> : null}
+                      {index % 2 === 1 ? <span aria-hidden="true" className={`absolute top-0 h-px bg-emerald-700 ${healthSensors.findIndex((item) => item.id === sensorDraft.id) % 2 === 0 ? "left-[calc(50%-0.375rem)] right-0" : "left-0 right-[calc(50%-0.375rem)]"}`} /> : null}
                     </div> : null}
                   </React.Fragment>)}</div>}
               </div>
