@@ -29,7 +29,7 @@ beforeEach(() => {
   supabase.rpc.mockResolvedValue({ data: [], error: null });
 });
 
-test("splash confirms sooner and exits after the staggered bars", () => {
+test("splash starts bars with the title, then confirms and exits", () => {
   jest.useFakeTimers();
   supabase.auth.getSession.mockResolvedValue({ data: { session: null }, error: null });
   supabase.auth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: jest.fn() } } });
@@ -37,7 +37,11 @@ test("splash confirms sooner and exits after the staggered bars", () => {
   try {
     render(<App />);
     const splash = screen.getByLabelText("Whole Build Profile loading");
-    act(() => jest.advanceTimersByTime(2949));
+    act(() => jest.advanceTimersByTime(1749));
+    expect(splash.querySelector(".wbp-splash-ident")).toHaveClass("stage-1");
+    act(() => jest.advanceTimersByTime(1));
+    expect(splash.querySelector(".wbp-splash-ident")).toHaveClass("stage-2");
+    act(() => jest.advanceTimersByTime(1199));
     expect(splash.querySelector(".wbp-splash-ident")).toHaveClass("stage-4");
     act(() => jest.advanceTimersByTime(1));
     expect(splash.querySelector(".wbp-splash-ident")).toHaveClass("stage-5");

@@ -273,13 +273,10 @@ code {
   transform: scaleX(0);
   transform-origin: left;
   transition: transform 1500ms ease, background-color 500ms ease;
-  transition-delay: calc(var(--signal-index) * 180ms);
 }
 
-.wbp-signal-row:nth-child(2) .wbp-signal-rule { transition-duration: 1750ms, 500ms; }
-.wbp-signal-row:nth-child(3) .wbp-signal-rule { transition-duration: 1600ms, 500ms; }
-.wbp-signal-row:nth-child(4) .wbp-signal-rule { transition-duration: 1850ms, 500ms; }
-
+.stage-2 .wbp-signal-rule,
+.stage-3 .wbp-signal-rule,
 .stage-4 .wbp-signal-rule,
 .stage-5 .wbp-signal-rule { transform: scaleX(1); }
 
