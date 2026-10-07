@@ -409,16 +409,23 @@ test("registered instrument tiles open their edit details", async () => {
     id: "sensor-1", manufacturer: "Dyson", model: "TP02", serialNumber: "NN6-UK-HDA1783",
     location: "Upstairs", metrics: [], connectionMethod: "manual", evidenceGrade: "indicative",
     verificationStatus: "unverified", evidenceStorageReference: "owner/home/label", evidenceFileName: "dyson-label.jpg",
+  }, {
+    id: "sensor-2", manufacturer: "IAQ are us", model: "Test", serialNumber: "TEST-002",
+    location: "Downstairs", metrics: [], connectionMethod: "manual", evidenceGrade: "indicative",
+    verificationStatus: "unverified",
   }] }));
   render(<MemoryRouter><NewBuildingSetupPanel editModal syncHomeProfile isActive /></MemoryRouter>);
   const dialog = screen.getByRole("dialog", { name: "Edit property profile" });
   fireEvent.click(within(dialog).getByRole("button", { name: "Health monitoring" }));
   const edit = await within(dialog).findByRole("button", { name: "Edit Dyson TP02" });
+  const dysonCard = edit.closest(".border-gray-300.bg-white");
   expect(edit).toHaveTextContent("Dyson TP02");
   expect(edit).not.toHaveTextContent("Rated power:");
   expect(edit).not.toHaveTextContent("Confirm physical label");
-  expect(within(dialog).getByRole("button", { name: "Connect sensor" })).toBeInTheDocument();
-  fireEvent.click(within(dialog).getByRole("button", { name: "Connect sensor" }));
+  expect(within(dysonCard).getByRole("button", { name: "Connect sensor" })).toBeInTheDocument();
+  fireEvent.click(within(dysonCard).getByRole("button", { name: "Connect sensor" }));
+  expect(within(dysonCard).getByRole("button", { name: "Find this device on the home network" })).toBeInTheDocument();
+  fireEvent.click(within(dysonCard).getByText("Other connection methods"));
   expect(within(dialog).getByRole("button", { name: "Home network" })).toBeInTheDocument();
   expect(within(dialog).queryByRole("button", { name: "Find on the home network" })).not.toBeInTheDocument();
   fireEvent.click(within(dialog).getByRole("button", { name: "Manufacturer / hub" }));
@@ -457,6 +464,8 @@ test("registered instrument tiles open their edit details", async () => {
   fireEvent.click(within(dialog).getByRole("button", { name: "Edit Dyson TP02" }));
   const editForm = within(dialog).getByRole("heading", { name: "Edit Dyson TP02" }).parentElement;
   expect(registered.compareDocumentPosition(editForm) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(dysonCard).toContainElement(editForm);
+  expect(within(dialog).getByRole("button", { name: "Edit IAQ are us Test" }).closest(".border-gray-300.bg-white")).not.toContainElement(editForm);
   expect(editForm).toHaveClass("bg-emerald-50");
   expect(within(dialog).getByRole("button", { name: "Edit Dyson TP02" })).toHaveClass("bg-emerald-50");
 });
@@ -597,7 +606,7 @@ test("a device's network button opens possible matches inside its tile", async (
     const dialog = screen.getByRole("dialog", { name: "Edit property profile" });
     fireEvent.click(within(dialog).getByRole("button", { name: "Health monitoring" }));
     fireEvent.click(await within(dialog).findByRole("button", { name: "Connect sensor" }));
-    const networkButton = within(dialog).getByRole("button", { name: "Home network" });
+    const networkButton = within(dialog).getByRole("button", { name: "Find this device on the home network" });
     const instrumentCard = networkButton.parentElement.parentElement;
     expect(within(dialog).queryByRole("heading", { name: "Possible matches" })).not.toBeInTheDocument();
     fireEvent.click(networkButton);
@@ -650,7 +659,7 @@ test("an exact serial match becomes a brief confirmation, then imports into a Li
     const dialog = screen.getByRole("dialog", { name: "Edit property profile" });
     fireEvent.click(within(dialog).getByRole("button", { name: "Health monitoring" }));
     fireEvent.click(await within(dialog).findByRole("button", { name: "Connect sensor" }));
-    const networkButton = within(dialog).getByRole("button", { name: "Home network" });
+    const networkButton = within(dialog).getByRole("button", { name: "Find this device on the home network" });
     const instrumentCard = networkButton.parentElement.parentElement;
     fireEvent.click(networkButton);
     await waitFor(() => expect(instrumentCard.querySelector(".wbp-device-found")).toHaveTextContent("Device found"));

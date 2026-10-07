@@ -104,9 +104,7 @@ export const sensorLabelRatings = (sensor, details) => Object.fromEntries(
     details?.[field] && !sensor?.[field]
   ).map((field) => [field, details[field]])
 );
-const SensorFormPlacement = ({ isNew, target, children }) => isNew
-  ? target ? createPortal(children, target) : null
-  : children;
+const SensorFormPlacement = ({ target, children }) => target ? createPortal(children, target) : null;
 export const mergeAccountSensors = (accountSensors, localSensors, currentSensors) => Array.from(
   new Map([...localSensors, ...currentSensors, ...accountSensors].map((sensor) => [sensor.id, sensor])).values()
 );
@@ -9179,6 +9177,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   const [bluetoothCandidate, setBluetoothCandidate] = useState(null);
   const [bluetoothStatus, setBluetoothStatus] = useState("");
   const [newSensorFormSlot, setNewSensorFormSlot] = useState(null);
+  const [editSensorFormSlot, setEditSensorFormSlot] = useState(null);
   const [liveSensorId, setLiveSensorId] = useState("");
   const [clearSensorsConfirm, setClearSensorsConfirm] = useState(false);
   const [clearingSensors, setClearingSensors] = useState(false);
@@ -10424,6 +10423,14 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
     setSensorDetailsVisible(true);
   };
 
+  const findRegisteredSensor = async (sensorId) => {
+    const saved = await saveSetupSection();
+    if (!saved) return;
+    setConnectionRoute("network");
+    setNetworkInstrumentId(sensorId);
+    setShowNetworkMatches(true);
+  };
+
   const chooseBluetoothDevice = async () => {
     if (!navigator.bluetooth?.requestDevice) {
       setBluetoothStatus("Bluetooth discovery is unavailable in this browser. Use a supported browser on the tablet or choose another route.");
@@ -11228,7 +11235,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                   setSectionSaveStatus("Local sensor draft loaded. Review it, then save health monitoring to sync it to your account.");
                 }}>Load {pendingLocalSensors.length} sensor draft{pendingLocalSensors.length === 1 ? "" : "s"} from this device</button> : null}
                 {healthSensors.length === 0 ? <div className="space-y-2 border bg-white p-3 text-xs text-gray-600"><p>No health-data instruments registered yet.</p><button type="button" className="border border-emerald-700 bg-white px-3 py-2 font-semibold text-emerald-900 disabled:opacity-50" disabled={restoringSensors} onClick={restoreSensorsFromTabletScan}>{restoringSensors ? "Checking saved scan..." : "Restore devices from tablet scan"}</button></div>
-                  : <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">{healthSensors.map((sensor) => <div key={sensor.id} className="min-w-0 border border-gray-300 bg-white p-2 text-xs">
+                  : <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">{healthSensors.map((sensor) => <div key={sensor.id} className={`min-w-0 border border-gray-300 bg-white p-2 text-xs ${sensorDetailsVisible && sensorDraft.id === sensor.id ? "col-span-2 lg:col-span-3" : ""}`}>
                     <button type="button" aria-expanded={sensorDetailsVisible && sensorDraft.id === sensor.id} className={`w-full min-w-0 border px-2 py-3 text-left transition-colors ${sensorDetailsVisible && sensorDraft.id === sensor.id ? "border-emerald-700 bg-emerald-50" : "border-emerald-300 bg-emerald-100"}`} onClick={() => {
                       if (sensorDetailsVisible && sensorDraft.id === sensor.id) {
                         setSensorDetailsVisible(false);
@@ -11247,6 +11254,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                       {sensor.networkMatch?.importedAt && Date.now() - Date.parse(sensor.lastSampleAt || "") < 30 * 60 * 1000 ? <span className="mt-1 flex items-center gap-1 font-bold text-red-700"><span className="wbp-live-signal" aria-hidden="true"><i /><i /><i /><b /></span>Live</span> : <span className="mt-1 block text-emerald-800">{sensor.networkMatch?.importedAt ? "Data linked" : sensor.networkMatch ? "Device found" : "Not connected"}</span>}
                       {sensor.networkMatch?.address ? <span className="mt-1 block text-gray-700">IP {sensor.networkMatch.address}</span> : null}
                     </button>
+                    {sensorDetailsVisible && sensorDraft.id === sensor.id ? <div ref={setEditSensorFormSlot} className="mt-2" /> : null}
                     {sensor.networkMatch || sensor.networkAddress || sensor.readingType ? <button type="button" className="mt-2 block text-xs font-semibold text-emerald-800 underline" onClick={() => { setResetSensorId(sensor.id); setClearSensorsConfirm(true); }}>Reset connection</button> : null}
                     {sensor.networkMatch?.importedAt ? <>
                       <button type="button" aria-expanded={liveSensorId === sensor.id} className="mt-2 w-full border border-emerald-700 bg-white px-2 py-2 text-center font-semibold text-emerald-900" onClick={() => setLiveSensorId((current) => current === sensor.id ? "" : sensor.id)}>View stored readings</button>
@@ -11259,6 +11267,8 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                         setBluetoothStatus("");
                       }}>Connect sensor</button>
                       {connectionRouteSensorId === sensor.id ? <div className="mt-2 space-y-2 border-t border-emerald-200 pt-2">
+                        <button type="button" className="w-full border border-emerald-700 bg-emerald-700 px-3 py-2 font-semibold text-white" onClick={() => findRegisteredSensor(sensor.id)}>Find this device on the home network</button>
+                        <details className="text-xs text-gray-700"><summary className="cursor-pointer font-semibold">Other connection methods</summary>
                         <div className="grid grid-cols-2 gap-1" role="group" aria-label={`Connection route for ${sensor.location || sensor.model || "device"}`}>
                           {[["network", "Home network"], ["hub", "Manufacturer / hub"], ["bluetooth", "Bluetooth"], ["feed", "Existing data feed"]].map(([route, label]) => <button key={route} type="button" aria-pressed={connectionRoute === route} className={`min-w-0 border px-1 py-2 text-center text-xs font-semibold ${connectionRoute === route ? "border-emerald-700 bg-emerald-100 text-emerald-950" : "border-gray-300 bg-white text-gray-700"}`} onClick={async () => {
                             setConnectionRoute(route);
@@ -11267,12 +11277,10 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                               return;
                             }
                             if (route !== "network" || (showNetworkMatches && networkInstrumentId === sensor.id)) return;
-                            const saved = await saveSetupSection();
-                            if (!saved) return;
-                            setNetworkInstrumentId(sensor.id);
-                            setShowNetworkMatches(true);
+                            await findRegisteredSensor(sensor.id);
                           }}>{label}</button>)}
                         </div>
+                        </details>
                         {connectionRoute === "network" ? showNetworkMatches && networkInstrumentId === sensor.id ? <DeviceImportWorkbench isActive={isActive} embedded requestedInstrumentId={sensor.id} /> : <p className="text-xs text-gray-700">Select Home network to check this device against the paired tablet's scan.</p> : null}
                         {connectionRoute === "hub" ? <p className="text-xs text-gray-700">For sensors managed by a manufacturer app or a Zigbee, Thread or other hub. WBP needs a supported provider connection and permission to read its data. This route is not connected yet; the device remains registered but not live.</p> : null}
                         {connectionRoute === "bluetooth" ? <>
@@ -11285,7 +11293,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                   </div>)}</div>}
               </div>
 
-              {sensorDetailsVisible ? <SensorFormPlacement isNew={!sensorDraft.id} target={newSensorFormSlot}><div className={`space-y-3 border p-3 transition-colors ${sensorDraft.id ? "border-emerald-700 bg-emerald-50" : "border-gray-200 bg-white"}`}><h4 className="text-sm font-semibold text-gray-900">{sensorDraft.id ? `Edit ${sensorDraft.manufacturer || "device"} ${sensorDraft.model || ""}` : "New device"}</h4><div className="grid gap-2 sm:grid-cols-2">
+              {sensorDetailsVisible ? <SensorFormPlacement target={sensorDraft.id ? editSensorFormSlot : newSensorFormSlot}><div className={`space-y-3 border p-3 transition-colors ${sensorDraft.id ? "border-emerald-700 bg-emerald-50" : "border-gray-200 bg-white"}`}><h4 className="text-sm font-semibold text-gray-900">{sensorDraft.id ? `Edit ${sensorDraft.manufacturer || "device"} ${sensorDraft.model || ""}` : "New device"}</h4><div className="grid gap-2 sm:grid-cols-2">
                 <label className="space-y-1 text-xs text-gray-600">
                   Manufacturer
                   <input
