@@ -423,8 +423,14 @@ test("registered instrument tiles open their edit details", async () => {
   expect(within(dialog).queryByRole("button", { name: "Find on the home network" })).not.toBeInTheDocument();
   fireEvent.click(within(dialog).getByRole("button", { name: "Manufacturer / hub" }));
   expect(within(dialog).getByText(/This route is not connected yet/)).toBeInTheDocument();
+  const bluetoothDescriptor = Object.getOwnPropertyDescriptor(navigator, "bluetooth");
+  const requestDevice = jest.fn().mockResolvedValue({ name: "Test monitor", id: "device-1" });
+  Object.defineProperty(navigator, "bluetooth", { configurable: true, value: { requestDevice } });
   fireEvent.click(within(dialog).getByRole("button", { name: "Bluetooth" }));
-  expect(within(dialog).getByRole("button", { name: "Find nearby Bluetooth device" })).toBeInTheDocument();
+  expect(requestDevice).toHaveBeenCalledTimes(1);
+  expect(within(dialog).queryByRole("button", { name: "Find nearby Bluetooth device" })).not.toBeInTheDocument();
+  if (bluetoothDescriptor) Object.defineProperty(navigator, "bluetooth", bluetoothDescriptor);
+  else delete navigator.bluetooth;
   fireEvent.click(within(dialog).getByRole("button", { name: "Existing data feed" }));
   expect(within(dialog).getByText(/MQTT broker or LoRaWAN platform/)).toBeInTheDocument();
   fireEvent.click(edit);
