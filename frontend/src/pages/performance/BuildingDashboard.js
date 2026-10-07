@@ -11235,7 +11235,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                   setSectionSaveStatus("Local sensor draft loaded. Review it, then save health monitoring to sync it to your account.");
                 }}>Load {pendingLocalSensors.length} sensor draft{pendingLocalSensors.length === 1 ? "" : "s"} from this device</button> : null}
                 {healthSensors.length === 0 ? <div className="space-y-2 border bg-white p-3 text-xs text-gray-600"><p>No health-data instruments registered yet.</p><button type="button" className="border border-emerald-700 bg-white px-3 py-2 font-semibold text-emerald-900 disabled:opacity-50" disabled={restoringSensors} onClick={restoreSensorsFromTabletScan}>{restoringSensors ? "Checking saved scan..." : "Restore devices from tablet scan"}</button></div>
-                  : <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">{healthSensors.map((sensor) => <div key={sensor.id} className={`min-w-0 border border-gray-300 bg-white p-2 text-xs ${sensorDetailsVisible && sensorDraft.id === sensor.id ? "col-span-2 lg:col-span-3" : ""}`}>
+                  : <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">{healthSensors.map((sensor) => <div key={sensor.id} className="min-w-0 border border-gray-300 bg-white p-2 text-xs">
                     <button type="button" aria-expanded={sensorDetailsVisible && sensorDraft.id === sensor.id} className={`w-full min-w-0 border px-2 py-3 text-left transition-colors ${sensorDetailsVisible && sensorDraft.id === sensor.id ? "border-emerald-700 bg-emerald-50" : "border-emerald-300 bg-emerald-100"}`} onClick={() => {
                       if (sensorDetailsVisible && sensorDraft.id === sensor.id) {
                         setSensorDetailsVisible(false);
@@ -11254,7 +11254,6 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                       {sensor.networkMatch?.importedAt && Date.now() - Date.parse(sensor.lastSampleAt || "") < 30 * 60 * 1000 ? <span className="mt-1 flex items-center gap-1 font-bold text-red-700"><span className="wbp-live-signal" aria-hidden="true"><i /><i /><i /><b /></span>Live</span> : <span className="mt-1 block text-emerald-800">{sensor.networkMatch?.importedAt ? "Data linked" : sensor.networkMatch ? "Device found" : "Not connected"}</span>}
                       {sensor.networkMatch?.address ? <span className="mt-1 block text-gray-700">IP {sensor.networkMatch.address}</span> : null}
                     </button>
-                    {sensorDetailsVisible && sensorDraft.id === sensor.id ? <div ref={setEditSensorFormSlot} className="mt-2" /> : null}
                     {sensor.networkMatch || sensor.networkAddress || sensor.readingType ? <button type="button" className="mt-2 block text-xs font-semibold text-emerald-800 underline" onClick={() => { setResetSensorId(sensor.id); setClearSensorsConfirm(true); }}>Reset connection</button> : null}
                     {sensor.networkMatch?.importedAt ? <>
                       <button type="button" aria-expanded={liveSensorId === sensor.id} className="mt-2 w-full border border-emerald-700 bg-white px-2 py-2 text-center font-semibold text-emerald-900" onClick={() => setLiveSensorId((current) => current === sensor.id ? "" : sensor.id)}>View stored readings</button>
@@ -11291,6 +11290,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                       </div> : null}
                     </>}
                   </div>)}</div>}
+                {sensorDetailsVisible && sensorDraft.id ? <div ref={setEditSensorFormSlot} className="mt-3" /> : null}
               </div>
 
               {sensorDetailsVisible ? <SensorFormPlacement target={sensorDraft.id ? editSensorFormSlot : newSensorFormSlot}><div className={`space-y-3 border p-3 transition-colors ${sensorDraft.id ? "border-emerald-700 bg-emerald-50" : "border-gray-200 bg-white"}`}><h4 className="text-sm font-semibold text-gray-900">{sensorDraft.id ? `Edit ${sensorDraft.manufacturer || "device"} ${sensorDraft.model || ""}` : "New device"}</h4><div className="grid gap-2 sm:grid-cols-2">

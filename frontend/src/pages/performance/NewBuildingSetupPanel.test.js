@@ -464,10 +464,15 @@ test("registered instrument tiles open their edit details", async () => {
   fireEvent.click(within(dialog).getByRole("button", { name: "Edit Dyson TP02" }));
   const editForm = within(dialog).getByRole("heading", { name: "Edit Dyson TP02" }).parentElement;
   expect(registered.compareDocumentPosition(editForm) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  expect(dysonCard).toContainElement(editForm);
+  expect(registered).toContainElement(editForm);
+  expect(dysonCard).not.toContainElement(editForm);
   expect(within(dialog).getByRole("button", { name: "Edit IAQ are us Test" }).closest(".border-gray-300.bg-white")).not.toContainElement(editForm);
   expect(editForm).toHaveClass("bg-emerald-50");
   expect(within(dialog).getByRole("button", { name: "Edit Dyson TP02" })).toHaveClass("bg-emerald-50");
+  fireEvent.click(within(dialog).getByRole("button", { name: "Edit IAQ are us Test" }));
+  expect(within(dialog).getByRole("heading", { name: "Edit IAQ are us Test" })).toBeInTheDocument();
+  expect(within(dialog).getByRole("button", { name: "Edit IAQ are us Test" })).toHaveClass("bg-emerald-50");
+  expect(within(dialog).getByRole("button", { name: "Edit Dyson TP02" })).not.toHaveClass("bg-emerald-50");
 });
 
 test("a recently linked instrument shows its network address and Live status", async () => {
