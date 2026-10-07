@@ -420,10 +420,12 @@ test("registered instrument tiles open their edit details", async () => {
   expect(within(dialog).getByRole("button", { name: "Connect sensor" })).toBeInTheDocument();
   fireEvent.click(within(dialog).getByRole("button", { name: "Connect sensor" }));
   expect(within(dialog).getByRole("button", { name: "Find on the home network" })).toBeInTheDocument();
-  fireEvent.click(within(dialog).getByRole("button", { name: "Hub / account" }));
-  expect(within(dialog).getByText(/No account connector is configured yet/)).toBeInTheDocument();
+  fireEvent.click(within(dialog).getByRole("button", { name: "Manufacturer / hub" }));
+  expect(within(dialog).getByText(/This route is not connected yet/)).toBeInTheDocument();
   fireEvent.click(within(dialog).getByRole("button", { name: "Bluetooth" }));
   expect(within(dialog).getByRole("button", { name: "Find nearby Bluetooth device" })).toBeInTheDocument();
+  fireEvent.click(within(dialog).getByRole("button", { name: "Existing data feed" }));
+  expect(within(dialog).getByText(/MQTT broker or LoRaWAN platform/)).toBeInTheDocument();
   fireEvent.click(edit);
   const serialInput = within(dialog).getByRole("textbox", { name: "Serial / device ID" });
   expect(serialInput).toHaveValue("NN6-UK-HDA1783");
