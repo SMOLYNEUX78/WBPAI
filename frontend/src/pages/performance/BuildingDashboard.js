@@ -9174,6 +9174,10 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   const [sensorDetailsVisible, setSensorDetailsVisible] = useState(false);
   const [networkInstrumentId, setNetworkInstrumentId] = useState("");
   const [showNetworkMatches, setShowNetworkMatches] = useState(false);
+  const [connectionRouteSensorId, setConnectionRouteSensorId] = useState("");
+  const [connectionRoute, setConnectionRoute] = useState("network");
+  const [bluetoothCandidate, setBluetoothCandidate] = useState(null);
+  const [bluetoothStatus, setBluetoothStatus] = useState("");
   const [newSensorFormSlot, setNewSensorFormSlot] = useState(null);
   const [liveSensorId, setLiveSensorId] = useState("");
   const [clearSensorsConfirm, setClearSensorsConfirm] = useState(false);
@@ -10420,6 +10424,21 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
     setSensorDetailsVisible(true);
   };
 
+  const chooseBluetoothDevice = async () => {
+    if (!navigator.bluetooth?.requestDevice) {
+      setBluetoothStatus("Bluetooth discovery is unavailable in this browser. Use a supported browser on the tablet or choose another route.");
+      return;
+    }
+    setBluetoothStatus("");
+    try {
+      const device = await navigator.bluetooth.requestDevice({ acceptAllDevices: true });
+      setBluetoothCandidate({ name: device.name || "Unnamed Bluetooth device", id: device.id });
+      setBluetoothStatus("Device selected. WBP still needs a compatible reading connector before it can import data.");
+    } catch (error) {
+      setBluetoothStatus(error?.name === "NotFoundError" ? "No Bluetooth device selected." : `Bluetooth discovery failed: ${error?.message || "Unknown error"}`);
+    }
+  };
+
   const uploadSensorEvidence = async (file, labelDetails = null) => {
     if (!file || !sensorDraft.id || sensorEvidenceBusy) return;
     if (!["image/jpeg", "image/png", "application/pdf"].includes(file.type) || file.size > 10 * 1024 * 1024) {
@@ -11232,13 +11251,32 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                     {sensor.networkMatch?.importedAt ? <>
                       <button type="button" aria-expanded={liveSensorId === sensor.id} className="mt-2 w-full border border-emerald-700 bg-white px-2 py-2 text-center font-semibold text-emerald-900" onClick={() => setLiveSensorId((current) => current === sensor.id ? "" : sensor.id)}>View stored readings</button>
                       {liveSensorId === sensor.id ? <SensorLiveReadings sensor={sensor} /> : null}
-                    </> : showNetworkMatches && networkInstrumentId === sensor.id ? <div className="mt-2"><DeviceImportWorkbench isActive={isActive} embedded requestedInstrumentId={sensor.id} /></div> : <button type="button" className="mt-2 w-full border border-emerald-700 bg-white px-2 py-2 text-center font-semibold text-emerald-900" onClick={async () => {
-                      const saved = await saveSetupSection();
-                      if (!saved) return;
-                      setNetworkInstrumentId(sensor.id);
-                      setShowNetworkMatches(true);
-                      requestAnimationFrame(() => document.getElementById("wbp-device-network-step")?.scrollIntoView?.({ behavior: "smooth", block: "nearest" }));
-                    }}>Find on the home network</button>}
+                    </> : <>
+                      <button type="button" aria-expanded={connectionRouteSensorId === sensor.id} className="mt-2 w-full border border-emerald-700 bg-white px-2 py-2 text-center font-semibold text-emerald-900" onClick={() => {
+                        setConnectionRouteSensorId((current) => current === sensor.id ? "" : sensor.id);
+                        setConnectionRoute("network");
+                        setBluetoothCandidate(null);
+                        setBluetoothStatus("");
+                      }}>Connect sensor</button>
+                      {connectionRouteSensorId === sensor.id ? <div className="mt-2 space-y-2 border-t border-emerald-200 pt-2">
+                        <div className="grid grid-cols-3 gap-1" role="group" aria-label={`Connection route for ${sensor.location || sensor.model || "device"}`}>
+                          {[["network", "Home network"], ["hub", "Hub / account"], ["bluetooth", "Bluetooth"]].map(([route, label]) => <button key={route} type="button" aria-pressed={connectionRoute === route} className={`min-w-0 border px-1 py-2 text-center text-xs font-semibold ${connectionRoute === route ? "border-emerald-700 bg-emerald-100 text-emerald-950" : "border-gray-300 bg-white text-gray-700"}`} onClick={() => setConnectionRoute(route)}>{label}</button>)}
+                        </div>
+                        {connectionRoute === "network" ? showNetworkMatches && networkInstrumentId === sensor.id ? <DeviceImportWorkbench isActive={isActive} embedded requestedInstrumentId={sensor.id} /> : <button type="button" className="w-full border border-emerald-700 bg-white px-2 py-2 text-center font-semibold text-emerald-900" onClick={async () => {
+                          const saved = await saveSetupSection();
+                          if (!saved) return;
+                          setNetworkInstrumentId(sensor.id);
+                          setShowNetworkMatches(true);
+                          requestAnimationFrame(() => document.getElementById("wbp-device-network-step")?.scrollIntoView?.({ behavior: "smooth", block: "nearest" }));
+                        }}>Find on the home network</button> : null}
+                        {connectionRoute === "hub" ? <p className="text-xs text-gray-700">A manufacturer or hub account can provide readings when WBP supports that provider. No account connector is configured yet; this device remains registered but not live.</p> : null}
+                        {connectionRoute === "bluetooth" ? <>
+                          <button type="button" className="w-full border border-emerald-700 bg-white px-2 py-2 text-center font-semibold text-emerald-900" onClick={chooseBluetoothDevice}>Find nearby Bluetooth device</button>
+                          {bluetoothCandidate ? <p className="break-words text-xs text-gray-700">Selected: {bluetoothCandidate.name} ({bluetoothCandidate.id}). Compare it with the physical device before using a supported connector.</p> : null}
+                          {bluetoothStatus ? <p role="status" className="text-xs text-gray-700">{bluetoothStatus}</p> : null}
+                        </> : null}
+                      </div> : null}
+                    </>}
                   </div>)}</div>}
               </div>
 

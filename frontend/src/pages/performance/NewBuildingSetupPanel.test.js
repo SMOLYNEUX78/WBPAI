@@ -417,7 +417,13 @@ test("registered instrument tiles open their edit details", async () => {
   expect(edit).toHaveTextContent("Dyson TP02");
   expect(edit).not.toHaveTextContent("Rated power:");
   expect(edit).not.toHaveTextContent("Confirm physical label");
+  expect(within(dialog).getByRole("button", { name: "Connect sensor" })).toBeInTheDocument();
+  fireEvent.click(within(dialog).getByRole("button", { name: "Connect sensor" }));
   expect(within(dialog).getByRole("button", { name: "Find on the home network" })).toBeInTheDocument();
+  fireEvent.click(within(dialog).getByRole("button", { name: "Hub / account" }));
+  expect(within(dialog).getByText(/No account connector is configured yet/)).toBeInTheDocument();
+  fireEvent.click(within(dialog).getByRole("button", { name: "Bluetooth" }));
+  expect(within(dialog).getByRole("button", { name: "Find nearby Bluetooth device" })).toBeInTheDocument();
   fireEvent.click(edit);
   const serialInput = within(dialog).getByRole("textbox", { name: "Serial / device ID" });
   expect(serialInput).toHaveValue("NN6-UK-HDA1783");
@@ -515,7 +521,7 @@ test("resetting connections keeps scanned instrument details", async () => {
     fireEvent.click(within(confirmation).getByRole("button", { name: "Reset connection" }));
     await waitFor(() => expect(within(dialog).getByText(/Scanned device details and historical readings were kept/)).toBeInTheDocument());
     expect(within(dialog).getByRole("button", { name: "Edit Dyson TP02" })).toHaveTextContent("Not connected");
-    expect(within(dialog).getByRole("button", { name: "Find on the home network" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Connect sensor" })).toBeInTheDocument();
     expect(setupData.healthSensors).toEqual([{ id: "sensor-1", manufacturer: "Dyson", model: "TP02", location: "Upstairs", serialNumber: "NN6-UK-HDA1783A" }]);
     expect(setupData.billReview.supplier).toBe("Good Energy");
   } finally {
@@ -581,7 +587,8 @@ test("a device's network button opens possible matches inside its tile", async (
     render(<MemoryRouter><NewBuildingSetupPanel editModal syncHomeProfile isActive /></MemoryRouter>);
     const dialog = screen.getByRole("dialog", { name: "Edit property profile" });
     fireEvent.click(within(dialog).getByRole("button", { name: "Health monitoring" }));
-    const networkButton = await within(dialog).findByRole("button", { name: "Find on the home network" });
+    fireEvent.click(await within(dialog).findByRole("button", { name: "Connect sensor" }));
+    const networkButton = within(dialog).getByRole("button", { name: "Find on the home network" });
     const instrumentCard = networkButton.parentElement;
     expect(within(dialog).queryByRole("heading", { name: "Possible matches" })).not.toBeInTheDocument();
     fireEvent.click(networkButton);
@@ -633,7 +640,8 @@ test("an exact serial match becomes a brief confirmation, then imports into a Li
     render(<MemoryRouter><NewBuildingSetupPanel editModal syncHomeProfile isActive /></MemoryRouter>);
     const dialog = screen.getByRole("dialog", { name: "Edit property profile" });
     fireEvent.click(within(dialog).getByRole("button", { name: "Health monitoring" }));
-    const networkButton = await within(dialog).findByRole("button", { name: "Find on the home network" });
+    fireEvent.click(await within(dialog).findByRole("button", { name: "Connect sensor" }));
+    const networkButton = within(dialog).getByRole("button", { name: "Find on the home network" });
     const instrumentCard = networkButton.parentElement;
     fireEvent.click(networkButton);
     await waitFor(() => expect(instrumentCard.querySelector(".wbp-device-found")).toHaveTextContent("Device found"));
