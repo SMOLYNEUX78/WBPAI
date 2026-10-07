@@ -9171,6 +9171,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   const [sensorDetailsVisible, setSensorDetailsVisible] = useState(false);
   const [networkInstrumentId, setNetworkInstrumentId] = useState("");
   const [showNetworkMatches, setShowNetworkMatches] = useState(false);
+  const [liveSensorId, setLiveSensorId] = useState("");
   const [clearSensorsConfirm, setClearSensorsConfirm] = useState(false);
   const [clearingSensors, setClearingSensors] = useState(false);
   const [resetSensorId, setResetSensorId] = useState("");
@@ -11195,7 +11196,11 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                 }}>Load {pendingLocalSensors.length} sensor draft{pendingLocalSensors.length === 1 ? "" : "s"} from this device</button> : null}
                 {healthSensors.length === 0 ? <div className="space-y-2 border bg-white p-3 text-xs text-gray-600"><p>No health-data instruments registered yet.</p><button type="button" className="border border-emerald-700 bg-white px-3 py-2 font-semibold text-emerald-900 disabled:opacity-50" disabled={restoringSensors} onClick={restoreSensorsFromTabletScan}>{restoringSensors ? "Checking saved scan..." : "Restore devices from tablet scan"}</button></div>
                   : <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">{healthSensors.map((sensor) => <div key={sensor.id} className="min-w-0 border border-gray-300 bg-white p-2 text-xs">
-                    <button type="button" className={`w-full min-w-0 border px-2 py-3 text-left transition-colors ${sensor.networkMatch?.importedAt ? "border-emerald-700 bg-emerald-100" : sensorDetailsVisible && sensorDraft.id === sensor.id ? "border-emerald-700 bg-emerald-100" : "border-gray-300 bg-white"}`} onClick={() => {
+                    <button type="button" aria-expanded={sensorDetailsVisible && sensorDraft.id === sensor.id} className={`w-full min-w-0 border px-2 py-3 text-left transition-colors ${sensor.networkMatch?.importedAt || (sensorDetailsVisible && sensorDraft.id === sensor.id) ? "border-emerald-700 bg-emerald-100" : "border-gray-300 bg-white"}`} onClick={() => {
+                      if (sensorDetailsVisible && sensorDraft.id === sensor.id) {
+                        setSensorDetailsVisible(false);
+                        return;
+                      }
                       sensorDraftTouchedRef.current = true;
                       setSensorDetailsVisible(true);
                       setSensorDraft({ ...emptySensorDraft(), ...sensor });
@@ -11209,7 +11214,10 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                       {sensor.networkMatch?.address ? <span className="mt-1 block text-gray-700">IP {sensor.networkMatch.address}</span> : null}
                     </button>
                     {sensor.networkMatch || sensor.networkAddress || sensor.readingType ? <button type="button" className="mt-2 block text-xs font-semibold text-emerald-800 underline" onClick={() => { setResetSensorId(sensor.id); setClearSensorsConfirm(true); }}>Reset connection</button> : null}
-                    {sensor.networkMatch?.importedAt ? null : showNetworkMatches && networkInstrumentId === sensor.id ? <div className="mt-2"><DeviceImportWorkbench isActive={isActive} embedded requestedInstrumentId={sensor.id} /></div> : <button type="button" className="mt-2 w-full border border-emerald-700 bg-white px-2 py-2 text-center font-semibold text-emerald-900" onClick={async () => {
+                    {sensor.networkMatch?.importedAt ? <>
+                      <button type="button" aria-expanded={liveSensorId === sensor.id} className="mt-2 w-full border border-emerald-700 bg-white px-2 py-2 text-center font-semibold text-emerald-900" onClick={() => setLiveSensorId((current) => current === sensor.id ? "" : sensor.id)}>View stored readings</button>
+                      {liveSensorId === sensor.id ? <SensorLiveReadings sensor={sensor} /> : null}
+                    </> : showNetworkMatches && networkInstrumentId === sensor.id ? <div className="mt-2"><DeviceImportWorkbench isActive={isActive} embedded requestedInstrumentId={sensor.id} /></div> : <button type="button" className="mt-2 w-full border border-emerald-700 bg-white px-2 py-2 text-center font-semibold text-emerald-900" onClick={async () => {
                       const saved = await saveSetupSection();
                       if (!saved) return;
                       setNetworkInstrumentId(sensor.id);
@@ -12601,6 +12609,41 @@ const ExchangeDashboardPanel = ({ homeValue = null }) => {
   );
 };
 
+export const SensorLiveReadings = ({ sensor }) => {
+  const [rows, setRows] = useState([]);
+  const [status, setStatus] = useState("Loading stored readings...");
+  useEffect(() => {
+    if (!sensor.readingType || !sensor.sourceBuildingId) {
+      setStatus("No collector stream is linked to this instrument.");
+      return undefined;
+    }
+    let active = true;
+    const load = async () => {
+      const { data, error } = await supabase.from("Readings")
+        .select("timestamp,temperature_inside,humidity,pm25,pm10,vocs,no2,co2,hcho")
+        .eq("building_id", sensor.sourceBuildingId).eq("reading_type", sensor.readingType)
+        .order("timestamp", { ascending: false }).limit(5);
+      if (!active) return;
+      setRows(error ? [] : data || []);
+      setStatus(error ? `Could not load readings: ${error.message}` : data?.length ? "" : "No readings stored for this sensor yet.");
+    };
+    load();
+    const timer = setInterval(load, 15000);
+    return () => { active = false; clearInterval(timer); };
+  }, [sensor.readingType, sensor.sourceBuildingId]);
+  const latest = rows[0];
+  const recent = latest && Date.now() - Date.parse(latest.timestamp) < 30 * 60 * 1000;
+  return <div className="mt-2 min-w-0 border border-emerald-200 bg-emerald-50 p-2 text-xs">
+    {status ? <p role="status">{status}</p> : <>
+      <p className="font-semibold">{recent ? "Receiving data" : "Last stored sample"} · {new Date(latest.timestamp).toLocaleString()}</p>
+      <div className="mt-2 max-h-44 space-y-2 overflow-y-auto">{rows.map((row) => <div key={row.timestamp} className="border-t border-emerald-200 pt-1">
+        <time className="text-gray-600">{new Date(row.timestamp).toLocaleTimeString()}</time>
+        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">{Object.entries(SENSOR_READING_COLUMNS).filter(([, column]) => row[column] != null).map(([metric, column]) => <span key={metric}>{metric.toUpperCase()} {row[column]}</span>)}</div>
+      </div>)}</div>
+    </>}
+  </div>;
+};
+
 const DeviceImportWorkbench = ({ isActive, embedded = false, requestedInstrumentId = "" }) => {
   const navigate = useNavigate();
   const [profile, setProfile] = useState(null);
@@ -12611,7 +12654,7 @@ const DeviceImportWorkbench = ({ isActive, embedded = false, requestedInstrument
   const [collectorDeviceId, setCollectorDeviceId] = useState("");
   const [pairingToken, setPairingToken] = useState("");
   const [scanJobId, setScanJobId] = useState(null);
-  const [scanBusy, setScanBusy] = useState(false);
+  const [scanBusy, setScanBusy] = useState(embedded);
   const [physicalDevices, setPhysicalDevices] = useState([]);
   const [selectedInstrumentId, setSelectedInstrumentId] = useState("");
   const [testReading, setTestReading] = useState(null);
@@ -12627,6 +12670,7 @@ const DeviceImportWorkbench = ({ isActive, embedded = false, requestedInstrument
   const [metricsStatus, setMetricsStatus] = useState("");
   const autoScanRequestedRef = useRef(false);
   const autoMatchAttemptRef = useRef("");
+  const shownMatchRef = useRef("");
   useEffect(() => {
     if (!deviceFoundNotice) return undefined;
     const timer = setTimeout(() => setDeviceFoundNotice(false), 1400);
@@ -12653,12 +12697,12 @@ const DeviceImportWorkbench = ({ isActive, embedded = false, requestedInstrument
     const loadProfile = async () => {
       const { data: auth } = await supabase.auth.getUser();
       if (!active) return;
-      if (!auth?.user) { setStatus("Sign in to connect devices to a property."); return; }
+      if (!auth?.user) { setStatus("Sign in to connect devices to a property."); setScanBusy(false); return; }
       const { data, error } = await findAccountHomeRecord(supabase, auth.user.id, readSavedHomePassport()?.databaseId);
       if (!active) return;
       setProfile(error ? null : data);
       setStatus(error ? "Could not load your property. Try again later." : data ? "" : "Set up a property in New before connecting devices.");
-      if (!data || error) return;
+      if (!data || error) { setScanBusy(false); return; }
       const { data: devices, error: devicesError } = await supabase.from("WBPCollectorDevices")
         .select("id,label,last_seen_at").eq("building_record_id", data.id)
         .order("created_at", { ascending: false });
@@ -12669,6 +12713,7 @@ const DeviceImportWorkbench = ({ isActive, embedded = false, requestedInstrument
       }
       setCollectorDevices(devices || []);
       setCollectorDeviceId(devices?.[0]?.id || "");
+      if (!devices?.length) setScanBusy(false);
       const { data: setup } = await supabase.from("WBPBuildingSetupDeclarations")
         .select("setup_data").eq("building_record_id", data.id).maybeSingle();
       if (active) {
@@ -12800,6 +12845,12 @@ const DeviceImportWorkbench = ({ isActive, embedded = false, requestedInstrument
   const canIdentify = selectedDevice && selectedInstrument && !["This tablet", "Router or gateway", "Audio device"].includes(selectedDevice.kind) && profile;
   const selectedCollector = matchedCandidates.find((candidate) => candidate.address === selected)?.configured;
   const selectedMatch = selectedInstrument?.networkMatch?.address === selected ? selectedInstrument.networkMatch : null;
+  useEffect(() => {
+    const key = `${selectedInstrumentId}:${selectedMatch?.address || ""}:${scan?.scannedAt || ""}`;
+    if (!embedded || scanBusy || !scan || !selectedMatch || selectedMatch.importedAt || shownMatchRef.current === key) return;
+    shownMatchRef.current = key;
+    setDeviceFoundNotice(true);
+  }, [embedded, scanBusy, scan, selectedInstrumentId, selectedMatch]);
   useEffect(() => {
     let active = true;
     setAvailableMetrics([]);
@@ -13009,7 +13060,7 @@ const DeviceImportWorkbench = ({ isActive, embedded = false, requestedInstrument
     {importStatus ? <p role="status" className="mt-2 text-sm text-gray-700">{importStatus}</p> : null}
   </section> : null;
   const autoMatchPending = !selectedMatch && !readingStatus && String(profile?.uprn) === "100091142492" &&
-    Boolean(selectedCollector?.readingType) && displayedCandidates.length === 1 && displayedCandidates[0].serialMatch;
+    matchedCandidates.some((candidate) => candidate.serialMatch && candidate.configured?.readingType);
   const progressText = scanBusy ? status || "Scanning the home network..."
     : matchBusy ? readingStatus || "Confirming this device..."
       : autoMatchPending ? "Matching the scanned serial to the collector..." : "";
@@ -13035,9 +13086,9 @@ const DeviceImportWorkbench = ({ isActive, embedded = false, requestedInstrument
           </div>
         </div> : null}
         <div className="min-w-0">
-          {selectedMatch ? deviceFoundNotice ? <div role="status" className="wbp-device-found border border-emerald-700 bg-emerald-100 px-3 py-2 text-center text-sm font-bold text-emerald-950">Device found</div> : importSection : <>
+          {progressText ? <div className="min-h-[44px]"><p role="status" className="mb-2 text-xs text-gray-700">{progressText}</p><div className="wbp-network-scan-progress" role="progressbar" aria-label="Loading possible matches" aria-valuetext={progressText}><span /></div></div>
+            : selectedMatch ? deviceFoundNotice ? <div role="status" className="wbp-device-found border border-emerald-700 bg-emerald-100 px-3 py-2 text-center text-sm font-bold text-emerald-950">Device found</div> : importSection : <>
           {!scanBusy && !autoMatchPending ? <h3 className="text-sm font-bold">Possible matches</h3> : null}
-          {progressText ? <div className="min-h-[44px]"><p role="status" className="mb-2 text-xs text-gray-700">{progressText}</p><div className="wbp-network-scan-progress" role="progressbar" aria-label="Loading possible matches" aria-valuetext={progressText}><span /></div></div> : null}
           {!scanBusy && !autoMatchPending && embedded && status ? <p role="status" className="mt-1 text-xs text-gray-600">{readingStatus ? "Connection needs attention" : status}</p> : null}
           {!scanBusy && !autoMatchPending && displayedCandidates.length ? <div className="mt-2 max-h-56 space-y-2 overflow-y-auto border border-gray-200 p-2">{displayedCandidates.map((candidate) =>
             <button key={candidate.address} type="button" aria-pressed={selected === candidate.address} onClick={() => { setSelected(candidate.address); setTestReading(null); setReadingsOpen(false); setReadingStatus(""); setImportStatus(""); setComparisonConfirmed(false); }}

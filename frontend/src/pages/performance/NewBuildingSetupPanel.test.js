@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router-dom";
-import { NewBuildingSetupPanel, OccupyHistoryTabs, ProfileSummaryColumns, addressLines, decodeSensorLabel, parseSensorLabelText, mergeScannedSensor, selectDysonStream, registerSensorDraft, sensorLabelConflict, sensorLabelRatings, likelyOcrSerial, mergeAccountSensors, findAccountHomeRecord, findHomeProfileForOverwrite, readCachedBridgewoodValue, observedSensorMetrics } from "./BuildingDashboard";
+import { NewBuildingSetupPanel, OccupyHistoryTabs, ProfileSummaryColumns, SensorLiveReadings, addressLines, decodeSensorLabel, parseSensorLabelText, mergeScannedSensor, selectDysonStream, registerSensorDraft, sensorLabelConflict, sensorLabelRatings, likelyOcrSerial, mergeAccountSensors, findAccountHomeRecord, findHomeProfileForOverwrite, readCachedBridgewoodValue, observedSensorMetrics } from "./BuildingDashboard";
 import supabase from "../../supabaseClient";
 
 beforeEach(() => window.localStorage.clear());
@@ -426,6 +426,9 @@ test("registered instrument tiles open their edit details", async () => {
   expect(within(dialog).getByText(/Editing Dyson TP02/)).toBeInTheDocument();
   expect(dialog.querySelector('input[type="file"][accept*="image/jpeg"]')).toBeInTheDocument();
   expect(within(dialog).getByRole("button", { name: "Read saved label photo" })).toBeInTheDocument();
+  fireEvent.click(edit);
+  expect(within(dialog).queryByRole("textbox", { name: "Serial / device ID" })).not.toBeInTheDocument();
+  fireEvent.click(edit);
   fireEvent.change(within(dialog).getByRole("textbox", { name: "Serial / device ID" }), { target: { value: "NN6-UK-HDA1783A" } });
   fireEvent.click(within(dialog).getByRole("button", { name: "Update instrument" }));
   fireEvent.click(within(dialog).getByRole("button", { name: "Edit Dyson TP02" }));
@@ -450,6 +453,24 @@ test("a recently linked instrument shows its network address and Live status", a
   expect(instrument).toHaveTextContent("IP 192.168.1.144");
   expect(instrument).toHaveClass("bg-emerald-100");
   expect(instrument.querySelector(".wbp-live-signal")).toBeInTheDocument();
+  expect(within(dialog).getByRole("button", { name: "View stored readings" })).toBeInTheDocument();
+});
+
+test("live instrument view reads its own recent Supabase stream", async () => {
+  const timestamp = new Date().toISOString();
+  const query = { select: () => query, eq: jest.fn(() => query), order: () => query,
+    limit: async () => ({ data: [{ timestamp, temperature_inside: 21, humidity: 45, pm25: 3 }], error: null }) };
+  const from = jest.spyOn(supabase, "from").mockReturnValue(query);
+  try {
+    render(<SensorLiveReadings sensor={{ readingType: "dyson:upstairs", sourceBuildingId: "home" }} />);
+    expect(await screen.findByText(/Receiving data/)).toBeInTheDocument();
+    expect(screen.getByText("TEMPERATURE 21")).toBeInTheDocument();
+    expect(screen.getByText("HUMIDITY 45")).toBeInTheDocument();
+    expect(from).toHaveBeenCalledWith("Readings");
+    expect(query.eq).toHaveBeenCalledWith("reading_type", "dyson:upstairs");
+  } finally {
+    from.mockRestore();
+  }
 });
 
 test("resetting connections keeps scanned instrument details", async () => {
@@ -555,7 +576,7 @@ test("a device's network button opens possible matches inside its tile", async (
     fireEvent.click(networkButton);
     expect(await within(instrumentCard).findByRole("progressbar", { name: "Loading possible matches" })).toBeInTheDocument();
     expect(within(instrumentCard).queryByRole("button", { name: "Find on the home network" })).not.toBeInTheDocument();
-    expect(within(instrumentCard).getByText(/Asking the paired tablet|Tablet is scanning/)).toBeInTheDocument();
+    expect(within(instrumentCard).getByText(/Checking your saved property|Asking the paired tablet|Tablet is scanning/)).toBeInTheDocument();
     expect(within(dialog).queryByRole("heading", { name: "Possible matches" })).not.toBeInTheDocument();
     expect(within(dialog).queryByRole("button", { name: "Remove tablet pairing" })).not.toBeInTheDocument();
     expect(within(dialog).queryByText("Import a scan file instead")).not.toBeInTheDocument();
