@@ -438,12 +438,10 @@ test("registered instrument tiles open their edit details", async () => {
   expect(within(dialog).getByRole("textbox", { name: "Serial / device ID" })).toHaveValue("");
   const newForm = within(dialog).getByRole("heading", { name: "New device" }).parentElement;
   const registered = within(dialog).getByRole("heading", { name: "Registered Instruments" }).parentElement.parentElement;
-  expect(newForm).toHaveStyle({ order: 2 });
-  expect(registered).toHaveStyle({ order: 3 });
+  expect(newForm.compareDocumentPosition(registered) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   fireEvent.click(within(dialog).getByRole("button", { name: "Edit Dyson TP02" }));
   const editForm = within(dialog).getByRole("heading", { name: "Edit Dyson TP02" }).parentElement;
-  expect(editForm).toHaveStyle({ order: 3 });
-  expect(registered).toHaveStyle({ order: 2 });
+  expect(registered.compareDocumentPosition(editForm) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(editForm).toHaveClass("bg-emerald-50");
   expect(within(dialog).getByRole("button", { name: "Edit Dyson TP02" })).toHaveClass("bg-emerald-50");
 });

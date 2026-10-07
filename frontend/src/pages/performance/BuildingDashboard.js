@@ -104,6 +104,9 @@ export const sensorLabelRatings = (sensor, details) => Object.fromEntries(
     details?.[field] && !sensor?.[field]
   ).map((field) => [field, details[field]])
 );
+const SensorFormPlacement = ({ isNew, target, children }) => isNew
+  ? target ? createPortal(children, target) : null
+  : children;
 export const mergeAccountSensors = (accountSensors, localSensors, currentSensors) => Array.from(
   new Map([...localSensors, ...currentSensors, ...accountSensors].map((sensor) => [sensor.id, sensor])).values()
 );
@@ -9171,6 +9174,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   const [sensorDetailsVisible, setSensorDetailsVisible] = useState(false);
   const [networkInstrumentId, setNetworkInstrumentId] = useState("");
   const [showNetworkMatches, setShowNetworkMatches] = useState(false);
+  const [newSensorFormSlot, setNewSensorFormSlot] = useState(null);
   const [liveSensorId, setLiveSensorId] = useState("");
   const [clearSensorsConfirm, setClearSensorsConfirm] = useState(false);
   const [clearingSensors, setClearingSensors] = useState(false);
@@ -11186,7 +11190,8 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                 </div> : null}
               </div>
 
-              <div className="space-y-2 border-t border-gray-200 pt-4" style={{ order: sensorDetailsVisible && !sensorDraft.id ? 3 : 2 }}>
+              <div ref={setNewSensorFormSlot} className={sensorDetailsVisible && !sensorDraft.id ? "" : "hidden"} />
+              <div className="space-y-2 border-t border-gray-200 pt-4">
                 <div className="flex items-center justify-between gap-3">
                   <h4 className="font-semibold text-sm">Registered Instruments</h4>
                   <span className="text-xs text-gray-500">{healthSensors.length} registered</span>
@@ -11237,7 +11242,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                   </div>)}</div>}
               </div>
 
-              {sensorDetailsVisible ? <div style={{ order: sensorDraft.id ? 3 : 2 }} className={`space-y-3 border p-3 transition-colors ${sensorDraft.id ? "border-emerald-700 bg-emerald-50" : "border-gray-200 bg-white"}`}><h4 className="text-sm font-semibold text-gray-900">{sensorDraft.id ? `Edit ${sensorDraft.manufacturer || "device"} ${sensorDraft.model || ""}` : "New device"}</h4><div className="grid gap-2 sm:grid-cols-2">
+              {sensorDetailsVisible ? <SensorFormPlacement isNew={!sensorDraft.id} target={newSensorFormSlot}><div className={`space-y-3 border p-3 transition-colors ${sensorDraft.id ? "border-emerald-700 bg-emerald-50" : "border-gray-200 bg-white"}`}><h4 className="text-sm font-semibold text-gray-900">{sensorDraft.id ? `Edit ${sensorDraft.manufacturer || "device"} ${sensorDraft.model || ""}` : "New device"}</h4><div className="grid gap-2 sm:grid-cols-2">
                 <label className="space-y-1 text-xs text-gray-600">
                   Manufacturer
                   <input
@@ -11409,7 +11414,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                 setSensorDetailsVisible(false);
                 sensorDraftTouchedRef.current = true;
               }}>Remove instrument</button> : null}
-              </div> : null}
+              </div></SensorFormPlacement> : null}
             </div>
             <div className="flex flex-wrap items-center justify-end gap-3 border-t border-gray-200 pt-3">
               {sectionSaveStatus ? <span role="status" className="text-xs text-gray-600">{sectionSaveStatus}</span> : null}
