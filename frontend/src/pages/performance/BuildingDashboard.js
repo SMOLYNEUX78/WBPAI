@@ -10440,6 +10440,20 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
     setSensorDetailsVisible(true);
   };
 
+  const toggleRegisteredSensorEditor = (sensor) => {
+    if (sensorDetailsVisible && sensorDraft.id === sensor.id) {
+      setSensorDetailsVisible(false);
+      return;
+    }
+    sensorDraftTouchedRef.current = true;
+    setSensorDetailsVisible(true);
+    setSensorDraft({ ...emptySensorDraft(), ...sensor });
+    setSensorEvidenceFileName(sensor.evidenceFileName || "");
+    setSensorScanStatus("");
+    setSectionSaveStatus("");
+    requestAnimationFrame(() => sensorSerialInputRef.current?.focus());
+  };
+
   const findRegisteredSensor = async (sensorId) => {
     const saved = await saveSetupSection();
     if (!saved) return;
@@ -11253,24 +11267,15 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                 }}>Load {pendingLocalSensors.length} sensor draft{pendingLocalSensors.length === 1 ? "" : "s"} from this device</button> : null}
                 {healthSensors.length === 0 ? <div className="space-y-2 border bg-white p-3 text-xs text-gray-600"><p>No health-data instruments registered yet.</p><button type="button" className="border border-emerald-700 bg-white px-3 py-2 font-semibold text-emerald-900 disabled:opacity-50" disabled={restoringSensors} onClick={restoreSensorsFromTabletScan}>{restoringSensors ? "Checking saved scan..." : "Restore devices from tablet scan"}</button></div>
                   : <div className="grid grid-cols-2 gap-3">{healthSensors.map((sensor, index) => <React.Fragment key={sensor.id}><div className={`min-w-0 border p-2 text-xs ${sensorDetailsVisible && sensorDraft.id === sensor.id ? "border-emerald-700 border-b-0 bg-emerald-50 pb-0" : "border-gray-300 bg-white"}`}>
-                    <button type="button" aria-expanded={sensorDetailsVisible && sensorDraft.id === sensor.id} className={`w-full min-w-0 px-2 py-3 text-left transition-colors ${sensorDetailsVisible && sensorDraft.id === sensor.id ? "border-0 bg-emerald-50" : "border border-emerald-300 bg-emerald-100"}`} onClick={() => {
-                      if (sensorDetailsVisible && sensorDraft.id === sensor.id) {
-                        setSensorDetailsVisible(false);
-                        return;
-                      }
-                      sensorDraftTouchedRef.current = true;
-                      setSensorDetailsVisible(true);
-                      setSensorDraft({ ...emptySensorDraft(), ...sensor });
-                      setSensorEvidenceFileName(sensor.evidenceFileName || "");
-                      setSensorScanStatus("");
-                      setSectionSaveStatus("");
-                      requestAnimationFrame(() => sensorSerialInputRef.current?.focus());
-                    }} aria-label={`Edit ${sensor.manufacturer} ${sensor.model}`}>
+                    <div className="relative">
+                    <button type="button" aria-expanded={sensorDetailsVisible && sensorDraft.id === sensor.id} className={`w-full min-w-0 px-2 py-3 pr-12 text-left transition-colors ${sensorDetailsVisible && sensorDraft.id === sensor.id ? "border-0 bg-emerald-50" : "border border-emerald-300 bg-emerald-100"}`} onClick={() => toggleRegisteredSensorEditor(sensor)} aria-label={`Edit ${sensor.manufacturer} ${sensor.model}`}>
                       <strong className="block break-words">{sensor.manufacturer} {sensor.model || ""}</strong>
                       <span className="mt-1 block text-gray-600">{sensor.location || "Room pending"}</span>
                       {sensor.networkMatch?.importedAt && Date.now() - Date.parse(sensor.lastSampleAt || "") < 30 * 60 * 1000 ? <span className="mt-1 flex items-center gap-1 font-bold text-red-700"><span className="wbp-live-signal" aria-hidden="true"><i /><i /><i /><b /></span>Live</span> : <span className="mt-1 block text-emerald-800">{sensor.networkMatch?.importedAt ? "Data linked" : sensor.networkMatch ? "Device found" : "Not connected"}</span>}
                       {sensor.networkMatch?.address ? <span className="mt-1 block text-gray-700">IP {sensor.networkMatch.address}</span> : null}
                     </button>
+                    <button type="button" aria-label={`Edit ${sensor.manufacturer} ${sensor.model}`} title="Edit device" aria-expanded={sensorDetailsVisible && sensorDraft.id === sensor.id} className="absolute right-2 top-2 border border-emerald-700 bg-white px-2 py-1 text-xs font-semibold text-emerald-900" onClick={() => toggleRegisteredSensorEditor(sensor)}>Edit</button>
+                    </div>
                     {sensor.networkMatch || sensor.networkAddress || sensor.readingType ? <button type="button" className="mt-2 block text-xs font-semibold text-emerald-800 underline" onClick={() => { setResetSensorId(sensor.id); setClearSensorsConfirm(true); }}>Reset connection</button> : null}
                     {sensor.networkMatch?.importedAt ? <>
                       <button type="button" aria-expanded={liveSensorId === sensor.id} className="mt-2 w-full border border-emerald-700 bg-white px-2 py-2 text-center font-semibold text-emerald-900" onClick={() => setLiveSensorId((current) => current === sensor.id ? "" : sensor.id)}>View stored readings</button>
