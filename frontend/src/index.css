@@ -683,11 +683,27 @@ code {
 @media (display-mode: standalone) {
   @supports (-webkit-touch-callout: none) {
     .wbp-auth-backdrop {
+      position: absolute;
+      inset: 0 0 auto;
+      min-height: 100dvh;
+      box-sizing: border-box;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: visible;
+      pointer-events: none;
       animation: none;
       backdrop-filter: none;
       -webkit-backdrop-filter: none;
     }
-    .wbp-auth-modal { animation: none; }
+    .wbp-auth-modal {
+      flex: none;
+      max-height: none;
+      overflow: visible;
+      margin-block: auto;
+      pointer-events: auto;
+      animation: none;
+    }
   }
 }
 
