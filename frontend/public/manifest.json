@@ -3,17 +3,17 @@
   "name": "Whole Build Profile",
   "icons": [
     {
-      "src": "performance-icon-64.png",
+      "src": "wbp-rounded-64.png",
       "sizes": "64x64",
       "type": "image/png"
     },
     {
-      "src": "logo192.png",
+      "src": "wbp-rounded-192.png",
       "type": "image/png",
       "sizes": "192x192"
     },
     {
-      "src": "logo512.png",
+      "src": "wbp-rounded-512.png",
       "type": "image/png",
       "sizes": "512x512"
     }
