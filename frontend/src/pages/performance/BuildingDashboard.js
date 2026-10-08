@@ -11293,7 +11293,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                           <ol className="list-inside list-decimal space-y-2">{connectionForSensor(sensor).steps.map((step) => <li key={step}>{step}</li>)}</ol>
                           <a href={connectionForSensor(sensor).guideUrl} target="_blank" rel="noopener noreferrer" className="mt-3 inline-block font-semibold text-emerald-800 underline">{connectionForSensor(sensor).guideLabel}</a>
                         </div> : null}
-                        <details className="text-xs text-gray-700"><summary className="cursor-pointer font-semibold">Other connection methods</summary>
+                        {connectionForSensor(sensor)?.id !== "airgradient" ? <details className="text-xs text-gray-700"><summary className="cursor-pointer font-semibold">Other connection methods</summary>
                         <div className="grid grid-cols-2 gap-1" role="group" aria-label={`Connection route for ${sensor.location || sensor.model || "device"}`}>
                           {[["network", "Home network"], ["api", "Manufacturer API"], ["hub", "Manufacturer / hub"], ["bluetooth", "Bluetooth"], ["feed", "Existing data feed"]].map(([route, label]) => <button key={route} type="button" disabled={route === "network" && !connectionForSensor(sensor)?.ready} aria-pressed={connectionRoute === route} className={`min-w-0 border px-1 py-2 text-center text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${connectionRoute === route ? "border-emerald-700 bg-emerald-100 text-emerald-950" : "border-gray-300 bg-white text-gray-700"}`} onClick={async () => {
                             setConnectionRoute(route);
@@ -11305,7 +11305,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                             await findRegisteredSensor(sensor.id);
                           }}>{label}</button>)}
                         </div>
-                        </details>
+                        </details> : null}
                         {connectionRoute === "network" && connectionForSensor(sensor)?.id === "dyson" ? showNetworkMatches && networkInstrumentId === sensor.id ? <DeviceImportWorkbench isActive={isActive} embedded requestedInstrumentId={sensor.id} /> : <p className="text-xs text-gray-700">Checking the paired tablet for this device...</p> : null}
                         {connectionRoute === "network" && connectionForSensor(sensor)?.id === "airgradient" ? <AirGradientLocalConnect sensor={sensor} isActive={isActive} onSerialCaptured={(serial) => {
                           setHealthSensors((current) => current.map((item) => item.id === sensor.id ? { ...item, serialNumber: serial, labelCode: serial } : item));
@@ -12783,7 +12783,7 @@ const AirGradientLocalConnect = ({ sensor, isActive, onSerialCaptured }) => {
   const [sample, setSample] = useState(null);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
-  const [scanning, setScanning] = useState(false);
+  const [scanning, setScanning] = useState(true);
   const videoRef = useRef(null);
   const onSerialCapturedRef = useRef(onSerialCaptured);
   onSerialCapturedRef.current = onSerialCaptured;
