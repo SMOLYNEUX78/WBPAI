@@ -112,6 +112,33 @@
   box-shadow: 0 20px 60px rgb(0 0 0 / 20%);
 }
 
+.wbp-sensor-camera-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10002;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgb(17 34 29 / 58%);
+}
+
+.wbp-sensor-camera-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: min(100%, 620px);
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  border-top: 5px solid #047857;
+  background: #fff;
+  padding: 20px;
+  box-shadow: 0 20px 60px rgb(0 0 0 / 25%);
+}
+
+.wbp-sensor-camera-dialog p { margin: 0; color: #17212b; font-size: 15px; font-weight: 600; }
+.wbp-sensor-camera-dialog video { display: block; width: 100%; max-height: min(52dvh, 430px); background: #111; object-fit: contain; }
+.wbp-sensor-camera-dialog button { align-self: flex-end; border: 1px solid #047857; padding: 8px 12px; color: #065f46; font-size: 13px; font-weight: 700; }
+
 .wbp-occupy-setup-heading {
   display: flex;
   align-items: flex-start;
