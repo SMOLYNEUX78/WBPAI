@@ -682,26 +682,25 @@ code {
 
 @media (display-mode: standalone) {
   @supports (-webkit-touch-callout: none) {
+    .wbp-access-shell:has(> .wbp-auth-backdrop) > .wbp-access-intro,
+    .wbp-access-shell:has(> .wbp-auth-backdrop) > .wbp-route-bands { display: none; }
     .wbp-auth-backdrop {
-      position: absolute;
-      inset: 0 0 auto;
-      min-height: 100dvh;
+      position: relative;
+      inset: auto;
+      min-height: calc(100dvh - 90px);
       box-sizing: border-box;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      display: block;
       overflow: visible;
-      pointer-events: none;
+      padding: 16px;
+      background: #f3f4f6;
       animation: none;
       backdrop-filter: none;
       -webkit-backdrop-filter: none;
     }
     .wbp-auth-modal {
-      flex: none;
       max-height: none;
       overflow: visible;
-      margin-block: auto;
-      pointer-events: auto;
+      margin: 0 auto;
       animation: none;
     }
   }
