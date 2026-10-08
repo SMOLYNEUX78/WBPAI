@@ -68,8 +68,8 @@ const SplashScreen = () => {
     const resolveTimer = setTimeout(() => setStage(2), 1750);
     const signalTimer = setTimeout(() => setStage(4), 2500);
     const verifyTimer = setTimeout(() => setStage(5), 2950);
-    const exitTimer = setTimeout(() => setFadeOut(true), 5100);
-    const navigationTimer = setTimeout(() => navigate("/login"), 5500);
+    const exitTimer = setTimeout(() => setFadeOut(true), 4800);
+    const navigationTimer = setTimeout(() => navigate("/login"), 5200);
 
     return () => {
       clearTimeout(assembleTimer);
