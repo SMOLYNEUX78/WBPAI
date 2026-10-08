@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
+import AppUpdateNotice from "./AppUpdateNotice";
 import {
   BrowserRouter as Router,
   Routes,
@@ -1149,6 +1150,7 @@ const OrganisationAccountPreview = ({ role = "architect" }) => {
 
 const App = () => (
   <Router>
+    <AppUpdateNotice />
     <Routes>
       <Route path="/" element={<SplashScreen />} />
       <Route path="/login" element={<RoleGateway />} />

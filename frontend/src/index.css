@@ -955,3 +955,5 @@ button.wbp-project-row:hover { background: #f9fafb; }
   .wbp-register-heading { align-items: stretch; flex-direction: column; }
   .wbp-register-heading input { width: 100%; }
 }
+.wbp-app-update { position: fixed; z-index: 10000; left: max(12px, env(safe-area-inset-left)); right: max(12px, env(safe-area-inset-right)); bottom: max(12px, env(safe-area-inset-bottom)); display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; background: #10251e; color: #fff; font-size: 14px; box-shadow: 0 4px 16px #0003; }
+.wbp-app-update button { flex: none; border: 1px solid #fff; background: #fff; color: #10251e; padding: 8px 12px; font: inherit; font-weight: 700; }

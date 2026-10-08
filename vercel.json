@@ -23,6 +23,7 @@
     },
     {
       "src": "/(.*)",
+      "headers": { "Cache-Control": "no-store" },
       "dest": "/index.html"
     }
   ]
