@@ -11284,6 +11284,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                         setBluetoothCandidate(null);
                         setBluetoothStatus("");
                         if (opening && connector?.id === "dyson") void findRegisteredSensor(sensor.id);
+                        if (opening && connector?.route === "bluetooth") void chooseBluetoothDevice();
                       }}>Connect sensor</button>
                       {connectionRouteSensorId === sensor.id ? <div className="mt-2 space-y-2 border-t border-emerald-200 pt-2">
                         {connectionForSensor(sensor)?.id !== "airgradient" ? <p className="text-xs text-gray-700">{connectionForSensor(sensor)
@@ -11293,7 +11294,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                           <ol className="list-inside list-decimal space-y-2">{connectionForSensor(sensor).steps.map((step) => <li key={step}>{step}</li>)}</ol>
                           <a href={connectionForSensor(sensor).guideUrl} target="_blank" rel="noopener noreferrer" className="mt-3 inline-block font-semibold text-emerald-800 underline">{connectionForSensor(sensor).guideLabel}</a>
                         </div> : null}
-                        {connectionForSensor(sensor)?.id !== "airgradient" ? <details className="text-xs text-gray-700"><summary className="cursor-pointer font-semibold">Other connection methods</summary>
+                        {!connectionForSensor(sensor) ? <details className="text-xs text-gray-700"><summary className="cursor-pointer font-semibold">Connection methods</summary>
                         <div className="grid grid-cols-2 gap-1" role="group" aria-label={`Connection route for ${sensor.location || sensor.model || "device"}`}>
                           {[["network", "Home network"], ["api", "Manufacturer API"], ["hub", "Manufacturer / hub"], ["bluetooth", "Bluetooth"], ["feed", "Existing data feed"]].map(([route, label]) => <button key={route} type="button" disabled={route === "network" && !connectionForSensor(sensor)?.ready} aria-pressed={connectionRoute === route} className={`min-w-0 border px-1 py-2 text-center text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${connectionRoute === route ? "border-emerald-700 bg-emerald-100 text-emerald-950" : "border-gray-300 bg-white text-gray-700"}`} onClick={async () => {
                             setConnectionRoute(route);
