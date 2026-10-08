@@ -499,7 +499,8 @@ code {
   inset: 0;
   display: grid;
   place-items: center;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
   background: rgba(17, 24, 39, 0.72);
   backdrop-filter: blur(5px);
@@ -677,6 +678,17 @@ code {
   .wbp-auth-modal { padding-top: 17px; padding-bottom: 17px; }
   .wbp-auth-tabs { margin-top: 12px; }
   .wbp-auth-form { gap: 11px; margin-top: 12px; }
+}
+
+@media (display-mode: standalone) {
+  @supports (-webkit-touch-callout: none) {
+    .wbp-auth-backdrop {
+      animation: none;
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
+    .wbp-auth-modal { animation: none; }
+  }
 }
 
 /* Design and build organisation workspace */
