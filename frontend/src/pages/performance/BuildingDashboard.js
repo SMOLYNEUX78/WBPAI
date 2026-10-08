@@ -9470,6 +9470,20 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
           updated_at: new Date().toISOString(),
         }, { onConflict: "building_record_id" });
         if (!error) {
+          let registryError = null;
+          if (setupTab === "health" && savedSection.healthSensors.length) {
+            const instruments = savedSection.healthSensors.filter((sensor) => sensor.id).map((sensor) => ({
+              building_record_id: targetRecordId,
+              instrument_id: sensor.id,
+              manufacturer: String(sensor.manufacturer || "").slice(0, 120),
+              model: String(sensor.model || "").slice(0, 120),
+              serial_number: String(sensor.serialNumber || "").slice(0, 120),
+              location: String(sensor.location || "").slice(0, 120),
+              updated_at: new Date().toISOString(),
+            }));
+            ({ error: registryError } = await supabase.from("WBPSensorInstruments")
+              .upsert(instruments, { onConflict: "building_record_id,instrument_id" }));
+          }
           const savedSetup = { ...(existing?.setup_data || {}), ...savedSection };
           if (setupTab === "health") {
             setHealthSensors(savedSection.healthSensors);
@@ -9481,7 +9495,9 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
           window.localStorage.setItem(key, JSON.stringify(savedSetup));
           if (setupTab !== "health" || pendingLocalSensors.length === 0) window.localStorage.removeItem("wbp-new-building-setup-draft");
           window.dispatchEvent(new CustomEvent("wbp:setup-updated", { detail: { recordId: targetRecordId, setupData: savedSetup } }));
-          setSectionSaveStatus(`${setupTab} saved to account`);
+          setSectionSaveStatus(registryError
+            ? `Health Monitoring saved, but sensor registry sync failed: ${registryError.message}. Apply Sensor Registry and Readings.sql, then save again.`
+            : `${setupTab} saved to account`);
           if (setupTab === "measurements") setModelAreaEdited(false);
           return true;
         }
@@ -11258,7 +11274,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                     {sensor.networkMatch || sensor.networkAddress || sensor.readingType ? <button type="button" className="mt-2 block text-xs font-semibold text-emerald-800 underline" onClick={() => { setResetSensorId(sensor.id); setClearSensorsConfirm(true); }}>Reset connection</button> : null}
                     {sensor.networkMatch?.importedAt ? <>
                       <button type="button" aria-expanded={liveSensorId === sensor.id} className="mt-2 w-full border border-emerald-700 bg-white px-2 py-2 text-center font-semibold text-emerald-900" onClick={() => setLiveSensorId((current) => current === sensor.id ? "" : sensor.id)}>View stored readings</button>
-                      {liveSensorId === sensor.id ? <SensorLiveReadings sensor={sensor} /> : null}
+                      {liveSensorId === sensor.id ? <SensorLiveReadings sensor={sensor} buildingRecordId={healthRecordId} /> : null}
                     </> : <>
                       <button type="button" aria-expanded={connectionRouteSensorId === sensor.id} className="mt-2 w-full border border-emerald-700 bg-white px-2 py-2 text-center font-semibold text-emerald-900" onClick={() => {
                         const opening = connectionRouteSensorId !== sensor.id;
@@ -12697,16 +12713,35 @@ const ExchangeDashboardPanel = ({ homeValue = null }) => {
   );
 };
 
-export const SensorLiveReadings = ({ sensor }) => {
+export const SensorLiveReadings = ({ sensor, buildingRecordId }) => {
   const [rows, setRows] = useState([]);
+  const [metricRows, setMetricRows] = useState([]);
   const [status, setStatus] = useState("Loading stored readings...");
   useEffect(() => {
-    if (!sensor.readingType || !sensor.sourceBuildingId) {
+    if (!buildingRecordId && (!sensor.readingType || !sensor.sourceBuildingId)) {
       setStatus("No collector stream is linked to this instrument.");
       return undefined;
     }
     let active = true;
     const load = async () => {
+      if (buildingRecordId) {
+        const { data: measurements } = await supabase.from("WBPSensorMeasurements")
+          .select("observed_at,metric,value,unit")
+          .eq("building_record_id", buildingRecordId).eq("instrument_id", sensor.id)
+          .order("observed_at", { ascending: false }).limit(40);
+        if (!active) return;
+        if (measurements?.length) {
+          setMetricRows(measurements);
+          setRows([]);
+          setStatus("");
+          return;
+        }
+      }
+      setMetricRows([]);
+      if (!sensor.readingType || !sensor.sourceBuildingId) {
+        setStatus("No readings stored for this sensor yet.");
+        return;
+      }
       const { data, error } = await supabase.from("Readings")
         .select("timestamp,temperature_inside,humidity,pm25,pm10,vocs,no2,co2,hcho")
         .eq("building_id", sensor.sourceBuildingId).eq("reading_type", sensor.readingType)
@@ -12718,16 +12753,22 @@ export const SensorLiveReadings = ({ sensor }) => {
     load();
     const timer = setInterval(load, 15000);
     return () => { active = false; clearInterval(timer); };
-  }, [sensor.readingType, sensor.sourceBuildingId]);
+  }, [buildingRecordId, sensor.id, sensor.readingType, sensor.sourceBuildingId]);
+  const latestMetric = metricRows[0];
   const latest = rows[0];
   const recent = latest && Date.now() - Date.parse(latest.timestamp) < 30 * 60 * 1000;
   return <div className="mt-2 min-w-0 border border-emerald-200 bg-emerald-50 p-2 text-xs">
     {status ? <p role="status">{status}</p> : <>
+      {latestMetric ? <>
+        <p className="font-semibold">{Date.now() - Date.parse(latestMetric.observed_at) < 30 * 60 * 1000 ? "Receiving data" : "Last stored sample"} · {new Date(latestMetric.observed_at).toLocaleString()}</p>
+        <div className="mt-2 max-h-44 space-y-1 overflow-y-auto">{metricRows.filter((row) => row.observed_at === latestMetric.observed_at).map((row) => <p key={row.metric}>{row.metric.replaceAll("_", " ")}: {row.value} {row.unit}</p>)}</div>
+      </> : <>
       <p className="font-semibold">{recent ? "Receiving data" : "Last stored sample"} · {new Date(latest.timestamp).toLocaleString()}</p>
       <div className="mt-2 max-h-44 space-y-2 overflow-y-auto">{rows.map((row) => <div key={row.timestamp} className="border-t border-emerald-200 pt-1">
         <time className="text-gray-600">{new Date(row.timestamp).toLocaleTimeString()}</time>
         <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">{Object.entries(SENSOR_READING_COLUMNS).filter(([, column]) => row[column] != null).map(([metric, column]) => <span key={metric}>{metric.toUpperCase()} {row[column]}</span>)}</div>
       </div>)}</div>
+      </>}
     </>}
   </div>;
 };
@@ -12875,6 +12916,7 @@ const AirGradientLocalConnect = ({ sensor, isActive, onSerialCaptured }) => {
     {!tablet ? <p>Pair the home tablet in Connect before testing this monitor.</p> : null}
     {connection?.active ? <>
       <p className="font-semibold text-emerald-800">Import enabled{connection.last_sample_at ? ` · Last saved ${new Date(connection.last_sample_at).toLocaleString()}` : " · Waiting for first reading"}</p>
+      {profile?.id ? <SensorLiveReadings sensor={sensor} buildingRecordId={profile.id} /> : null}
       <button type="button" disabled={busy} onClick={stopImport} className="border border-gray-400 bg-white px-3 py-2 font-semibold disabled:opacity-50">Stop import</button>
     </> : <>
       <button type="button" disabled={!tablet || !validSerial || busy} onClick={testReading} className="border border-emerald-700 bg-white px-3 py-2 font-semibold text-emerald-900 disabled:opacity-50">{busy ? "Testing..." : "Test local reading"}</button>

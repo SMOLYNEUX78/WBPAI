@@ -340,6 +340,16 @@ fuel, and writes rows with `reading_type=interval_30m`.
 ## AirGradient local API
 
 Apply `Supabase-code/AirGradient Local Connector.sql` after `Collector Scan Queue.sql`.
+Then apply `Supabase-code/Sensor Registry and Readings.sql` to add the shared
+instrument and metric tables. Health Monitoring saves registered devices to the
+shared registry; AirGradient writes both shared measurements and legacy `Readings`
+rows so current charts still work. Future tablet connectors can use
+`wbp_store_sensor_sample` with a property-bound `WBPSensorConnections` row and a
+normalised sample (`connector`, `deviceId`, `observedAt`, `measurements` with
+`metric`, numeric `value`, and `unit`). The shared schema does not make an
+unsupported sensor readable: its protocol, authentication, identity check and
+metric mapping still need a connector adapter. Existing Dyson-specific seasonal
+aggregations have not yet been migrated to the shared measurements table.
 Update the paired tablet checkout and restart its `wbp-scan` tmux session so the
 new worker code runs. Existing Dyson, weather and energy collectors do not need
 to restart. In WBP, scan and save an AirGradient ONE/Open Air monitor, open
