@@ -1,5 +1,6 @@
 const { createClient } = require("@supabase/supabase-js");
 const { calculateCarbonSavings } = require("./carbon-savings-calculator");
+const { shouldMirrorIntervalCorrection } = require("./glow-interval-corrections");
 require("dotenv").config();
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -41,7 +42,7 @@ const COLLECTOR_INSTANCE = process.env.COLLECTOR_INSTANCE || "unknown";
 const SOURCE_NAME = `glow-api:${COLLECTOR_INSTANCE}`;
 const GLOW_API_RESOURCES = process.env.GLOW_API_RESOURCES || "";
 const GLOW_API_INTERVAL_FUELS = new Set(
-  (process.env.GLOW_API_INTERVAL_FUELS || "electricity")
+  (process.env.GLOW_API_INTERVAL_FUELS || "electricity,gas")
     .split(",")
     .map((fuel) => fuel.trim().toLowerCase())
     .filter(Boolean)
@@ -261,13 +262,13 @@ function shouldPollInstantPower(resource, nowMs) {
 }
 
 async function existingIntervalTimestamps(resource, from, to) {
-  const timestamps = new Set();
+  const timestamps = new Map();
   const pageSize = 1000;
 
   for (let page = 0; page < 10; page += 1) {
     const { data, error } = await supabase
       .from("EnergyReadings")
-      .select("timestamp")
+      .select("timestamp,usage_kwh")
       .eq("building_id", resource.buildingId)
       .eq("fuel_type", resource.fuelType)
       .eq("reading_type", "interval_30m")
@@ -282,7 +283,7 @@ async function existingIntervalTimestamps(resource, from, to) {
 
     (data || []).forEach((row) => {
       if (row.timestamp) {
-        timestamps.add(new Date(row.timestamp).toISOString());
+        timestamps.set(new Date(row.timestamp).toISOString(), Number(row.usage_kwh));
       }
     });
 
@@ -296,6 +297,7 @@ async function existingIntervalTimestamps(resource, from, to) {
 
 async function collectResource(resource) {
   const rows = [];
+  const mirrorCorrections = [];
   const nowMs = Date.now();
 
   if (shouldPollDailyTotal(resource, nowMs)) {
@@ -337,15 +339,11 @@ async function collectResource(resource) {
         const usageKwh = Number(value);
         const timestamp = new Date(Number(timestampSeconds) * 1000).toISOString();
 
-        if (
-          !Number.isFinite(usageKwh) ||
-          existingTimestamps.has(timestamp)
-        ) {
+        if (!Number.isFinite(usageKwh)) {
           return;
         }
 
-        existingTimestamps.add(timestamp);
-        rows.push({
+        const row = {
           timestamp,
           building_id: resource.buildingId,
           fuel_type: resource.fuelType,
@@ -355,7 +353,15 @@ async function collectResource(resource) {
           source: SOURCE_NAME,
           topic: resource.resourceId,
           raw_payload: GLOW_API_STORE_RAW_PAYLOAD ? intervalData : null,
-        });
+        };
+        if (existingTimestamps.has(timestamp)) {
+          if (shadowEnergy && shouldMirrorIntervalCorrection(
+            existingTimestamps.get(timestamp), usageKwh, timestamp, nowMs
+          )) mirrorCorrections.push(row);
+          return;
+        }
+        existingTimestamps.set(timestamp, usageKwh);
+        rows.push(row);
       });
     }
 
@@ -387,7 +393,7 @@ async function collectResource(resource) {
     }
   }
 
-  return rows;
+  return { rows, mirrorCorrections };
 }
 
 const { createEnergyShadowWriter } = require("./energy-shadow-write");
@@ -402,14 +408,17 @@ async function pollGlowApi() {
 
   try {
     const results = await Promise.all(resources.map(collectResource));
-    const rows = results.flat();
+    const rows = results.flatMap((result) => result.rows);
+    const mirrorCorrections = results.flatMap((result) => result.mirrorCorrections);
 
-    if (rows.length === 0) {
+    if (rows.length === 0 && mirrorCorrections.length === 0) {
       console.warn(`[${timestamp}] Glow API returned no energy rows`);
       return;
     }
 
-    const { error } = await supabase.from("EnergyReadings").insert(rows);
+    const { error } = rows.length
+      ? await supabase.from("EnergyReadings").insert(rows)
+      : { error: null };
 
     if (error) {
       console.error(`[${timestamp}] EnergyReadings insert error:`, error.message);
@@ -419,7 +428,7 @@ async function pollGlowApi() {
     console.log(`[${timestamp}] Logged ${rows.length} Glow API energy row(s)`);
     if (shadowEnergy) {
       try {
-        const count = await shadowEnergy(rows);
+        const count = await shadowEnergy([...rows, ...mirrorCorrections]);
         console.log(`[${timestamp}] Mirrored ${count} property-bound energy row(s)`);
       } catch (shadowError) {
         console.error(`[${timestamp}] Property-bound mirror failed:`, shadowError.message);

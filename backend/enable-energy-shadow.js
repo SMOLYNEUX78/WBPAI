@@ -9,10 +9,11 @@ const ENV_PATH = path.join(__dirname, ".env");
 
 function withShadowSettings(contents, buildingRecordId) {
   const lines = contents.split(/\r?\n/).filter((line) =>
-    !/^WBP_ENERGY_SHADOW_(BUILDING_ID|RECORD_ID)=/.test(line)
+    !/^WBP_ENERGY_SHADOW_(BUILDING_ID|RECORD_ID)=/.test(line) &&
+    !/^GLOW_API_INTERVAL_FUELS=/.test(line)
   );
   while (lines.length && lines[lines.length - 1] === "") lines.pop();
-  return `${lines.join("\n")}\nWBP_ENERGY_SHADOW_BUILDING_ID=home\nWBP_ENERGY_SHADOW_RECORD_ID=${buildingRecordId}\n`;
+  return `${lines.join("\n")}\nWBP_ENERGY_SHADOW_BUILDING_ID=home\nWBP_ENERGY_SHADOW_RECORD_ID=${buildingRecordId}\nGLOW_API_INTERVAL_FUELS=electricity,gas\n`;
 }
 
 async function main() {
@@ -41,7 +42,7 @@ async function main() {
   fs.writeFileSync(temporaryPath, updated, { mode: 0o600 });
   fs.renameSync(temporaryPath, ENV_PATH);
   fs.chmodSync(ENV_PATH, 0o600);
-  stdout.write("Energy mirror enabled in .env. Restart the Glow collector to apply it.\n");
+  stdout.write("Energy mirror and half-hour gas polling enabled in .env. Restart the Glow collector to apply them.\n");
 }
 
 if (require.main === module) main().catch((error) => {
