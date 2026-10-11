@@ -390,6 +390,13 @@ async function collectResource(resource) {
   return rows;
 }
 
+const { createEnergyShadowWriter } = require("./energy-shadow-write");
+const shadowEnergy = createEnergyShadowWriter(supabase, {
+  token: process.env.WBP_SCAN_DEVICE_TOKEN,
+  legacyBuildingId: process.env.WBP_ENERGY_SHADOW_BUILDING_ID,
+  buildingRecordId: process.env.WBP_ENERGY_SHADOW_RECORD_ID,
+});
+
 async function pollGlowApi() {
   const timestamp = new Date().toISOString();
 
@@ -410,6 +417,14 @@ async function pollGlowApi() {
     }
 
     console.log(`[${timestamp}] Logged ${rows.length} Glow API energy row(s)`);
+    if (shadowEnergy) {
+      try {
+        const count = await shadowEnergy(rows);
+        console.log(`[${timestamp}] Mirrored ${count} property-bound energy row(s)`);
+      } catch (shadowError) {
+        console.error(`[${timestamp}] Property-bound mirror failed:`, shadowError.message);
+      }
+    }
     scheduleCarbonSavingsRefresh(rows, timestamp);
   } catch (error) {
     console.error(`[${timestamp}] Glow API poll failed:`, error.message);
