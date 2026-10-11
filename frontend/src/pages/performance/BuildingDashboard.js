@@ -8873,6 +8873,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   const [modelAreaEdited, setModelAreaEdited] = useState(false);
   const [designPlanningLookup, setDesignPlanningLookup] = useState(null);
   const setupPanelRef = useRef(null);
+  const setupOverlayRef = useRef(null);
   const auditTabRef = useRef(null);
   const setupContentRef = useRef(null);
   const previousPanelHeightRef = useRef(null);
@@ -8892,6 +8893,28 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = previousOverflow; };
+  }, [overlayVisible]);
+  useEffect(() => {
+    if (!overlayVisible || !window.visualViewport) return undefined;
+    const viewport = window.visualViewport;
+    const overlay = setupOverlayRef.current;
+    let focusTimer;
+    const syncViewport = () => {
+      overlay?.style.setProperty("--wbp-visible-height", `${viewport.height}px`);
+      overlay?.style.setProperty("--wbp-visible-top", `${viewport.offsetTop}px`);
+      window.clearTimeout(focusTimer);
+      if (overlay?.contains(document.activeElement) && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) {
+        focusTimer = window.setTimeout(() => document.activeElement?.scrollIntoView({ block: "center", behavior: "smooth" }), 120);
+      }
+    };
+    syncViewport();
+    viewport.addEventListener("resize", syncViewport);
+    viewport.addEventListener("scroll", syncViewport);
+    return () => {
+      window.clearTimeout(focusTimer);
+      viewport.removeEventListener("resize", syncViewport);
+      viewport.removeEventListener("scroll", syncViewport);
+    };
   }, [overlayVisible]);
   const finishSetupOverlay = () => {
     if (!showSetupOverlay) return;
@@ -10786,7 +10809,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
         </> : null}
       </section> : null}
       <PortalWhen active={overlayVisible}>
-      <section className={`mx-4 mb-4 bg-gray-100 p-4 shadow ${overlayVisible ? `wbp-setup-overlay ${setupOverlayExiting ? "wbp-setup-overlay--exiting" : ""}` : ""}`} role={overlayVisible ? "dialog" : undefined} aria-modal={overlayVisible ? "true" : undefined} aria-label={overlayVisible ? editModal ? "Edit property profile" : "Let's set up your home" : undefined}>
+      <section ref={setupOverlayRef} className={`mx-4 mb-4 bg-gray-100 p-4 shadow ${overlayVisible ? `wbp-setup-overlay ${setupOverlayExiting ? "wbp-setup-overlay--exiting" : ""}` : ""}`} role={overlayVisible ? "dialog" : undefined} aria-modal={overlayVisible ? "true" : undefined} aria-label={overlayVisible ? editModal ? "Edit property profile" : "Let's set up your home" : undefined}>
       <div className={overlayVisible ? "wbp-occupy-setup-dialog" : undefined}>
       {historyStage === "audit" ? <>
       {showSetupOverlay ? <><div className="wbp-occupy-setup-heading"><div><span>Occupy · {editModal ? "Edit profile" : `${ownershipRecord ? 3 : propertyDiscovery?.confirmedAt ? 2 : 1} of 3`}</span><h2>{editModal ? "Edit property profile" : "Let’s set up your home"}</h2></div><button type="button" onClick={() => { if (editModal) onClose?.(); else { setShowSetupOverlay(false); navigate("/dashboard/home"); } }} className="wbp-occupy-setup-close" aria-label="Close setup" title="Close setup">&times;</button></div>{editModal ? <nav className="mx-6 mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3" aria-label="Profile edit steps">{[[1, "Property"], [2, "Owner details"], [3, "Evidence"], [4, "3D model"], [5, "Energy monitoring"], [6, "Health monitoring"]].map(([step, label]) => <button key={step} type="button" onClick={() => selectEditSection(step)} aria-current={editStep === step ? "step" : undefined} className={`border px-2 py-2 text-xs font-semibold ${editStep === step ? "border-emerald-700 bg-emerald-50 text-emerald-950" : "border-gray-300 text-gray-700"}`}>{label}</button>)}</nav> : null}</> : null}
@@ -11340,9 +11363,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                     ? sensorDraft.id === sensor.id
                     : (index % 2 === 1 || index === healthSensors.length - 1)
                       && Math.floor(healthSensors.findIndex((item) => item.id === sensorDraft.id) / 2) === Math.floor(index / 2))
-                    ? <div ref={setEditSensorFormSlot} className="relative col-span-1 -mt-3 border border-t-0 border-emerald-700 bg-emerald-50 sm:col-span-2">
-                      {!narrowSensorList && index % 2 === 1 ? <span aria-hidden="true" className={`absolute top-0 hidden h-px bg-emerald-700 sm:block ${healthSensors.findIndex((item) => item.id === sensorDraft.id) % 2 === 0 ? "left-[calc(50%-0.375rem)] right-0" : "left-0 right-[calc(50%-0.375rem)]"}`} /> : null}
-                    </div> : null}
+                    ? <div ref={setEditSensorFormSlot} className="relative col-span-1 -mt-3 border border-emerald-700 bg-emerald-50 sm:col-span-2" /> : null}
                   </React.Fragment>)}</div>}
               </div>
 

@@ -164,8 +164,19 @@
 .wbp-setup-overlay select { min-height: 46px; box-sizing: border-box; background: #fff; }
 
 @media (max-width: 640px) {
-  .wbp-setup-overlay.wbp-setup-overlay { place-items: end center; padding: 0; }
-  .wbp-setup-overlay > .wbp-occupy-setup-dialog { width: 100%; height: 92dvh; max-height: 92dvh; }
+  .wbp-setup-overlay.wbp-setup-overlay {
+    top: var(--wbp-visible-top, 0px);
+    bottom: auto;
+    height: var(--wbp-visible-height, 100dvh);
+    place-items: end center;
+    padding: 0;
+  }
+  .wbp-setup-overlay > .wbp-occupy-setup-dialog {
+    width: 100%;
+    height: min(92dvh, calc(var(--wbp-visible-height, 100dvh) - 8px));
+    max-height: calc(var(--wbp-visible-height, 100dvh) - 8px);
+    -webkit-overflow-scrolling: touch;
+  }
   .wbp-occupy-setup-heading { padding: 18px 18px 0; }
   .wbp-setup-overlay #new-building-panel { padding: 14px 18px 22px; }
 }
