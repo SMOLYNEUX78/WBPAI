@@ -291,6 +291,21 @@
 .wbp-occupy-actions button:hover,
 .wbp-occupy-actions button:focus-visible { background: #e6f5ec; }
 
+.wbp-museum-deep-dive-button {
+  align-self: center;
+  min-height: 42px;
+  padding: 0 24px;
+  border: 1px solid #86a89a;
+  border-radius: 4px;
+  background: #fff;
+  color: #164e3b;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.wbp-museum-deep-dive-button:hover,
+.wbp-museum-deep-dive-button:focus-visible { background: #e6f5ec; }
+
 .wbp-performance-stage--linear { padding: 0 0 12px; }
 .wbp-occupy-panel--linear > :first-child { padding-bottom: 0; }
 

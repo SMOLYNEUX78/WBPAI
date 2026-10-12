@@ -7398,15 +7398,12 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
             </div>
           </div> : null}
 
-          {!isCarbonCreditTab && building.id !== "home" ? (
-            <nav className="wbp-occupy-actions" aria-label="Home detail">
-              <button type="button" onClick={() => setOccupyDetail("performance")}>Performance</button>
-              <button type="button" onClick={() => setOccupyDetail("trends")}>Trends</button>
-            </nav>
+          {!isCarbonCreditTab && building.id === "museum" ? (
+            <button type="button" className="wbp-museum-deep-dive-button" onClick={() => setOccupyDetail("performance")}>Deep Dive</button>
           ) : null}
 
           {!shouldShowDeepDive || occupyDetail !== "performance" ? null : (
-          <DetailSurface modal={Boolean(occupyPerformanceTabs)} title={occupyPerformanceTabs ? "" : "Performance deep dive"} onClose={() => setOccupyDetail(null)} headerExtra={occupyPerformanceTabs}>
+          <DetailSurface modal={Boolean(occupyPerformanceTabs) || building.id === "museum"} title={occupyPerformanceTabs ? "" : "Performance deep dive"} onClose={() => setOccupyDetail(null)} headerExtra={occupyPerformanceTabs}>
           <div className="bg-white rounded border p-2.5 sm:p-4 min-w-0 overflow-hidden">
             {building.id === "rf" ? <p className="mb-3 text-xs text-gray-600">Measured WBP-001 baseline context, not post-retrofit performance.</p> : null}
             {isCarbonCreditTab ? (
