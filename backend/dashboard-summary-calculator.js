@@ -1,5 +1,6 @@
 const cron = require("node-cron");
 const supabase = require("./supabaseClient");
+const { reconcileRecentEnergySummaries } = require("./reconcile-recent-energy-summaries");
 
 const BUILDING_IDS = (process.env.DASHBOARD_SUMMARY_BUILDING_IDS || "home,museum")
   .split(",")
@@ -604,6 +605,11 @@ async function upsertSummary(buildingId) {
   if (dailyResult.error) {
     throw dailyResult.error;
   }
+
+  const repaired = await reconcileRecentEnergySummaries(
+    supabase, buildingId, carbonDailyRows, today, calculatedAt
+  );
+  if (repaired) console.log(`[dashboard-summary] ${buildingId}: refreshed ${repaired} recent daily energy summary row(s).`);
 
   console.log(
     `[dashboard-summary] ${buildingId}: ${energyRows.length} energy row(s), ${sensorRows.length} sensor row(s), ${energySummary.baselineMeteredDays} metered day(s).`
