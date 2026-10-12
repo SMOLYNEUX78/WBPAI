@@ -428,19 +428,22 @@ async function pollGlowApi() {
     }
 
     console.log(`[${timestamp}] Logged ${rows.length} Glow API energy row(s)`);
-    const corrected = [];
+    let corrected = 0;
     for (const correction of intervalCorrections) {
+      if (correction.row.building_id !== process.env.WBP_ENERGY_SHADOW_BUILDING_ID) continue;
       try {
-        await applyLegacyIntervalCorrections(supabase, [correction], SOURCE_NAME);
-        corrected.push(correction.row);
+        corrected += await applyLegacyIntervalCorrections(
+          supabase, [correction], SOURCE_NAME, process.env.WBP_SCAN_DEVICE_TOKEN
+        );
       } catch (correctionError) {
         console.error(`[${timestamp}] Legacy Glow interval correction failed:`, correctionError.message);
+        break;
       }
     }
-    if (corrected.length) console.log(`[${timestamp}] Revised ${corrected.length} legacy Glow interval(s)`);
+    if (corrected) console.log(`[${timestamp}] Revised ${corrected} legacy Glow interval(s)`);
     if (shadowEnergy) {
       try {
-        const count = await shadowEnergy([...rows, ...corrected]);
+        const count = await shadowEnergy([...rows, ...intervalCorrections.map(({ row }) => row)]);
         console.log(`[${timestamp}] Mirrored ${count} property-bound energy row(s)`);
       } catch (shadowError) {
         console.error(`[${timestamp}] Property-bound mirror failed:`, shadowError.message);
