@@ -1,6 +1,6 @@
 const { createClient } = require("@supabase/supabase-js");
 const { calculateCarbonSavings } = require("./carbon-savings-calculator");
-const { shouldMirrorIntervalCorrection } = require("./glow-interval-corrections");
+const { shouldMirrorIntervalCorrection, startupIntervalStart } = require("./glow-interval-corrections");
 const { applyLegacyIntervalCorrections } = require("./glow-legacy-corrections");
 require("dotenv").config();
 
@@ -175,11 +175,7 @@ async function buildIntervalQuery(resource, startupCatchup) {
     );
     const latestStored = await latestStoredIntervalTimestamp(resource, catchupFloor);
 
-    if (latestStored) {
-      start = new Date(Math.max(catchupFloor.getTime(), latestStored.getTime()));
-    } else {
-      start = catchupFloor;
-    }
+    start = startupIntervalStart(regularStart, catchupFloor, latestStored);
   }
 
   start.setUTCMinutes(start.getUTCMinutes() < 30 ? 0 : 30, 0, 0);

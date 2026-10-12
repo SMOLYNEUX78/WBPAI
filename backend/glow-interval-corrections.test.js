@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { shouldMirrorIntervalCorrection } = require("./glow-interval-corrections");
+const { shouldMirrorIntervalCorrection, startupIntervalStart } = require("./glow-interval-corrections");
 
 const now = Date.parse("2026-10-11T20:00:00Z");
 test("mirrors a delayed nonzero interval that was first stored as zero", () => {
@@ -12,4 +12,11 @@ test("does not repeatedly mirror unchanged or old intervals", () => {
 });
 test("accepts a previous-day revision within the property mirror window", () => {
   assert.equal(shouldMirrorIntervalCorrection(0, 11.4, "2026-10-10T08:00:00Z", now), true);
+});
+test("startup includes the regular lookback even with a newer stored interval", () => {
+  const regular = new Date("2026-10-09T08:00:00Z");
+  const floor = new Date("2026-09-28T08:00:00Z");
+  const latest = new Date("2026-10-12T08:00:00Z");
+  assert.equal(startupIntervalStart(regular, floor, latest).toISOString(), regular.toISOString());
+  assert.equal(startupIntervalStart(regular, floor, null).toISOString(), floor.toISOString());
 });

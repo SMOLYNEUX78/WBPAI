@@ -6,4 +6,12 @@ function shouldMirrorIntervalCorrection(previous, incoming, observedAt, now = Da
     timestamp <= now + 5 * 60 * 1000;
 }
 
-module.exports = { shouldMirrorIntervalCorrection };
+function startupIntervalStart(regularStart, catchupFloor, latestStored) {
+  if (!latestStored) return catchupFloor;
+  return new Date(Math.min(
+    regularStart.getTime(),
+    Math.max(catchupFloor.getTime(), latestStored.getTime())
+  ));
+}
+
+module.exports = { shouldMirrorIntervalCorrection, startupIntervalStart };
