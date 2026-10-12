@@ -7094,7 +7094,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
     setDeepDivePanel("baseline");
     const archivedSeason = seasonalTrendRecords.find((record) => record.status === "complete");
     setSelectedTrendSeason(archivedSeason?.name || activeSeasonInfo.name);
-    setOccupyDetail("trends");
+    setOccupyDetail("performance");
   };
   const occupyPerformanceTabs = dataSourceBuildingId === "home" ? (
     <div className={`wbp-detail-header-controls ${isCarbonCreditTab ? "wbp-detail-header-controls--staged" : ""}`}>
@@ -7103,8 +7103,8 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
         <button type="button" role="tab" aria-selected={ccStage === "live"} onClick={() => { setCcStage("live"); setSelectedTrendSeason(activeSeasonInfo.name); }}>Live</button>
       </div> : null}
       <div className="wbp-detail-tabs" role="tablist" aria-label="Performance views">
-        <button type="button" role="tab" aria-selected={occupyDetail === "trends"} onClick={() => setOccupyDetail("trends")}>Seasonal Charts</button>
         <button type="button" role="tab" aria-selected={occupyDetail === "performance"} onClick={() => setOccupyDetail("performance")}>Deep Dive</button>
+        <button type="button" role="tab" aria-selected={occupyDetail === "trends"} onClick={() => setOccupyDetail("trends")}>Seasonal Charts</button>
       </div>
       {!isCarbonCreditTab ? <div className="wbp-detail-header-scores">
         <span><strong>Health</strong> {formatScore(performanceBreakdown.health)}</span>
@@ -7318,7 +7318,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
       {building.id === "rf" ? (
         <section className="wbp-retrofit-page -mx-4 px-4 pb-5 sm:px-8" aria-label="Retrofit planning prototype">
           <div className="-mx-4 sm:-mx-8">
-            <button type="button" className="wbp-linear-performance-track" onClick={() => setOccupyDetail("trends")} aria-label={Number.isFinite(performanceValue) ? `Measured baseline performance ${Math.round(performanceValue)} out of 100. Open seasonal charts and deep dive` : "Measured baseline performance pending. Open seasonal charts and deep dive"}>
+            <button type="button" className="wbp-linear-performance-track" onClick={() => setOccupyDetail("performance")} aria-label={Number.isFinite(performanceValue) ? `Measured baseline performance ${Math.round(performanceValue)} out of 100. Open performance deep dive` : "Measured baseline performance pending. Open performance deep dive"}>
               {Number.isFinite(performanceValue) ? (
                 <span className="wbp-linear-performance-marker" style={{ left: `${Math.max(0, Math.min(100, performanceValue))}%` }} aria-hidden="true">
                   <span>{Math.round(performanceValue)}</span>
@@ -7344,7 +7344,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
               <button
                 type="button"
                 className="wbp-linear-performance-track"
-                onClick={() => setOccupyDetail("trends")}
+                onClick={() => setOccupyDetail("performance")}
                 aria-label={Number.isFinite(performanceValue) ? `Building performance ${Math.round(performanceValue)} out of 100. Open building details` : "Building performance pending. Open building details"}
               >
                 {Number.isFinite(performanceValue) ? (
