@@ -7753,16 +7753,16 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
                   </p>
                   {!isNewPerformanceDeepDive ? (
                     <>
-                      <div className={heatLossStatusClass(heatExclusionStatus)}>
-                        <p>
+                      <details className={heatLossStatusClass(heatExclusionStatus)}>
+                        <summary className="cursor-pointer">
                           <HeatLossStatusDot status={heatExclusionStatus} />{" "}
                           <strong>Heat Exclusion:</strong>{" "}
                           {formatHeatExclusionBuffer(
                             heatExclusionSummary.averageBuffer
                           )}
-                        </p>
+                        </summary>
                         {heatExclusionSummary.sampleCount > 0 ? (
-                          <p className="pl-4 text-xs">
+                          <p className="pl-4">
                             {heatExclusionSummary.sampleCount} hot-weather sample(s)
                             above {heatExclusionSummary.hotThreshold} deg C outside
                             {Number.isFinite(heatExclusionSummary.overheatingShare)
@@ -7772,8 +7772,8 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
                                 )}% at 28 deg C+ indoors`
                               : ""}
                           </p>
-                        ) : null}
-                      </div>
+                        ) : <p className="pl-4">No hot-weather samples yet.</p>}
+                      </details>
                       <div className={heatLossStatusClass(rainHumidityStatus)}>
                         {(rainHumidityAreas.length
                           ? rainHumidityAreas
@@ -7782,15 +7782,15 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
                           const areaStatus = getRainHumidityStatus(summary);
 
                           return (
-                            <div key={label} className="mb-2 last:mb-0">
-                              <p>
+                            <details key={label} className="mb-2 last:mb-0">
+                              <summary className="cursor-pointer">
                                 <HeatLossStatusDot status={areaStatus} />{" "}
                                 <strong>Rain / {label} RH:</strong>{" "}
                                 {describeRainHumiditySummary(summary)}
-                              </p>
+                              </summary>
                               {summary.rainySamples > 0 ||
                               summary.drySamples > 0 ? (
-                                <p className="pl-4 text-xs">
+                                <p className="pl-4">
                                   {summary.rainySamples} rainy hour(s) /{" "}
                                   {summary.drySamples} dry hour(s)
                                   {Number.isFinite(summary.averageRainyRh) &&
@@ -7807,8 +7807,8 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
                                     ? ` / ${formatCorrelation(summary.correlation)}`
                                     : ""}
                                 </p>
-                              ) : null}
-                            </div>
+                              ) : <p className="pl-4">Rain/dry comparison pending.</p>}
+                            </details>
                           );
                         })}
                       </div>
