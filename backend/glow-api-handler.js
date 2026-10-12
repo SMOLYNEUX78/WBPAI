@@ -1,6 +1,7 @@
 const { createClient } = require("@supabase/supabase-js");
 const { calculateCarbonSavings } = require("./carbon-savings-calculator");
 const { shouldMirrorIntervalCorrection } = require("./glow-interval-corrections");
+const { applyLegacyIntervalCorrections } = require("./glow-legacy-corrections");
 require("dotenv").config();
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -268,11 +269,12 @@ async function existingIntervalTimestamps(resource, from, to) {
   for (let page = 0; page < 10; page += 1) {
     const { data, error } = await supabase
       .from("EnergyReadings")
-      .select("timestamp,usage_kwh")
+      .select("timestamp,usage_kwh,raw_payload")
       .eq("building_id", resource.buildingId)
       .eq("fuel_type", resource.fuelType)
       .eq("reading_type", "interval_30m")
       .eq("topic", resource.resourceId)
+      .eq("source", SOURCE_NAME)
       .gte("timestamp", from.toISOString())
       .lte("timestamp", to.toISOString())
       .range(page * pageSize, (page + 1) * pageSize - 1);
@@ -283,7 +285,10 @@ async function existingIntervalTimestamps(resource, from, to) {
 
     (data || []).forEach((row) => {
       if (row.timestamp) {
-        timestamps.set(new Date(row.timestamp).toISOString(), Number(row.usage_kwh));
+        timestamps.set(new Date(row.timestamp).toISOString(), {
+          usage_kwh: Number(row.usage_kwh),
+          raw_payload: row.raw_payload,
+        });
       }
     });
 
@@ -297,7 +302,7 @@ async function existingIntervalTimestamps(resource, from, to) {
 
 async function collectResource(resource) {
   const rows = [];
-  const mirrorCorrections = [];
+  const intervalCorrections = [];
   const nowMs = Date.now();
 
   if (shouldPollDailyTotal(resource, nowMs)) {
@@ -355,12 +360,13 @@ async function collectResource(resource) {
           raw_payload: GLOW_API_STORE_RAW_PAYLOAD ? intervalData : null,
         };
         if (existingTimestamps.has(timestamp)) {
-          if (shadowEnergy && shouldMirrorIntervalCorrection(
-            existingTimestamps.get(timestamp), usageKwh, timestamp, nowMs
-          )) mirrorCorrections.push(row);
+          const previous = existingTimestamps.get(timestamp);
+          if (shouldMirrorIntervalCorrection(previous.usage_kwh, usageKwh, timestamp, nowMs)) {
+            intervalCorrections.push({ row, previous });
+          }
           return;
         }
-        existingTimestamps.set(timestamp, usageKwh);
+        existingTimestamps.set(timestamp, { usage_kwh: usageKwh, raw_payload: null });
         rows.push(row);
       });
     }
@@ -393,7 +399,7 @@ async function collectResource(resource) {
     }
   }
 
-  return { rows, mirrorCorrections };
+  return { rows, intervalCorrections };
 }
 
 const { createEnergyShadowWriter } = require("./energy-shadow-write");
@@ -409,9 +415,9 @@ async function pollGlowApi() {
   try {
     const results = await Promise.all(resources.map(collectResource));
     const rows = results.flatMap((result) => result.rows);
-    const mirrorCorrections = results.flatMap((result) => result.mirrorCorrections);
+    const intervalCorrections = results.flatMap((result) => result.intervalCorrections);
 
-    if (rows.length === 0 && mirrorCorrections.length === 0) {
+    if (rows.length === 0 && intervalCorrections.length === 0) {
       console.warn(`[${timestamp}] Glow API returned no energy rows`);
       return;
     }
@@ -426,9 +432,19 @@ async function pollGlowApi() {
     }
 
     console.log(`[${timestamp}] Logged ${rows.length} Glow API energy row(s)`);
+    const corrected = [];
+    for (const correction of intervalCorrections) {
+      try {
+        await applyLegacyIntervalCorrections(supabase, [correction], SOURCE_NAME);
+        corrected.push(correction.row);
+      } catch (correctionError) {
+        console.error(`[${timestamp}] Legacy Glow interval correction failed:`, correctionError.message);
+      }
+    }
+    if (corrected.length) console.log(`[${timestamp}] Revised ${corrected.length} legacy Glow interval(s)`);
     if (shadowEnergy) {
       try {
-        const count = await shadowEnergy([...rows, ...mirrorCorrections]);
+        const count = await shadowEnergy([...rows, ...corrected]);
         console.log(`[${timestamp}] Mirrored ${count} property-bound energy row(s)`);
       } catch (shadowError) {
         console.error(`[${timestamp}] Property-bound mirror failed:`, shadowError.message);
