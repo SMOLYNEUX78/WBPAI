@@ -1178,12 +1178,6 @@ const BUILDINGS = [
     setupOnly: true,
   },
   {
-    id: "connect",
-    name: "Connect",
-    subtitle: "Device import workbench",
-    connectOnly: true,
-  },
-  {
     ...HOME_BUILDING,
     id: "home",
     name: "WBP-001",
@@ -12960,7 +12954,7 @@ const AirGradientLocalConnect = ({ sensor, isActive, onSerialCaptured }) => {
       </section>
     </div>, document.body) : <button type="button" className="border border-emerald-700 px-3 py-2 font-semibold text-emerald-900" onClick={() => setScanning(true)}>Scan device label</button>}
     {validSerial ? <p>Serial {serial}</p> : null}
-    {!tablet ? <p>Pair the home tablet in Connect before testing this monitor.</p> : null}
+    {!tablet ? <p>Pair the home tablet in Occupy profile settings before testing this monitor.</p> : null}
     {connection?.active ? <>
       <p className="font-semibold text-emerald-800">Import enabled{connection.last_sample_at ? ` · Last saved ${new Date(connection.last_sample_at).toLocaleString()}` : " · Waiting for first reading"}</p>
       {profile?.id ? <SensorLiveReadings sensor={sensor} buildingRecordId={profile.id} /> : null}
@@ -13254,7 +13248,7 @@ const DeviceImportWorkbench = ({ isActive, embedded = false, requestedInstrument
     const stored = Array.isArray(existing?.setup_data?.healthSensors) ? existing.setup_data.healthSensors : [];
     const sensor = stored.find((item) => item.id === selectedInstrumentId);
     if (!sensor) {
-      setReadingStatus("This instrument was changed elsewhere. Reload Connect and try again.");
+      setReadingStatus("This instrument was changed elsewhere. Reload the Occupy profile and try again.");
       setMatchBusy(false);
       return;
     }
@@ -13308,7 +13302,7 @@ const DeviceImportWorkbench = ({ isActive, embedded = false, requestedInstrument
     const instrument = stored.find((item) => item.id === selectedInstrumentId);
     if (readError || !auth?.user || !instrument?.networkMatch ||
       instrument.networkMatch.address !== selected || instrument.networkMatch.stream !== selectedMatch.stream) {
-      setImportStatus("Could not confirm the saved match. Reload Connect and try again.");
+      setImportStatus("Could not confirm the saved match. Reload the Occupy profile and try again.");
       setImportBusy(false);
       return;
     }
@@ -13504,6 +13498,11 @@ const BuildingDashboard = () => {
       (building) => building.id === currentSection
     );
 
+    if (currentSection === "connect") {
+      navigate("/dashboard/home", { replace: true });
+      return;
+    }
+
     if (currentIndex >= 0) {
       setActiveIndex(currentIndex);
       return;
@@ -13612,8 +13611,6 @@ const BuildingDashboard = () => {
               >
                 {building.setupOnly ? (
                   <NewBuildingSetupPanel key={new URLSearchParams(location.search).get("record") === "existing" ? "existing" : "fresh"} freshStart={new URLSearchParams(location.search).get("record") !== "existing"} syncHomeProfile isActive={isActiveSlide} />
-                ) : building.connectOnly ? (
-                  <NewBuildingSetupPanel editModal initialEditStep={6} syncHomeProfile isActive={isActiveSlide} onClose={() => openSectionById("home")} />
                 ) : building.portfolioOnly ? (
                   <PortfolioDashboardPanel
                     bridgewoodTokens={bridgewoodTokens}
