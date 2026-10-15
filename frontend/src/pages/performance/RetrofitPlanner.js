@@ -58,7 +58,10 @@ export default function RetrofitPlanner({ ready, annualEui, area, electricityDai
                 <strong>Planning split · {annualBenefit ? `${formatGbp(Math.abs(annualBenefit.total))}/yr${annualBenefit.total < 0 ? " net cost" : ""}` : "pending"}</strong>
                 {annualBenefit?.parts.map((part) => <div key={part.label}><i style={{ backgroundColor: part.colour }} /><span>{part.label}</span><strong>{formatGbp(part.value)}</strong></div>)}
                 {annualBenefit?.energyCostIncrease > 0 ? <small>Energy cost increase: {formatGbp(annualBenefit.energyCostIncrease)}/yr, deducted from total.</small> : null}
-                {annualBenefit && !annualBenefit.insuranceIncluded ? <small>Insurance excluded until a premium is entered.</small> : null}
+                <label className="wbp-retrofit-premium">Current annual buildings insurance premium (£)
+                  <input type="number" min="0" max="100000" step="1" inputMode="decimal" value={annualPremium} onChange={(event) => setAnnualPremium(event.target.value)} placeholder="Enter your annual premium" />
+                </label>
+                {annualBenefit?.insuranceIncluded ? <small>Illustrative insurance saving: {formatGbp(projectInsuranceSaving(annualPremium, projection.scenarios[1].insuranceDiscount))}/yr at 5% (range £0–{formatGbp(projectInsuranceSaving(annualPremium, projection.scenarios[2].insuranceDiscount))}/yr at 0–10%). No insurer discount is confirmed.</small> : <small>Enter your premium to see an illustrative insurance saving.</small>}
                 {annualBenefit ? <small>Data licensing is independent of the retrofit and needs a buyer agreement.</small> : null}
               </div>
             </div>
@@ -86,9 +89,6 @@ export default function RetrofitPlanner({ ready, annualEui, area, electricityDai
               <span className="wbp-retrofit-range-labels"><span>-50%</span><span>Reference</span><span>+200%</span></span>
             </label>
           </div>
-          <label className="wbp-retrofit-premium">Current annual buildings insurance premium, optional (£)
-            <input type="number" min="0" max="100000" step="1" inputMode="decimal" value={annualPremium} onChange={(event) => setAnnualPremium(event.target.value)} placeholder="Enter premium to compare quotes" />
-          </label>
             <div className="wbp-retrofit-scenarios" role="table" aria-label="Retrofit cost and annual value scenarios">
               <div className="wbp-retrofit-scenario-labels" role="row"><span role="columnheader">Scenario</span>{projection.scenarios.map((scenario) => <strong role="columnheader" key={scenario.id}>{scenario.label}</strong>)}</div>
               {[

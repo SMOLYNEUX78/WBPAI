@@ -42,12 +42,15 @@ test("shows assumption-based scenarios and opens the selected pack", () => {
   expect(screen.getByText("Data licences")).toBeInTheDocument();
   expect(screen.getByRole("img", { name: /Data licences £222/i })).toBeInTheDocument();
   expect(screen.queryByRole("heading", { name: "Other occupant value" })).not.toBeInTheDocument();
+  expect(screen.getByText(/Enter your premium to see an illustrative insurance saving/)).toBeInTheDocument();
+  fireEvent.change(screen.getByRole("spinbutton", { name: /current annual buildings insurance premium/i }), { target: { value: "500" } });
+  expect(screen.getByRole("img", { name: /Insurance £25/i })).toBeInTheDocument();
+  expect(screen.getByText(/Illustrative insurance saving: £25\/yr at 5% \(range £0–£50\/yr at 0–10%\)/)).toBeInTheDocument();
   expect(screen.queryByText("Estimated installed cost")).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Adjust assumptions" }));
   expect(screen.getByRole("dialog", { name: "Adjust assumptions" })).toBeInTheDocument();
   expect(screen.getByRole("table", { name: /retrofit cost and annual value scenarios/i })).toBeInTheDocument();
-  expect(screen.getAllByText("Enter premium")).toHaveLength(3);
-  fireEvent.change(screen.getByRole("spinbutton", { name: /current annual buildings insurance premium/i }), { target: { value: "500" } });
+  expect(screen.queryByText("Enter premium")).not.toBeInTheDocument();
   expect(screen.getByText("£25 (5%)")).toBeInTheDocument();
   fireEvent.change(screen.getByRole("slider", { name: "Energy unit price change" }), { target: { value: "50" } });
   expect(screen.getByText("+50%")).toBeInTheDocument();
