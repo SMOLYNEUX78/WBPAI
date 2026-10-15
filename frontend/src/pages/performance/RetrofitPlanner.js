@@ -9,6 +9,13 @@ const FUNDING = [
 
 const formatGbp = (value) => `${value < 0 ? "-" : ""}£${Math.round(Math.abs(value)).toLocaleString("en-GB")}`;
 
+const OCCUPANT_OPPORTUNITIES = [
+  { name: "Network planning data", benefit: "Possible share of a data licence, not extra to the licence value above", evidence: "Consented before/after half-hourly peak demand and a buyer agreement", status: "No agreement" },
+  { name: "Retrofit verification", benefit: "Delivered bill savings or a contractual performance remedy", evidence: "Post-works measurements and a performance guarantee", status: "Not verified" },
+  { name: "Grid flexibility", benefit: "Payment for measured demand shifts", evidence: "Smart-meter event data and a registered provider", status: "Not enrolled" },
+  { name: "Finance and resale", benefit: "Possible mortgage saving or sale-price effect", evidence: "A lender offer or completed sale, not an EUI estimate", status: "No offer" },
+];
+
 export default function RetrofitPlanner({ ready, annualEui, area, electricityDailyKwh, gasDailyKwh, billReview, DetailSurface }) {
   const [worksScope, setWorksScope] = useState(0);
   const [energyPriceChange, setEnergyPriceChange] = useState(0);
@@ -64,6 +71,15 @@ export default function RetrofitPlanner({ ready, annualEui, area, electricityDai
             <p className="wbp-retrofit-outcome">Possible data-licence value: {formatGbp(projection.scenarios[0].dataIncome)}–{formatGbp(projection.scenarios[2].dataIncome)}/yr, independent of the retrofit savings and subject to a buyer agreement.</p>
             <p className="wbp-retrofit-outcome">{projection.scenarios[1].energySavedKwh === null ? "Energy saving pending" : `${Math.round(projection.scenarios[1].energySavedKwh).toLocaleString("en-GB")} kWh/yr energy saved`} · {projection.scenarios[1].carbonSavedTonnes === null ? "Carbon saving pending" : `${projection.scenarios[1].carbonSavedTonnes.toFixed(2)} tCO₂e/yr carbon saved`} · {projection.targetEui === null ? "Target EUI pending" : `Target EUI ${projection.targetEui.toFixed(1)} kWh/m²/yr`}</p>
             <p className="wbp-retrofit-caveat">Indicative comparison only. Winter baseline and survey still needed; carbon and insurance income is not secured. Data licensing is separate from the retrofit result. The EnerPHit endpoint uses CC's illustrative EUI target, not a certified design. {allElectric ? "Fuel mix transitions to all-electric at the endpoint." : "Bill and carbon savings hold the current fuel mix; heating changes need a separate design."}</p>
+            <section className="wbp-retrofit-opportunities" aria-labelledby="wbp-retrofit-opportunities-title">
+              <h3 id="wbp-retrofit-opportunities-title">Other occupant value</h3>
+              <ul>{OCCUPANT_OPPORTUNITIES.map((item) => <li key={item.name}>
+                <div className="wbp-retrofit-opportunity-heading"><strong>{item.name}</strong><span>{item.status}</span></div>
+                <p>{item.benefit}</p>
+                <small>{item.evidence}</small>
+              </li>)}</ul>
+              <p>These routes are separate from retrofit savings and are not included in the annual benefit or wallet.</p>
+            </section>
             <div className="wbp-retrofit-actions"><button type="button" onClick={() => setAdjustOpen(true)}>Adjust assumptions</button><button type="button" onClick={() => setPackOpen(true)}>View retrofit pack</button></div>
           </div>
         </div>

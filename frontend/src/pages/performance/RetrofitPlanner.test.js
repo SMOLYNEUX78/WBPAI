@@ -40,6 +40,12 @@ test("shows assumption-based scenarios and opens the selected pack", () => {
   expect(screen.queryByRole("table", { name: /retrofit cost and annual value scenarios/i })).not.toBeInTheDocument();
   expect(screen.getByText("Potential annual retrofit benefit")).toBeInTheDocument();
   expect(screen.getByText(/Possible data-licence value: £0–£444\/yr, independent/)).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Other occupant value" })).toBeInTheDocument();
+  expect(screen.getByText("Network planning data")).toBeInTheDocument();
+  expect(screen.getByText("Retrofit verification")).toBeInTheDocument();
+  expect(screen.getByText("Grid flexibility")).toBeInTheDocument();
+  expect(screen.getByText("Finance and resale")).toBeInTheDocument();
+  expect(screen.getByText(/not included in the annual benefit or wallet/)).toBeInTheDocument();
   expect(screen.getByRole("img", { name: /annual benefit split/i })).toBeInTheDocument();
   expect(screen.queryByText("Estimated installed cost")).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Adjust assumptions" }));
