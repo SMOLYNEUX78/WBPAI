@@ -76,14 +76,14 @@ test("does not invent fuel-dependent earnings without a metered split", () => {
   expect(getAnnualBenefitBreakdown(result.scenarios[1], "500")).toBeNull();
 });
 
-test("annual retrofit benefit excludes independent data licensing and unknown insurance", () => {
+test("annual potential includes data licensing but excludes unknown insurance", () => {
   const scenario = { billSavedGbp: 300, carbonValueGbp: 40, dataIncome: 222, insuranceDiscount: 0.05 };
-  expect(getAnnualBenefitBreakdown(scenario, "")).toMatchObject({ total: 340, insuranceIncluded: false });
-  expect(getAnnualBenefitBreakdown(scenario, "500")).toMatchObject({ total: 365, insuranceIncluded: true });
+  expect(getAnnualBenefitBreakdown(scenario, "")).toMatchObject({ total: 562, insuranceIncluded: false });
+  expect(getAnnualBenefitBreakdown(scenario, "500")).toMatchObject({ total: 587, insuranceIncluded: true });
   const extraCost = getAnnualBenefitBreakdown({ ...scenario, billSavedGbp: -50 }, "");
-  expect(extraCost).toMatchObject({ total: -10, energyCostIncrease: 50 });
+  expect(extraCost).toMatchObject({ total: 212, energyCostIncrease: 50 });
   expect(extraCost.parts[0].value).toBe(0);
-  expect(extraCost.parts.map((part) => part.label)).not.toContain("Data licences");
+  expect(extraCost.parts.map((part) => part.label)).toContain("Data licences");
 });
 
 test("price stress changes money values without changing energy or carbon tonnes", () => {

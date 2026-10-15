@@ -466,13 +466,6 @@
 .wbp-retrofit-forecast button { margin-top: 9px; border: 1px solid #047857; background: #047857; color: white; padding: 7px 12px; font-weight: 700; }
 .wbp-retrofit-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .wbp-retrofit-outcome { margin-top: 10px; font-size: 12px; font-weight: 600; }
-.wbp-retrofit-opportunities { margin-top: 18px; border-top: 1px solid #d1d5db; }
-.wbp-retrofit-opportunities h3 { padding: 12px 0 4px; font-size: 14px; font-weight: 700; }
-.wbp-retrofit-opportunities li { min-width: 0; border-bottom: 1px solid #e5e7eb; padding: 10px 0; }
-.wbp-retrofit-opportunity-heading { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; }
-.wbp-retrofit-opportunity-heading span { color: #92400e; font-size: 11px; font-weight: 700; }
-.wbp-retrofit-opportunities li p { margin-top: 3px; color: #17212b; font-size: 12px; }
-.wbp-retrofit-opportunities li small, .wbp-retrofit-opportunities > p { display: block; margin-top: 3px; color: #6b7280; font-size: 11px; line-height: 1.4; }
 .wbp-retrofit-benefit { display: grid; grid-template-columns: minmax(0, 1fr) 120px minmax(0, 1fr); align-items: center; gap: 14px; margin-top: 16px; border-top: 1px solid #d1d5db; border-bottom: 1px solid #d1d5db; padding: 16px 0; }
 .wbp-retrofit-benefit-main { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
 .wbp-retrofit-benefit-main > p { font-size: 13px; font-weight: 700; }

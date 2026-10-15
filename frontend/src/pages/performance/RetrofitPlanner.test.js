@@ -10,7 +10,7 @@ test("upper works scope separates possible annual costs from the benefit range",
   fireEvent.change(screen.getByRole("combobox", { name: "Heating fuel assumption" }), { target: { value: "electric" } });
   fireEvent.click(screen.getByRole("button", { name: "Close" }));
   fireEvent.change(screen.getByRole("slider", { name: "Extent of retrofit works" }), { target: { value: "100" } });
-  const range = screen.getByText("Potential annual retrofit benefit").nextElementSibling;
+  const range = screen.getByText("Potential annual value").nextElementSibling;
   expect(range.textContent).toMatch(/^£0–£[\d,]+\/yr$/);
   expect(screen.getByText(/Possible net annual cost: up to £/)).toBeInTheDocument();
   expect(screen.getByText(/Energy cost increase: £/)).toBeInTheDocument();
@@ -34,19 +34,14 @@ test("recalculates the EnerPHit forecast when the measured baseline changes", ()
 });
 
 test("shows assumption-based scenarios and opens the selected pack", () => {
-  render(<RetrofitPlanner ready annualEui={120} area={100} DetailSurface={Surface} />);
+  render(<RetrofitPlanner ready annualEui={120} area={100} electricityDailyKwh={5} gasDailyKwh={7} DetailSurface={Surface} />);
   expect(screen.getByText("Do we need a retrofit?")).toBeInTheDocument();
   expect(screen.getByText(/Target EUI 102\.0 kWh\/m²\/yr/)).toBeInTheDocument();
   expect(screen.queryByRole("table", { name: /retrofit cost and annual value scenarios/i })).not.toBeInTheDocument();
-  expect(screen.getByText("Potential annual retrofit benefit")).toBeInTheDocument();
-  expect(screen.getByText(/Possible data-licence value: £0–£444\/yr, independent/)).toBeInTheDocument();
-  expect(screen.getByRole("heading", { name: "Other occupant value" })).toBeInTheDocument();
-  expect(screen.getByText("Network planning data")).toBeInTheDocument();
-  expect(screen.getByText("Retrofit verification")).toBeInTheDocument();
-  expect(screen.getByText("Grid flexibility")).toBeInTheDocument();
-  expect(screen.getByText("Finance and resale")).toBeInTheDocument();
-  expect(screen.getByText(/not included in the annual benefit or wallet/)).toBeInTheDocument();
-  expect(screen.getByRole("img", { name: /annual benefit split/i })).toBeInTheDocument();
+  expect(screen.getByText("Potential annual value")).toBeInTheDocument();
+  expect(screen.getByText("Data licences")).toBeInTheDocument();
+  expect(screen.getByRole("img", { name: /Data licences £222/i })).toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: "Other occupant value" })).not.toBeInTheDocument();
   expect(screen.queryByText("Estimated installed cost")).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Adjust assumptions" }));
   expect(screen.getByRole("dialog", { name: "Adjust assumptions" })).toBeInTheDocument();

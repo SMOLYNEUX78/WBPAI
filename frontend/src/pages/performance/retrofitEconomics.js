@@ -48,6 +48,7 @@ export function getAnnualBenefitBreakdown(scenario, annualPremium) {
   const parts = [
     { label: "Energy bills", value: Math.max(0, scenario.billSavedGbp), colour: "#047857" },
     { label: "Carbon", value: scenario.carbonValueGbp, colour: "#2563eb" },
+    { label: "Data licences", value: scenario.dataIncome, colour: "#d97706" },
     { label: "Insurance", value: insuranceSaving ?? 0, colour: "#be123c" },
   ];
   const energyCostIncrease = Math.max(0, -scenario.billSavedGbp);
