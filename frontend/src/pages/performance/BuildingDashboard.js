@@ -7017,12 +7017,13 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
     hddSource: "Illustrative retrofit profile; PHPP pending",
     comfortNote: "20.5 deg C target internal temp / EnerPHit comfort assumed",
   };
-  const displayedAnnualEui = isNewPerformanceDeepDive
-    ? projectedPerformanceDeepDive.annualEui
-    : Number.isFinite(historicalPerformance) &&
+  const measuredAnnualEui = Number.isFinite(historicalPerformance) &&
       matterportMetadata.internalArea !== "--"
     ? (historicalPerformance * 365) / Number(matterportMetadata.internalArea)
     : null;
+  const displayedAnnualEui = isNewPerformanceDeepDive
+    ? projectedPerformanceDeepDive.annualEui
+    : measuredAnnualEui;
   const displayedElectricityDailyAverage = isNewPerformanceDeepDive
     ? projectedPerformanceDeepDive.electricityDailyAverage
     : energySummary.electricityDailyAverage;
@@ -7323,11 +7324,11 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
           </div>
           <p className="mt-3 text-xs font-semibold text-gray-700">Measured baseline performance</p>
           <div className="flex flex-wrap items-center justify-between gap-2 text-sm font-semibold">
-            <span>Baseline confidence</span><strong>100% assumed</strong>
+            <span>Baseline confidence</span><strong>{baselineConfidence.label} · {baselineConfidence.score}%</strong>
           </div>
-          <div role="progressbar" aria-label="Assumed baseline confidence" aria-valuenow={100} aria-valuemin={0} aria-valuemax={100} className="mt-2 h-2 bg-gray-200"><div className="h-full w-full bg-emerald-500" /></div>
-          <p className="mt-2 text-xs text-gray-600">Future-stage prototype. This does not change the measured baseline or certify any outcome on WBP-001.</p>
-          <RetrofitPlanner ready annualEui={displayedAnnualEui} area={Number(matterportMetadata.internalArea)} electricityDailyKwh={energySummary.electricityDailyAverage} gasDailyKwh={energySummary.gasDailyAverage} billReview={normaliseBillReview(homeSetup.billReview)} DetailSurface={DetailSurface} />
+          <div role="progressbar" aria-label="Baseline confidence" aria-valuenow={baselineConfidence.score} aria-valuemin={0} aria-valuemax={100} className="mt-2 h-2 bg-gray-200"><div className="h-full bg-emerald-500" style={{ width: `${baselineConfidence.score}%` }} /></div>
+          <p className="mt-2 text-xs text-gray-600">Measured baseline: {Number.isFinite(measuredAnnualEui) ? `${measuredAnnualEui.toFixed(1)} kWh/m²/yr` : "pending"}, annualised from {energySummary.baselineMeteredDays || 0} completed metered days. The forecast updates as readings arrive; winter evidence is still needed.</p>
+          <RetrofitPlanner ready annualEui={measuredAnnualEui} area={Number(matterportMetadata.internalArea)} electricityDailyKwh={energySummary.electricityDailyAverage} gasDailyKwh={energySummary.gasDailyAverage} billReview={normaliseBillReview(homeSetup.billReview)} DetailSurface={DetailSurface} />
         </section>
       ) : null}
       <div className={building.id === "rf" ? "hidden" : dataSourceBuildingId === "home" ? "wbp-performance-stage wbp-performance-stage--linear -mx-4" : "wbp-performance-stage bg-gray-100 p-3 sm:p-4 rounded shadow"}>

@@ -23,6 +23,16 @@ test("keeps retrofit planning locked until baseline is complete", () => {
   expect(screen.queryByRole("slider", { name: "Extent of retrofit works" })).not.toBeInTheDocument();
 });
 
+test("recalculates the EnerPHit forecast when the measured baseline changes", () => {
+  const props = { ready: true, area: 99.2, electricityDailyKwh: 5, gasDailyKwh: 7, DetailSurface: Surface };
+  const { rerender } = render(<RetrofitPlanner {...props} annualEui={41.47} />);
+  fireEvent.change(screen.getByRole("slider", { name: "Extent of retrofit works" }), { target: { value: "100" } });
+  expect(screen.getByText(/1,634 kWh\/yr energy saved/)).toBeInTheDocument();
+
+  rerender(<RetrofitPlanner {...props} annualEui={60} />);
+  expect(screen.getByText(/3,472 kWh\/yr energy saved/)).toBeInTheDocument();
+});
+
 test("shows assumption-based scenarios and opens the selected pack", () => {
   render(<RetrofitPlanner ready annualEui={120} area={100} DetailSurface={Surface} />);
   expect(screen.getByText("Do we need a retrofit?")).toBeInTheDocument();
