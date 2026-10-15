@@ -13494,7 +13494,7 @@ const BuildingDashboard = () => {
   }, [activeBuilding.id]);
 
   useEffect(() => {
-    if (activeBuilding.id !== "cc") return undefined;
+    if (accessRole !== "homeowner") return undefined;
     let active = true;
     supabase.from("CarbonSavingsDaily")
       .select("saving_date", { count: "exact", head: true })
@@ -13504,7 +13504,7 @@ const BuildingDashboard = () => {
         if (active) setAccruedDataDays(error ? "unavailable" : count);
       });
     return () => { active = false; };
-  }, [activeBuilding.id]);
+  }, [accessRole]);
 
   const logOut = async () => {
     await supabase.auth.signOut();
@@ -13611,11 +13611,12 @@ const BuildingDashboard = () => {
             </div>
             <div ref={accountMenuRef} className="relative shrink-0">
               <button type="button" aria-label="Open account menu" aria-expanded={accountMenuOpen} aria-controls="wbp-account-menu" onClick={() => setAccountMenuOpen((open) => !open)} className="flex h-9 w-10 items-center justify-center border border-gray-300 bg-white text-xl leading-none text-gray-900 hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-700">{"\u2630"}</button>
-              {accountMenuOpen ? <div id="wbp-account-menu" className="absolute right-0 top-full z-50 mt-2 w-56 max-w-[calc(100vw-2rem)] border border-gray-300 bg-white p-2 text-sm shadow-lg">
-                {activeBuilding.id === "cc" ? <div className="border-b border-gray-200 px-2 py-2">
-                  <p className="font-semibold text-gray-900">Data accrued</p>
-                  <p className="text-xs text-gray-600">{accruedDataDays == null ? "Checking recorded days" : accruedDataDays === "unavailable" ? "Recorded days unavailable" : `${accruedDataDays.toLocaleString()} recorded day${accruedDataDays === 1 ? "" : "s"}`}</p>
-                </div> : null}
+              {accountMenuOpen ? <div id="wbp-account-menu" className="absolute right-0 top-full z-50 mt-2 w-60 max-w-[calc(100vw-2rem)] border border-gray-300 bg-white p-2 text-sm shadow-lg">
+                {accessRole === "homeowner" ? <button type="button" onClick={() => { setAccountMenuOpen(false); navigate("/dashboard/exchange?source=cc"); }} className="w-full border-b border-gray-200 bg-emerald-50 px-3 py-3 text-left text-emerald-950 hover:bg-emerald-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-700">
+                  <span className="block text-xs font-semibold uppercase">Data wallet</span>
+                  <strong className="mt-1 block text-lg leading-tight">{accruedDataDays == null ? "Checking balance" : accruedDataDays === "unavailable" ? "Balance unavailable" : `${accruedDataDays.toLocaleString()} data-day${accruedDataDays === 1 ? "" : "s"}`}</strong>
+                  <span className="mt-1 block text-xs text-emerald-800">View in Exchange {"\u2192"}</span>
+                </button> : null}
                 <button type="button" onClick={logOut} className="w-full px-2 py-2 text-left font-semibold text-gray-900 hover:bg-gray-100">Log out</button>
               </div> : null}
             </div>
