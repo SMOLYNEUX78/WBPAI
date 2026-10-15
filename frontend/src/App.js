@@ -4,6 +4,7 @@ import {
   BrowserRouter as Router,
   Routes,
   Route,
+  Navigate,
   useLocation,
   useNavigate,
   useParams,
@@ -18,6 +19,9 @@ import { isProfessionalEmailAllowed, TEST_PROFESSIONAL_EMAIL } from "./professio
 import { hasFullWorkspaceAccess, loadLinkedHistoricOutline } from "./workspaceAccess";
 
 const AUTH_INTENT_KEY = "wbp-auth-intent:v1";
+const ACTIVE_ROUTE_KEY = "wbp-active-route:v1";
+const isWorkspaceRoute = (path) => path === "/dashboard" || path.startsWith("/dashboard/")
+  || path === "/workspaces" || path.startsWith("/workspace/");
 const PROFILE_IMAGE_LIMIT_BYTES = 750 * 1024;
 
 const readProfileImage = (file) => new Promise((resolve, reject) => {
@@ -121,6 +125,23 @@ const SplashScreen = () => {
       </main>
     </div>
   );
+};
+
+const ActiveRouteTracker = () => {
+  const location = useLocation();
+  useEffect(() => {
+    if (isWorkspaceRoute(location.pathname)) {
+      window.sessionStorage.setItem(ACTIVE_ROUTE_KEY, `${location.pathname}${location.search}`);
+    }
+  }, [location.pathname, location.search]);
+  return null;
+};
+
+const LaunchRoute = () => {
+  const lastRoute = window.sessionStorage.getItem(ACTIVE_ROUTE_KEY);
+  return lastRoute && isWorkspaceRoute(lastRoute.split("?")[0])
+    ? <Navigate to={lastRoute} replace />
+    : <SplashScreen />;
 };
 
 const RoleGateway = () => {
@@ -1151,8 +1172,9 @@ const OrganisationAccountPreview = ({ role = "architect" }) => {
 const App = () => (
   <Router>
     <AppUpdateNotice />
+    <ActiveRouteTracker />
     <Routes>
-      <Route path="/" element={<SplashScreen />} />
+      <Route path="/" element={<LaunchRoute />} />
       <Route path="/login" element={<RoleGateway />} />
       <Route path="/workspaces" element={<AuthenticatedRoute><WorkspaceSwitcher /></AuthenticatedRoute>} />
       <Route path="/workspace/history" element={<AuthenticatedRoute><WorkspaceSwitcher historicalOnly /></AuthenticatedRoute>} />

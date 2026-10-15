@@ -19,6 +19,7 @@ jest.mock("./pages/performance/BuildingDashboard", () => () => "Dashboard test v
 
 beforeEach(() => {
   window.localStorage.removeItem("wbp-auth-intent:v1");
+  window.sessionStorage.removeItem("wbp-active-route:v1");
   supabase.from.mockImplementation(() => ({
     select: () => ({
       order: () => Promise.resolve({ data: [], error: null }),
@@ -27,6 +28,21 @@ beforeEach(() => {
     upsert: () => Promise.resolve({ error: null }),
   }));
   supabase.rpc.mockResolvedValue({ data: [], error: null });
+});
+
+test("returning to an open app restores the previous dashboard route without the splash", async () => {
+  const session = { user: { id: "returning-user", email: "owner@example.com" } };
+  supabase.auth.getSession.mockResolvedValue({ data: { session }, error: null });
+  supabase.auth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: jest.fn() } } });
+  window.sessionStorage.setItem("wbp-active-route:v1", "/dashboard/occupy?tab=health");
+  window.history.pushState({}, "", "/");
+
+  render(<App />);
+
+  expect(screen.queryByLabelText("Whole Build Profile loading")).not.toBeInTheDocument();
+  expect(await screen.findByText("Dashboard test view")).toBeInTheDocument();
+  expect(window.location.pathname).toBe("/dashboard/occupy");
+  expect(window.location.search).toBe("?tab=health");
 });
 
 test("splash starts bars with the title, then confirms and exits", () => {
@@ -45,7 +61,7 @@ test("splash starts bars with the title, then confirms and exits", () => {
     expect(splash.querySelector(".wbp-splash-ident")).toHaveClass("stage-4");
     act(() => jest.advanceTimersByTime(1));
     expect(splash.querySelector(".wbp-splash-ident")).toHaveClass("stage-5");
-    act(() => jest.advanceTimersByTime(2149));
+    act(() => jest.advanceTimersByTime(1849));
     expect(splash).not.toHaveClass("is-exiting");
     act(() => jest.advanceTimersByTime(1));
     expect(splash).toHaveClass("is-exiting");
