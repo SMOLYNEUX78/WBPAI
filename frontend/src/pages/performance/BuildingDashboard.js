@@ -7327,7 +7327,6 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
             <span>Baseline confidence</span><strong>{baselineConfidence.label} · {baselineConfidence.score}%</strong>
           </div>
           <div role="progressbar" aria-label="Baseline confidence" aria-valuenow={baselineConfidence.score} aria-valuemin={0} aria-valuemax={100} className="mt-2 h-2 bg-gray-200"><div className="h-full bg-emerald-500" style={{ width: `${baselineConfidence.score}%` }} /></div>
-          <p className="mt-2 text-xs text-gray-600">Measured baseline: {Number.isFinite(measuredAnnualEui) ? `${measuredAnnualEui.toFixed(1)} kWh/m²/yr` : "pending"}, annualised from {energySummary.baselineMeteredDays || 0} completed metered days. The forecast updates as readings arrive; winter evidence is still needed.</p>
           <RetrofitPlanner ready annualEui={measuredAnnualEui} area={Number(matterportMetadata.internalArea)} electricityDailyKwh={energySummary.electricityDailyAverage} gasDailyKwh={energySummary.gasDailyAverage} billReview={normaliseBillReview(homeSetup.billReview)} DetailSurface={DetailSurface} />
         </section>
       ) : null}

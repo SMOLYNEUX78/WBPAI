@@ -10,7 +10,7 @@ test("upper works scope separates possible annual costs from the benefit range",
   fireEvent.change(screen.getByRole("combobox", { name: "Heating fuel assumption" }), { target: { value: "electric" } });
   fireEvent.click(screen.getByRole("button", { name: "Close" }));
   fireEvent.change(screen.getByRole("slider", { name: "Extent of retrofit works" }), { target: { value: "100" } });
-  const range = screen.getByText("Potential annual benefit").nextElementSibling;
+  const range = screen.getByText("Potential annual retrofit benefit").nextElementSibling;
   expect(range.textContent).toMatch(/^£0–£[\d,]+\/yr$/);
   expect(screen.getByText(/Possible net annual cost: up to £/)).toBeInTheDocument();
   expect(screen.getByText(/Energy cost increase: £/)).toBeInTheDocument();
@@ -38,7 +38,8 @@ test("shows assumption-based scenarios and opens the selected pack", () => {
   expect(screen.getByText("Do we need a retrofit?")).toBeInTheDocument();
   expect(screen.getByText(/Target EUI 102\.0 kWh\/m²\/yr/)).toBeInTheDocument();
   expect(screen.queryByRole("table", { name: /retrofit cost and annual value scenarios/i })).not.toBeInTheDocument();
-  expect(screen.getByText("Potential annual benefit")).toBeInTheDocument();
+  expect(screen.getByText("Potential annual retrofit benefit")).toBeInTheDocument();
+  expect(screen.getByText(/Possible data-licence value: £0–£444\/yr, independent/)).toBeInTheDocument();
   expect(screen.getByRole("img", { name: /annual benefit split/i })).toBeInTheDocument();
   expect(screen.queryByText("Estimated installed cost")).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Adjust assumptions" }));
