@@ -13457,14 +13457,13 @@ const DeviceImportWorkbench = ({ isActive, embedded = false, requestedInstrument
 const BuildingDashboard = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const accountMenuRef = useRef(null);
+  const [accruedDataDays, setAccruedDataDays] = useState(null);
   const accessParams = new URLSearchParams(location.search);
   const storedRole = window.localStorage.getItem("wbp-user-role") || "";
   const accessRole = accessParams.get("role") || storedRole || "homeowner";
-  const roleDetails = {
-    architect: { label: "Design", phase: "Design", focus: "Design intent and specification" },
-    builder: { label: "Build", phase: "Build", focus: "Delivery, quality and commissioning" },
-    homeowner: { label: "Occupy", phase: "Occupy", focus: "Handover and measured performance" },
-  }[accessRole];
+  const roleLabel = { architect: "Design", builder: "Build", homeowner: "Occupy" }[accessRole];
   const routeSection = location.pathname.split("/").filter(Boolean)[1] || "new";
   const routeIndex = BUILDINGS.findIndex((building) => building.id === routeSection);
   const defaultIndex = routeIndex >= 0
@@ -13475,6 +13474,37 @@ const BuildingDashboard = () => {
   const bridgewoodTokens = bridgewoodValue.credits;
 
   const activeBuilding = BUILDINGS[activeIndex];
+
+  useEffect(() => {
+    if (!accountMenuOpen) return undefined;
+    const closeMenu = (event) => {
+      if (event.type === "keydown" && event.key === "Escape") setAccountMenuOpen(false);
+      if (event.type === "pointerdown" && !accountMenuRef.current?.contains(event.target)) setAccountMenuOpen(false);
+    };
+    document.addEventListener("keydown", closeMenu);
+    document.addEventListener("pointerdown", closeMenu);
+    return () => {
+      document.removeEventListener("keydown", closeMenu);
+      document.removeEventListener("pointerdown", closeMenu);
+    };
+  }, [accountMenuOpen]);
+
+  useEffect(() => {
+    setAccountMenuOpen(false);
+  }, [activeBuilding.id]);
+
+  useEffect(() => {
+    if (activeBuilding.id !== "cc") return undefined;
+    let active = true;
+    supabase.from("CarbonSavingsDaily")
+      .select("saving_date", { count: "exact", head: true })
+      .eq("building_id", "home")
+      .eq("scenario", CARBON_SAVINGS_SCENARIO)
+      .then(({ count, error }) => {
+        if (active) setAccruedDataDays(error ? "unavailable" : count);
+      });
+    return () => { active = false; };
+  }, [activeBuilding.id]);
 
   const logOut = async () => {
     await supabase.auth.signOut();
@@ -13571,20 +13601,23 @@ const BuildingDashboard = () => {
         </div>
       </div>
 
-      {roleDetails ? (
+      {roleLabel ? (
         <section className={`border-b px-4 py-3 ${accessRole === "architect" ? "border-blue-200 bg-blue-50" : accessRole === "builder" ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50"}`}>
-          <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-3">
+          <div className="mx-auto flex max-w-7xl items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-3">
               <span className={`px-2 py-1 text-xs font-bold uppercase text-white ${accessRole === "architect" ? "bg-blue-700" : accessRole === "builder" ? "bg-amber-700" : "bg-emerald-700"}`}>
-                {roleDetails.label}
+                {roleLabel}
               </span>
-              <div>
-                {accessRole !== "homeowner" ? <p className="m-0 text-sm font-bold text-gray-900">{roleDetails.phase} workspace</p> : null}
-                <p className="m-0 text-xs text-gray-600">{roleDetails.focus}</p>
-              </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <button type="button" onClick={logOut} className="border border-emerald-700 bg-white px-3 py-2 text-xs font-semibold text-emerald-900 hover:bg-emerald-100">Log out</button>
+            <div ref={accountMenuRef} className="relative shrink-0">
+              <button type="button" aria-label="Open account menu" aria-expanded={accountMenuOpen} aria-controls="wbp-account-menu" onClick={() => setAccountMenuOpen((open) => !open)} className="flex h-9 w-10 items-center justify-center border border-gray-300 bg-white text-xl leading-none text-gray-900 hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-700">{"\u2630"}</button>
+              {accountMenuOpen ? <div id="wbp-account-menu" className="absolute right-0 top-full z-50 mt-2 w-56 max-w-[calc(100vw-2rem)] border border-gray-300 bg-white p-2 text-sm shadow-lg">
+                {activeBuilding.id === "cc" ? <div className="border-b border-gray-200 px-2 py-2">
+                  <p className="font-semibold text-gray-900">Data accrued</p>
+                  <p className="text-xs text-gray-600">{accruedDataDays == null ? "Checking recorded days" : accruedDataDays === "unavailable" ? "Recorded days unavailable" : `${accruedDataDays.toLocaleString()} recorded day${accruedDataDays === 1 ? "" : "s"}`}</p>
+                </div> : null}
+                <button type="button" onClick={logOut} className="w-full px-2 py-2 text-left font-semibold text-gray-900 hover:bg-gray-100">Log out</button>
+              </div> : null}
             </div>
           </div>
         </section>
