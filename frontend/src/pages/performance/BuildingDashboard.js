@@ -738,8 +738,7 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
               })}</dl>)}
               <div className="min-w-0">{renderDocumentList() || <><h4 className="font-semibold text-emerald-950">Historical documents</h4><p className="mt-1 text-gray-600">None uploaded</p></>}</div>
             </div>}
-            <div className="mt-2 flex flex-wrap items-end justify-between gap-2">
-              <p className="text-gray-600">{recordedStage.designProfileRef || recordedStage.buildProfileRef ? `Owner-selected ${isBuild ? "Build" : "Design"} account; project attribution remains unverified.` : "Owner-supplied historical record; organisation attribution is unverified."}</p>
+            <div className="mt-2 flex justify-end">
               <button type="button" onClick={() => { if (showEditor) changeHistory((current) => ({ ...current, [contentStage]: recordedStage })); setEditingStage(showEditor ? null : contentStage); }} className="shrink-0 border border-emerald-700 px-3 py-1 font-semibold text-emerald-950">{showEditor ? "Cancel" : "Edit details"}</button>
             </div>
           </div> : null}
