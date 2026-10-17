@@ -11187,8 +11187,8 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
             </div>
 
             <div className="flex flex-col gap-3 rounded border bg-gray-50 p-3">
-              <h4 className="font-semibold text-sm">1. Confirm meters and consent</h4>
-              <p className="text-xs text-gray-600">Confirm this home's electricity and gas meters and your move-in date when the connection is available. A bill can help identify a meter, but does not itself grant access to readings.</p>
+              <h4 className="font-semibold text-sm">1. Scan bill and confirm consent interest</h4>
+              <p className="text-xs text-gray-600">Scan a bill to confirm the electricity MPAN, gas MPRN and tariff details. A bill does not itself grant access to readings; the move-in date and formal consent will be confirmed when the connection is available.</p>
 
               <label className="flex items-start gap-2 text-xs text-gray-700">
                 <input
@@ -11201,8 +11201,8 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                   I would like WBP to request access to this home's electricity and gas smart-meter history. Formal consent will follow when the connection is available.
                 </span>
               </label>
-              <details className="text-xs text-gray-700"><summary className="cursor-pointer">Meter number fallback</summary>
-                <p className="mt-2">If the address lookup cannot identify a meter, use a bill or scan its label to confirm the MPAN or MPRN. This does not replace the formal consent step.</p>
+              <details className="text-xs text-gray-700"><summary className="cursor-pointer">Enter or scan a meter number instead</summary>
+                <p className="mt-2">If a bill does not show the meter number clearly, enter the MPAN or MPRN or scan the meter label. This does not replace formal consent.</p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   <input type="text" className="min-w-0 flex-1 border bg-white p-2" placeholder="MPAN / MPRN" aria-label="MPAN or MPRN from bill"
                     value={meterIdentifiers.supplyId} onChange={(event) => setMeterIdentifiers((current) => ({ ...current, supplyId: event.target.value }))} />
@@ -11218,21 +11218,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                 </div> : null}
                 {meterScanStatus ? <p role="status" className="mt-1">{meterScanStatus}</p> : null}
               </details>
-            </div>
-
-            <div className="flex flex-col gap-3 rounded border bg-gray-50 p-3">
-              <h4 className="font-semibold text-sm">2. Import energy data</h4>
-              <button type="button" disabled className="border border-gray-300 bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-600">
-                Import energy data
-              </button>
-              <p className="text-xs text-gray-600">Available when WBP's n3rgy connection and formal consent process are approved. Selecting interest above does not start an import.</p>
-              <p className="text-xs text-gray-600">With consent, electricity and gas smart-meter history may reach back up to 13 months, but not before your move-in date or the meter's commissioning date. Each fuel's available history may differ.</p>
-            </div>
-
-            <div className="grid gap-3">
-              <h4 className="font-semibold text-sm">3. Tariff evidence</h4>
-              <p className="text-xs text-gray-600">A bill supports tariff, supplier and fuel claims, including carbon context. It does not replace consented meter readings or independently verify a renewable tariff.</p>
-              <div className="space-y-3 border bg-gray-50 p-3">
+              <div className="space-y-3 border-t border-gray-200 pt-3">
                 <p className="text-xs text-gray-600">Text PDFs may fill some details. For scanned bills or images, enter them manually and confirm before saving.</p>
                 <input ref={billUploadRef} type="file" className="sr-only" aria-label="Choose energy bill" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
                   onChange={(event) => { prepareEnergyBill(event.target.files?.[0]); event.target.value = ""; }} />
@@ -11258,6 +11244,15 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
               </div>
               <p className="text-xs text-gray-600">Smart-meter readings establish consumption. The bill supports supplier and tariff details; a renewable tariff still requires review.</p>
               {carbonEvidenceStatus ? <p className="text-sm" role="status">{carbonEvidenceStatus}</p> : null}
+            </div>
+
+            <div className="flex flex-col gap-3 rounded border bg-gray-50 p-3">
+              <h4 className="font-semibold text-sm">2. Import energy data</h4>
+              <button type="button" disabled className="border border-gray-300 bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-600">
+                Import energy data
+              </button>
+              <p className="text-xs text-gray-600">Available when WBP's n3rgy connection and formal consent process are approved. Selecting interest above does not start an import.</p>
+              <p className="text-xs text-gray-600">With consent, electricity and gas smart-meter history may reach back up to 13 months, but not before your move-in date or the meter's commissioning date. Each fuel's available history may differ.</p>
             </div>
 
           </div>
