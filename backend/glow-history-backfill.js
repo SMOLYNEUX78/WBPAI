@@ -24,7 +24,9 @@ const GLOW_API_RESOURCES =
 const HISTORY_FROM = process.env.GLOW_HISTORY_FROM || "2020-01-01";
 const HISTORY_TO = process.env.GLOW_HISTORY_TO || new Date().toISOString();
 const HISTORY_PERIOD = process.env.GLOW_HISTORY_PERIOD || "PT30M";
-const HISTORY_CHUNK_DAYS = Number(process.env.GLOW_HISTORY_CHUNK_DAYS || 30);
+// Glow limits PT30M aggregation requests to 10 days; leave margin at boundaries.
+const requestedChunkDays = Number(process.env.GLOW_HISTORY_CHUNK_DAYS || 7);
+const HISTORY_CHUNK_DAYS = Math.min(9, Math.max(1, requestedChunkDays));
 const BATCH_SIZE = Number(process.env.GLOW_HISTORY_BATCH_SIZE || 500);
 
 const defaultResources = [
@@ -187,9 +189,10 @@ function mapReadingsToRows(resource, data) {
 
 async function insertMissingRows(rows) {
   if (rows.length === 0) {
-    return;
+    return 0;
   }
 
+  let inserted = 0;
   for (const batch of chunkRows(rows, BATCH_SIZE)) {
     const sample = batch[0];
     const timestamps = batch.map((row) => row.timestamp);
@@ -223,31 +226,35 @@ async function insertMissingRows(rows) {
     if (insertError) {
       throw insertError;
     }
+    inserted += missingRows.length;
   }
+  return inserted;
 }
 
 async function backfillResource(resource, fromDate, toDate) {
   let cursor = new Date(fromDate);
-  let totalRows = 0;
+  let fetchedRows = 0;
+  let insertedRows = 0;
 
   while (cursor < toDate) {
     const chunkEnd = new Date(Math.min(addDays(cursor, HISTORY_CHUNK_DAYS), toDate));
     const data = await glowFetch(readingsPath(resource.resourceId, cursor, chunkEnd));
     const rows = mapReadingsToRows(resource, data);
 
-    await insertMissingRows(rows);
-    totalRows += rows.length;
+    const inserted = await insertMissingRows(rows);
+    fetchedRows += rows.length;
+    insertedRows += inserted;
 
     console.log(
       `[${resource.buildingId}/${resource.fuelType}] ${toGlowDate(cursor)} to ${toGlowDate(
         chunkEnd
-      )}: ${rows.length} row(s)`
+      )}: ${rows.length} fetched, ${inserted} inserted`
     );
 
     cursor = chunkEnd;
   }
 
-  return totalRows;
+  return { fetchedRows, insertedRows };
 }
 
 async function main() {
@@ -266,18 +273,24 @@ async function main() {
   if (fromDate >= toDate) {
     throw new Error("GLOW_HISTORY_FROM must be before GLOW_HISTORY_TO.");
   }
-
-  console.log(
-    `Backfilling ${resources.length} Glow resource(s) from ${fromDate.toISOString()} to ${toDate.toISOString()} at ${HISTORY_PERIOD}`
-  );
-
-  let totalRows = 0;
-
-  for (const resource of resources) {
-    totalRows += await backfillResource(resource, fromDate, toDate);
+  if (!Number.isFinite(requestedChunkDays) || requestedChunkDays <= 0) {
+    throw new Error("GLOW_HISTORY_CHUNK_DAYS must be a positive number.");
   }
 
-  console.log(`Glow history backfill complete: ${totalRows} interval row(s) processed.`);
+  console.log(
+    `Backfilling ${resources.length} Glow resource(s) from ${fromDate.toISOString()} to ${toDate.toISOString()} at ${HISTORY_PERIOD} in ${HISTORY_CHUNK_DAYS}-day chunks`
+  );
+
+  let fetchedRows = 0;
+  let insertedRows = 0;
+
+  for (const resource of resources) {
+    const result = await backfillResource(resource, fromDate, toDate);
+    fetchedRows += result.fetchedRows;
+    insertedRows += result.insertedRows;
+  }
+
+  console.log(`Glow history backfill complete: ${fetchedRows} fetched, ${insertedRows} inserted.`);
 }
 
 main().catch((error) => {

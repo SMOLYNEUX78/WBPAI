@@ -334,8 +334,11 @@ GLOW_HISTORY_FROM=2026-06-01 GLOW_HISTORY_TO=2026-06-03 npm run backfill:glow-hi
 ```
 
 For the full available history, widen `GLOW_HISTORY_FROM`. The script requests
-`PT30M` readings in chunks, skips existing timestamps for the same building and
-fuel, and writes rows with `reading_type=interval_30m`.
+`PT30M` readings in seven-day chunks (Glow rejects requests spanning more than
+10 days), skips existing timestamps for the same building and fuel, and writes
+rows with `reading_type=interval_30m`. Its completion line distinguishes rows
+fetched from rows newly inserted. A zero insertion count means this run did not
+recover missing readings, even when Glow returned many existing intervals.
 
 ## AirGradient local API
 
