@@ -492,6 +492,28 @@ test("registered instrument tiles open their edit details", async () => {
   expect(within(dialog).getByRole("button", { name: "Edit Dyson TP02" })).not.toHaveClass("bg-emerald-50");
 });
 
+test("AirGradient connection shows its network route without opening the camera", async () => {
+  window.localStorage.setItem("wbp-new-building-passport", JSON.stringify({
+    recordId: "WBP-TEST", databaseId: "home-1", legalOwnerName: "Owner",
+    propertyDiscovery: { address: "14 Bridgewood Road", postcode: "IP12 4HA", uprn: "100091142492", confirmedAt: "2026-09-24" },
+  }));
+  window.localStorage.setItem("WBP-TEST:setupSections", JSON.stringify({ healthSensors: [{
+    id: "airgradient-1", manufacturer: "AirGradient", model: "Open Air", serialNumber: "001122aabbcc", location: "Garden", metrics: [],
+  }] }));
+  const getUser = jest.spyOn(supabase.auth, "getUser").mockResolvedValue({ data: { user: null }, error: null });
+  try {
+    render(<MemoryRouter><NewBuildingSetupPanel editModal syncHomeProfile isActive /></MemoryRouter>);
+    const dialog = screen.getByRole("dialog", { name: "Edit property profile" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Health monitoring" }));
+    fireEvent.click(await within(dialog).findByRole("button", { name: "Connect sensor" }));
+    expect(within(dialog).getByText(/Supported connector for AirGradient Open Air: Local Wi-Fi API/)).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Scan device label" })).toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Scan sensor label" })).not.toBeInTheDocument();
+  } finally {
+    getUser.mockRestore();
+  }
+});
+
 test("a recently linked instrument shows its network address and Live status", async () => {
   const now = new Date().toISOString();
   window.localStorage.setItem("wbp-new-building-passport", JSON.stringify({

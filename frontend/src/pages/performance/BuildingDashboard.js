@@ -11330,9 +11330,9 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                         if (opening && connector?.route === "bluetooth") void chooseBluetoothDevice();
                       }}>Connect sensor</button>
                       {connectionRouteSensorId === sensor.id ? <div className="mt-2 space-y-2 border-t border-emerald-200 pt-2">
-                        {connectionForSensor(sensor)?.id !== "airgradient" ? <p className="text-xs text-gray-700">{connectionForSensor(sensor)
+                        <p className="text-xs text-gray-700">{connectionForSensor(sensor)
                           ? `${connectionForSensor(sensor).ready ? "Supported connector" : "Recommended route"} for ${sensor.manufacturer} ${sensor.model}: ${connectionForSensor(sensor).name}. ${connectionForSensor(sensor).nextStep}`
-                          : "No supported reading connector is registered for this model yet. The instrument is saved, but WBP cannot import its data until a compatible connector is configured."}</p> : null}
+                          : "No supported reading connector is registered for this model yet. The instrument is saved, but WBP cannot import its data until a compatible connector is configured."}</p>
                         {connectionForSensor(sensor)?.steps ? <div className="border border-emerald-200 bg-white p-3 text-xs text-gray-800">
                           <ol className="list-inside list-decimal space-y-2">{connectionForSensor(sensor).steps.map((step) => <li key={step}>{step}</li>)}</ol>
                           <a href={connectionForSensor(sensor).guideUrl} target="_blank" rel="noopener noreferrer" className="mt-3 inline-block font-semibold text-emerald-800 underline">{connectionForSensor(sensor).guideLabel}</a>
@@ -12836,7 +12836,7 @@ const AirGradientLocalConnect = ({ sensor, isActive, onSerialCaptured }) => {
   const [sample, setSample] = useState(null);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
-  const [scanning, setScanning] = useState(true);
+  const [scanning, setScanning] = useState(false);
   const videoRef = useRef(null);
   const onSerialCapturedRef = useRef(onSerialCaptured);
   onSerialCapturedRef.current = onSerialCaptured;
@@ -12972,7 +12972,7 @@ const AirGradientLocalConnect = ({ sensor, isActive, onSerialCaptured }) => {
   return <div className="space-y-2 border border-emerald-200 bg-white p-3 text-xs text-gray-800">
     {scanning ? createPortal(<div className="wbp-sensor-camera-overlay">
       <section role="dialog" aria-modal="true" aria-label="Scan sensor label" className="wbp-sensor-camera-dialog">
-        <p>Connect your sensor to the same Wi-Fi as your tablet and scan the device label.</p>
+        <p>Scan the device label to confirm its serial number. Readings will come through the paired tablet, not the camera.</p>
         <video ref={videoRef} autoPlay muted playsInline aria-label="Scan AirGradient QR code or barcode" />
         <button type="button" autoFocus onClick={() => setScanning(false)}>Close camera</button>
         {status ? <p role="status">{status}</p> : null}
