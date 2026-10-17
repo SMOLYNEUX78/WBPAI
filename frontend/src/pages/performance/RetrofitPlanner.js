@@ -72,9 +72,9 @@ export default function RetrofitPlanner({ ready, embedded = false, annualEui, ar
             <div className="wbp-retrofit-actions"><button type="button" onClick={() => setAdjustOpen(true)}>Adjust assumptions</button>{!embedded ? <button type="button" onClick={() => setPackOpen(true)}>View retrofit pack</button> : null}</div>
             {embedded ? <div className="wbp-retrofit-next-steps">
               <div><h3>Funding avenues</h3><ul>{FUNDING.map((source) => <li key={source.name}><a href={source.href} target="_blank" rel="noreferrer">{source.name}</a><span>{source.note}</span></li>)}</ul><p>Check eligibility before deducting any funding from the cost estimate.</p></div>
-              <div><h3>Design and build</h3><p>Recorded on this home's original project; availability and retrofit suitability are not verified.</p><ul>
-                <li><strong>Original architect</strong>{originalTeam.architect ? (originalTeam.architectProfileRef ? <a href={`/workspace/design-profile/${encodeURIComponent(originalTeam.architectProfileRef)}`}>{originalTeam.architect}</a> : <span>{originalTeam.architect}</span>) : <span>Not recorded</span>}</li>
-                <li><strong>Original builder</strong>{originalTeam.builder ? (originalTeam.builderProfileRef ? <a href={`/workspace/build-profile/${encodeURIComponent(originalTeam.builderProfileRef)}`}>{originalTeam.builder}</a> : <span>{originalTeam.builder}</span>) : <span>Not recorded</span>}</li>
+              <div><h3>Recommended design and build routes</h3><p>These names are from this home's original project record, not verified retrofit recommendations. Check availability and suitability before commissioning.</p><ul>
+                <li><strong>Design</strong>{originalTeam.architect ? (originalTeam.architectProfileRef ? <a href={`/workspace/design-profile/${encodeURIComponent(originalTeam.architectProfileRef)}`}>{originalTeam.architect}</a> : <span>{originalTeam.architect}</span>) : <span>Not recorded</span>}</li>
+                <li><strong>Build</strong>{originalTeam.builder ? (originalTeam.builderProfileRef ? <a href={`/workspace/build-profile/${encodeURIComponent(originalTeam.builderProfileRef)}`}>{originalTeam.builder}</a> : <span>{originalTeam.builder}</span>) : <span>Not recorded</span>}</li>
               </ul></div>
             </div> : null}
           </div>

@@ -22,6 +22,7 @@ test("baseline report keeps the page concise and colour-codes the scores", () =>
   expect(screen.queryByText(/Upstairs RH: 72 %/)).not.toBeInTheDocument();
   expect(screen.getByText(/WBP’s 35 kWh\/m²\/year planning target/)).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Download detailed report" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /Sell baseline data/ })).toHaveClass("min-h-32");
   expect(screen.queryByText(/100% baseline scenario/)).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: /Property report/ })).not.toBeInTheDocument();
 });
@@ -40,6 +41,12 @@ test("retrofit option opens the cost and funding planner without introductory co
   expect(screen.getByText("Estimated works cost")).toBeInTheDocument();
   expect(screen.getByText(/Illustrative data income: £0–£444\/yr/)).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: "Funding avenues" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Recommended design and build routes" })).toBeInTheDocument();
+  expect(screen.getByText("Design")).toBeInTheDocument();
+  expect(screen.getByText("Build")).toBeInTheDocument();
+  const funding = screen.getByRole("heading", { name: "Funding avenues" });
+  const routes = screen.getByRole("heading", { name: "Recommended design and build routes" });
+  expect(funding.compareDocumentPosition(routes) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(screen.getByText("Original Architects")).toBeInTheDocument();
   expect(screen.getByText("Original Builders")).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "View retrofit pack" })).not.toBeInTheDocument();

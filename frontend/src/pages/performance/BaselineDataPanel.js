@@ -93,7 +93,7 @@ export default function BaselineDataPanel({ DetailSurface, baseline = {} }) {
     <div className="mt-7 border-t border-gray-200 pt-5">
       <h3 className="mb-3 text-base font-bold">Options</h3>
       <button type="button" onClick={() => setOpenPanel("retrofit")} className="group relative flex min-h-44 w-full items-end overflow-hidden border border-emerald-900 bg-emerald-950 p-5 text-left text-white sm:min-h-52 sm:p-7" style={{ backgroundImage: "linear-gradient(90deg, rgba(9, 43, 34, .8), rgba(9, 43, 34, .12) 75%), url('/images/retrofit-options.png')", backgroundSize: "cover", backgroundPosition: "center" }}><span className="relative text-xl font-bold drop-shadow sm:text-2xl">Explore retrofit options <span aria-hidden="true">→</span></span></button>
-      <button type="button" onClick={() => setOpenPanel("sale")} className="mt-3 w-full border border-emerald-700 bg-white px-4 py-3 text-left text-sm font-semibold text-emerald-950 hover:bg-emerald-50">Sell baseline data</button>
+      <button type="button" onClick={() => setOpenPanel("sale")} className="mt-3 flex min-h-32 w-full items-end justify-between gap-4 border border-emerald-800 bg-emerald-50 px-5 py-5 text-left text-xl font-bold text-emerald-950 hover:bg-emerald-100 sm:px-7 sm:text-2xl"><span>Sell baseline data</span><span aria-hidden="true">→</span></button>
     </div>
 
     {openPanel === "retrofit" ? <DetailSurface modal title="Explore Retrofit Options" onClose={() => setOpenPanel(null)}>

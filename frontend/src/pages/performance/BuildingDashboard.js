@@ -7356,7 +7356,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
                   </div>
                 ) : <span className="wbp-linear-performance-pending">Pending</span>}
               </button>
-              <div className="wbp-linear-performance-baseline">
+              {building.id !== "bl" ? <div className="wbp-linear-performance-baseline">
                 <div className="flex flex-wrap items-center justify-between gap-1 text-xs font-semibold text-gray-700">
                   <span>Baseline confidence: {baselineConfidence.label}</span>
                   <span>{baselineConfidence.score}%</span>
@@ -7371,7 +7371,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
                     {baselineConfidenceSteps.map((step) => <li key={step.label} className="list-disc">{step.complete ? "Complete" : "Needed"}: {step.label} - {step.detail}</li>)}
                   </ul>
                 </details>
-              </div>
+              </div> : null}
             </div>
           ) : isCarbonCreditTab ? (
             <div className="wbp-linear-performance">
