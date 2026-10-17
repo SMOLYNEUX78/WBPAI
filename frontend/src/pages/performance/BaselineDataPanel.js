@@ -22,7 +22,6 @@ export default function BaselineDataPanel({ DetailSurface, baseline = {} }) {
   const target = Number(baseline.targetEui);
   const hasEui = Number.isFinite(eui) && eui > 0;
   const aboveTarget = hasEui && Number.isFinite(target) && target > 0 && eui > target;
-  const rainFlags = (baseline.rainHumidityAreas || []).filter((area) => area.summary?.status === "ready" && Number.isFinite(area.summary.rhUplift) && area.summary.rhUplift >= 8);
   useEffect(() => {
     let cancelled = false;
     if (!baseline.buildingId) {
