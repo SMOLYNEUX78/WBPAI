@@ -10,10 +10,33 @@ const average = (rows, field) => {
   const values = (rows || []).map((item) => item[field]).filter(Number.isFinite);
   return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
 };
+const seasonalSummary = (records) => (records || [])
+  .map((record) => {
+    const days = (record.dailyData || []).filter((day) => day.date && (!record.startDate || day.date >= record.startDate) && (!record.endDate || day.date <= record.endDate));
+    if (!days.length) return null;
+    const observed = days.filter((day) => ["electricity", "gas", "internalTemp", "externalTemp", "upstairsHumidity", "downstairsHumidity"].some((field) => Number.isFinite(day[field])));
+    if (!observed.length) return null;
+    return {
+      label: `${record.name || "Season"} ${record.year || (record.startDate || "").slice(0, 4)}`,
+      period: `${observed[0].date} to ${observed[observed.length - 1].date}`,
+      days: observed.length,
+      electricity: average(observed, "electricity"),
+      gas: average(observed, "gas"),
+      internalTemp: average(observed, "internalTemp"),
+      externalTemp: average(observed, "externalTemp"),
+      upstairsHumidity: average(observed, "upstairsHumidity"),
+      downstairsHumidity: average(observed, "downstairsHumidity"),
+      startDate: record.startDate || observed[0].date,
+    };
+  })
+  .filter(Boolean)
+  .sort((a, b) => a.startDate.localeCompare(b.startDate));
 
 export function buildBaselineReportHtml(baseline, energyExport) {
   const rooms = baseline.rooms || [];
   const heat = baseline.heatLoss || {};
+  const exclusion = baseline.heatExclusion || {};
+  const seasons = seasonalSummary(baseline.seasonalTrends);
   const target = baseline.targetEui;
   const eui = baseline.annualEui;
   const history = baseline.historicalHealth || { status: "unavailable", findings: [] };
@@ -29,6 +52,10 @@ export function buildBaselineReportHtml(baseline, energyExport) {
     ].filter((value) => value !== "Not available").join("; ");
     return row(room.label, `${room.timestamp ? `Latest ${new Date(room.timestamp).toLocaleString("en-GB")}` : "No recent timestamp"}${profile ? `; weekly profile: ${profile}` : ""}`);
   }).join("");
+  const seasonRows = seasons.map((season) => `<tr><th scope="row">${escapeHtml(season.label)}<br><span class="muted">${escapeHtml(season.period)} · ${season.days} observed days</span></th><td>${escapeHtml(metric(season.electricity, "kWh/day"))}</td><td>${escapeHtml(metric(season.gas, "kWh/day"))}</td><td>${escapeHtml(metric(season.internalTemp, "°C"))}</td><td>${escapeHtml(metric(season.externalTemp, "°C"))}</td><td>${escapeHtml(metric(season.upstairsHumidity, "%"))} / ${escapeHtml(metric(season.downstairsHumidity, "%"))}</td></tr>`).join("");
+  const exclusionValue = Number.isFinite(exclusion.averageBuffer)
+    ? `${Math.abs(exclusion.averageBuffer).toFixed(1)} °C ${exclusion.averageBuffer >= 0 ? "cooler" : "hotter"} than outside`
+    : "Not available";
   const weatherNote = "No comparison with a long-term local weather reference has been completed. A warm or cold winter could bias the observed baseline and retrofit savings.";
   const recommendations = [
     "Survey fabric, airtightness, thermal bridges, heating and hot-water systems before specifying works.",
@@ -41,7 +68,8 @@ export function buildBaselineReportHtml(baseline, energyExport) {
   ${section("Building and evidence", `<table>${row("Building record", baseline.buildingId || "Pending")}${row("Floor area", metric(baseline.area, "m²"))}${row("Meter period", `${energyExport.periodStart || "Unknown"} to ${energyExport.periodEnd || "Unknown"}`)}${row("Days with meter readings", energyExport.meteredDays ?? "Unknown")}${row("Coverage", "Days with readings do not prove complete half-hour coverage")}</table>`)}
   ${section("Energy performance", `<table>${row("Observed annual EUI", metric(eui, "kWh/m²/year"))}${row("WBP planning target", metric(target, "kWh/m²/year"))}${row("Target comparison", Number.isFinite(eui) && Number.isFinite(target) ? (eui > target ? "Above target" : "At or below target") : "Pending")}${row("Average electricity day", metric(baseline.electricityDailyKwh, "kWh"))}${row("Average gas day", metric(baseline.gasDailyKwh, "kWh"))}${row("Observed-weather extrapolation", metric(heat.weatherNormalisedEui, "kWh/m²/year"))}${fuelRows}</table><p>The 35 kWh/m²/year target, where shown, is WBP's planning threshold, not an EPC, SAP, HEM, LETI or EnerPHit rating.</p>`)}
   ${section("Health and monitored rooms", `<table>${row("Health score", metric(baseline.healthScore, "/100", 0))}${row("Energy score", metric(baseline.energyScore, "/100", 0))}${roomRows}</table>${history.status === "ready" ? (flags.length ? list(flags) : "<p>No historical room averages available.</p>") : "<p>Historical comparison unavailable.</p>"}<p>Counts cover daily averages in the past year, not individual peaks. Missing days and unmonitored rooms are excluded.</p>`)}
-  ${section("Heat, moisture and weather", `<table>${row("Heat-loss estimate", metric(heat.htcEstimate, "W/K", 0))}${row("Night cooldown", metric(heat.nightCooldownRateCPerHour, "°C/hour", 2))}${row("Heating-degree evidence", heat.hddDays ? `${heat.hddDays} days` : "Pending")}</table>${rain.length ? list(rain) : "<p>Rain/humidity comparison pending.</p>"}<p>${weatherNote}</p>`)}
+  ${section("Heat loss and summer resilience", `<table>${row("HLA score", metric(baseline.hlaScore, "/100", 0))}${row("HDD intensity", metric(heat.kwhPerHdd, "kWh/HDD", 3))}${row("Heating-degree evidence", heat.hddDays ? `${heat.hddDays} days` : "Pending")}${row("HTC estimate", metric(heat.htcEstimate, "W/K", 1))}${row("HTC samples", heat.htcSamples ?? "Unknown")}${row("Night cooldown HTC", metric(heat.nightCooldownHtc, "W/K", 1))}${row("Night cooldown time constant", metric(heat.nightCooldownTauHours, "hours", 1))}${row("Night cooldown rate", metric(heat.nightCooldownRateCPerHour, "°C/hour", 2))}${row("Qualifying cooldown nights", heat.nightCooldownNights ?? "Unknown")}${row("Heat exclusion", exclusionValue)}${row("Hot-weather samples", exclusion.sampleCount ?? "Unknown")}${row("Indoor overheating share", Number.isFinite(exclusion.overheatingShare) ? `${(exclusion.overheatingShare * 100).toFixed(0)}%` : "Not available")}</table>${rain.length ? list(rain) : "<p>Rain/humidity comparison pending.</p>"}<p>${weatherNote}</p>`)}
+  ${section("Seasonal performance trends", seasons.length ? `<table><thead><tr><th>Season and coverage</th><th>Electricity</th><th>Gas</th><th>Inside</th><th>Outside</th><th>Upstairs / downstairs RH</th></tr></thead><tbody>${seasonRows}</tbody></table><p>Values are averages of dated readings available in the seasonal trend archive. Observed days are not proof of complete seasonal coverage; missing fuels or sensors are shown as unavailable.</p>` : "<p>No dated seasonal trend readings are available in this report yet.</p>")}
   ${section("Retrofit design brief", list(recommendations))}
   ${section("Data licensing preparation", `<p>This owner-only report can inform a redacted, purpose-specific licence pack. It is not itself approved for sharing. Define the buyer, permitted use, retention, consent, re-identification controls and price before release.</p><p>Candidate fields: period and coverage, fuel totals and intervals, area and EUI method, room/sensor inventory, health summaries, weather context, provenance and exclusions. Remove building identifiers and occupant-level traces unless explicitly licensed.</p>`)}
   <p class="muted">This report supports scoping, not a condition survey, EPC, retrofit design or independently verified carbon claim.</p></body></html>`;
