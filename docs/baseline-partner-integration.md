@@ -1,8 +1,8 @@
 # Baseline export and partner integration
 
 `WBP-001bl` remains a scenario, not a certified baseline or a live listing.
-The `Review measured export` control calls `/api/baselineExport` with the
-signed-in account token. Apply `Supabase-code/Baseline Owner Export.sql` before
+The `Review measured export` control calls the Supabase
+`wbp_owner_baseline_export` RPC with the signed-in account session. Apply `Supabase-code/Baseline Owner Export.sql` before
 using it. The database function checks the building's custodian and returns
 aggregate property-bound interval energy only. It omits address, UPRN, bills,
 occupant details, raw time series, device credentials and sensors. The API is

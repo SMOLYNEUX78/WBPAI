@@ -62,12 +62,13 @@ export default function BaselineDataPanel({ DetailSurface, baseline = {} }) {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) throw new Error("Sign in again to review this baseline.");
-      const response = await fetch(`/api/baselineExport?buildingId=${encodeURIComponent(baseline.buildingId)}`, {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-        cache: "no-store",
+      const { data: payload, error } = await supabase.rpc("wbp_owner_baseline_export", {
+        p_building_record_id: baseline.buildingId,
       });
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error || "Baseline export unavailable.");
+      if (error) throw new Error(error.message || "Baseline export unavailable.");
+      if (payload?.buildingRecordId?.toLowerCase() !== baseline.buildingId.toLowerCase() || payload.shareable !== false) {
+        throw new Error("The baseline export could not be verified.");
+      }
       setOwnerExport(payload);
     } catch (error) {
       setExportError(error.message || "Baseline export unavailable.");
