@@ -14,6 +14,7 @@ import RetrofitPlanner from "./RetrofitPlanner";
 import { CC_CANDIDATE_PROFILE } from "./retrofitEconomics";
 import { normaliseSerial, readDeviceScan, suggestDeviceCandidates, visibleDeviceCandidates } from "./deviceScan";
 import { connectionForSensor } from "./sensorConnectors";
+import { calculateModelledWalletBalance } from "./dataWallet";
 import "./occupyScreen.css";
 
 export const DetailSurface = ({ children, title, onClose, modal, headerExtra }) => {
@@ -12055,6 +12056,7 @@ export const PortfolioDashboardPanel = ({
 
 const ExchangeDashboardPanel = ({ homeValue = null }) => {
   const isHomeExchange = homeValue !== null;
+  const [baselineOfferOpen, setBaselineOfferOpen] = useState(false);
   const [marketView, setMarketView] = useState("carbon");
   const [tradeTimeframe, setTradeTimeframe] = useState("1D");
   const [salePanelOpen, setSalePanelOpen] = useState(false);
@@ -12242,6 +12244,14 @@ const ExchangeDashboardPanel = ({ homeValue = null }) => {
           <button type="button" aria-pressed={salePanelOpen && saleMode === "simple"} onClick={() => openSalePanel("simple", "market")} className="min-h-11 border border-lime-500 bg-lime-400 px-3 py-2.5 text-sm font-semibold text-gray-950 hover:bg-lime-500">Sell</button>
           <button type="button" aria-pressed={salePanelOpen && saleMode === "advanced"} onClick={() => openSalePanel("advanced")} className="min-h-11 border border-lime-500 bg-lime-400 px-3 py-2.5 text-sm font-semibold text-gray-950 hover:bg-lime-500">Managed sale</button>
         </div>
+        {isHomeExchange ? <div className="border-t border-gray-200 px-3 py-3 sm:px-5">
+          <button type="button" aria-expanded={baselineOfferOpen} onClick={() => setBaselineOfferOpen((open) => !open)} className="w-full border border-emerald-700 bg-white px-3 py-2.5 text-left text-sm font-semibold text-emerald-900 hover:bg-emerald-50">Sell baseline energy data</button>
+          {baselineOfferOpen ? <div className="mt-3 border-l-2 border-emerald-700 pl-3 text-xs text-gray-700">
+            <strong className="block text-sm text-gray-950">Baseline energy data · draft offer</strong>
+            <p className="mt-1">Energy bills can establish tariffs and account context; metered electricity and gas readings establish the baseline. Share only a defined period and purpose with an approved buyer.</p>
+            <p className="mt-2">Price pending a buyer agreement. No licence or payment has been created.</p>
+          </div> : null}
+        </div> : null}
       </section>
 
       <section className="border-b border-gray-200 px-3 py-5 sm:px-5">
@@ -13459,6 +13469,7 @@ const BuildingDashboard = () => {
   const navigate = useNavigate();
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const accountMenuRef = useRef(null);
+  const [accruedDataDays, setAccruedDataDays] = useState(null);
   const accessParams = new URLSearchParams(location.search);
   const storedRole = window.localStorage.getItem("wbp-user-role") || "";
   const accessRole = accessParams.get("role") || storedRole || "homeowner";
@@ -13471,6 +13482,13 @@ const BuildingDashboard = () => {
   const [activeIndex, setActiveIndex] = useState(defaultIndex >= 0 ? defaultIndex : 0);
   const [bridgewoodValue, setBridgewoodValue] = useState(readCachedBridgewoodValue);
   const bridgewoodTokens = bridgewoodValue.credits;
+  const { total: modelledWalletBalance } = calculateModelledWalletBalance({
+    recordedDays: accruedDataDays,
+    savedKgCo2e: bridgewoodValue.savedKgCo2e,
+    carbonCredits: bridgewoodValue.credits,
+    annualDataValue: MODELLED_DATA_VALUE_PER_PROPERTY_GBP,
+    carbonPricePerTonne: FALLBACK_CARBON_PRICE_GBP_PER_TONNE,
+  });
 
   const activeBuilding = BUILDINGS[activeIndex];
 
@@ -13491,6 +13509,19 @@ const BuildingDashboard = () => {
   useEffect(() => {
     setAccountMenuOpen(false);
   }, [activeBuilding.id]);
+
+  useEffect(() => {
+    if (accessRole !== "homeowner") return undefined;
+    let active = true;
+    supabase.from("CarbonSavingsDaily")
+      .select("saving_date", { count: "exact", head: true })
+      .eq("building_id", "home")
+      .eq("scenario", CARBON_SAVINGS_SCENARIO)
+      .then(({ count, error }) => {
+        if (active) setAccruedDataDays(error ? "unavailable" : count);
+      });
+    return () => { active = false; };
+  }, [accessRole]);
 
   const logOut = async () => {
     await supabase.auth.signOut();
@@ -13596,8 +13627,9 @@ const BuildingDashboard = () => {
               <button type="button" aria-label="Open account menu" aria-expanded={accountMenuOpen} aria-controls="wbp-account-menu" onClick={() => setAccountMenuOpen((open) => !open)} className="flex h-9 w-10 items-center justify-center border border-gray-300 bg-white text-xl leading-none text-gray-900 hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-700">{"\u2630"}</button>
               {accountMenuOpen ? <div id="wbp-account-menu" className="absolute right-0 top-full z-50 mt-2 w-60 max-w-[calc(100vw-2rem)] border border-gray-300 bg-white p-2 text-sm shadow-lg">
                 {accessRole === "homeowner" ? <button type="button" onClick={() => { setAccountMenuOpen(false); navigate("/dashboard/exchange?source=cc"); }} className="w-full border-b border-gray-200 bg-emerald-50 px-3 py-3 text-left text-emerald-950 hover:bg-emerald-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-700">
-                  <span className="block text-xs font-semibold uppercase">Confirmed portfolio value</span>
-                  <strong className="mt-1 block text-lg leading-tight">£0.00</strong>
+                  <span className="block text-xs font-semibold uppercase">Portfolio value · modelled</span>
+                  <strong className="mt-1 block text-lg leading-tight">{modelledWalletBalance === null ? accruedDataDays === "unavailable" ? "Unavailable" : "Calculating" : new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(modelledWalletBalance)}</strong>
+                  <span className="mt-1 block text-xs text-emerald-800">Confirmed proceeds £0.00</span>
                   <span className="mt-1 block text-xs text-emerald-800">Exchange</span>
                 </button> : null}
                 <button type="button" onClick={logOut} className="w-full px-2 py-2 text-left font-semibold text-gray-900 hover:bg-gray-100">Log out</button>
