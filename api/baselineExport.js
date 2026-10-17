@@ -30,6 +30,8 @@ module.exports = async function baselineExport(request, response) {
       status: "owner-review",
       shareable: false,
       generatedAt: pack.generatedAt,
+      validFrom: pack.validFrom,
+      cutoverReason: pack.cutoverReason,
       periodStart: pack.periodStart,
       periodEnd: pack.periodEnd,
       meteredDays: pack.meteredDays,

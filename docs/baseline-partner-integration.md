@@ -9,6 +9,12 @@ occupant details, raw time series, device credentials and sensors. The API is
 read-only, owner-only and marks the result `shareable: false`. It does not
 create a licence, consent, partner account or payout.
 
+For Bridgewood, apply `Supabase-code/Bridgewood Meter Cutover.sql` after the
+owner export function. The old meter was replaced on 18 March 2026. Earlier
+zero-filled rows remain in storage for audit, but are excluded from the owner
+baseline export. Days with any interval row are not proof of complete coverage;
+check fuel-specific gaps and bills before freezing an evidence version.
+
 The pilot's `home` text source ID is not a customer identity. Only readings
 already present in `WBPBuildingEnergyMeasurements` under the building UUID
 appear in this export. Check their completeness against the legacy chart

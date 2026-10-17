@@ -99,14 +99,15 @@ export default function BaselineDataPanel({ DetailSurface, baseline = {} }) {
           <span><strong>Measured EUI:</strong> {Number.isFinite(baseline.annualEui) ? `${baseline.annualEui.toFixed(1)} kWh/m²/yr` : "Pending"}</span>
           <span><strong>Energy score:</strong> {Number.isFinite(baseline.energyScore) ? Math.round(baseline.energyScore) : "Pending"}</span>
           <span><strong>Health score:</strong> {Number.isFinite(baseline.healthScore) ? Math.round(baseline.healthScore) : "Pending"}</span>
-          <span><strong>Metered days:</strong> {baseline.meteredDays ?? "Pending"}</span>
         </div>
         <div className="mt-4 border-b border-gray-200 pb-4 text-sm">
           <button type="button" onClick={reviewExport} disabled={exportLoading} className="border border-emerald-700 px-3 py-2 font-semibold text-emerald-900 disabled:opacity-50">{exportLoading ? "Checking measured export..." : "Review measured export"}</button>
           {exportError ? <p role="alert" className="mt-2 text-red-800">{exportError}</p> : null}
           {ownerExport ? <div className="mt-3" aria-label="Owner-only export">
             <p className="font-semibold">Owner-only export, not licensed for sharing</p>
-            <p>Metered days: {ownerExport.meteredDays}. Period: {ownerExport.periodStart ? new Date(ownerExport.periodStart).toLocaleDateString("en-GB") : "No readings"} to {ownerExport.periodEnd ? new Date(ownerExport.periodEnd).toLocaleDateString("en-GB") : "No readings"}.</p>
+            {ownerExport.validFrom ? <p>Meter replacement cutover: {new Date(ownerExport.validFrom).toLocaleDateString("en-GB")}. Earlier raw rows are excluded from this baseline review.</p> : null}
+            <p>Days with interval rows: {ownerExport.meteredDays}. Period: {ownerExport.periodStart ? new Date(ownerExport.periodStart).toLocaleDateString("en-GB") : "No readings"} to {ownerExport.periodEnd ? new Date(ownerExport.periodEnd).toLocaleDateString("en-GB") : "No readings"}.</p>
+            <p className="text-xs text-gray-600">This count does not prove full daily coverage or validate the readings against bills.</p>
             {(ownerExport.fuelSummaries || []).map((fuel) => <p key={fuel.fuelType}>{fuel.fuelType}: {Number(fuel.totalKwh).toFixed(1)} kWh across {fuel.intervalCount} intervals.</p>)}
           </div> : null}
         </div>
