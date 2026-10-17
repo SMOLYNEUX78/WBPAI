@@ -75,7 +75,8 @@ export default function BaselineDataPanel({ DetailSurface, baseline = {} }) {
   };
 
   return <section className="-mx-4 border-t border-gray-300 bg-white px-4 py-6 text-gray-900 sm:px-8" aria-label="Baseline report">
-    <h2 className="text-lg font-bold">Baseline report</h2>
+    <button type="button" onClick={downloadReport} disabled={downloadLoading} aria-label="Download baseline report" className="block w-full cursor-pointer text-left disabled:cursor-wait">
+    <h2 className="text-lg font-bold">{downloadLoading ? "Preparing report..." : "Baseline report"}</h2>
     <div className="mt-4 grid gap-3 sm:grid-cols-2">
       <div className={`border-l-4 p-4 ${!hasEui ? "border-gray-400 bg-gray-100" : aboveTarget ? "border-amber-600 bg-amber-50" : "border-emerald-700 bg-emerald-50"}`}>
         <h3 className="text-sm font-semibold">Energy EUI</h3>
@@ -88,7 +89,7 @@ export default function BaselineDataPanel({ DetailSurface, baseline = {} }) {
         <ul className="mt-2 space-y-1 text-sm">{historicalFlags.slice(0, 3).map((finding) => <li key={finding.field}>{finding.label}: {finding.redDays} of {finding.observedDays} observed days in the red band</li>)}{historicalHealth.status === "loading" ? <li>Checking past readings...</li> : null}{historicalHealth.status === "unavailable" ? <li>Historical readings unavailable</li> : null}{historicalHealth.status === "ready" && !historicalFlags.length ? <li>No red-band daily averages found in available history.</li> : null}</ul>
       </div>
     </div>
-    <div className="mt-4 flex justify-end"><button type="button" onClick={downloadReport} disabled={downloadLoading} className="border border-emerald-700 px-4 py-2 text-sm font-semibold text-emerald-900 disabled:opacity-50">{downloadLoading ? "Preparing report..." : "Download detailed report"}</button></div>
+    </button>
     {exportError ? <p role="alert" className="mt-2 text-right text-sm text-red-800">{exportError}</p> : null}
     <div className="mt-7 border-t border-gray-200 pt-5">
       <h3 className="mb-3 text-base font-bold">Options</h3>
