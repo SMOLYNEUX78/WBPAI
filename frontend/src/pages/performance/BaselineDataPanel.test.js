@@ -20,3 +20,10 @@ test("sell baseline data opens a buyer-fit window without claiming a live sale",
   fireEvent.click(screen.getByRole("button", { name: "Close" }));
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 });
+
+test("owner export needs a saved building record", () => {
+  render(<BaselineDataPanel DetailSurface={Surface} />);
+  fireEvent.click(screen.getByRole("button", { name: "Sell baseline data" }));
+  fireEvent.click(screen.getByRole("button", { name: "Review measured export" }));
+  expect(screen.getByRole("alert")).toHaveTextContent(/Save this building profile/);
+});

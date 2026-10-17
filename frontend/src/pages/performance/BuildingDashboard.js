@@ -8839,6 +8839,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
           )
         : null}
       {building.id === "bl" ? <BaselineDataPanel DetailSurface={DetailSurface} baseline={{
+        buildingId: homePassportDatabaseId,
         annualEui: measuredAnnualEui,
         energyScore: performanceBreakdown.energy,
         healthScore: performanceBreakdown.health,

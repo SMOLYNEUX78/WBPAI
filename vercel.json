@@ -11,12 +11,20 @@
     {
       "src": "api/lookupAddress.js",
       "use": "@vercel/node"
+    },
+    {
+      "src": "api/baselineExport.js",
+      "use": "@vercel/node"
     }
   ],
   "routes": [
     {
       "src": "/api/lookupAddress",
       "dest": "/api/lookupAddress"
+    },
+    {
+      "src": "/api/baselineExport",
+      "dest": "/api/baselineExport"
     },
     {
       "handle": "filesystem"

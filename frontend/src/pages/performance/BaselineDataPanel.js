@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import supabase from "../../supabaseClient";
 
 const BUYER_ROUTES = [
   {
@@ -38,7 +39,34 @@ const BUYER_ROUTES = [
 export default function BaselineDataPanel({ DetailSurface, baseline = {} }) {
   const [open, setOpen] = useState(false);
   const [selectedId, setSelectedId] = useState(BUYER_ROUTES[0].id);
+  const [ownerExport, setOwnerExport] = useState(null);
+  const [exportError, setExportError] = useState("");
+  const [exportLoading, setExportLoading] = useState(false);
   const selected = BUYER_ROUTES.find((route) => route.id === selectedId);
+  const reviewExport = async () => {
+    setExportError("");
+    setOwnerExport(null);
+    if (!baseline.buildingId) {
+      setExportError("Save this building profile before reviewing its property-bound export.");
+      return;
+    }
+    setExportLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error("Sign in again to review this baseline.");
+      const response = await fetch(`/api/baselineExport?buildingId=${encodeURIComponent(baseline.buildingId)}`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        cache: "no-store",
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Baseline export unavailable.");
+      setOwnerExport(payload);
+    } catch (error) {
+      setExportError(error.message || "Baseline export unavailable.");
+    } finally {
+      setExportLoading(false);
+    }
+  };
   const blockers = [
     "Lock and version the real metered baseline",
     ...(!baseline.authorityReady ? ["Verify ownership or delegated authority"] : []),
@@ -63,6 +91,15 @@ export default function BaselineDataPanel({ DetailSurface, baseline = {} }) {
           <span><strong>Energy score:</strong> {Number.isFinite(baseline.energyScore) ? Math.round(baseline.energyScore) : "Pending"}</span>
           <span><strong>Health score:</strong> {Number.isFinite(baseline.healthScore) ? Math.round(baseline.healthScore) : "Pending"}</span>
           <span><strong>Metered days:</strong> {baseline.meteredDays ?? "Pending"}</span>
+        </div>
+        <div className="mt-4 border-b border-gray-200 pb-4 text-sm">
+          <button type="button" onClick={reviewExport} disabled={exportLoading} className="border border-emerald-700 px-3 py-2 font-semibold text-emerald-900 disabled:opacity-50">{exportLoading ? "Checking measured export..." : "Review measured export"}</button>
+          {exportError ? <p role="alert" className="mt-2 text-red-800">{exportError}</p> : null}
+          {ownerExport ? <div className="mt-3" aria-label="Owner-only export">
+            <p className="font-semibold">Owner-only export, not licensed for sharing</p>
+            <p>Metered days: {ownerExport.meteredDays}. Period: {ownerExport.periodStart ? new Date(ownerExport.periodStart).toLocaleDateString("en-GB") : "No readings"} to {ownerExport.periodEnd ? new Date(ownerExport.periodEnd).toLocaleDateString("en-GB") : "No readings"}.</p>
+            {(ownerExport.fuelSummaries || []).map((fuel) => <p key={fuel.fuelType}>{fuel.fuelType}: {Number(fuel.totalKwh).toFixed(1)} kWh across {fuel.intervalCount} intervals.</p>)}
+          </div> : null}
         </div>
         <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(200px,0.8fr)_minmax(0,1.2fr)]">
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1" role="group" aria-label="Potential buyers">
