@@ -514,7 +514,7 @@ test("AirGradient connection shows its network route without opening the camera"
   }
 });
 
-test("expanded sensor details join the full-width sensor tile", async () => {
+test("expanded sensor details keep the original tile width without a top divider", async () => {
   window.localStorage.setItem("wbp-new-building-passport", JSON.stringify({
     recordId: "WBP-TEST", databaseId: "home-1", legalOwnerName: "Owner",
     propertyDiscovery: { address: "14 Bridgewood Road", postcode: "IP12 4HA", uprn: "100091142492", confirmedAt: "2026-09-24" },
@@ -527,7 +527,8 @@ test("expanded sensor details join the full-width sensor tile", async () => {
   fireEvent.click(within(dialog).getByRole("button", { name: "Health monitoring" }));
   const edit = (await within(dialog).findAllByRole("button", { name: "Edit AirGradient Open Air" }))[0];
   fireEvent.click(edit);
-  expect(edit.closest(".border-emerald-700.bg-emerald-50")).toHaveClass("sm:col-span-2", "border-b-0");
+  expect(edit.closest(".border-emerald-700.bg-emerald-50")).toHaveClass("border-b-0");
+  expect(edit.closest(".border-emerald-700.bg-emerald-50")).not.toHaveClass("sm:col-span-2");
   expect(within(dialog).getByRole("textbox", { name: "Serial / device ID" }).closest(".border-emerald-700.bg-emerald-50"))
     .toHaveClass("sm:col-span-2", "border-t-0");
 });

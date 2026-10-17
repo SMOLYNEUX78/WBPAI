@@ -9211,6 +9211,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   const [bluetoothStatus, setBluetoothStatus] = useState("");
   const [newSensorFormSlot, setNewSensorFormSlot] = useState(null);
   const [editSensorFormSlot, setEditSensorFormSlot] = useState(null);
+  const [narrowSensorList, setNarrowSensorList] = useState(() => typeof window.matchMedia === "function" && window.matchMedia("(max-width: 639px)").matches);
   const [liveSensorId, setLiveSensorId] = useState("");
   const [clearSensorsConfirm, setClearSensorsConfirm] = useState(false);
   const [clearingSensors, setClearingSensors] = useState(false);
@@ -9219,6 +9220,13 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
   const [sensorPhotoBusy, setSensorPhotoBusy] = useState(false);
   const sensorVideoRef = useRef(null);
   const sensorPhotoInputRef = useRef(null);
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return undefined;
+    const media = window.matchMedia("(max-width: 639px)");
+    const update = () => setNarrowSensorList(media.matches);
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
   useEffect(() => {
     if (!syncHomeProfile || !isolatedDraft) return undefined;
     let active = true;
@@ -11296,7 +11304,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                   setSectionSaveStatus("Local sensor draft loaded. Review it, then save health monitoring to sync it to your account.");
                 }}>Load {pendingLocalSensors.length} sensor draft{pendingLocalSensors.length === 1 ? "" : "s"} from this device</button> : null}
                 {healthSensors.length === 0 ? <div className="space-y-2 border bg-white p-3 text-xs text-gray-600"><p>No health-data instruments registered yet.</p><button type="button" className="border border-emerald-700 bg-white px-3 py-2 font-semibold text-emerald-900 disabled:opacity-50" disabled={restoringSensors} onClick={restoreSensorsFromTabletScan}>{restoringSensors ? "Checking saved scan..." : "Restore devices from tablet scan"}</button></div>
-                  : <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">{healthSensors.map((sensor) => <React.Fragment key={sensor.id}><div className={`min-w-0 border p-2 text-xs ${sensorDetailsVisible && sensorDraft.id === sensor.id ? "border-emerald-700 border-b-0 bg-emerald-50 pb-0 sm:col-span-2" : "border-gray-300 bg-white"}`}>
+                  : <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">{healthSensors.map((sensor, index) => <React.Fragment key={sensor.id}><div className={`min-w-0 border p-2 text-xs ${sensorDetailsVisible && sensorDraft.id === sensor.id ? "border-emerald-700 border-b-0 bg-emerald-50 pb-0" : "border-gray-300 bg-white"}`}>
                     <div className="relative">
                     <button type="button" aria-expanded={sensorDetailsVisible && sensorDraft.id === sensor.id} className={`w-full min-w-0 px-2 py-3 pr-12 text-left transition-colors ${sensorDetailsVisible && sensorDraft.id === sensor.id ? "border-0 bg-emerald-50" : "border border-emerald-300 bg-emerald-100"}`} onClick={() => toggleRegisteredSensorEditor(sensor)} aria-label={`Edit ${sensor.manufacturer} ${sensor.model}`}>
                       <strong className="block break-words">{sensor.manufacturer} {sensor.model || ""}</strong>
@@ -11358,7 +11366,10 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                       </div> : null}
                     </>}
                   </div>
-                  {sensorDetailsVisible && sensorDraft.id === sensor.id
+                  {sensorDetailsVisible && sensorDraft.id && (narrowSensorList
+                    ? sensorDraft.id === sensor.id
+                    : (index % 2 === 1 || index === healthSensors.length - 1)
+                      && Math.floor(healthSensors.findIndex((item) => item.id === sensorDraft.id) / 2) === Math.floor(index / 2))
                     ? <div ref={setEditSensorFormSlot} className="relative col-span-1 -mt-3 border border-t-0 border-emerald-700 bg-emerald-50 sm:col-span-2" /> : null}
                   </React.Fragment>)}</div>}
               </div>
