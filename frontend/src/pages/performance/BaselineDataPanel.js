@@ -72,7 +72,7 @@ export default function BaselineDataPanel({ DetailSurface, baseline = {} }) {
           <p className="mt-1 text-gray-700">{Number.isFinite(area) && area > 0 ? `${area.toFixed(1)} m² home` : "Floor area pending"} · {hasEui ? `${eui.toFixed(1)} kWh/m²/year measured energy use` : "Energy use pending"}</p>
           {hasEui && Number.isFinite(target) && target > 0 ? <p className="mt-1 text-gray-700">{aboveTarget ? "Above" : "At or below"} the dashboard's {target.toFixed(0)} kWh/m²/year planning target. This is not an EPC rating or a like-for-like peer comparison.</p> : null}
           <p className="mt-2 text-gray-700">Average day: {Number.isFinite(baseline.electricityDailyKwh) ? `${baseline.electricityDailyKwh.toFixed(1)} kWh electricity` : "electricity pending"} · {Number.isFinite(baseline.gasDailyKwh) ? `${baseline.gasDailyKwh.toFixed(1)} kWh gas` : "gas pending"}</p>
-          <p className="mt-1 text-gray-700">Weather-normalised use: {Number.isFinite(baseline.heatLoss?.weatherNormalisedEui) ? `${baseline.heatLoss.weatherNormalisedEui.toFixed(1)} kWh/m²/year` : "Pending cold-weather evidence"}</p>
+          <p className="mt-1 text-gray-700">Heating-weather estimate from observed days: {Number.isFinite(baseline.heatLoss?.weatherNormalisedEui) ? `${baseline.heatLoss.weatherNormalisedEui.toFixed(1)} kWh/m²/year` : "Pending cold-weather evidence"}</p>
         </div>
         <div>
           <h3 className="font-bold">What needs attention</h3>
@@ -104,6 +104,9 @@ export default function BaselineDataPanel({ DetailSurface, baseline = {} }) {
       </div>
       <div className="border-t border-gray-200 pt-4">
         <h3 className="font-bold">Heat and weather</h3>
+        <p className="mt-1 font-semibold text-amber-900">Weather context: provisional</p>
+        <p className="mt-1 text-gray-700">The baseline may reflect an unusually warm or cold winter. {baseline.heatLoss?.hddDays > 0 ? `${baseline.heatLoss.hddDays} days with heating-degree evidence are available.` : "Heating-degree coverage is still being established."} We have not yet compared the same dates with a long-term local weather reference, so we cannot say whether this period was typical or adjust the baseline for an extreme year.</p>
+        <p className="mt-1 text-xs text-gray-600">Energy scores, retrofit savings and before/after comparisons should remain indicative until that comparison and meter-coverage checks are complete. The heating-weather estimate above extrapolates observed days; it is not a long-term climate adjustment.</p>
         <p className="mt-1 text-gray-700">Heat-loss estimate: {Number.isFinite(baseline.heatLoss?.htcEstimate) ? `${baseline.heatLoss.htcEstimate.toFixed(0)} W/K` : "Pending indoor/outdoor and energy overlap"} · Night cooldown: {Number.isFinite(baseline.heatLoss?.nightCooldownRateCPerHour) ? `${baseline.heatLoss.nightCooldownRateCPerHour.toFixed(2)} °C/hour` : "Pending qualifying nights"}</p>
         {(baseline.rainHumidityAreas || []).map((area) => <p key={area.label} className="mt-1 text-gray-700">{area.label} after rain: {Number.isFinite(area.summary?.rhUplift) ? `${area.summary.rhUplift.toFixed(1)} percentage points higher RH` : "Comparison pending"}</p>)}
         <p className="mt-2 text-xs text-gray-600">These are indications for a survey, not diagnoses of damp or measured retrofit savings.</p>
@@ -122,7 +125,7 @@ export default function BaselineDataPanel({ DetailSurface, baseline = {} }) {
 
     {openPanel === "retrofit" ? <DetailSurface modal title="Retrofit options" onClose={() => setOpenPanel(null)}>
       <div className="space-y-5 px-4 py-5 text-sm sm:px-6">
-        <div><h2 className="font-bold">A sensible starting point</h2><p className="mt-1 text-gray-700">Use the readings to decide what to investigate, then check the home in person before choosing works.</p></div>
+        <div><h2 className="font-bold">A sensible starting point</h2><p className="mt-1 text-gray-700">Use the readings to decide what to investigate, then check the home in person before choosing works. Slider savings are provisional until the baseline is checked against typical local weather.</p></div>
         <ol className="space-y-3 border-y border-gray-200 py-4">
           {airFlags.length ? <li><strong>1. Check ventilation and moisture</strong><p className="text-gray-700">Current red-band air readings in {Array.from(new Set(airFlags.map((flag) => flag.label.split(" ")[0]))).join(" and ")} make ventilation, sources and controls worth reviewing.</p></li> : <li><strong>1. Review ventilation</strong><p className="text-gray-700">Check airflow and moisture before changing insulation or airtightness, even without a current red-band reading.</p></li>}
           {temperatureFlags.length || aboveTarget ? <li><strong>2. Survey heat loss and comfort</strong><p className="text-gray-700">{temperatureFlags.length ? "A room temperature is currently in the red band. " : ""}{aboveTarget ? "Energy use is above the planning target. " : ""}Assess the fabric, draughts and heating controls together.</p></li> : <li><strong>2. Check fabric and heating</strong><p className="text-gray-700">A survey can identify practical improvements without assuming that a major retrofit is needed.</p></li>}
