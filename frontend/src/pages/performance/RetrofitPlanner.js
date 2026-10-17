@@ -56,11 +56,9 @@ export default function RetrofitPlanner({ ready, embedded = false, annualEui, ar
                 {potentialAnnualCost > 0 ? <span>Possible net annual cost: up to {formatGbp(potentialAnnualCost)}/yr under these assumptions.</span> : null}
                 <span>Bill savings plus possible carbon, data and insurance value</span>
               </div>
+              <div className="wbp-retrofit-benefit-pie" role="img" aria-label={annualBenefit ? `Annual benefit split: ${annualBenefit.parts.map((part) => `${part.label} ${formatGbp(part.value)}`).join(", ")}` : "Annual benefit split pending baseline"} style={{ background: `conic-gradient(${pieStops})` }}><span /></div>
               <div className="wbp-retrofit-benefit-key">
-                <div className="wbp-retrofit-benefit-heading">
-                  <strong>Planning split · {annualBenefit ? `${formatGbp(Math.abs(annualBenefit.total))}/yr${annualBenefit.total < 0 ? " net cost" : ""}` : "pending"}</strong>
-                  <div className="wbp-retrofit-benefit-pie" role="img" aria-label={annualBenefit ? `Annual benefit split: ${annualBenefit.parts.map((part) => `${part.label} ${formatGbp(part.value)}`).join(", ")}` : "Annual benefit split pending baseline"} style={{ background: `conic-gradient(${pieStops})` }}><span /></div>
-                </div>
+                <strong>Planning split · {annualBenefit ? `${formatGbp(Math.abs(annualBenefit.total))}/yr${annualBenefit.total < 0 ? " net cost" : ""}` : "pending"}</strong>
                 {annualBenefit?.parts.map((part) => <div key={part.label}><i style={{ backgroundColor: part.colour }} /><span>{part.label}</span><strong>{formatGbp(part.value)}</strong></div>)}
                 {annualBenefit?.energyCostIncrease > 0 ? <small>Energy cost increase: {formatGbp(annualBenefit.energyCostIncrease)}/yr, deducted from total.</small> : null}
                 <label className="wbp-retrofit-premium">Current annual buildings insurance premium (£)
