@@ -19,6 +19,8 @@ test("baseline report keeps the page concise and colour-codes the scores", () =>
   expect(screen.getByRole("heading", { name: "Baseline report" })).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: "Energy" }).parentElement).toHaveTextContent("74/100");
   expect(screen.getByRole("heading", { name: "Health" }).parentElement).toHaveTextContent("72/100");
+  expect(screen.getByRole("heading", { name: "Energy" }).parentElement.parentElement).toHaveClass("bg-amber-50");
+  expect(screen.getByRole("heading", { name: "Health" }).parentElement.parentElement).toHaveClass("bg-amber-50");
   expect(screen.getByRole("heading", { name: "EUI" }).parentElement).toHaveTextContent("42.3 kWh/m²/year");
   expect(screen.getByText("42.3", { exact: false })).toBeInTheDocument();
   expect(screen.getByText("72/100")).toBeInTheDocument();
