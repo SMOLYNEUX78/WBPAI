@@ -88,8 +88,10 @@ export default function BaselineDataPanel({ DetailSurface, baseline = {} }) {
   };
 
   return <section className="-mx-4 border-t border-gray-300 bg-white px-4 py-6 text-gray-900 sm:px-8" aria-label="Baseline report">
-    <button type="button" onClick={downloadReport} disabled={downloadLoading} aria-label="Download baseline report" className="block w-full cursor-pointer text-left disabled:cursor-wait">
-    <h2 className="text-lg font-bold">{downloadLoading ? "Preparing report..." : "Baseline report"}</h2>
+    <div className="flex items-center justify-between gap-3">
+      <h2 className="text-lg font-bold">Baseline report</h2>
+      <button type="button" onClick={downloadReport} disabled={downloadLoading} className="shrink-0 border border-emerald-800 px-3 py-2 text-sm font-semibold text-emerald-900 hover:bg-emerald-50 disabled:cursor-wait">{downloadLoading ? "Preparing report..." : "Detailed report"}</button>
+    </div>
     <div className="mt-4 grid gap-3 sm:grid-cols-2">
       <div className={`border-l-4 p-4 ${!hasEui ? "border-gray-400 bg-gray-100" : aboveTarget ? "border-amber-600 bg-amber-50" : "border-emerald-700 bg-emerald-50"}`}>
         <h3 className="text-sm font-semibold">Energy EUI</h3>
@@ -117,7 +119,6 @@ export default function BaselineDataPanel({ DetailSurface, baseline = {} }) {
       {otherPerformanceConcerns.map((concern) => <ConcernRow key={concern.key} label={concern.label} tone={concern.status === "poor" ? "red" : "amber"} detail={concern.detail} />)}
       {baseline.redReadings?.map((reading) => <ConcernRow key={reading.key} label={`${reading.label} recently`} detail={`${reading.value} ${reading.unit}`} />)}
     </div> : null}
-    </button>
     {exportError ? <p role="alert" className="mt-2 text-right text-sm text-red-800">{exportError}</p> : null}
     <div className="mt-7 border-t border-gray-200 pt-5">
       <h3 className="mb-3 text-base font-bold">Options</h3>
