@@ -8837,11 +8837,15 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
             document.body
           )
         : null}
-      {building.id === "bl" ? <BaselineDataPanel DetailSurface={DetailSurface} baseline={{
+      {building.id === "bl" ? <BaselineDataPanel DetailSurface={DetailSurface} onOpenRetrofit={() => navigate("/dashboard/rf")} baseline={{
         buildingId: homePassportDatabaseId,
         annualEui: measuredAnnualEui,
+        area: Number(matterportMetadata.internalArea),
+        targetEui: building.targetEui,
         energyScore: performanceBreakdown.energy,
         healthScore: performanceBreakdown.health,
+        rooms: roomIaqData,
+        redReadings,
         meteredDays: baselineMeteredDays,
         auditScore: evidencePackScore,
         authorityReady: readinessGates.authority.ready,
