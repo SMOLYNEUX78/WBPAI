@@ -92,16 +92,31 @@ export default function BaselineDataPanel({ DetailSurface, baseline = {} }) {
       <h2 className="text-lg font-bold">Baseline report</h2>
       <button type="button" onClick={downloadReport} disabled={downloadLoading} className="shrink-0 border border-emerald-800 px-3 py-2 text-sm font-semibold text-emerald-900 hover:bg-emerald-50 disabled:cursor-wait">{downloadLoading ? "Preparing report..." : "Detailed report"}</button>
     </div>
-    <div className="mt-4 grid gap-3 sm:grid-cols-2">
-      <div className={`border-l-4 p-4 ${!hasEui ? "border-gray-400 bg-gray-100" : aboveTarget ? "border-amber-600 bg-amber-50" : "border-emerald-700 bg-emerald-50"}`}>
-        <h3 className="text-sm font-semibold">Energy EUI</h3>
-        <p className="mt-1 text-2xl font-bold">{hasEui ? eui.toFixed(1) : "Pending"} <span className="text-sm font-normal">{hasEui ? "kWh/m²/year" : ""}</span></p>
-        {hasEui && Number.isFinite(target) && target > 0 ? <p className="mt-2 text-sm">{aboveTarget ? "Above" : "At or below"} WBP’s {target.toFixed(0)} kWh/m²/year planning target.</p> : null}
+    <div className="mt-4 grid gap-6 sm:grid-cols-2">
+      <div>
+        <div className="flex items-baseline justify-between gap-3">
+          <h3 className="text-base font-bold">Energy</h3>
+          <span className="text-lg font-bold">{Number.isFinite(baseline.energyScore) ? `${Math.round(baseline.energyScore)}/100` : "Pending"}</span>
+        </div>
+        <div className={`mt-2 border-l-4 p-4 ${!hasEui ? "border-gray-400 bg-gray-100" : aboveTarget ? "border-amber-600 bg-amber-50" : "border-emerald-700 bg-emerald-50"}`}>
+          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+            <h4 className="text-sm font-semibold">EUI</h4>
+            <p className="text-lg font-bold">{hasEui ? eui.toFixed(1) : "Pending"} <span className="text-sm font-normal">{hasEui ? "kWh/m²/year" : ""}</span></p>
+          </div>
+          {hasEui && Number.isFinite(target) && target > 0 ? <p className="mt-2 text-sm">{aboveTarget ? "Above" : "At or below"} WBP’s {target.toFixed(0)} kWh/m²/year planning target.</p> : null}
+        </div>
+        {fabricConcerns.length > 0 ? <div className="mt-4 space-y-2" aria-label="Fabric">
+          <h4 className="text-sm font-bold">Fabric</h4>
+          {fabricConcerns.map((concern) => <ConcernRow key={concern.key} label={concern.label} tone={concern.status === "poor" ? "red" : "amber"} detail={concern.detail} />)}
+        </div> : null}
       </div>
-      <div className={`border-l-4 p-4 ${!Number.isFinite(baseline.healthScore) ? "border-gray-400 bg-gray-100" : baseline.healthScore < 60 ? "border-red-700 bg-red-50" : baseline.healthScore < 80 ? "border-amber-600 bg-amber-50" : "border-emerald-700 bg-emerald-50"}`}>
-        <h3 className="text-sm font-semibold">Health score</h3>
-        <p className="mt-1 text-2xl font-bold">{Number.isFinite(baseline.healthScore) ? Math.round(baseline.healthScore) : "Pending"}<span className="text-sm font-normal">{Number.isFinite(baseline.healthScore) ? "/100" : ""}</span></p>
-        {historicalHealth.status === "ready" ? <div className="mt-3 space-y-2 text-sm">
+      <div>
+        <div className="flex items-baseline justify-between gap-3">
+          <h3 className="text-base font-bold">Health</h3>
+          <span className="text-lg font-bold">{Number.isFinite(baseline.healthScore) ? `${Math.round(baseline.healthScore)}/100` : "Pending"}</span>
+        </div>
+        <div className={`mt-2 border-l-4 p-4 ${!Number.isFinite(baseline.healthScore) ? "border-gray-400 bg-gray-100" : baseline.healthScore < 60 ? "border-red-700 bg-red-50" : baseline.healthScore < 80 ? "border-amber-600 bg-amber-50" : "border-emerald-700 bg-emerald-50"}`}>
+        {historicalHealth.status === "ready" ? <div className="space-y-2 text-sm">
           {PRIMARY_HEALTH_FIELDS.map(({ field, label }) => {
             const finding = historicalHealth.findings.find((item) => item.field === field);
             return finding && (field !== "upstairs_humidity" || finding.redDays > 0) ? <ConcernRow key={field} label={label} tone={finding.redDays > 0 ? "red" : "green"} detail={`${finding.redDays} of ${finding.observedDays} observed days in the red`} /> : null;
@@ -109,12 +124,9 @@ export default function BaselineDataPanel({ DetailSurface, baseline = {} }) {
           {otherHistoricalFlags.map((finding) => <ConcernRow key={finding.field} label={finding.label} detail={`${finding.redDays} of ${finding.observedDays} observed days in the red`} />)}
           {!historicalHealth.findings.length ? <p>Historical sensor readings unavailable</p> : null}
         </div> : <p className="mt-2 text-sm">{historicalHealth.status === "loading" ? "Checking past readings..." : "Historical readings unavailable"}</p>}
+        </div>
       </div>
     </div>
-    {fabricConcerns.length > 0 ? <div className="mt-4 space-y-2" aria-label="Fabric">
-      <h3 className="text-sm font-bold">Fabric</h3>
-      {fabricConcerns.map((concern) => <ConcernRow key={concern.key} label={concern.label} tone={concern.status === "poor" ? "red" : "amber"} detail={concern.detail} />)}
-    </div> : null}
     {(otherPerformanceConcerns.length > 0 || baseline.redReadings?.length > 0) ? <div className="mt-4 space-y-2" aria-label="Other areas to review">
       {otherPerformanceConcerns.map((concern) => <ConcernRow key={concern.key} label={concern.label} tone={concern.status === "poor" ? "red" : "amber"} detail={concern.detail} />)}
       {baseline.redReadings?.map((reading) => <ConcernRow key={reading.key} label={`${reading.label} recently`} detail={`${reading.value} ${reading.unit}`} />)}

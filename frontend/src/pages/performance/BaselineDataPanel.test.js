@@ -17,8 +17,11 @@ test("baseline report keeps the page concise and colour-codes the scores", () =>
     redReadings: [{ key: "upstairs:humidity", label: "Upstairs RH", value: 72, unit: "%" }],
   }} />);
   expect(screen.getByRole("heading", { name: "Baseline report" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Energy" }).parentElement).toHaveTextContent("74/100");
+  expect(screen.getByRole("heading", { name: "Health" }).parentElement).toHaveTextContent("72/100");
+  expect(screen.getByRole("heading", { name: "EUI" }).parentElement).toHaveTextContent("42.3 kWh/m²/year");
   expect(screen.getByText("42.3", { exact: false })).toBeInTheDocument();
-  expect(screen.getByText("72")).toBeInTheDocument();
+  expect(screen.getByText("72/100")).toBeInTheDocument();
   expect(screen.queryByText(/Upstairs RH: 72 %/)).not.toBeInTheDocument();
   expect(screen.getByText(/WBP’s 35 kWh\/m²\/year planning target/)).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Detailed report" })).toBeInTheDocument();
@@ -178,6 +181,7 @@ test("baseline shows every historical red metric plus performance and recent con
   expect(screen.getByText("Upstairs NO2")).toBeInTheDocument();
   expect(screen.getByText("Summer heat")).toBeInTheDocument();
   const fabric = screen.getByRole("heading", { name: "Fabric" });
+  expect(screen.getByRole("heading", { name: "Energy" }).parentElement.parentElement).toContainElement(fabric);
   expect(fabric.parentElement).toHaveTextContent("Heat demand");
   expect(fabric.parentElement).toHaveTextContent("Summer heat");
   expect(screen.getByText("Upstairs RH recently")).toBeInTheDocument();
