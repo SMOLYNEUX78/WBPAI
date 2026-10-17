@@ -514,6 +514,24 @@ test("AirGradient connection shows its network route without opening the camera"
   }
 });
 
+test("expanded sensor details join the full-width sensor tile", async () => {
+  window.localStorage.setItem("wbp-new-building-passport", JSON.stringify({
+    recordId: "WBP-TEST", databaseId: "home-1", legalOwnerName: "Owner",
+    propertyDiscovery: { address: "14 Bridgewood Road", postcode: "IP12 4HA", uprn: "100091142492", confirmedAt: "2026-09-24" },
+  }));
+  window.localStorage.setItem("WBP-TEST:setupSections", JSON.stringify({ healthSensors: [{
+    id: "airgradient-1", manufacturer: "AirGradient", model: "Open Air", serialNumber: "001122aabbcc", location: "Garden", metrics: [],
+  }] }));
+  render(<MemoryRouter><NewBuildingSetupPanel editModal syncHomeProfile isActive /></MemoryRouter>);
+  const dialog = screen.getByRole("dialog", { name: "Edit property profile" });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Health monitoring" }));
+  const edit = (await within(dialog).findAllByRole("button", { name: "Edit AirGradient Open Air" }))[0];
+  fireEvent.click(edit);
+  expect(edit.closest(".border-emerald-700.bg-emerald-50")).toHaveClass("sm:col-span-2", "border-b-0");
+  expect(within(dialog).getByRole("textbox", { name: "Serial / device ID" }).closest(".border-emerald-700.bg-emerald-50"))
+    .toHaveClass("sm:col-span-2", "border-t-0");
+});
+
 test("a recently linked instrument shows its network address and Live status", async () => {
   const now = new Date().toISOString();
   window.localStorage.setItem("wbp-new-building-passport", JSON.stringify({
