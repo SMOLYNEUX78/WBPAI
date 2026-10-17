@@ -1,8 +1,9 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import supabase from "../../supabaseClient";
 import { DATA_LICENCE_REFERENCE_GBP_PER_YEAR } from "./retrofitEconomics";
 import RetrofitPlanner from "./RetrofitPlanner";
 import { buildBaselineReportHtml } from "./baselineReport";
+import { fetchHistoricalHealthDays, summariseHistoricalHealth } from "./historicalHealth";
 
 const LICENCE_PARTS = [
   { label: "Energy performance", value: 144, colour: "#087f5b" },
@@ -15,15 +16,32 @@ export default function BaselineDataPanel({ DetailSurface, baseline = {} }) {
   const [ownerExport, setOwnerExport] = useState(null);
   const [exportError, setExportError] = useState("");
   const [downloadLoading, setDownloadLoading] = useState(false);
-  const redReadings = baseline.redReadings || [];
+  const [historicalHealth, setHistoricalHealth] = useState({ status: "loading", findings: [] });
   const area = Number(baseline.area);
   const eui = Number(baseline.annualEui);
   const target = Number(baseline.targetEui);
   const hasEui = Number.isFinite(eui) && eui > 0;
   const aboveTarget = hasEui && Number.isFinite(target) && target > 0 && eui > target;
-  const airFlags = redReadings.filter((reading) => /RH|PM|VOCs|HCHO|NO2|CO2/.test(reading.label));
-  const temperatureFlags = redReadings.filter((reading) => /Temperature/.test(reading.label));
   const rainFlags = (baseline.rainHumidityAreas || []).filter((area) => area.summary?.status === "ready" && Number.isFinite(area.summary.rhUplift) && area.summary.rhUplift >= 8);
+  useEffect(() => {
+    let cancelled = false;
+    if (!baseline.buildingId) {
+      setHistoricalHealth({ status: "unavailable", findings: [] });
+      return undefined;
+    }
+    setHistoricalHealth({ status: "loading", findings: [] });
+    fetchHistoricalHealthDays(supabase, baseline.sourceBuildingId || "home")
+      .then((rows) => {
+        if (!cancelled) setHistoricalHealth({ status: "ready", findings: summariseHistoricalHealth(rows) });
+      })
+      .catch(() => {
+        if (!cancelled) setHistoricalHealth({ status: "unavailable", findings: [] });
+      });
+    return () => { cancelled = true; };
+  }, [baseline.buildingId, baseline.sourceBuildingId]);
+  const historicalFlags = historicalHealth.findings.filter((finding) => finding.redDays > 0);
+  const airFlags = historicalFlags.filter((finding) => finding.field !== "internal_temp");
+  const temperatureFlags = historicalFlags.filter((finding) => finding.field === "internal_temp");
 
   const loadOwnerExport = async () => {
     if (!baseline.buildingId) throw new Error("Save this home profile before viewing its readings.");
@@ -43,7 +61,7 @@ export default function BaselineDataPanel({ DetailSurface, baseline = {} }) {
     try {
       const payload = ownerExport || await loadOwnerExport();
       setOwnerExport(payload);
-      const file = new Blob([buildBaselineReportHtml(baseline, payload)], { type: "text/html;charset=utf-8" });
+      const file = new Blob([buildBaselineReportHtml({ ...baseline, historicalHealth }, payload)], { type: "text/html;charset=utf-8" });
       const url = URL.createObjectURL(file);
       const link = document.createElement("a");
       link.href = url;
@@ -70,7 +88,7 @@ export default function BaselineDataPanel({ DetailSurface, baseline = {} }) {
       <div className={`border-l-4 p-4 ${!Number.isFinite(baseline.healthScore) ? "border-gray-400 bg-gray-100" : baseline.healthScore < 60 ? "border-red-700 bg-red-50" : baseline.healthScore < 80 ? "border-amber-600 bg-amber-50" : "border-emerald-700 bg-emerald-50"}`}>
         <h3 className="text-sm font-semibold">Health score</h3>
         <p className="mt-1 text-2xl font-bold">{Number.isFinite(baseline.healthScore) ? Math.round(baseline.healthScore) : "Pending"}<span className="text-sm font-normal">{Number.isFinite(baseline.healthScore) ? "/100" : ""}</span></p>
-        <ul className="mt-2 space-y-1 text-sm">{redReadings.slice(0, 3).map((reading) => <li key={reading.key}>{reading.label}: {reading.value} {reading.unit} in the red band</li>)}{rainFlags.slice(0, 2).map((area) => <li key={area.label}>{area.label}: humidity rises after rain</li>)}{!redReadings.length && !rainFlags.length ? <li>No current red-band flags in monitored rooms.</li> : null}</ul>
+        <ul className="mt-2 space-y-1 text-sm">{historicalFlags.slice(0, 3).map((finding) => <li key={finding.field}>{finding.label}: {finding.redDays} of {finding.observedDays} observed days in the red band</li>)}{historicalHealth.status === "loading" ? <li>Checking past readings...</li> : null}{historicalHealth.status === "unavailable" ? <li>Historical readings unavailable</li> : null}{historicalHealth.status === "ready" && !historicalFlags.length ? <li>No red-band daily averages found in available history.</li> : null}</ul>
       </div>
     </div>
     <button type="button" onClick={downloadReport} disabled={downloadLoading} className="mt-4 border border-emerald-700 px-4 py-2 text-sm font-semibold text-emerald-900 disabled:opacity-50">{downloadLoading ? "Preparing report..." : "Download detailed report"}</button>
@@ -84,8 +102,8 @@ export default function BaselineDataPanel({ DetailSurface, baseline = {} }) {
       <div className="space-y-5 px-4 py-5 text-sm sm:px-6">
         <div><h2 className="font-bold">A sensible starting point</h2><p className="mt-1 text-gray-700">Use the readings to decide what to investigate, then check the home in person before choosing works. Slider savings are provisional until the baseline is checked against typical local weather.</p></div>
         <ol className="space-y-3 border-y border-gray-200 py-4">
-          {airFlags.length ? <li><strong>1. Check ventilation and moisture</strong><p className="text-gray-700">Current red-band air readings in {Array.from(new Set(airFlags.map((flag) => flag.label.split(" ")[0]))).join(" and ")} make ventilation, sources and controls worth reviewing.</p></li> : <li><strong>1. Review ventilation</strong><p className="text-gray-700">Check airflow and moisture before changing insulation or airtightness, even without a current red-band reading.</p></li>}
-          {temperatureFlags.length || aboveTarget ? <li><strong>2. Survey heat loss and comfort</strong><p className="text-gray-700">{temperatureFlags.length ? "A room temperature is currently in the red band. " : ""}{aboveTarget ? "Energy use is above the planning target. " : ""}Assess the fabric, draughts and heating controls together.</p></li> : <li><strong>2. Check fabric and heating</strong><p className="text-gray-700">A survey can identify practical improvements without assuming that a major retrofit is needed.</p></li>}
+          {airFlags.length ? <li><strong>1. Check ventilation and moisture</strong><p className="text-gray-700">Historical red-band daily averages in {Array.from(new Set(airFlags.map((flag) => flag.label.split(" ")[0]))).join(" and ")} make ventilation, sources and controls worth reviewing.</p></li> : <li><strong>1. Review ventilation</strong><p className="text-gray-700">Check airflow and moisture before changing insulation or airtightness.</p></li>}
+          {temperatureFlags.length || aboveTarget ? <li><strong>2. Survey heat loss and comfort</strong><p className="text-gray-700">{temperatureFlags.length ? "Historical temperature averages entered the red band. " : ""}{aboveTarget ? "Energy use is above the planning target. " : ""}Assess the fabric, draughts and heating controls together.</p></li> : <li><strong>2. Check fabric and heating</strong><p className="text-gray-700">A survey can identify practical improvements without assuming that a major retrofit is needed.</p></li>}
           <li><strong>3. Compare whole-home options</strong><p className="text-gray-700">Use the existing retrofit planner to compare staged fabric, ventilation and heating measures. Costs and savings remain estimates until surveyed and quoted.</p></li>
         </ol>
         <RetrofitPlanner ready annualEui={baseline.annualEui} area={area} electricityDailyKwh={baseline.electricityDailyKwh} gasDailyKwh={baseline.gasDailyKwh} billReview={baseline.billReview} DetailSurface={DetailSurface} />
