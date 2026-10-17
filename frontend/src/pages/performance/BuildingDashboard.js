@@ -13676,7 +13676,7 @@ const BuildingDashboard = () => {
                     onOpenExchange={() => openSectionById("exchange")}
                   />
                 ) : building.baselineOnly ? (
-                  <BaselineDataPanel onOpenPathway={() => openSectionById("rf")} />
+                  <BaselineDataPanel DetailSurface={DetailSurface} />
                 ) : building.exchangeOnly ? (
                   <ExchangeDashboardPanel homeValue={new URLSearchParams(location.search).get("source") === "cc" ? bridgewoodValue : null} />
                 ) : (
