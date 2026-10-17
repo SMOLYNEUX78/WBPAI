@@ -43,7 +43,7 @@ test("shows assumption-based scenarios and opens the selected pack", () => {
   expect(screen.getByRole("img", { name: /Data licences £222/i })).toBeInTheDocument();
   expect(screen.queryByRole("heading", { name: "Other occupant value" })).not.toBeInTheDocument();
   expect(screen.getByText("Potential funding input")).toBeInTheDocument();
-  expect(screen.getByText(/green mortgage or other finance is repayable/i)).toBeInTheDocument();
+  expect(screen.getByText("Amount set after scheme check")).toBeInTheDocument();
   fireEvent.change(screen.getByRole("spinbutton", { name: /current annual buildings insurance premium/i }), { target: { value: "500" } });
   expect(screen.getByRole("img", { name: /Insurance £25/i })).toBeInTheDocument();
   expect(screen.queryByText(/Illustrative insurance saving:/)).not.toBeInTheDocument();
@@ -63,4 +63,21 @@ test("shows assumption-based scenarios and opens the selected pack", () => {
   fireEvent.click(screen.getByRole("button", { name: "View retrofit pack" }));
   expect(screen.getByRole("dialog", { name: "EnerPHit design pathway plan" })).toBeInTheDocument();
   expect(screen.getByText(/No WBP design or build profile has a verified/)).toBeInTheDocument();
+});
+
+test("uses the saved Suffolk council for local funding routes without treating a loan as a grant", () => {
+  render(<RetrofitPlanner ready embedded postcode="IP1 1AA" localAuthority="Ipswich" annualEui={120} area={100} electricityDailyKwh={5} gasDailyKwh={7} DetailSurface={Surface} />);
+  expect(screen.getByText("Amount set after scheme check")).toBeInTheDocument();
+  expect(screen.getByText("Suffolk Warm Homes Loan")).toBeInTheDocument();
+  expect(screen.getByText(/windows or doors; amount follows eligibility and a survey/i)).toBeInTheDocument();
+  fireEvent.change(screen.getByRole("slider", { name: "Extent of retrofit works" }), { target: { value: "50" } });
+  expect(screen.getByText("£0–£7,500 heat-pump grant")).toBeInTheDocument();
+  expect(screen.getByText(/repayable, not a grant/i)).toBeInTheDocument();
+});
+
+test("does not infer Suffolk funding from the postcode alone", () => {
+  render(<RetrofitPlanner ready embedded postcode="IP1 1AA" annualEui={120} area={100} electricityDailyKwh={5} gasDailyKwh={7} DetailSurface={Surface} />);
+  expect(screen.queryByText("Suffolk Warm Homes Loan")).not.toBeInTheDocument();
+  fireEvent.change(screen.getByRole("slider", { name: "Extent of retrofit works" }), { target: { value: "50" } });
+  expect(screen.getByText("Amount set after scheme check")).toBeInTheDocument();
 });

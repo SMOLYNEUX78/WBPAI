@@ -99,7 +99,7 @@ export default function BaselineDataPanel({ DetailSurface, baseline = {} }) {
 
     {openPanel === "retrofit" ? <DetailSurface modal title="Explore Retrofit Options" onClose={() => setOpenPanel(null)}>
       <div className="px-4 py-5 text-sm sm:px-6">
-        <RetrofitPlanner ready embedded annualEui={baseline.annualEui} area={area} electricityDailyKwh={baseline.electricityDailyKwh} gasDailyKwh={baseline.gasDailyKwh} billReview={baseline.billReview} originalTeam={baseline.originalTeam} DetailSurface={DetailSurface} />
+        <RetrofitPlanner ready embedded postcode={baseline.postcode} localAuthority={baseline.localAuthority} annualEui={baseline.annualEui} area={area} electricityDailyKwh={baseline.electricityDailyKwh} gasDailyKwh={baseline.gasDailyKwh} billReview={baseline.billReview} originalTeam={baseline.originalTeam} DetailSurface={DetailSurface} />
       </div>
     </DetailSurface> : null}
 
