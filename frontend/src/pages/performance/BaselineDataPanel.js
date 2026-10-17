@@ -36,6 +36,14 @@ const BUYER_ROUTES = [
   },
 ];
 
+const SALE_STAGES = [
+  { title: "Reconcile the measured baseline", detail: "Compare property-bound energy with the legacy charts; check missing intervals, source IDs, winter coverage and the EUI method." },
+  { title: "Freeze an evidence version", detail: "Record the period, source provenance, exclusions and internal quality checks. Keep the owner export private." },
+  { title: "Clear rights and prepare a redacted sample", detail: "Confirm owner and occupant permissions, proposed fields, purpose, retention and re-identification risk." },
+  { title: "Ask buyers for a price", detail: "Test distinct uses with property-data, finance and retrofit-programme buyers. Record written terms, not modelled values." },
+  { title: "Agree and deliver a pilot", detail: "Only after a buyer contract, create a buyer-specific package or credential, log access and record actual payment." },
+];
+
 export default function BaselineDataPanel({ DetailSurface, baseline = {} }) {
   const [open, setOpen] = useState(false);
   const [selectedId, setSelectedId] = useState(BUYER_ROUTES[0].id);
@@ -101,6 +109,16 @@ export default function BaselineDataPanel({ DetailSurface, baseline = {} }) {
             {(ownerExport.fuelSummaries || []).map((fuel) => <p key={fuel.fuelType}>{fuel.fuelType}: {Number(fuel.totalKwh).toFixed(1)} kWh across {fuel.intervalCount} intervals.</p>)}
           </div> : null}
         </div>
+        <section className="mt-4 border-b border-gray-200 pb-4" aria-label="Baseline sales stages">
+          <h2 className="text-sm font-bold">Route to a first sale</h2>
+          <ol className="mt-2 space-y-2 text-xs text-gray-700">
+            {SALE_STAGES.map((stage, index) => <li key={stage.title} className="grid grid-cols-[1.25rem_minmax(0,1fr)] gap-2">
+              <span className="font-bold text-emerald-800">{index + 1}.</span>
+              <span><strong className="block text-gray-900">{stage.title}</strong>{stage.detail}</span>
+            </li>)}
+          </ol>
+          <p className="mt-3 text-xs text-gray-600">An independent audit is not assumed for an ordinary data licence; ask each buyer what assurance it requires. Issuing carbon credits is a separate post-improvement scheme with its own independent verification rules.</p>
+        </section>
         <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(200px,0.8fr)_minmax(0,1.2fr)]">
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1" role="group" aria-label="Potential buyers">
             {BUYER_ROUTES.map((route) => <button key={route.id} type="button" aria-pressed={selectedId === route.id} onClick={() => setSelectedId(route.id)} className={`border px-3 py-3 text-left text-sm font-semibold ${selectedId === route.id ? "border-emerald-700 bg-emerald-50 text-emerald-950" : "border-gray-300 bg-white hover:bg-gray-50"}`}>{route.name}</button>)}
