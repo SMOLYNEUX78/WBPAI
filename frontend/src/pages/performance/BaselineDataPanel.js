@@ -52,6 +52,7 @@ export default function BaselineDataPanel({ DetailSurface, baseline = {} }) {
   const otherHistoricalFlags = historicalFlags.filter((finding) => !PRIMARY_HEALTH_FIELDS.some((item) => item.field === finding.field));
   const fabricConcerns = (baseline.performanceConcerns || []).filter((concern) => FABRIC_CONCERN_KEYS.has(concern.key));
   const otherPerformanceConcerns = (baseline.performanceConcerns || []).filter((concern) => !FABRIC_CONCERN_KEYS.has(concern.key));
+  const otherRecentReadings = (baseline.redReadings || []).filter((reading) => reading.key !== "upstairs:humidity");
 
   const loadOwnerExport = async () => {
     if (!baseline.buildingId) throw new Error("Save this home profile before viewing its readings.");
@@ -127,9 +128,9 @@ export default function BaselineDataPanel({ DetailSurface, baseline = {} }) {
         </div>
       </div>
     </div>
-    {(otherPerformanceConcerns.length > 0 || baseline.redReadings?.length > 0) ? <div className="mt-4 space-y-2" aria-label="Other areas to review">
+    {(otherPerformanceConcerns.length > 0 || otherRecentReadings.length > 0) ? <div className="mt-4 space-y-2" aria-label="Other areas to review">
       {otherPerformanceConcerns.map((concern) => <ConcernRow key={concern.key} label={concern.label} tone={concern.status === "poor" ? "red" : "amber"} detail={concern.detail} />)}
-      {baseline.redReadings?.map((reading) => <ConcernRow key={reading.key} label={`${reading.label} recently`} detail={`${reading.value} ${reading.unit}`} />)}
+      {otherRecentReadings.map((reading) => <ConcernRow key={reading.key} label={`${reading.label} recently`} detail={`${reading.value} ${reading.unit}`} />)}
     </div> : null}
     {exportError ? <p role="alert" className="mt-2 text-right text-sm text-red-800">{exportError}</p> : null}
     <div className="mt-7 border-t border-gray-200 pt-5">

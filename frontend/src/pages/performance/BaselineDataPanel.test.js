@@ -175,7 +175,10 @@ test("baseline shows every historical red metric plus performance and recent con
       { key: "hdd", label: "Heat demand", status: "poor", detail: "High for the weather" },
       { key: "heat-exclusion", label: "Summer heat", status: "poor", detail: "1.2 °C hotter than outside" },
     ],
-    redReadings: [{ key: "upstairs:humidity", label: "Upstairs RH", value: 72, unit: "%" }],
+    redReadings: [
+      { key: "upstairs:humidity", label: "Upstairs RH", value: 72, unit: "%" },
+      { key: "downstairs:pm25", label: "Downstairs PM2.5", value: 40, unit: "µg/m³" },
+    ],
   }} />);
   expect(await screen.findByText("Upstairs PM2.5")).toBeInTheDocument();
   expect(screen.getByText("Downstairs PM2.5")).toBeInTheDocument();
@@ -187,6 +190,7 @@ test("baseline shows every historical red metric plus performance and recent con
   expect(screen.getByRole("heading", { name: "Energy" }).parentElement.parentElement).toContainElement(fabric);
   expect(fabric.parentElement).toHaveTextContent("Heat demand");
   expect(fabric.parentElement).toHaveTextContent("Summer heat");
-  expect(screen.getByText("Upstairs RH recently")).toBeInTheDocument();
+  expect(screen.queryByText("Upstairs RH recently")).not.toBeInTheDocument();
+  expect(screen.getByText("Downstairs PM2.5 recently")).toBeInTheDocument();
   rpc.mockRestore();
 });
