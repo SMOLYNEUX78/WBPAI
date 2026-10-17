@@ -129,9 +129,16 @@ test("historical health counts red daily averages only on observed days", () => 
 
 test("health summary shows historical red days rather than a live flag", async () => {
   const rpc = jest.spyOn(supabase, "rpc").mockResolvedValue({ data: [], error: null });
-  rpc.mockResolvedValueOnce({ data: [{ reading_date: "2026-10-01", upstairs_humidity: 72 }, { reading_date: "2026-10-02", upstairs_humidity: 65 }], error: null });
+  rpc.mockResolvedValueOnce({ data: [
+    { reading_date: "2026-10-01", internal_temp: 25, upstairs_humidity: 72, downstairs_humidity: 71 },
+    { reading_date: "2026-10-02", internal_temp: 20, upstairs_humidity: 65, downstairs_humidity: 68 },
+  ], error: null });
   render(<BaselineDataPanel DetailSurface={Surface} baseline={{ buildingId: "record-1", sourceBuildingId: "home", healthScore: 72, redReadings: [{ key: "upstairs:humidity", label: "Upstairs RH", value: 80, unit: "%" }] }} />);
-  expect(await screen.findByText(/Upstairs humidity: 1 of 2 observed days in the red band/)).toBeInTheDocument();
+  expect(await screen.findByText("Upstairs humidity")).toBeInTheDocument();
+  expect(screen.getByText("Downstairs humidity")).toBeInTheDocument();
+  expect(screen.getByText("Temperature")).toBeInTheDocument();
+  expect(screen.getAllByText("1 of 2 observed days in the red")).toHaveLength(3);
+  expect(screen.getByText(/daily average of 70% or above/)).toBeInTheDocument();
   expect(screen.queryByText(/Upstairs RH: 80/)).not.toBeInTheDocument();
   rpc.mockRestore();
 });
