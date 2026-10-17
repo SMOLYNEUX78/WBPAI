@@ -11,6 +11,7 @@ import { mergeMonthlyHlaRows } from "./monthlyHla";
 import { liveRedReadings } from "./liveRedReadings";
 import { extractEnergyBillImage, extractEnergyBillPdf, normaliseBillReview } from "./energyBill";
 import RetrofitPlanner from "./RetrofitPlanner";
+import BaselineDataPanel from "./BaselineDataPanel";
 import { CC_CANDIDATE_PROFILE } from "./retrofitEconomics";
 import { normaliseSerial, readDeviceScan, suggestDeviceCandidates, visibleDeviceCandidates } from "./deviceScan";
 import { connectionForSensor } from "./sensorConnectors";
@@ -1182,6 +1183,14 @@ const BUILDINGS = [
     ...HOME_BUILDING,
     id: "home",
     name: "WBP-001",
+  },
+  {
+    ...HOME_BUILDING,
+    id: "bl",
+    name: "WBP-001bl",
+    subtitle: "Baseline data licensing prototype",
+    dataSourceId: "home",
+    baselineOnly: true,
   },
   {
     ...HOME_BUILDING,
@@ -13666,6 +13675,8 @@ const BuildingDashboard = () => {
                     onOpenBuilding={openBuildingById}
                     onOpenExchange={() => openSectionById("exchange")}
                   />
+                ) : building.baselineOnly ? (
+                  <BaselineDataPanel onOpenPathway={() => openSectionById("rf")} />
                 ) : building.exchangeOnly ? (
                   <ExchangeDashboardPanel homeValue={new URLSearchParams(location.search).get("source") === "cc" ? bridgewoodValue : null} />
                 ) : (

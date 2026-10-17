@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 const OCCUPY_TABS = [
   { label: "New", path: "/dashboard/new" },
   { label: "WBP-001", path: "/dashboard/home" },
+  { label: "WBP-001bl", path: "/dashboard/bl" },
   { label: "WBP-001rf", path: "/dashboard/rf" },
   { label: "WBP-001cc", path: "/dashboard/cc" },
   { label: "Museum", path: "/dashboard/museum" },
