@@ -7093,6 +7093,13 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
     : nightCooldownStatus;
   const shouldShowDeepDive = Boolean(occupyDetail);
   const redReadings = dataSourceBuildingId === "home" ? liveRedReadings(roomIaqData, alertClock) : [];
+  const baselinePerformanceConcerns = [
+    { key: "hdd", label: "Heat demand", status: hddStatus, detail: Number.isFinite(hddIntensityPerM2) ? `${hddIntensityPerM2.toFixed(3)} kWh/m²/HDD` : "" },
+    { key: "htc", label: "Heat loss", status: htcStatus, detail: Number.isFinite(htcPerM2) ? `${htcPerM2.toFixed(1)} W/m²K` : "" },
+    { key: "night-cooldown", label: "Night cooldown", status: nightCooldownStatus, detail: (heatLossSummary.nightCooldownNights || 0) < 3 ? `${heatLossSummary.nightCooldownNights || 0} qualifying nights; more evidence needed` : Number.isFinite(nightCooldownHtcPerM2) ? `${nightCooldownHtcPerM2.toFixed(1)} W/m²K` : "" },
+    { key: "heat-exclusion", label: "Summer heat", status: heatExclusionStatus, detail: Number.isFinite(heatExclusionSummary.averageBuffer) ? `${Math.abs(heatExclusionSummary.averageBuffer).toFixed(1)} °C ${heatExclusionSummary.averageBuffer < 0 ? "hotter" : "cooler"} than outside` : "" },
+    ...rainHumidityAreas.map(({ label, summary }) => ({ key: `rain-${label}`, label: `${label} after rain`, status: getRainHumidityStatus(summary), detail: Number.isFinite(summary.rhUplift) ? `+${summary.rhUplift.toFixed(1)} percentage points RH` : "" })),
+  ].filter(({ status }) => status === "poor" || status === "warning");
   const openCcPerformance = () => {
     setCcStage("before");
     setDeepDivePanel("baseline");
@@ -8858,6 +8865,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
         healthScore: performanceBreakdown.health,
         rooms: roomIaqData,
         redReadings,
+        performanceConcerns: baselinePerformanceConcerns,
         meteredDays: baselineMeteredDays,
         auditScore: evidencePackScore,
         authorityReady: readinessGates.authority.ready,

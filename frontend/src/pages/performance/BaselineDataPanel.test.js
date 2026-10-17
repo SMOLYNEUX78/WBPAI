@@ -77,6 +77,8 @@ test("downloaded report includes architect evidence and excludes HTML injection"
     weeklyTrend: [{ upstairsHumidity: 68 }, { upstairsHumidity: 70 }],
     historicalHealth: { status: "ready", findings: [{ label: "<script>alert(1)</script>", redDays: 4, observedDays: 20, lastRedDate: "2026-10-01" }] },
     heatLoss: { hddDays: 92, htcEstimate: 135 },
+    performanceConcerns: [{ label: "Summer heat", detail: "1.2 °C hotter than outside" }],
+    redReadings: [{ label: "Upstairs RH", value: 72, unit: "%" }],
   }, { periodStart: "2026-03-18", periodEnd: "2026-10-17", meteredDays: 214, fuelSummaries: [{ fuelType: "gas", totalKwh: 1703 }] });
   expect(html).toContain("Building baseline report");
   expect(html).toContain("69.0 % average RH");
@@ -85,6 +87,9 @@ test("downloaded report includes architect evidence and excludes HTML injection"
   expect(html).toContain("Data licensing preparation");
   expect(html).not.toContain("<script>");
   expect(html).toContain("4 of 20 observed days");
+  expect(html).toContain("Areas to review");
+  expect(html).toContain("Summer heat: 1.2 °C hotter than outside");
+  expect(html).toContain("Upstairs RH (recent): 72 %");
 });
 
 test("detailed report includes HLA evidence and dated seasonal trends", () => {
@@ -138,7 +143,26 @@ test("health summary shows historical red days rather than a live flag", async (
   expect(screen.getByText("Downstairs humidity")).toBeInTheDocument();
   expect(screen.getByText("Temperature")).toBeInTheDocument();
   expect(screen.getAllByText("1 of 2 observed days in the red")).toHaveLength(3);
-  expect(screen.getByText(/daily average of 70% or above/)).toBeInTheDocument();
+  expect(screen.queryByText(/Observed days have a usable daily average/)).not.toBeInTheDocument();
   expect(screen.queryByText(/Upstairs RH: 80/)).not.toBeInTheDocument();
+  rpc.mockRestore();
+});
+
+test("baseline shows every historical red metric plus performance and recent concerns", async () => {
+  const rpc = jest.spyOn(supabase, "rpc").mockResolvedValue({ data: [], error: null });
+  rpc.mockResolvedValueOnce({ data: [
+    { reading_date: "2026-10-01", upstairs_pm25: 40, downstairs_pm25: 38, upstairs_vocs: 550, upstairs_hcho: 90, upstairs_no2: 110 },
+  ], error: null });
+  render(<BaselineDataPanel DetailSurface={Surface} baseline={{ buildingId: "record-1", sourceBuildingId: "home", healthScore: 55,
+    performanceConcerns: [{ key: "heat-exclusion", label: "Summer heat", status: "poor", detail: "1.2 °C hotter than outside" }],
+    redReadings: [{ key: "upstairs:humidity", label: "Upstairs RH", value: 72, unit: "%" }],
+  }} />);
+  expect(await screen.findByText("Upstairs PM2.5")).toBeInTheDocument();
+  expect(screen.getByText("Downstairs PM2.5")).toBeInTheDocument();
+  expect(screen.getByText("Upstairs VOCs")).toBeInTheDocument();
+  expect(screen.getByText("Upstairs HCHO")).toBeInTheDocument();
+  expect(screen.getByText("Upstairs NO2")).toBeInTheDocument();
+  expect(screen.getByText("Summer heat")).toBeInTheDocument();
+  expect(screen.getByText("Upstairs RH recently")).toBeInTheDocument();
   rpc.mockRestore();
 });

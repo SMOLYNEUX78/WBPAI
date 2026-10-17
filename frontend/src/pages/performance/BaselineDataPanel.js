@@ -15,6 +15,10 @@ const PRIMARY_HEALTH_FIELDS = [
   { field: "downstairs_humidity", label: "Downstairs humidity" },
   { field: "upstairs_humidity", label: "Upstairs humidity" },
 ];
+const ConcernRow = ({ label, detail, tone = "red" }) => <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+  <span className={`inline-block min-w-36 border-l-4 px-2 py-1 font-semibold ${tone === "red" ? "border-red-700 bg-red-50 text-red-900" : tone === "amber" ? "border-amber-600 bg-amber-50 text-amber-900" : "border-emerald-700 bg-emerald-50 text-emerald-900"}`}>{label}</span>
+  <span>{detail}</span>
+</div>;
 
 export default function BaselineDataPanel({ DetailSurface, baseline = {} }) {
   const [openPanel, setOpenPanel] = useState(null);
@@ -95,14 +99,17 @@ export default function BaselineDataPanel({ DetailSurface, baseline = {} }) {
         {historicalHealth.status === "ready" ? <div className="mt-3 space-y-2 text-sm">
           {PRIMARY_HEALTH_FIELDS.map(({ field, label }) => {
             const finding = historicalHealth.findings.find((item) => item.field === field);
-            const tone = !finding ? "border-gray-400 bg-gray-100 text-gray-800" : finding.redDays > 0 ? "border-red-700 bg-red-50 text-red-900" : "border-emerald-700 bg-emerald-50 text-emerald-900";
-            return <div key={field} className="flex flex-wrap items-center gap-x-3 gap-y-1"><span className={`inline-block min-w-36 border-l-4 px-2 py-1 font-semibold ${tone}`}>{label}</span><span>{finding ? `${finding.redDays} of ${finding.observedDays} observed days in the red` : "No daily readings"}</span></div>;
+            return finding ? <ConcernRow key={field} label={label} tone={finding.redDays > 0 ? "red" : "green"} detail={`${finding.redDays} of ${finding.observedDays} observed days in the red`} /> : null;
           })}
-          {otherHistoricalFlags.map((finding) => <p key={finding.field}>{finding.label}: {finding.redDays} of {finding.observedDays} observed days in the red</p>)}
-          <p className="text-xs text-gray-600">Observed days have a usable daily average for that sensor, not necessarily a full day of monitoring. Red humidity means a daily average of 70% or above (or below 30%); shorter spikes may not count.</p>
+          {otherHistoricalFlags.map((finding) => <ConcernRow key={finding.field} label={finding.label} detail={`${finding.redDays} of ${finding.observedDays} observed days in the red`} />)}
+          {!historicalHealth.findings.length ? <p>Historical sensor readings unavailable</p> : null}
         </div> : <p className="mt-2 text-sm">{historicalHealth.status === "loading" ? "Checking past readings..." : "Historical readings unavailable"}</p>}
       </div>
     </div>
+    {(baseline.performanceConcerns?.length > 0 || baseline.redReadings?.length > 0) ? <div className="mt-4 space-y-2" aria-label="Other areas to review">
+      {baseline.performanceConcerns?.map((concern) => <ConcernRow key={concern.key} label={concern.label} tone={concern.status === "poor" ? "red" : "amber"} detail={concern.detail} />)}
+      {baseline.redReadings?.map((reading) => <ConcernRow key={reading.key} label={`${reading.label} recently`} detail={`${reading.value} ${reading.unit}`} />)}
+    </div> : null}
     </button>
     {exportError ? <p role="alert" className="mt-2 text-right text-sm text-red-800">{exportError}</p> : null}
     <div className="mt-7 border-t border-gray-200 pt-5">
