@@ -42,10 +42,11 @@ test("shows assumption-based scenarios and opens the selected pack", () => {
   expect(screen.getByText("Data licences")).toBeInTheDocument();
   expect(screen.getByRole("img", { name: /Data licences £222/i })).toBeInTheDocument();
   expect(screen.queryByRole("heading", { name: "Other occupant value" })).not.toBeInTheDocument();
-  expect(screen.getByText(/Enter your premium to see an illustrative insurance saving/)).toBeInTheDocument();
+  expect(screen.getByText("Potential funding input")).toBeInTheDocument();
+  expect(screen.getByText(/green mortgage or other finance is repayable/i)).toBeInTheDocument();
   fireEvent.change(screen.getByRole("spinbutton", { name: /current annual buildings insurance premium/i }), { target: { value: "500" } });
   expect(screen.getByRole("img", { name: /Insurance £25/i })).toBeInTheDocument();
-  expect(screen.getByText(/Illustrative insurance saving: £25\/yr at 5% \(range £0–£50\/yr at 0–10%\)/)).toBeInTheDocument();
+  expect(screen.queryByText(/Illustrative insurance saving:/)).not.toBeInTheDocument();
   expect(screen.getByText("Estimated works cost")).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Adjust assumptions" }));
   expect(screen.getByRole("dialog", { name: "Adjust assumptions" })).toBeInTheDocument();

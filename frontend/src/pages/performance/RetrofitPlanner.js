@@ -51,20 +51,21 @@ export default function RetrofitPlanner({ ready, embedded = false, annualEui, ar
                 <p>Potential annual value</p>
                 <strong>{benefitTotals ? `${formatGbp(Math.max(0, benefitTotals[0]))}–${formatGbp(Math.max(0, benefitTotals[1]))}/yr` : "Pending baseline"}</strong>
                 <p className="wbp-retrofit-cost"><b>Estimated works cost</b><br />{projection.costRangeGbp ? `${formatGbp(projection.costRangeGbp[0])}–${formatGbp(projection.costRangeGbp[1])}` : "Floor area needed"}</p>
+                <p className="wbp-retrofit-funding"><b>Potential funding input</b><br />{projection.costRangeGbp ? `${formatGbp(0)}–${formatGbp(projection.costRangeGbp[1])}` : "Floor area needed"}</p>
+                <span>Grants depend on eligibility; green mortgage or other finance is repayable. No funding is assumed.</span>
                 {potentialAnnualCost > 0 ? <span>Possible net annual cost: up to {formatGbp(potentialAnnualCost)}/yr under these assumptions.</span> : null}
                 <span>Bill savings plus possible carbon, data and insurance value</span>
               </div>
-              <div className="wbp-retrofit-benefit-pie" role="img" aria-label={annualBenefit ? `Annual benefit split: ${annualBenefit.parts.map((part) => `${part.label} ${formatGbp(part.value)}`).join(", ")}` : "Annual benefit split pending baseline"} style={{ background: `conic-gradient(${pieStops})` }}><span /></div>
               <div className="wbp-retrofit-benefit-key">
-                <strong>Planning split · {annualBenefit ? `${formatGbp(Math.abs(annualBenefit.total))}/yr${annualBenefit.total < 0 ? " net cost" : ""}` : "pending"}</strong>
+                <div className="wbp-retrofit-benefit-heading">
+                  <strong>Planning split · {annualBenefit ? `${formatGbp(Math.abs(annualBenefit.total))}/yr${annualBenefit.total < 0 ? " net cost" : ""}` : "pending"}</strong>
+                  <div className="wbp-retrofit-benefit-pie" role="img" aria-label={annualBenefit ? `Annual benefit split: ${annualBenefit.parts.map((part) => `${part.label} ${formatGbp(part.value)}`).join(", ")}` : "Annual benefit split pending baseline"} style={{ background: `conic-gradient(${pieStops})` }}><span /></div>
+                </div>
                 {annualBenefit?.parts.map((part) => <div key={part.label}><i style={{ backgroundColor: part.colour }} /><span>{part.label}</span><strong>{formatGbp(part.value)}</strong></div>)}
                 {annualBenefit?.energyCostIncrease > 0 ? <small>Energy cost increase: {formatGbp(annualBenefit.energyCostIncrease)}/yr, deducted from total.</small> : null}
                 <label className="wbp-retrofit-premium">Current annual buildings insurance premium (£)
                   <input type="number" min="0" max="100000" step="1" inputMode="decimal" value={annualPremium} onChange={(event) => setAnnualPremium(event.target.value)} placeholder="Enter your annual premium" />
                 </label>
-                {annualBenefit?.insuranceIncluded ? <small>Illustrative insurance saving: {formatGbp(projectInsuranceSaving(annualPremium, projection.scenarios[1].insuranceDiscount))}/yr at 5% (range £0–{formatGbp(projectInsuranceSaving(annualPremium, projection.scenarios[2].insuranceDiscount))}/yr at 0–10%). No insurer discount is confirmed.</small> : <small>Enter your premium to see an illustrative insurance saving.</small>}
-                {annualBenefit ? <small>Data licensing is independent of the retrofit and needs a buyer agreement.</small> : null}
-                {annualBenefit ? <small>Illustrative data income: {formatGbp(projection.scenarios[0].dataIncome)}–{formatGbp(projection.scenarios[2].dataIncome)}/yr; no buyer secured.</small> : null}
               </div>
             </div>
             <p className="wbp-retrofit-outcome">{projection.scenarios[1].energySavedKwh === null ? "Energy saving pending" : `${Math.round(projection.scenarios[1].energySavedKwh).toLocaleString("en-GB")} kWh/yr energy saved`} · {projection.scenarios[1].carbonSavedTonnes === null ? "Carbon saving pending" : `${projection.scenarios[1].carbonSavedTonnes.toFixed(2)} tCO₂e/yr carbon saved`} · {projection.targetEui === null ? "Target EUI pending" : `Target EUI ${projection.targetEui.toFixed(1)} kWh/m²/yr`}</p>
