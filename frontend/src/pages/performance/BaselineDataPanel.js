@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import supabase from "../../supabaseClient";
 import { DATA_LICENCE_REFERENCE_GBP_PER_YEAR } from "./retrofitEconomics";
 import RetrofitPlanner from "./RetrofitPlanner";
+import { buildBaselineReportHtml } from "./baselineReport";
 
 const LICENCE_PARTS = [
   { label: "Energy performance", value: 144, colour: "#087f5b" },
@@ -9,19 +10,11 @@ const LICENCE_PARTS = [
   { label: "Demand profile", value: 180, colour: "#2b69a4" },
 ];
 
-const formatDate = (value) => value ? new Date(value).toLocaleDateString("en-GB") : "No readings";
-
-const averageField = (rows, field) => {
-  const values = (rows || []).map((row) => row[field]).filter((value) => Number.isFinite(value));
-  return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
-};
-
 export default function BaselineDataPanel({ DetailSurface, baseline = {} }) {
   const [openPanel, setOpenPanel] = useState(null);
   const [ownerExport, setOwnerExport] = useState(null);
   const [exportError, setExportError] = useState("");
-  const [exportLoading, setExportLoading] = useState(false);
-  const rooms = baseline.rooms || [];
+  const [downloadLoading, setDownloadLoading] = useState(false);
   const redReadings = baseline.redReadings || [];
   const area = Number(baseline.area);
   const eui = Number(baseline.annualEui);
@@ -31,93 +24,57 @@ export default function BaselineDataPanel({ DetailSurface, baseline = {} }) {
   const airFlags = redReadings.filter((reading) => /RH|PM|VOCs|HCHO|NO2|CO2/.test(reading.label));
   const temperatureFlags = redReadings.filter((reading) => /Temperature/.test(reading.label));
   const rainFlags = (baseline.rainHumidityAreas || []).filter((area) => area.summary?.status === "ready" && Number.isFinite(area.summary.rhUplift) && area.summary.rhUplift >= 8);
-  const weeklyRooms = [
-    { label: "Upstairs", humidity: "upstairsHumidity", pm25: "upstairsPm25", vocs: "upstairsVocs" },
-    { label: "Downstairs", humidity: "downstairsHumidity", pm25: "downstairsPm25", vocs: "downstairsVocs" },
-  ];
 
-  const reviewExport = async () => {
-    setExportError("");
-    setOwnerExport(null);
-    if (!baseline.buildingId) {
-      setExportError("Save this home profile before viewing its readings.");
-      return;
+  const loadOwnerExport = async () => {
+    if (!baseline.buildingId) throw new Error("Save this home profile before viewing its readings.");
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) throw new Error("Sign in again to view these readings.");
+    const { data: payload, error } = await supabase.rpc("wbp_owner_baseline_export", { p_building_record_id: baseline.buildingId });
+    if (error) throw new Error(error.message || "Readings unavailable.");
+    if (payload?.buildingRecordId?.toLowerCase() !== baseline.buildingId.toLowerCase() || payload.shareable !== false) {
+      throw new Error("These readings could not be verified.");
     }
-    setExportLoading(true);
+    return payload;
+  };
+
+  const downloadReport = async () => {
+    setExportError("");
+    setDownloadLoading(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) throw new Error("Sign in again to view these readings.");
-      const { data: payload, error } = await supabase.rpc("wbp_owner_baseline_export", {
-        p_building_record_id: baseline.buildingId,
-      });
-      if (error) throw new Error(error.message || "Readings unavailable.");
-      if (payload?.buildingRecordId?.toLowerCase() !== baseline.buildingId.toLowerCase() || payload.shareable !== false) {
-        throw new Error("These readings could not be verified.");
-      }
+      const payload = ownerExport || await loadOwnerExport();
       setOwnerExport(payload);
+      const file = new Blob([buildBaselineReportHtml(baseline, payload)], { type: "text/html;charset=utf-8" });
+      const url = URL.createObjectURL(file);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "wbp-baseline-report.html";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (error) {
-      setExportError(error.message || "Readings unavailable.");
+      setExportError(error.message || "Report unavailable.");
     } finally {
-      setExportLoading(false);
+      setDownloadLoading(false);
     }
   };
 
   return <section className="-mx-4 border-t border-gray-300 bg-white px-4 py-6 text-gray-900 sm:px-8" aria-label="Baseline report">
     <h2 className="text-lg font-bold">Baseline report</h2>
-    <p className="mt-1 max-w-2xl text-xs text-gray-600">100% baseline scenario using the readings currently available. This is a working report, not a verified full-year audit.</p>
-    <div className="mt-5 space-y-5 text-sm">
-      <div className="grid gap-5 border-y border-gray-200 py-4 sm:grid-cols-2">
-        <div>
-          <h3 className="font-bold">Energy for this home</h3>
-          <p className="mt-1 text-gray-700">{Number.isFinite(area) && area > 0 ? `${area.toFixed(1)} m² home` : "Floor area pending"} · {hasEui ? `${eui.toFixed(1)} kWh/m²/year measured energy use` : "Energy use pending"}</p>
-          {hasEui && Number.isFinite(target) && target > 0 ? <p className="mt-1 text-gray-700">{aboveTarget ? "Above" : "At or below"} the dashboard's {target.toFixed(0)} kWh/m²/year planning target. This is not an EPC rating or a like-for-like peer comparison.</p> : null}
-          <p className="mt-2 text-gray-700">Average day: {Number.isFinite(baseline.electricityDailyKwh) ? `${baseline.electricityDailyKwh.toFixed(1)} kWh electricity` : "electricity pending"} · {Number.isFinite(baseline.gasDailyKwh) ? `${baseline.gasDailyKwh.toFixed(1)} kWh gas` : "gas pending"}</p>
-          <p className="mt-1 text-gray-700">Heating-weather estimate from observed days: {Number.isFinite(baseline.heatLoss?.weatherNormalisedEui) ? `${baseline.heatLoss.weatherNormalisedEui.toFixed(1)} kWh/m²/year` : "Pending cold-weather evidence"}</p>
-        </div>
-        <div>
-          <h3 className="font-bold">What needs attention</h3>
-          <p className="mt-1 text-gray-700">Health score: {Number.isFinite(baseline.healthScore) ? `${Math.round(baseline.healthScore)}/100` : "Pending"} · Energy score: {Number.isFinite(baseline.energyScore) ? `${Math.round(baseline.energyScore)}/100` : "Pending"}</p>
-          <ul className="mt-2 space-y-1 text-gray-700">
-            {redReadings.map((reading) => <li key={reading.key} className="font-semibold text-red-800">{reading.label}: {reading.value} {reading.unit} in the red band now</li>)}
-            {rainFlags.map((area) => <li key={area.label} className="font-semibold text-red-800">{area.label}: humidity rises {area.summary.rhUplift.toFixed(1)} percentage points after rain</li>)}
-            {aboveTarget ? <li>Energy use is above the {target.toFixed(0)} kWh/m²/year planning target.</li> : null}
-            {!redReadings.length && !rainFlags.length && !aboveTarget ? <li>No current red-band or rain-related flags in the available summaries.</li> : null}
-          </ul>
-          <p className="mt-2 text-xs text-gray-600">A missing flag does not rule out past problems or unmonitored rooms.</p>
-        </div>
+    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+      <div className={`border-l-4 p-4 ${!hasEui ? "border-gray-400 bg-gray-100" : aboveTarget ? "border-amber-600 bg-amber-50" : "border-emerald-700 bg-emerald-50"}`}>
+        <h3 className="text-sm font-semibold">Energy EUI</h3>
+        <p className="mt-1 text-2xl font-bold">{hasEui ? eui.toFixed(1) : "Pending"} <span className="text-sm font-normal">{hasEui ? "kWh/m²/year" : ""}</span></p>
+        {hasEui && Number.isFinite(target) && target > 0 ? <p className="mt-2 text-sm">{aboveTarget ? "Above" : "At or below"} WBP’s {target.toFixed(0)} kWh/m²/year planning target.</p> : null}
       </div>
-      <div>
-        <h3 className="font-bold">Room-by-room picture</h3>
-        <p className="mt-1 text-xs text-gray-600">Latest readings and available weekly-profile averages. More rooms appear here as their sensors connect.</p>
-        {rooms.length ? <div className="mt-2 divide-y divide-gray-200 border-y border-gray-200">{rooms.map((room) => {
-            const flags = redReadings.filter((reading) => reading.key.startsWith(`${room.key}:`));
-            const readingTime = Date.parse(room.timestamp || "");
-            const recent = Number.isFinite(readingTime) && readingTime <= Date.now() && Date.now() - readingTime <= 2 * 60 * 60 * 1000;
-            const weekly = weeklyRooms.find((item) => item.label.toLowerCase() === room.label.toLowerCase());
-            const averages = weekly ? [["RH", weekly.humidity, "%"], ["PM2.5", weekly.pm25, "µg/m³"], ["VOCs", weekly.vocs, "ppb"]]
-              .map(([label, field, unit]) => { const value = averageField(baseline.weeklyTrend, field); return Number.isFinite(value) ? `${label} ${value.toFixed(1)} ${unit}` : null; }).filter(Boolean) : [];
-            return <div key={room.key} className="grid gap-1 py-3 sm:grid-cols-[minmax(100px,0.4fr)_minmax(0,1fr)] sm:gap-4">
-              <div><strong>{room.label}</strong><p className="text-xs text-gray-600">{room.timestamp ? `Latest ${new Date(room.timestamp).toLocaleString("en-GB")}` : "No recent timestamp"}</p></div>
-              <div><p className={flags.length ? "font-semibold text-red-800" : "text-gray-700"}>{flags.length ? flags.map((flag) => `${flag.label.replace(`${room.label} `, "")} ${flag.value} ${flag.unit}`).join(" · ") : recent ? "No current red-band reading" : "No recent reading"}</p>{averages.length ? <p className="mt-1 text-xs text-gray-600">Weekly profile averages: {averages.join(" · ")}</p> : null}</div>
-            </div>;
-          })}</div> : <p className="mt-2 text-gray-700">No room sensor readings available yet.</p>}
+      <div className={`border-l-4 p-4 ${!Number.isFinite(baseline.healthScore) ? "border-gray-400 bg-gray-100" : baseline.healthScore < 60 ? "border-red-700 bg-red-50" : baseline.healthScore < 80 ? "border-amber-600 bg-amber-50" : "border-emerald-700 bg-emerald-50"}`}>
+        <h3 className="text-sm font-semibold">Health score</h3>
+        <p className="mt-1 text-2xl font-bold">{Number.isFinite(baseline.healthScore) ? Math.round(baseline.healthScore) : "Pending"}<span className="text-sm font-normal">{Number.isFinite(baseline.healthScore) ? "/100" : ""}</span></p>
+        <ul className="mt-2 space-y-1 text-sm">{redReadings.slice(0, 3).map((reading) => <li key={reading.key}>{reading.label}: {reading.value} {reading.unit} in the red band</li>)}{rainFlags.slice(0, 2).map((area) => <li key={area.label}>{area.label}: humidity rises after rain</li>)}{!redReadings.length && !rainFlags.length ? <li>No current red-band flags in monitored rooms.</li> : null}</ul>
       </div>
-      <div className="border-t border-gray-200 pt-4">
-        <h3 className="font-bold">Heat and weather</h3>
-        <p className="mt-1 font-semibold text-amber-900">Weather context: provisional</p>
-        <p className="mt-1 text-gray-700">The baseline may reflect an unusually warm or cold winter. {baseline.heatLoss?.hddDays > 0 ? `${baseline.heatLoss.hddDays} days with heating-degree evidence are available.` : "Heating-degree coverage is still being established."} We have not yet compared the same dates with a long-term local weather reference, so we cannot say whether this period was typical or adjust the baseline for an extreme year.</p>
-        <p className="mt-1 text-xs text-gray-600">Energy scores, retrofit savings and before/after comparisons should remain indicative until that comparison and meter-coverage checks are complete. The heating-weather estimate above extrapolates observed days; it is not a long-term climate adjustment.</p>
-        <p className="mt-1 text-gray-700">Heat-loss estimate: {Number.isFinite(baseline.heatLoss?.htcEstimate) ? `${baseline.heatLoss.htcEstimate.toFixed(0)} W/K` : "Pending indoor/outdoor and energy overlap"} · Night cooldown: {Number.isFinite(baseline.heatLoss?.nightCooldownRateCPerHour) ? `${baseline.heatLoss.nightCooldownRateCPerHour.toFixed(2)} °C/hour` : "Pending qualifying nights"}</p>
-        {(baseline.rainHumidityAreas || []).map((area) => <p key={area.label} className="mt-1 text-gray-700">{area.label} after rain: {Number.isFinite(area.summary?.rhUplift) ? `${area.summary.rhUplift.toFixed(1)} percentage points higher RH` : "Comparison pending"}</p>)}
-        <p className="mt-2 text-xs text-gray-600">These are indications for a survey, not diagnoses of damp or measured retrofit savings.</p>
-      </div>
-      <details className="border-t border-gray-200 pt-4"><summary className="cursor-pointer font-semibold text-emerald-900">View my energy readings</summary>
-          <div className="mt-3 space-y-2"><button type="button" onClick={reviewExport} disabled={exportLoading} className="border border-emerald-700 px-3 py-2 font-semibold text-emerald-900 disabled:opacity-50">{exportLoading ? "Loading readings..." : "Load readings"}</button>
-            {exportError ? <p role="alert" className="text-red-800">{exportError}</p> : null}
-            {ownerExport ? <div aria-label="Private energy readings" className="space-y-1 text-gray-700"><p className="font-semibold">Private to you, not available to buyers</p><p>{formatDate(ownerExport.periodStart)} to {formatDate(ownerExport.periodEnd)} · {ownerExport.meteredDays} days with readings; some days may have gaps.</p>{(ownerExport.fuelSummaries || []).map((fuel) => <p key={fuel.fuelType}>{fuel.fuelType === "gas" ? "Gas" : "Electricity"}: {Number(fuel.totalKwh).toFixed(1)} kWh</p>)}</div> : null}
-          </div>
-      </details>
     </div>
+    <button type="button" onClick={downloadReport} disabled={downloadLoading} className="mt-4 border border-emerald-700 px-4 py-2 text-sm font-semibold text-emerald-900 disabled:opacity-50">{downloadLoading ? "Preparing report..." : "Download detailed report"}</button>
+    {exportError ? <p role="alert" className="mt-2 text-sm text-red-800">{exportError}</p> : null}
     <div className="mt-5 grid gap-2 sm:grid-cols-2">
       <button type="button" onClick={() => setOpenPanel("retrofit")} className="border border-emerald-700 bg-white px-4 py-3 text-left text-sm font-semibold text-emerald-950 hover:bg-emerald-50">Retrofit options</button>
       <button type="button" onClick={() => setOpenPanel("sale")} className="border border-emerald-700 bg-white px-4 py-3 text-left text-sm font-semibold text-emerald-950 hover:bg-emerald-50">Sell baseline data</button>

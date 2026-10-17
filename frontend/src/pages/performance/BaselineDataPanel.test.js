@@ -1,10 +1,11 @@
 import React from "react";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import BaselineDataPanel from "./BaselineDataPanel";
+import { buildBaselineReportHtml } from "./baselineReport";
 
 const Surface = ({ title, children, onClose }) => <div role="dialog" aria-label={title}>{children}<button type="button" onClick={onClose}>Close</button></div>;
 
-test("baseline report shows monitored rooms, averages and flags inline", () => {
+test("baseline report keeps the page concise and colour-codes the scores", () => {
   render(<BaselineDataPanel DetailSurface={Surface} baseline={{
     annualEui: 42.3, area: 99.2, targetEui: 35, healthScore: 72, energyScore: 74,
     electricityDailyKwh: 4.2, gasDailyKwh: 7.5,
@@ -14,15 +15,12 @@ test("baseline report shows monitored rooms, averages and flags inline", () => {
     redReadings: [{ key: "upstairs:humidity", label: "Upstairs RH", value: 72, unit: "%" }],
   }} />);
   expect(screen.getByRole("heading", { name: "Baseline report" })).toBeInTheDocument();
-  expect(screen.getByText(/42.3 kWh\/m²\/year/)).toBeInTheDocument();
-  expect(screen.getByText(/Health score: 72\/100/)).toBeInTheDocument();
-  expect(screen.getByText(/RH 72 %/)).toBeInTheDocument();
-  expect(screen.getByText("Downstairs")).toBeInTheDocument();
-  expect(screen.getByText(/4.2 kWh electricity/)).toBeInTheDocument();
-  expect(screen.getByText(/RH 69.0 %/)).toBeInTheDocument();
-  expect(screen.getByText(/92 days with heating-degree evidence/)).toBeInTheDocument();
-  expect(screen.getByText(/we cannot say whether this period was typical/)).toBeInTheDocument();
-  expect(screen.getByText(/not a long-term climate adjustment/)).toBeInTheDocument();
+  expect(screen.getByText("42.3", { exact: false })).toBeInTheDocument();
+  expect(screen.getByText("72")).toBeInTheDocument();
+  expect(screen.getByText(/Upstairs RH: 72 %/)).toBeInTheDocument();
+  expect(screen.getByText(/WBP’s 35 kWh\/m²\/year planning target/)).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Download detailed report" })).toBeInTheDocument();
+  expect(screen.queryByText(/100% baseline scenario/)).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: /Property report/ })).not.toBeInTheDocument();
 });
 
@@ -47,9 +45,25 @@ test("sale pie is illustrative and does not claim a buyer or earnings", () => {
   expect(screen.getByText(/Nothing is shared automatically/)).toBeInTheDocument();
 });
 
-test("owner energy readings need a saved building record", () => {
+test("report download needs a saved building record", async () => {
   render(<BaselineDataPanel DetailSurface={Surface} />);
-  fireEvent.click(screen.getByText("View my energy readings"));
-  fireEvent.click(screen.getByRole("button", { name: "Load readings" }));
-  expect(screen.getByRole("alert")).toHaveTextContent(/Save this home profile/);
+  fireEvent.click(screen.getByRole("button", { name: "Download detailed report" }));
+  await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/Save this home profile/));
+});
+
+test("downloaded report includes architect evidence and excludes HTML injection", () => {
+  const html = buildBaselineReportHtml({
+    buildingId: "record-1", annualEui: 42.3, targetEui: 35, area: 99.2,
+    electricityDailyKwh: 4.2, gasDailyKwh: 7.5, healthScore: 72,
+    rooms: [{ label: "Upstairs", timestamp: "2026-10-17T12:00:00Z" }],
+    weeklyTrend: [{ upstairsHumidity: 68 }, { upstairsHumidity: 70 }],
+    redReadings: [{ label: "<script>alert(1)</script>", value: 72, unit: "%" }],
+    heatLoss: { hddDays: 92, htcEstimate: 135 },
+  }, { periodStart: "2026-03-18", periodEnd: "2026-10-17", meteredDays: 214, fuelSummaries: [{ fuelType: "gas", totalKwh: 1703 }] });
+  expect(html).toContain("Building baseline report");
+  expect(html).toContain("69.0 % average RH");
+  expect(html).toContain("1703.0 kWh");
+  expect(html).toContain("long-term local weather reference");
+  expect(html).toContain("Data licensing preparation");
+  expect(html).not.toContain("<script>");
 });
