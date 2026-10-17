@@ -29,10 +29,10 @@ const BUYER_ROUTES = [
   {
     id: "grid",
     name: "Grid and flexibility partners",
-    examples: "Network planners and registered flexibility providers",
+    examples: "Octopus Energy is the first outreach target; no agreement or integration exists",
     fit: "Half-hourly demand can inform readiness; a baseline alone does not prove dispatchable flexibility.",
     product: "Flexibility readiness profile",
-    next: "Confirm a working smart meter, controllable load, participant enrolment and the partner's metering interface.",
+    next: "Ask Octopus whether it wants additional verified building data and obtain a partner specification. Confirm customer eligibility, a working smart meter, controllable load and non-duplicate enrolment.",
   },
 ];
 
