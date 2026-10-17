@@ -55,7 +55,7 @@ begin
     where building_record_id = v_record_id and legacy_building_id = 'home'
   ) then raise exception 'Bridgewood/home link is missing or changed'; end if;
 
-  select count(*), min(id) into v_device_count, v_device_id
+  select count(*), (array_agg(id))[1] into v_device_count, v_device_id
   from public."WBPCollectorDevices" where building_record_id = v_record_id;
   if v_device_count <> 1 then
     raise exception 'Expected one paired collector for Bridgewood; found %', v_device_count;
