@@ -148,13 +148,27 @@ test("health summary shows historical red days rather than a live flag", async (
   rpc.mockRestore();
 });
 
+test("health summary omits upstairs humidity when it has no red days", async () => {
+  const rpc = jest.spyOn(supabase, "rpc").mockResolvedValue({ data: [], error: null });
+  rpc.mockResolvedValueOnce({ data: [
+    { reading_date: "2026-10-01", upstairs_humidity: 65, downstairs_humidity: 71 },
+  ], error: null });
+  render(<BaselineDataPanel DetailSurface={Surface} baseline={{ buildingId: "record-1", sourceBuildingId: "home", healthScore: 72 }} />);
+  expect(await screen.findByText("Downstairs humidity")).toBeInTheDocument();
+  expect(screen.queryByText("Upstairs humidity")).not.toBeInTheDocument();
+  rpc.mockRestore();
+});
+
 test("baseline shows every historical red metric plus performance and recent concerns", async () => {
   const rpc = jest.spyOn(supabase, "rpc").mockResolvedValue({ data: [], error: null });
   rpc.mockResolvedValueOnce({ data: [
     { reading_date: "2026-10-01", upstairs_pm25: 40, downstairs_pm25: 38, upstairs_vocs: 550, upstairs_hcho: 90, upstairs_no2: 110 },
   ], error: null });
   render(<BaselineDataPanel DetailSurface={Surface} baseline={{ buildingId: "record-1", sourceBuildingId: "home", healthScore: 55,
-    performanceConcerns: [{ key: "heat-exclusion", label: "Summer heat", status: "poor", detail: "1.2 °C hotter than outside" }],
+    performanceConcerns: [
+      { key: "hdd", label: "Heat demand", status: "poor", detail: "High for the weather" },
+      { key: "heat-exclusion", label: "Summer heat", status: "poor", detail: "1.2 °C hotter than outside" },
+    ],
     redReadings: [{ key: "upstairs:humidity", label: "Upstairs RH", value: 72, unit: "%" }],
   }} />);
   expect(await screen.findByText("Upstairs PM2.5")).toBeInTheDocument();
@@ -163,6 +177,9 @@ test("baseline shows every historical red metric plus performance and recent con
   expect(screen.getByText("Upstairs HCHO")).toBeInTheDocument();
   expect(screen.getByText("Upstairs NO2")).toBeInTheDocument();
   expect(screen.getByText("Summer heat")).toBeInTheDocument();
+  const fabric = screen.getByRole("heading", { name: "Fabric" });
+  expect(fabric.parentElement).toHaveTextContent("Heat demand");
+  expect(fabric.parentElement).toHaveTextContent("Summer heat");
   expect(screen.getByText("Upstairs RH recently")).toBeInTheDocument();
   rpc.mockRestore();
 });

@@ -15,6 +15,7 @@ const PRIMARY_HEALTH_FIELDS = [
   { field: "downstairs_humidity", label: "Downstairs humidity" },
   { field: "upstairs_humidity", label: "Upstairs humidity" },
 ];
+const FABRIC_CONCERN_KEYS = new Set(["hdd", "htc", "night-cooldown", "heat-exclusion"]);
 const ConcernRow = ({ label, detail, tone = "red" }) => <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
   <span className={`inline-block min-w-36 border-l-4 px-2 py-1 font-semibold ${tone === "red" ? "border-red-700 bg-red-50 text-red-900" : tone === "amber" ? "border-amber-600 bg-amber-50 text-amber-900" : "border-emerald-700 bg-emerald-50 text-emerald-900"}`}>{label}</span>
   <span>{detail}</span>
@@ -49,6 +50,8 @@ export default function BaselineDataPanel({ DetailSurface, baseline = {} }) {
   }, [baseline.buildingId, baseline.sourceBuildingId]);
   const historicalFlags = historicalHealth.findings.filter((finding) => finding.redDays > 0);
   const otherHistoricalFlags = historicalFlags.filter((finding) => !PRIMARY_HEALTH_FIELDS.some((item) => item.field === finding.field));
+  const fabricConcerns = (baseline.performanceConcerns || []).filter((concern) => FABRIC_CONCERN_KEYS.has(concern.key));
+  const otherPerformanceConcerns = (baseline.performanceConcerns || []).filter((concern) => !FABRIC_CONCERN_KEYS.has(concern.key));
 
   const loadOwnerExport = async () => {
     if (!baseline.buildingId) throw new Error("Save this home profile before viewing its readings.");
@@ -99,15 +102,19 @@ export default function BaselineDataPanel({ DetailSurface, baseline = {} }) {
         {historicalHealth.status === "ready" ? <div className="mt-3 space-y-2 text-sm">
           {PRIMARY_HEALTH_FIELDS.map(({ field, label }) => {
             const finding = historicalHealth.findings.find((item) => item.field === field);
-            return finding ? <ConcernRow key={field} label={label} tone={finding.redDays > 0 ? "red" : "green"} detail={`${finding.redDays} of ${finding.observedDays} observed days in the red`} /> : null;
+            return finding && (field !== "upstairs_humidity" || finding.redDays > 0) ? <ConcernRow key={field} label={label} tone={finding.redDays > 0 ? "red" : "green"} detail={`${finding.redDays} of ${finding.observedDays} observed days in the red`} /> : null;
           })}
           {otherHistoricalFlags.map((finding) => <ConcernRow key={finding.field} label={finding.label} detail={`${finding.redDays} of ${finding.observedDays} observed days in the red`} />)}
           {!historicalHealth.findings.length ? <p>Historical sensor readings unavailable</p> : null}
         </div> : <p className="mt-2 text-sm">{historicalHealth.status === "loading" ? "Checking past readings..." : "Historical readings unavailable"}</p>}
       </div>
     </div>
-    {(baseline.performanceConcerns?.length > 0 || baseline.redReadings?.length > 0) ? <div className="mt-4 space-y-2" aria-label="Other areas to review">
-      {baseline.performanceConcerns?.map((concern) => <ConcernRow key={concern.key} label={concern.label} tone={concern.status === "poor" ? "red" : "amber"} detail={concern.detail} />)}
+    {fabricConcerns.length > 0 ? <div className="mt-4 space-y-2" aria-label="Fabric">
+      <h3 className="text-sm font-bold">Fabric</h3>
+      {fabricConcerns.map((concern) => <ConcernRow key={concern.key} label={concern.label} tone={concern.status === "poor" ? "red" : "amber"} detail={concern.detail} />)}
+    </div> : null}
+    {(otherPerformanceConcerns.length > 0 || baseline.redReadings?.length > 0) ? <div className="mt-4 space-y-2" aria-label="Other areas to review">
+      {otherPerformanceConcerns.map((concern) => <ConcernRow key={concern.key} label={concern.label} tone={concern.status === "poor" ? "red" : "amber"} detail={concern.detail} />)}
       {baseline.redReadings?.map((reading) => <ConcernRow key={reading.key} label={`${reading.label} recently`} detail={`${reading.value} ${reading.unit}`} />)}
     </div> : null}
     </button>
