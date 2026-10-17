@@ -4,18 +4,15 @@ import RetrofitPlanner from "./RetrofitPlanner";
 
 const Surface = ({ children, title, onClose }) => <div role="dialog" aria-label={title}>{children}<button onClick={onClose}>Close</button></div>;
 
-test("upper works scope separates possible annual costs from the benefit range", () => {
+test("upper works scope keeps the annual value separate from works cost", () => {
   render(<RetrofitPlanner ready annualEui={41.47} area={99.2} electricityDailyKwh={5} gasDailyKwh={7} DetailSurface={Surface} />);
-  fireEvent.click(screen.getByRole("button", { name: "Adjust assumptions" }));
-  fireEvent.change(screen.getByRole("combobox", { name: "Heating fuel assumption" }), { target: { value: "electric" } });
-  fireEvent.click(screen.getByRole("button", { name: "Close" }));
   fireEvent.change(screen.getByRole("slider", { name: "Extent of retrofit works" }), { target: { value: "100" } });
   const range = screen.getByText("Potential annual value").nextElementSibling;
-  expect(range.textContent).toMatch(/^£0–£[\d,]+\/yr$/);
-  expect(screen.getByText(/Possible net annual cost: up to £/)).toBeInTheDocument();
-  expect(screen.getByText(/Energy cost increase: £/)).toBeInTheDocument();
+  expect(range.textContent).toMatch(/^£[\d,]+–£[\d,]+\/yr$/);
+  expect(screen.getByText("Estimated works cost")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Adjust assumptions" })).not.toBeInTheDocument();
   fireEvent.change(screen.getByRole("slider", { name: "Extent of retrofit works" }), { target: { value: "0" } });
-  expect(screen.queryByText(/Possible net annual cost/)).not.toBeInTheDocument();
+  expect(screen.getByText("Estimated works cost")).toBeInTheDocument();
 });
 
 test("keeps retrofit planning locked until baseline is complete", () => {
@@ -42,20 +39,12 @@ test("shows assumption-based scenarios and opens the selected pack", () => {
   expect(screen.getByText("Data licences")).toBeInTheDocument();
   expect(screen.getByRole("img", { name: /Data licences £222/i })).toBeInTheDocument();
   expect(screen.queryByRole("heading", { name: "Other occupant value" })).not.toBeInTheDocument();
-  expect(screen.getByText("Potential funding input")).toBeInTheDocument();
-  expect(screen.getByText("Amount set after scheme check")).toBeInTheDocument();
+  expect(screen.queryByText("Potential funding input")).not.toBeInTheDocument();
   fireEvent.change(screen.getByRole("spinbutton", { name: /current annual buildings insurance premium/i }), { target: { value: "500" } });
   expect(screen.getByRole("img", { name: /Insurance £25/i })).toBeInTheDocument();
   expect(screen.queryByText(/Illustrative insurance saving:/)).not.toBeInTheDocument();
   expect(screen.getByText("Estimated works cost")).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Adjust assumptions" }));
-  expect(screen.getByRole("dialog", { name: "Adjust assumptions" })).toBeInTheDocument();
-  expect(screen.getByRole("table", { name: /retrofit cost and annual value scenarios/i })).toBeInTheDocument();
-  expect(screen.queryByText("Enter premium")).not.toBeInTheDocument();
-  expect(screen.getByText("£25 (5%)")).toBeInTheDocument();
-  fireEvent.change(screen.getByRole("slider", { name: "Energy unit price change" }), { target: { value: "50" } });
-  expect(screen.getByText("+50%")).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Close" }));
+  expect(screen.queryByRole("button", { name: "Adjust assumptions" })).not.toBeInTheDocument();
   fireEvent.change(screen.getByRole("slider", { name: "Extent of retrofit works" }), { target: { value: "75" } });
   expect(screen.getByText(/Target EUI 78\.0 kWh\/m²\/yr/)).toBeInTheDocument();
   fireEvent.change(screen.getByRole("slider", { name: "Extent of retrofit works" }), { target: { value: "100" } });
@@ -67,11 +56,11 @@ test("shows assumption-based scenarios and opens the selected pack", () => {
 
 test("uses the saved Suffolk council for local funding routes without treating a loan as a grant", () => {
   render(<RetrofitPlanner ready embedded postcode="IP1 1AA" localAuthority="Ipswich" annualEui={120} area={100} electricityDailyKwh={5} gasDailyKwh={7} DetailSurface={Surface} />);
-  expect(screen.getByText("Amount set after scheme check")).toBeInTheDocument();
+  expect(screen.getByText(/No award is assumed or deducted from the works cost/)).toBeInTheDocument();
   expect(screen.getByText("Suffolk Warm Homes Loan")).toBeInTheDocument();
   expect(screen.getByText(/windows or doors; amount follows eligibility and a survey/i)).toBeInTheDocument();
   fireEvent.change(screen.getByRole("slider", { name: "Extent of retrofit works" }), { target: { value: "50" } });
-  expect(screen.getByText("£0–£7,500 heat-pump grant")).toBeInTheDocument();
+  expect(screen.queryByText("Potential funding input")).not.toBeInTheDocument();
   expect(screen.getByText(/repayable, not a grant/i)).toBeInTheDocument();
 });
 
@@ -79,5 +68,5 @@ test("does not infer Suffolk funding from the postcode alone", () => {
   render(<RetrofitPlanner ready embedded postcode="IP1 1AA" annualEui={120} area={100} electricityDailyKwh={5} gasDailyKwh={7} DetailSurface={Surface} />);
   expect(screen.queryByText("Suffolk Warm Homes Loan")).not.toBeInTheDocument();
   fireEvent.change(screen.getByRole("slider", { name: "Extent of retrofit works" }), { target: { value: "50" } });
-  expect(screen.getByText("Amount set after scheme check")).toBeInTheDocument();
+  expect(screen.getByText(/No award is assumed or deducted from the works cost/)).toBeInTheDocument();
 });

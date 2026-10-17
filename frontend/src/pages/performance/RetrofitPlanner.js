@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { getAnnualBenefitBreakdown, getRetrofitOption, projectInsuranceSaving, projectRetrofit } from "./retrofitEconomics";
+import { getAnnualBenefitBreakdown, getRetrofitOption, projectRetrofit } from "./retrofitEconomics";
 
 const FUNDING = [
   { name: "Warm Homes: Local Grant", href: "https://www.gov.uk/apply-warm-homes-local-grant", note: "England: council-approved insulation and possibly windows or doors; amount follows eligibility and a survey." },
@@ -12,14 +12,10 @@ const formatGbp = (value) => `${value < 0 ? "-" : ""}£${Math.round(Math.abs(val
 
 export default function RetrofitPlanner({ ready, embedded = false, postcode, localAuthority, annualEui, area, electricityDailyKwh, gasDailyKwh, billReview, originalTeam = {}, DetailSurface }) {
   const [worksScope, setWorksScope] = useState(0);
-  const [energyPriceChange, setEnergyPriceChange] = useState(0);
-  const [carbonPriceChange, setCarbonPriceChange] = useState(0);
   const [packOpen, setPackOpen] = useState(false);
-  const [adjustOpen, setAdjustOpen] = useState(false);
   const [annualPremium, setAnnualPremium] = useState("");
-  const [allElectric, setAllElectric] = useState(false);
   const option = getRetrofitOption(worksScope);
-  const projection = projectRetrofit({ option, annualEui, area, electricityDailyKwh, gasDailyKwh, billReview, energyPriceChangePercent: energyPriceChange, carbonPriceChangePercent: carbonPriceChange, allElectric });
+  const projection = projectRetrofit({ option, annualEui, area, electricityDailyKwh, gasDailyKwh, billReview });
   const annualBenefit = getAnnualBenefitBreakdown(projection.scenarios[1], annualPremium);
   const lowBenefit = getAnnualBenefitBreakdown(projection.scenarios[0], annualPremium);
   const highBenefit = getAnnualBenefitBreakdown(projection.scenarios[2], annualPremium);
@@ -54,7 +50,6 @@ export default function RetrofitPlanner({ ready, embedded = false, postcode, loc
                 <p>Potential annual value</p>
                 <strong>{benefitTotals ? `${formatGbp(Math.max(0, benefitTotals[0]))}–${formatGbp(Math.max(0, benefitTotals[1]))}/yr` : "Pending baseline"}</strong>
                 <p className="wbp-retrofit-cost"><b>Estimated works cost</b><br />{projection.costRangeGbp ? `${formatGbp(projection.costRangeGbp[0])}–${formatGbp(projection.costRangeGbp[1])}` : "Floor area needed"}</p>
-                <p className="wbp-retrofit-funding"><b>Potential funding input</b><br />{suffolkProperty && worksScope >= 50 ? "£0–£7,500 heat-pump grant" : "Amount set after scheme check"}</p>
                 {potentialAnnualCost > 0 ? <span>Possible net annual cost: up to {formatGbp(potentialAnnualCost)}/yr under these assumptions.</span> : null}
                 <span>Bill savings plus possible carbon, data and insurance value</span>
               </div>
@@ -69,10 +64,10 @@ export default function RetrofitPlanner({ ready, embedded = false, postcode, loc
               </div>
             </div>
             <p className="wbp-retrofit-outcome">{projection.scenarios[1].energySavedKwh === null ? "Energy saving pending" : `${Math.round(projection.scenarios[1].energySavedKwh).toLocaleString("en-GB")} kWh/yr energy saved`} · {projection.scenarios[1].carbonSavedTonnes === null ? "Carbon saving pending" : `${projection.scenarios[1].carbonSavedTonnes.toFixed(2)} tCO₂e/yr carbon saved`} · {projection.targetEui === null ? "Target EUI pending" : `Target EUI ${projection.targetEui.toFixed(1)} kWh/m²/yr`}</p>
-            <p className="wbp-retrofit-caveat">Indicative comparison only. Winter baseline and survey still needed; carbon, data licensing and insurance income is not secured. Data licensing is included in the pie but is independent of the retrofit result. The EnerPHit endpoint uses CC's illustrative EUI target, not a certified design. {allElectric ? "Fuel mix transitions to all-electric at the endpoint." : "Bill and carbon savings hold the current fuel mix; heating changes need a separate design."}</p>
-            <div className="wbp-retrofit-actions"><button type="button" onClick={() => setAdjustOpen(true)}>Adjust assumptions</button>{!embedded ? <button type="button" onClick={() => setPackOpen(true)}>View retrofit pack</button> : null}</div>
+            <p className="wbp-retrofit-caveat">Indicative comparison only. Winter baseline and survey still needed; carbon, data licensing and insurance income is not secured. Data licensing is included in the pie but is independent of the retrofit result. The EnerPHit endpoint uses CC's illustrative EUI target, not a certified design. Bill and carbon savings hold the current fuel mix; heating changes need a separate design.</p>
+            {!embedded ? <div className="wbp-retrofit-actions"><button type="button" onClick={() => setPackOpen(true)}>View retrofit pack</button></div> : null}
             {embedded ? <div className="wbp-retrofit-next-steps">
-              <div><h3>Funding avenues{localAuthority ? ` · ${localAuthority}` : ""}</h3>{postcode ? <p>Property postcode: {postcode}</p> : null}<ul>{fundingRoutes.map((source) => <li key={source.name}><a href={source.href} target="_blank" rel="noreferrer">{source.name}</a><span>{source.note}</span></li>)}</ul><p>No funding is confirmed or deducted from works cost; windows and doors have no published fixed grant here.</p></div>
+              <div><h3>Funding avenues{localAuthority ? ` · ${localAuthority}` : ""}</h3>{postcode ? <p>Property postcode: {postcode}</p> : null}<p>Possible routes to check against the proposed measures and household eligibility. No award is assumed or deducted from the works cost.</p><ul>{fundingRoutes.map((source) => <li key={source.name}><a href={source.href} target="_blank" rel="noreferrer">{source.name}</a><span>{source.note}</span></li>)}</ul></div>
               <div><h3>Recommended design and build routes</h3><p>These names are from this home's original project record, not verified retrofit recommendations. Check availability and suitability before commissioning.</p><ul>
                 <li><strong>Design</strong>{originalTeam.architect ? (originalTeam.architectProfileRef ? <a href={`/workspace/design-profile/${encodeURIComponent(originalTeam.architectProfileRef)}`}>{originalTeam.architect}</a> : <span>{originalTeam.architect}</span>) : <span>Not recorded</span>}</li>
                 <li><strong>Build</strong>{originalTeam.builder ? (originalTeam.builderProfileRef ? <a href={`/workspace/build-profile/${encodeURIComponent(originalTeam.builderProfileRef)}`}>{originalTeam.builder}</a> : <span>{originalTeam.builder}</span>) : <span>Not recorded</span>}</li>
@@ -81,40 +76,6 @@ export default function RetrofitPlanner({ ready, embedded = false, postcode, loc
           </div>
         </div>
       ) : <p className="wbp-retrofit-locked">The retrofit menu unlocks when the measured baseline reaches 100% confidence.</p>}
-      {adjustOpen ? <DetailSurface modal title="Adjust assumptions" onClose={() => setAdjustOpen(false)}>
-        <div className="wbp-retrofit-assumptions">
-          <label>Heating fuel assumption
-            <select aria-label="Heating fuel assumption" value={allElectric ? "electric" : "current"} onChange={(event) => setAllElectric(event.target.value === "electric")}>
-              <option value="current">Current fuel mix</option>
-              <option value="electric">Transition to all-electric at endpoint</option>
-            </select>
-          </label>
-          <div className="wbp-retrofit-controls">
-            <label>Energy unit price change <strong>{energyPriceChange > 0 ? "+" : ""}{energyPriceChange}%</strong>
-              <input type="range" min="-20" max="100" step="5" value={energyPriceChange} onChange={(event) => setEnergyPriceChange(Number(event.target.value))} aria-label="Energy unit price change" />
-              <span className="wbp-retrofit-range-labels"><span>-20%</span><span>Today</span><span>+100%</span></span>
-            </label>
-            <label>Carbon price change <strong>{carbonPriceChange > 0 ? "+" : ""}{carbonPriceChange}%</strong>
-              <input type="range" min="-50" max="200" step="10" value={carbonPriceChange} onChange={(event) => setCarbonPriceChange(Number(event.target.value))} aria-label="Carbon price change" />
-              <span className="wbp-retrofit-range-labels"><span>-50%</span><span>Reference</span><span>+200%</span></span>
-            </label>
-          </div>
-            <div className="wbp-retrofit-scenarios" role="table" aria-label="Retrofit cost and annual value scenarios">
-              <div className="wbp-retrofit-scenario-labels" role="row"><span role="columnheader">Scenario</span>{projection.scenarios.map((scenario) => <strong role="columnheader" key={scenario.id}>{scenario.label}</strong>)}</div>
-              {[
-                ["Energy saved /yr", (s) => s.energySavedKwh === null ? "Pending" : `${Math.round(s.energySavedKwh).toLocaleString("en-GB")} kWh`],
-                ["Bill saving /yr", (s) => s.billSavedGbp === null ? "Pending" : formatGbp(s.billSavedGbp)],
-                ["Carbon saved /yr", (s) => s.carbonSavedTonnes === null ? "Pending" : `${s.carbonSavedTonnes.toFixed(2)} tCO₂e`],
-                ["Carbon price /t", (s) => s.carbonPrice ? formatGbp(s.carbonPrice) : "No sale"],
-                ["Carbon value /yr", (s) => s.carbonValueGbp === null ? "Pending" : formatGbp(s.carbonValueGbp)],
-                ["Data licences /yr", (s) => formatGbp(s.dataIncome)],
-                ["Insurance /yr", (s) => { const saving = projectInsuranceSaving(annualPremium, s.insuranceDiscount); return saving === null ? "Enter premium" : `${formatGbp(saving)} (${Math.round(s.insuranceDiscount * 100)}%)`; }],
-              ].map(([label, render]) => <div role="row" key={label}><span role="rowheader">{label}</span>{projection.scenarios.map((scenario) => <span role="cell" key={scenario.id}>{render(scenario)}</span>)}</div>)}
-            </div>
-            <p className="wbp-retrofit-caveat">Illustrative scenarios, not quotes or offers. A survey and itemised quotes are required to estimate installation cost. The EnerPHit endpoint uses the CC prototype's 25 kWh/m²/yr total EUI target, capped at the whole-home target for an already efficient baseline; this is not the EnerPHit heating-demand criterion or a PHPP result. Energy and carbon price sliders are stress tests, not forecasts. Savings are 50%, 100% and 125% of the selected planning target; winter baseline is incomplete. Carbon reference prices start at £0, £65 and £150/t. Data licensing is independent of retrofit scope, with separate illustrative values of £0, £222 and £444/yr. No market bids, issued credits or contracted licences. Insurance at 0%, 5% and 10% is quote sensitivity only; no insurer has agreed a discount. The current fuel mix is held unless the all-electric comparison is selected. That comparison models a fuel switch without heat-pump efficiency or rebound.</p>
-            <p className="wbp-retrofit-sources">Cost ranges are WBP planning allowances informed by <a href="https://energysavingtrust.org.uk/retrofitting-the-uks-housing-stock-to-reach-net-zero/" target="_blank" rel="noreferrer">Energy Saving Trust measures</a>; fallback unit rates use <a href="https://www.ofgem.gov.uk/your-energy-supply/your-energy-bill/energy-price-cap-unit-rates-and-standing-charges" target="_blank" rel="noreferrer">Ofgem’s October 2026 averages</a>. Carbon factors: <a href="https://www.gov.uk/government/publications/greenhouse-gas-reporting-conversion-factors-2026" target="_blank" rel="noreferrer">DESNZ 2026</a>.</p>
-        </div>
-      </DetailSurface> : null}
       {packOpen ? <DetailSurface modal title={`${option.name} plan`} onClose={() => setPackOpen(false)}>
         <div className="wbp-retrofit-pack">
           <p>Planning target: {projection.reductionPercent === null ? "pending baseline" : `${projection.reductionPercent.toFixed(1)}% lower total EUI`}. Commission a whole-home assessment to validate measures, costs and comfort before procurement. An EnerPHit claim requires a separate PHPP design and certification review against the <a href="https://passivehouse.com/en/home/building-certification/" target="_blank" rel="noreferrer">Passive House Institute criteria</a>.</p>

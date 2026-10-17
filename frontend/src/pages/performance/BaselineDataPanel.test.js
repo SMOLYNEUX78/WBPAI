@@ -45,7 +45,8 @@ test("retrofit option opens the cost and funding planner without introductory co
   expect(screen.queryByText("A sensible starting point")).not.toBeInTheDocument();
   expect(screen.getByRole("slider", { name: "Extent of retrofit works" })).toBeInTheDocument();
   expect(screen.getByText("Estimated works cost")).toBeInTheDocument();
-  expect(screen.getByText("Potential funding input")).toBeInTheDocument();
+  expect(screen.queryByText("Potential funding input")).not.toBeInTheDocument();
+  expect(screen.getByText(/No award is assumed or deducted from the works cost/)).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: "Funding avenues" })).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: "Recommended design and build routes" })).toBeInTheDocument();
   expect(screen.getByText("Design")).toBeInTheDocument();
