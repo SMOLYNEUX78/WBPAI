@@ -8837,11 +8837,17 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
             document.body
           )
         : null}
-      {building.id === "bl" ? <BaselineDataPanel DetailSurface={DetailSurface} onOpenRetrofit={() => navigate("/dashboard/rf")} baseline={{
+      {building.id === "bl" ? <BaselineDataPanel DetailSurface={DetailSurface} baseline={{
         buildingId: homePassportDatabaseId,
         annualEui: measuredAnnualEui,
         area: Number(matterportMetadata.internalArea),
         targetEui: building.targetEui,
+        electricityDailyKwh: energySummary.electricityDailyAverage,
+        gasDailyKwh: energySummary.gasDailyAverage,
+        billReview: normaliseBillReview(homeSetup.billReview),
+        heatLoss: heatLossSummary,
+        rainHumidityAreas,
+        weeklyTrend: weeklyTrendData,
         energyScore: performanceBreakdown.energy,
         healthScore: performanceBreakdown.health,
         rooms: roomIaqData,
