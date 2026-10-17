@@ -35,21 +35,35 @@ const BUYER_ROUTES = [
   },
 ];
 
-export default function BaselineDataPanel({ DetailSurface }) {
+export default function BaselineDataPanel({ DetailSurface, baseline = {} }) {
   const [open, setOpen] = useState(false);
   const [selectedId, setSelectedId] = useState(BUYER_ROUTES[0].id);
   const selected = BUYER_ROUTES.find((route) => route.id === selectedId);
+  const blockers = [
+    "Lock and version the real metered baseline",
+    ...(!baseline.authorityReady ? ["Verify ownership or delegated authority"] : []),
+    ...(baseline.auditScore !== 100 ? ["Complete the audit evidence pack"] : []),
+    "Record purpose-specific permission and disclosure rules",
+    "Agree a buyer, licence price, delivery and revenue split",
+    ...(selectedId === "grid" ? ["Confirm controllable load and a registered flexibility partner"] : []),
+  ];
 
-  return <main className="mx-auto max-w-5xl px-4 py-8 text-gray-900 sm:px-6">
-    <p className="text-xs font-bold uppercase text-emerald-800">WBP-001 · 14 Bridgewood Road</p>
-    <h1 className="mt-2 text-2xl font-bold">Baseline achieved</h1>
-    <p className="mt-2 max-w-2xl text-sm text-gray-700">This prototype assumes 100% baseline confidence. The live WBP-001 record is unchanged.</p>
-    <button type="button" onClick={() => setOpen(true)} className="mt-6 border border-emerald-700 bg-emerald-700 px-5 py-3 text-sm font-bold text-white hover:bg-emerald-800">Sell baseline data</button>
-    <p className="mt-3 text-xs text-gray-600">Explore possible buyers. No data is shared, licence issued or payment recorded.</p>
+  return <section className="-mx-4 border-t border-gray-300 bg-white px-4 py-6 text-gray-900 sm:px-8" aria-label="Baseline data sale">
+    <h2 className="text-lg font-bold">Baseline data sale</h2>
+    <p className="mt-1 max-w-2xl text-sm text-gray-700">This WBP-001bl scenario assumes a 100% baseline. The dashboard above still shows Bridgewood's measured values; its live confidence and sale permissions are unchanged.</p>
+    <button type="button" onClick={() => setOpen(true)} className="mt-4 border border-emerald-700 bg-emerald-700 px-5 py-3 text-sm font-bold text-white hover:bg-emerald-800">Sell baseline data</button>
+    <p className="mt-2 text-xs text-gray-600">Explore buyer fit and the steps to a sale. No data is shared or payment recorded.</p>
 
     {open ? <DetailSurface modal title="Sell baseline data" onClose={() => setOpen(false)}>
       <div className="px-4 py-5 sm:px-6">
         <p className="text-sm text-gray-700">WBP compares a proposed baseline pack with buyer use cases. These are potential routes, not live matches or offers.</p>
+        <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1 border-y border-gray-200 py-3 text-xs">
+          <span><strong>Baseline scenario:</strong> 100%</span>
+          <span><strong>Measured EUI:</strong> {Number.isFinite(baseline.annualEui) ? `${baseline.annualEui.toFixed(1)} kWh/m²/yr` : "Pending"}</span>
+          <span><strong>Energy score:</strong> {Number.isFinite(baseline.energyScore) ? Math.round(baseline.energyScore) : "Pending"}</span>
+          <span><strong>Health score:</strong> {Number.isFinite(baseline.healthScore) ? Math.round(baseline.healthScore) : "Pending"}</span>
+          <span><strong>Metered days:</strong> {baseline.meteredDays ?? "Pending"}</span>
+        </div>
         <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(200px,0.8fr)_minmax(0,1.2fr)]">
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1" role="group" aria-label="Potential buyers">
             {BUYER_ROUTES.map((route) => <button key={route.id} type="button" aria-pressed={selectedId === route.id} onClick={() => setSelectedId(route.id)} className={`border px-3 py-3 text-left text-sm font-semibold ${selectedId === route.id ? "border-emerald-700 bg-emerald-50 text-emerald-950" : "border-gray-300 bg-white hover:bg-gray-50"}`}>{route.name}</button>)}
@@ -62,10 +76,14 @@ export default function BaselineDataPanel({ DetailSurface }) {
               <div><dt className="font-semibold">Data product</dt><dd className="mt-1">{selected.product}</dd></div>
               <div><dt className="font-semibold">Before a sale</dt><dd className="mt-1">{selected.next}</dd></div>
             </dl>
+            <div className="mt-4 border-t border-emerald-200 pt-3 text-xs">
+              <strong>Not sale-ready yet</strong>
+              <ul className="mt-2 list-disc space-y-1 pl-4">{blockers.map((blocker) => <li key={blocker}>{blocker}</li>)}</ul>
+            </div>
           </section>
         </div>
-        <p className="mt-5 border-t border-gray-200 pt-4 text-xs text-gray-600">A real offer needs a locked baseline, purpose-specific rights, disclosure review, agreed price and settlement route. Post-retrofit before/after products belong to the improvement pathway.</p>
+        <p className="mt-5 border-t border-gray-200 pt-4 text-xs text-gray-600">Next system steps: eligibility check → authorisation → versioned package → partner delivery → settlement ledger. None is activated by this preview. Post-retrofit products belong to the improvement pathway.</p>
       </div>
     </DetailSurface> : null}
-  </main>;
+  </section>;
 }

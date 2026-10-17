@@ -7343,7 +7343,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
         {dataSourceBuildingId !== "home" ? <h2 className="mb-2 text-lg font-bold">Performance</h2> : null}
 
         <div className="wbp-performance-content space-y-2.5 sm:space-y-4">
-          {!isCarbonCreditTab && building.id === "home" ? (
+          {!isCarbonCreditTab && ["home", "bl"].includes(building.id) ? (
             <div className="wbp-linear-performance">
               <button
                 type="button"
@@ -8838,6 +8838,14 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
             document.body
           )
         : null}
+      {building.id === "bl" ? <BaselineDataPanel DetailSurface={DetailSurface} baseline={{
+        annualEui: measuredAnnualEui,
+        energyScore: performanceBreakdown.energy,
+        healthScore: performanceBreakdown.health,
+        meteredDays: baselineMeteredDays,
+        auditScore: evidencePackScore,
+        authorityReady: readinessGates.authority.ready,
+      }} /> : null}
       {editProfileOpen ? <NewBuildingSetupPanel editModal syncHomeProfile isActive onClose={() => {
         setEditProfileOpen(false);
         if (new URLSearchParams(location.search).get("edit") === "health") navigate("/dashboard/home", { replace: true });
@@ -13675,8 +13683,6 @@ const BuildingDashboard = () => {
                     onOpenBuilding={openBuildingById}
                     onOpenExchange={() => openSectionById("exchange")}
                   />
-                ) : building.baselineOnly ? (
-                  <BaselineDataPanel DetailSurface={DetailSurface} />
                 ) : building.exchangeOnly ? (
                   <ExchangeDashboardPanel homeValue={new URLSearchParams(location.search).get("source") === "cc" ? bridgewoodValue : null} />
                 ) : (
