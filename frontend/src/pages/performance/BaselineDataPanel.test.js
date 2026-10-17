@@ -26,15 +26,23 @@ test("baseline report keeps the page concise and colour-codes the scores", () =>
   expect(screen.queryByRole("button", { name: /Property report/ })).not.toBeInTheDocument();
 });
 
-test("retrofit options expose the existing planner slider", () => {
+test("retrofit option opens the cost and funding planner without introductory copy", () => {
   render(<BaselineDataPanel DetailSurface={Surface} baseline={{
     annualEui: 42.3, area: 99.2, targetEui: 35, electricityDailyKwh: 4.2, gasDailyKwh: 7.5,
+    originalTeam: { architect: "Original Architects", builder: "Original Builders" },
     redReadings: [{ key: "upstairs:humidity", label: "Upstairs RH", value: 72, unit: "%" }],
   }} />);
-  fireEvent.click(screen.getByRole("button", { name: /Retrofit options/ }));
-  expect(screen.getByText(/Check airflow and moisture/)).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Options" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: /Explore retrofit options/i }));
+  expect(screen.getByRole("dialog", { name: "Explore Retrofit Options" })).toBeInTheDocument();
+  expect(screen.queryByText("A sensible starting point")).not.toBeInTheDocument();
   expect(screen.getByRole("slider", { name: "Extent of retrofit works" })).toBeInTheDocument();
-  expect(screen.getByText(/Slider savings are provisional/)).toBeInTheDocument();
+  expect(screen.getByText("Estimated works cost")).toBeInTheDocument();
+  expect(screen.getByText(/Illustrative data income: £0–£444\/yr/)).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Funding avenues" })).toBeInTheDocument();
+  expect(screen.getByText("Original Architects")).toBeInTheDocument();
+  expect(screen.getByText("Original Builders")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "View retrofit pack" })).not.toBeInTheDocument();
 });
 
 test("sale pie is illustrative and does not claim a buyer or earnings", () => {

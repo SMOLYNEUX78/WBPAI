@@ -39,8 +39,6 @@ export default function BaselineDataPanel({ DetailSurface, baseline = {} }) {
     return () => { cancelled = true; };
   }, [baseline.buildingId, baseline.sourceBuildingId]);
   const historicalFlags = historicalHealth.findings.filter((finding) => finding.redDays > 0);
-  const airFlags = historicalFlags.filter((finding) => finding.field !== "internal_temp");
-  const temperatureFlags = historicalFlags.filter((finding) => finding.field === "internal_temp");
 
   const loadOwnerExport = async () => {
     if (!baseline.buildingId) throw new Error("Save this home profile before viewing its readings.");
@@ -90,22 +88,17 @@ export default function BaselineDataPanel({ DetailSurface, baseline = {} }) {
         <ul className="mt-2 space-y-1 text-sm">{historicalFlags.slice(0, 3).map((finding) => <li key={finding.field}>{finding.label}: {finding.redDays} of {finding.observedDays} observed days in the red band</li>)}{historicalHealth.status === "loading" ? <li>Checking past readings...</li> : null}{historicalHealth.status === "unavailable" ? <li>Historical readings unavailable</li> : null}{historicalHealth.status === "ready" && !historicalFlags.length ? <li>No red-band daily averages found in available history.</li> : null}</ul>
       </div>
     </div>
-    <button type="button" onClick={downloadReport} disabled={downloadLoading} className="mt-4 border border-emerald-700 px-4 py-2 text-sm font-semibold text-emerald-900 disabled:opacity-50">{downloadLoading ? "Preparing report..." : "Download detailed report"}</button>
-    {exportError ? <p role="alert" className="mt-2 text-sm text-red-800">{exportError}</p> : null}
-    <div className="mt-5 grid gap-2 sm:grid-cols-2">
-      <button type="button" onClick={() => setOpenPanel("retrofit")} className="border border-emerald-700 bg-white px-4 py-3 text-left text-sm font-semibold text-emerald-950 hover:bg-emerald-50">Retrofit options</button>
-      <button type="button" onClick={() => setOpenPanel("sale")} className="border border-emerald-700 bg-white px-4 py-3 text-left text-sm font-semibold text-emerald-950 hover:bg-emerald-50">Sell baseline data</button>
+    <div className="mt-4 flex justify-end"><button type="button" onClick={downloadReport} disabled={downloadLoading} className="border border-emerald-700 px-4 py-2 text-sm font-semibold text-emerald-900 disabled:opacity-50">{downloadLoading ? "Preparing report..." : "Download detailed report"}</button></div>
+    {exportError ? <p role="alert" className="mt-2 text-right text-sm text-red-800">{exportError}</p> : null}
+    <div className="mt-7 border-t border-gray-200 pt-5">
+      <h3 className="mb-3 text-base font-bold">Options</h3>
+      <button type="button" onClick={() => setOpenPanel("retrofit")} className="group relative flex min-h-44 w-full items-end overflow-hidden border border-emerald-900 bg-emerald-950 p-5 text-left text-white sm:min-h-52 sm:p-7" style={{ backgroundImage: "linear-gradient(90deg, rgba(9, 43, 34, .8), rgba(9, 43, 34, .12) 75%), url('/images/retrofit-options.png')", backgroundSize: "cover", backgroundPosition: "center" }}><span className="relative text-xl font-bold drop-shadow sm:text-2xl">Explore retrofit options <span aria-hidden="true">→</span></span></button>
+      <button type="button" onClick={() => setOpenPanel("sale")} className="mt-3 w-full border border-emerald-700 bg-white px-4 py-3 text-left text-sm font-semibold text-emerald-950 hover:bg-emerald-50">Sell baseline data</button>
     </div>
 
-    {openPanel === "retrofit" ? <DetailSurface modal title="Retrofit options" onClose={() => setOpenPanel(null)}>
-      <div className="space-y-5 px-4 py-5 text-sm sm:px-6">
-        <div><h2 className="font-bold">A sensible starting point</h2><p className="mt-1 text-gray-700">Use the readings to decide what to investigate, then check the home in person before choosing works. Slider savings are provisional until the baseline is checked against typical local weather.</p></div>
-        <ol className="space-y-3 border-y border-gray-200 py-4">
-          {airFlags.length ? <li><strong>1. Check ventilation and moisture</strong><p className="text-gray-700">Historical red-band daily averages in {Array.from(new Set(airFlags.map((flag) => flag.label.split(" ")[0]))).join(" and ")} make ventilation, sources and controls worth reviewing.</p></li> : <li><strong>1. Review ventilation</strong><p className="text-gray-700">Check airflow and moisture before changing insulation or airtightness.</p></li>}
-          {temperatureFlags.length || aboveTarget ? <li><strong>2. Survey heat loss and comfort</strong><p className="text-gray-700">{temperatureFlags.length ? "Historical temperature averages entered the red band. " : ""}{aboveTarget ? "Energy use is above the planning target. " : ""}Assess the fabric, draughts and heating controls together.</p></li> : <li><strong>2. Check fabric and heating</strong><p className="text-gray-700">A survey can identify practical improvements without assuming that a major retrofit is needed.</p></li>}
-          <li><strong>3. Compare whole-home options</strong><p className="text-gray-700">Use the existing retrofit planner to compare staged fabric, ventilation and heating measures. Costs and savings remain estimates until surveyed and quoted.</p></li>
-        </ol>
-        <RetrofitPlanner ready annualEui={baseline.annualEui} area={area} electricityDailyKwh={baseline.electricityDailyKwh} gasDailyKwh={baseline.gasDailyKwh} billReview={baseline.billReview} DetailSurface={DetailSurface} />
+    {openPanel === "retrofit" ? <DetailSurface modal title="Explore Retrofit Options" onClose={() => setOpenPanel(null)}>
+      <div className="px-4 py-5 text-sm sm:px-6">
+        <RetrofitPlanner ready embedded annualEui={baseline.annualEui} area={area} electricityDailyKwh={baseline.electricityDailyKwh} gasDailyKwh={baseline.gasDailyKwh} billReview={baseline.billReview} originalTeam={baseline.originalTeam} DetailSurface={DetailSurface} />
       </div>
     </DetailSurface> : null}
 

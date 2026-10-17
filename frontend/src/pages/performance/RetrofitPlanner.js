@@ -4,12 +4,12 @@ import { getAnnualBenefitBreakdown, getRetrofitOption, projectInsuranceSaving, p
 const FUNDING = [
   { name: "Warm Homes: Local Grant", href: "https://www.gov.uk/apply-warm-homes-local-grant", note: "Private homes; income and official energy-certificate eligibility apply." },
   { name: "Boiler Upgrade Scheme", href: "https://www.gov.uk/apply-boiler-upgrade-scheme/check-if-youre-eligible", note: "For eligible low-carbon heating; an MCS installer checks the property." },
-  { name: "Suffolk home energy support", href: "https://www.suffolk.gov.uk/", note: "Check current county and district schemes before applying." },
+  { name: "Suffolk Warm Homes Loan", href: "https://www.suffolk.gov.uk/council-and-democracy/council-news/energy-efficiency-loans-available-for-suffolk-residents", note: "A local loan, not a grant; check current terms and eligibility." },
 ];
 
 const formatGbp = (value) => `${value < 0 ? "-" : ""}£${Math.round(Math.abs(value)).toLocaleString("en-GB")}`;
 
-export default function RetrofitPlanner({ ready, annualEui, area, electricityDailyKwh, gasDailyKwh, billReview, DetailSurface }) {
+export default function RetrofitPlanner({ ready, embedded = false, annualEui, area, electricityDailyKwh, gasDailyKwh, billReview, originalTeam = {}, DetailSurface }) {
   const [worksScope, setWorksScope] = useState(0);
   const [energyPriceChange, setEnergyPriceChange] = useState(0);
   const [carbonPriceChange, setCarbonPriceChange] = useState(0);
@@ -33,9 +33,9 @@ export default function RetrofitPlanner({ ready, annualEui, area, electricityDai
   }).join(", ") : "#e5e7eb 0% 100%";
 
   return (
-    <section className="wbp-retrofit-planner" aria-label="Retrofit planning">
-      <h2 className="text-lg font-bold">Do we need a retrofit?</h2>
-      {ready ? <p className="wbp-retrofit-decision">Potential case to explore. Confirm the winter baseline, survey findings and quotes before deciding.</p> : null}
+    <section className={`wbp-retrofit-planner${embedded ? " wbp-retrofit-planner--embedded" : ""}`} aria-label="Retrofit planning">
+      {!embedded ? <h2 className="text-lg font-bold">Do we need a retrofit?</h2> : null}
+      {ready && !embedded ? <p className="wbp-retrofit-decision">Potential case to explore. Confirm the winter baseline, survey findings and quotes before deciding.</p> : null}
       {ready ? (
         <div className="wbp-retrofit-content">
           <div className="wbp-retrofit-controls wbp-retrofit-controls--main">
@@ -50,6 +50,7 @@ export default function RetrofitPlanner({ ready, annualEui, area, electricityDai
               <div className="wbp-retrofit-benefit-main">
                 <p>Potential annual value</p>
                 <strong>{benefitTotals ? `${formatGbp(Math.max(0, benefitTotals[0]))}–${formatGbp(Math.max(0, benefitTotals[1]))}/yr` : "Pending baseline"}</strong>
+                <p className="wbp-retrofit-cost"><b>Estimated works cost</b><br />{projection.costRangeGbp ? `${formatGbp(projection.costRangeGbp[0])}–${formatGbp(projection.costRangeGbp[1])}` : "Floor area needed"}</p>
                 {potentialAnnualCost > 0 ? <span>Possible net annual cost: up to {formatGbp(potentialAnnualCost)}/yr under these assumptions.</span> : null}
                 <span>Bill savings plus possible carbon, data and insurance value</span>
               </div>
@@ -63,11 +64,19 @@ export default function RetrofitPlanner({ ready, annualEui, area, electricityDai
                 </label>
                 {annualBenefit?.insuranceIncluded ? <small>Illustrative insurance saving: {formatGbp(projectInsuranceSaving(annualPremium, projection.scenarios[1].insuranceDiscount))}/yr at 5% (range £0–{formatGbp(projectInsuranceSaving(annualPremium, projection.scenarios[2].insuranceDiscount))}/yr at 0–10%). No insurer discount is confirmed.</small> : <small>Enter your premium to see an illustrative insurance saving.</small>}
                 {annualBenefit ? <small>Data licensing is independent of the retrofit and needs a buyer agreement.</small> : null}
+                {annualBenefit ? <small>Illustrative data income: {formatGbp(projection.scenarios[0].dataIncome)}–{formatGbp(projection.scenarios[2].dataIncome)}/yr; no buyer secured.</small> : null}
               </div>
             </div>
             <p className="wbp-retrofit-outcome">{projection.scenarios[1].energySavedKwh === null ? "Energy saving pending" : `${Math.round(projection.scenarios[1].energySavedKwh).toLocaleString("en-GB")} kWh/yr energy saved`} · {projection.scenarios[1].carbonSavedTonnes === null ? "Carbon saving pending" : `${projection.scenarios[1].carbonSavedTonnes.toFixed(2)} tCO₂e/yr carbon saved`} · {projection.targetEui === null ? "Target EUI pending" : `Target EUI ${projection.targetEui.toFixed(1)} kWh/m²/yr`}</p>
             <p className="wbp-retrofit-caveat">Indicative comparison only. Winter baseline and survey still needed; carbon, data licensing and insurance income is not secured. Data licensing is included in the pie but is independent of the retrofit result. The EnerPHit endpoint uses CC's illustrative EUI target, not a certified design. {allElectric ? "Fuel mix transitions to all-electric at the endpoint." : "Bill and carbon savings hold the current fuel mix; heating changes need a separate design."}</p>
-            <div className="wbp-retrofit-actions"><button type="button" onClick={() => setAdjustOpen(true)}>Adjust assumptions</button><button type="button" onClick={() => setPackOpen(true)}>View retrofit pack</button></div>
+            <div className="wbp-retrofit-actions"><button type="button" onClick={() => setAdjustOpen(true)}>Adjust assumptions</button>{!embedded ? <button type="button" onClick={() => setPackOpen(true)}>View retrofit pack</button> : null}</div>
+            {embedded ? <div className="wbp-retrofit-next-steps">
+              <div><h3>Funding avenues</h3><ul>{FUNDING.map((source) => <li key={source.name}><a href={source.href} target="_blank" rel="noreferrer">{source.name}</a><span>{source.note}</span></li>)}</ul><p>Check eligibility before deducting any funding from the cost estimate.</p></div>
+              <div><h3>Design and build</h3><p>Recorded on this home's original project; availability and retrofit suitability are not verified.</p><ul>
+                <li><strong>Original architect</strong>{originalTeam.architect ? (originalTeam.architectProfileRef ? <a href={`/workspace/design-profile/${encodeURIComponent(originalTeam.architectProfileRef)}`}>{originalTeam.architect}</a> : <span>{originalTeam.architect}</span>) : <span>Not recorded</span>}</li>
+                <li><strong>Original builder</strong>{originalTeam.builder ? (originalTeam.builderProfileRef ? <a href={`/workspace/build-profile/${encodeURIComponent(originalTeam.builderProfileRef)}`}>{originalTeam.builder}</a> : <span>{originalTeam.builder}</span>) : <span>Not recorded</span>}</li>
+              </ul></div>
+            </div> : null}
           </div>
         </div>
       ) : <p className="wbp-retrofit-locked">The retrofit menu unlocks when the measured baseline reaches 100% confidence.</p>}

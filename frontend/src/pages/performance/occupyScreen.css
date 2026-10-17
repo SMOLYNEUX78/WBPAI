@@ -439,6 +439,8 @@
 }
 
 .wbp-retrofit-planner { margin-top: 12px; border-top: 1px solid #d1d5db; padding-top: 8px; }
+.wbp-retrofit-planner--embedded { margin-top: 0; border-top: 0; padding-top: 0; }
+.wbp-retrofit-planner--embedded .wbp-retrofit-content { margin-top: 0; }
 .wbp-retrofit-decision { margin-top: 3px; color: #4b5563; font-size: 12px; }
 .wbp-retrofit-locked, .wbp-retrofit-caveat { margin-top: 6px; color: #6b7280; font-size: 11px; line-height: 1.4; }
 .wbp-retrofit-content { margin-top: 10px; }
@@ -471,6 +473,7 @@
 .wbp-retrofit-benefit-main > p { font-size: 13px; font-weight: 700; }
 .wbp-retrofit-benefit-main > strong { font-size: 22px; line-height: 1.1; overflow-wrap: anywhere; }
 .wbp-retrofit-benefit-main > p:not(:first-child) { margin-top: 8px; }
+.wbp-retrofit-benefit-main .wbp-retrofit-cost { margin-top: 12px; font-size: 13px; line-height: 1.45; font-weight: 400; }
 .wbp-retrofit-benefit-main > span { font-size: 11px; color: #4b5563; }
 .wbp-retrofit-benefit-pie { width: 120px; aspect-ratio: 1; border-radius: 50%; display: grid; place-items: center; }
 .wbp-retrofit-benefit-pie span { width: 64%; aspect-ratio: 1; border-radius: 50%; background: white; }
@@ -478,10 +481,19 @@
 .wbp-retrofit-benefit-key > div { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; align-items: center; gap: 6px; padding: 3px 0; }
 .wbp-retrofit-benefit-key i { width: 9px; height: 9px; }
 .wbp-retrofit-benefit-key small { display: block; margin-top: 6px; color: #6b7280; font-size: 10px; }
+.wbp-retrofit-next-steps { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; margin-top: 24px; }
+.wbp-retrofit-next-steps > div { min-width: 0; border-top: 1px solid #d1d5db; padding-top: 14px; }
+.wbp-retrofit-next-steps h3 { font-size: 15px; font-weight: 700; }
+.wbp-retrofit-next-steps ul { margin-top: 8px; }
+.wbp-retrofit-next-steps li { display: flex; flex-direction: column; gap: 2px; border-bottom: 1px solid #e5e7eb; padding: 8px 0; overflow-wrap: anywhere; }
+.wbp-retrofit-next-steps li span, .wbp-retrofit-next-steps p { color: #4b5563; font-size: 12px; }
+.wbp-retrofit-next-steps p { margin-top: 8px; }
+.wbp-retrofit-next-steps a { color: #065f46; font-weight: 700; text-decoration: underline; }
 @media (max-width: 599px) {
   .wbp-retrofit-benefit { grid-template-columns: minmax(0, 1fr) 100px; gap: 10px; }
   .wbp-retrofit-benefit-pie { width: 100px; }
   .wbp-retrofit-benefit-key { grid-column: 1 / -1; }
+  .wbp-retrofit-next-steps { grid-template-columns: 1fr; gap: 18px; }
 }
 .wbp-retrofit-pack { font-size: 14px; line-height: 1.5; }
 .wbp-retrofit-pack h3 { margin-top: 20px; font-weight: 700; }

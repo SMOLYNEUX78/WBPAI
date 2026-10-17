@@ -8859,6 +8859,12 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
         meteredDays: baselineMeteredDays,
         auditScore: evidencePackScore,
         authorityReady: readinessGates.authority.ready,
+        originalTeam: {
+          architect: homeSetup.historicalStages?.design?.architectPractice,
+          architectProfileRef: homeSetup.historicalStages?.design?.designProfileRef,
+          builder: homeSetup.historicalStages?.build?.mainContractor,
+          builderProfileRef: homeSetup.historicalStages?.build?.buildProfileRef,
+        },
       }} /> : null}
       {editProfileOpen ? <NewBuildingSetupPanel editModal syncHomeProfile isActive onClose={() => {
         setEditProfileOpen(false);
