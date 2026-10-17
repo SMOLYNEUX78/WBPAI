@@ -11195,6 +11195,7 @@ export const NewBuildingSetupPanel = ({ freshStart = false, syncHomeProfile = fa
                 Import energy data
               </button>
               <p className="text-xs text-gray-600">Available when WBP's n3rgy connection and bill-based consent process are approved.</p>
+              <p className="text-xs text-gray-600">With consent, electricity and gas smart-meter history may reach back up to 13 months, but not before your move-in date or the meter's commissioning date. Each fuel's available history may differ.</p>
 
               <label className="flex items-start gap-2 text-xs text-gray-700">
                 <input
