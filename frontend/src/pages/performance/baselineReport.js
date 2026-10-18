@@ -33,12 +33,12 @@ const seasonalSummary = (records) => (records || [])
   .sort((a, b) => a.startDate.localeCompare(b.startDate));
 
 const CHART_METRICS = [
-  { key: "electricity", label: "Electricity", unit: "kWh" },
-  { key: "gas", label: "Gas", unit: "kWh" },
-  { key: "internalTemp", label: "Indoor temperature", unit: "°C" },
-  { key: "externalTemp", label: "Outdoor temperature", unit: "°C" },
-  { key: "upstairsHumidity", label: "Upstairs RH", unit: "%" },
-  { key: "downstairsHumidity", label: "Downstairs RH", unit: "%" },
+  { key: "electricity", label: "Electricity", unit: "kWh", color: "#2563eb", group: "energy" },
+  { key: "gas", label: "Gas", unit: "kWh", color: "#dc2626", group: "energy" },
+  { key: "internalTemp", label: "Indoor", unit: "°C", color: "#c2410c", group: "temperature" },
+  { key: "externalTemp", label: "Outside", unit: "°C", color: "#4338ca", group: "temperature" },
+  { key: "upstairsHumidity", label: "Upstairs RH", unit: "%", color: "#0891b2", group: "humidity" },
+  { key: "downstairsHumidity", label: "Downstairs RH", unit: "%", color: "#7c3aed", group: "humidity" },
 ];
 
 const interactiveSeasonalChart = (records) => {
@@ -55,18 +55,19 @@ const interactiveSeasonalChart = (records) => {
   })).filter((record) => record.weekly.length || record.daily.length);
   if (!data.length) return "";
   const encoded = JSON.stringify({ data, metrics: CHART_METRICS }).replace(/</g, "\\u003c");
-  return `<div id="seasonal-chart" class="chart"><div class="chart-controls"><label>Season <select id="chart-season">${data.map((record, index) => `<option value="${index}">${escapeHtml(record.name)}</option>`).join("")}</select></label><fieldset><legend>View</legend><label><input type="radio" name="chart-period" value="day"> Day</label><label><input type="radio" name="chart-period" value="week"> Week</label><label><input type="radio" name="chart-period" value="month" checked> Month</label></fieldset></div><div id="chart-metrics" class="chart-metrics" aria-label="Highlight a measure"></div><svg id="chart-plot" viewBox="0 0 800 270" role="img" aria-label="Seasonal trend chart"></svg><p id="chart-caption" class="muted"></p></div><script type="application/json" id="chart-data">${encoded}</script>`;
+  return `<div id="seasonal-chart" class="chart"><div class="chart-top"><strong>Seasonal Performance Trends</strong><div id="chart-seasons" class="chart-tabs" role="group" aria-label="Season">${data.map((record, index) => `<button type="button" data-season="${index}" aria-pressed="${index === 0}">${escapeHtml(record.name)}</button>`).join("")}</div></div><div id="chart-periods" class="chart-tabs chart-periods" role="group" aria-label="Trend period"><button type="button" data-period="day" aria-pressed="false">Day</button><button type="button" data-period="week" aria-pressed="false">Week</button><button type="button" data-period="month" aria-pressed="true">Month</button></div><div id="chart-groups" class="chart-tabs chart-groups" role="group" aria-label="Measure group"><button type="button" data-group="energy" aria-pressed="true">Energy</button><button type="button" data-group="temperature" aria-pressed="false">Temperature</button><button type="button" data-group="humidity" aria-pressed="false">Humidity</button></div><div class="chart-plot-wrap"><svg id="chart-plot" viewBox="0 0 800 310" role="img" aria-label="Seasonal performance trend chart"></svg><div id="chart-tooltip" class="chart-tooltip" hidden></div></div><div id="chart-metrics" class="chart-metrics" aria-label="Show or hide measures"></div><p id="chart-caption" class="muted"></p></div><script type="application/json" id="chart-data">${encoded}</script>`;
 };
 
 const INTERACTIVE_CHART_SCRIPT = `<script>(function(){
   var root=document.getElementById('seasonal-chart'); if(!root)return;
   var source=JSON.parse(document.getElementById('chart-data').textContent);
-  var selector=document.getElementById('chart-season');
   var metricBox=document.getElementById('chart-metrics');
   var svg=document.getElementById('chart-plot');
   var caption=document.getElementById('chart-caption');
-  var metric='electricity';
+  var tooltip=document.getElementById('chart-tooltip');
   var ns='http://www.w3.org/2000/svg';
+  var seasonIndex=0,period='month',group='energy',selected=new Set();
+  var plotted=[],visible=[],chartMin=0,chartMax=1;
   function average(rows,key){var values=rows.map(function(row){return row[key]}).filter(Number.isFinite);return values.length?values.reduce(function(a,b){return a+b},0)/values.length:null}
   function points(record,period){
     if(period==='week')return record.weekly;
@@ -75,26 +76,61 @@ const INTERACTIVE_CHART_SCRIPT = `<script>(function(){
     var weeks=[]; for(var i=0;i<sorted.length;i+=7){var rows=sorted.slice(i,i+7);var point={label:rows[0].label+' to '+rows[rows.length-1].label};source.metrics.forEach(function(item){point[item.key]=average(rows,item.key)});weeks.push(point)}return weeks;
   }
   function element(tag,attrs,text){var el=document.createElementNS(ns,tag);Object.keys(attrs).forEach(function(key){el.setAttribute(key,attrs[key])});if(text!=null)el.textContent=text;return el}
-  function draw(){
-    var record=source.data[Number(selector.value)]||source.data[0];
-    var period=document.querySelector('input[name="chart-period"]:checked').value;
-    var rows=points(record,period);
-    var available=source.metrics.filter(function(item){return rows.some(function(row){return Number.isFinite(row[item.key])})});
-    if(!available.some(function(item){return item.key===metric}))metric=available[0]?available[0].key:'';
-    metricBox.replaceChildren();available.forEach(function(item){var button=document.createElement('button');button.type='button';button.textContent=item.label;button.setAttribute('aria-pressed',String(item.key===metric));button.onclick=function(){metric=item.key;draw()};metricBox.appendChild(button)});
-    svg.replaceChildren(); if(!metric){caption.textContent='No chart readings for this season and view.';return}
-    var values=rows.map(function(row){return row[metric]}).filter(Number.isFinite);
-    var low=Math.min.apply(null,values),high=Math.max.apply(null,values);if(low===high){low-=1;high+=1}
-    var plot=rows.map(function(row,index){if(!Number.isFinite(row[metric]))return null;return {x:45+(rows.length===1?0:index/(rows.length-1)*720),y:225-(row[metric]-low)/(high-low)*190,value:row[metric],label:row.label}});
-    svg.appendChild(element('line',{x1:45,y1:225,x2:765,y2:225,stroke:'#94a3b8'}));
-    svg.appendChild(element('text',{x:4,y:39,fill:'#475569','font-size':12},high.toFixed(1)));
-    svg.appendChild(element('text',{x:4,y:228,fill:'#475569','font-size':12},low.toFixed(1)));
-    var path='',previous=false;plot.forEach(function(point){if(!point){previous=false;return}path+=(previous?' L':' M')+point.x.toFixed(1)+' '+point.y.toFixed(1);previous=true});
-    svg.appendChild(element('path',{d:path,fill:'none',stroke:'#047857','stroke-width':2.5}));
-    plot.forEach(function(point){if(!point)return;var dot=element('circle',{cx:point.x,cy:point.y,r:period==='week'?2:4,fill:'#047857'});dot.appendChild(element('title',{},point.label+': '+point.value.toFixed(2)));svg.appendChild(dot)});
-    var item=source.metrics.find(function(entry){return entry.key===metric});caption.textContent=record.name+' · '+period+' · '+item.label+' ('+item.unit+') · '+values.length+' plotted points';
+  function x(index,count){return 56+(count>1?index/(count-1)*714:357)}
+  function y(value){return 246-(value-chartMin)/(chartMax-chartMin)*200}
+  function addBand(low,high,color,label){
+    var top=y(Math.min(high,chartMax)),bottom=y(Math.max(low,chartMin));
+    if(bottom<=top)return;
+    svg.appendChild(element('rect',{x:56,y:top,width:714,height:bottom-top,fill:color,opacity:0.28}));
+    svg.appendChild(element('text',{x:63,y:top+13,fill:'#334155','font-size':10,opacity:0.68},label));
   }
-  selector.onchange=draw;document.querySelectorAll('input[name="chart-period"]').forEach(function(input){input.onchange=draw});draw();
+  function syncButtons(){
+    document.querySelectorAll('#chart-seasons button').forEach(function(button){button.setAttribute('aria-pressed',String(Number(button.dataset.season)===seasonIndex))});
+    document.querySelectorAll('#chart-periods button').forEach(function(button){button.setAttribute('aria-pressed',String(button.dataset.period===period))});
+    document.querySelectorAll('#chart-groups button').forEach(function(button){button.setAttribute('aria-pressed',String(button.dataset.group===group))});
+  }
+  function draw(){
+    var record=source.data[seasonIndex],rows=points(record,period);
+    var groups=['energy','temperature','humidity'];
+    function availableFor(key){return source.metrics.filter(function(item){return item.group===key&&rows.some(function(row){return Number.isFinite(row[item.key])})})}
+    if(!availableFor(group).length)group=groups.find(function(key){return availableFor(key).length})||'energy';
+    document.querySelectorAll('#chart-groups button').forEach(function(button){button.disabled=!availableFor(button.dataset.group).length});
+    var available=availableFor(group);
+    if(!available.some(function(item){return selected.has(item.key)}))selected=new Set(available.map(function(item){return item.key}));
+    visible=available.filter(function(item){return selected.has(item.key)});
+    syncButtons();tooltip.hidden=true;metricBox.replaceChildren();svg.replaceChildren();
+    available.forEach(function(item){
+      var button=document.createElement('button');button.type='button';button.setAttribute('aria-pressed',String(selected.has(item.key)));
+      var dot=document.createElement('span');dot.className='chart-dot';dot.style.backgroundColor=item.color;
+      var label=document.createElement('span');label.textContent=item.label;
+      var value=document.createElement('strong');var mean=average(rows,item.key);value.textContent=Number.isFinite(mean)?mean.toFixed(1)+' '+(group==='energy'&&period!=='month'?'kWh/h':group==='energy'?'kWh/day':item.unit):'No data';
+      button.append(dot,label,value);button.onclick=function(){if(selected.has(item.key)&&selected.size>1)selected.delete(item.key);else selected.add(item.key);draw()};metricBox.appendChild(button);
+    });
+    if(!visible.length){caption.textContent='No readings for this season and view.';return}
+    var values=rows.flatMap(function(row){return visible.map(function(item){return row[item.key]})}).filter(Number.isFinite);
+    if(group==='humidity'){chartMin=0;chartMax=100}
+    else if(group==='temperature'){chartMin=Math.min(10,Math.floor(Math.min.apply(null,values)-2));chartMax=Math.max(30,Math.ceil(Math.max.apply(null,values)+2))}
+    else {chartMin=0;chartMax=Math.max(1,Math.ceil(Math.max.apply(null,values)*1.15))}
+    if(group==='temperature'){addBand(chartMin,16,'#fecaca','Cold');addBand(16,18,'#fde68a','Cool');addBand(18,22,'#bbf7d0','Comfort');addBand(22,24,'#fde68a','Warm');addBand(24,chartMax,'#fecaca','Hot')}
+    if(group==='humidity'){addBand(0,30,'#fecaca','Dry');addBand(30,40,'#fde68a','Low');addBand(40,60,'#bbf7d0','Comfort');addBand(60,70,'#fde68a','High');addBand(70,100,'#fecaca','Humid')}
+    for(var tick=0;tick<=4;tick++){var value=chartMax-(chartMax-chartMin)*tick/4,yy=y(value);svg.appendChild(element('line',{x1:56,y1:yy,x2:770,y2:yy,stroke:'#d1d5db','stroke-width':1}));svg.appendChild(element('text',{x:49,y:yy+4,'text-anchor':'end',fill:'#475569','font-size':11},value.toFixed(group==='energy'?1:0)))}
+    svg.appendChild(element('text',{x:55,y:20,fill:'#334155','font-size':11,'font-weight':600},group==='energy'?(period==='month'?'kWh/day':'kWh/h'):visible[0].unit));
+    var labels=period==='day'?[0,6,12,18,23]:period==='week'?[0,24,48,72,96,120,144]:rows.map(function(_,index){return index}).filter(function(index){return index===0||index===rows.length-1||index%Math.max(1,Math.ceil(rows.length/7))===0});
+    labels.forEach(function(index){if(index>=rows.length)return;var xx=x(index,rows.length);svg.appendChild(element('line',{x1:xx,y1:46,x2:xx,y2:246,stroke:'#e5e7eb','stroke-width':1}));var label=period==='week'?['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][Math.floor(index/24)]||'':period==='day'?String(index).padStart(2,'0')+':00':rows[index].label.slice(5,10);svg.appendChild(element('text',{x:xx,y:270,'text-anchor':'middle',fill:'#64748b','font-size':10},label))});
+    plotted=rows;
+    visible.forEach(function(item){
+      var path='',previous=false;
+      rows.forEach(function(row,index){var value=row[item.key];if(!Number.isFinite(value)){previous=false;return}path+=(previous?' L':' M')+x(index,rows.length).toFixed(1)+' '+y(value).toFixed(1);previous=true});
+      svg.appendChild(element('path',{d:path,fill:'none',stroke:item.color,'stroke-width':2.5,'stroke-linecap':'round','stroke-linejoin':'round'}));
+      if(period==='month'||rows.length<=2)rows.forEach(function(row,index){if(!Number.isFinite(row[item.key]))return;var dot=element('circle',{cx:x(index,rows.length),cy:y(row[item.key]),r:4,fill:item.color});dot.appendChild(element('title',{},row.label+': '+item.label+' '+row[item.key].toFixed(2)+' '+item.unit));svg.appendChild(dot)});
+    });
+    caption.textContent=record.name+' · '+period+' · '+rows.length+' time slots. Shading shows temperature or humidity bands; energy has no comfort band.';
+  }
+  document.querySelectorAll('#chart-seasons button').forEach(function(button){button.onclick=function(){seasonIndex=Number(button.dataset.season);selected.clear();draw()}});
+  document.querySelectorAll('#chart-periods button').forEach(function(button){button.onclick=function(){period=button.dataset.period;selected.clear();draw()}});
+  document.querySelectorAll('#chart-groups button').forEach(function(button){button.onclick=function(){group=button.dataset.group;selected.clear();draw()}});
+  function inspect(event){if(!plotted.length||!visible.length)return;var bounds=svg.getBoundingClientRect();if(!bounds.width)return;var px=(event.clientX-bounds.left)/bounds.width*800;var index=Math.max(0,Math.min(plotted.length-1,Math.round((px-56)/714*(plotted.length-1))));var point=plotted[index];if(!point)return;var lines=[point.label];visible.forEach(function(item){if(Number.isFinite(point[item.key]))lines.push(item.label+': '+point[item.key].toFixed(2)+' '+item.unit)});tooltip.textContent=lines.join(' · ');tooltip.hidden=false}
+  svg.addEventListener('pointermove',inspect);svg.addEventListener('pointerdown',inspect);svg.addEventListener('pointerleave',function(){tooltip.hidden=true});draw();
 })();</script>`;
 
 export function buildBaselineReportHtml(baseline, energyExport) {
@@ -133,7 +169,7 @@ export function buildBaselineReportHtml(baseline, energyExport) {
     "Reconcile meter gaps, floor area, tariff evidence and source IDs; compare heating-degree days with a local long-term reference.",
     "Confirm room coverage, sensor calibration and any red-band events before making health claims.",
   ];
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Baseline report</title><style>body{font:15px/1.5 system-ui,sans-serif;color:#17212b;max-width:850px;margin:36px auto;padding:0 24px}h1{font-size:28px}h2{font-size:19px;border-bottom:1px solid #aaa;padding-bottom:5px;margin-top:30px}table{border-collapse:collapse;width:100%}th,td{padding:8px;border-bottom:1px solid #ddd;text-align:left;vertical-align:top}th{width:38%}.muted{color:#52606b}section{break-inside:avoid}.chart{border:1px solid #cbd5e1;padding:16px;margin:16px 0;overflow:hidden}.chart-controls{display:flex;flex-wrap:wrap;gap:12px;align-items:center}.chart-controls fieldset{display:flex;gap:12px;border:0;padding:0;margin:0}.chart-controls select{padding:5px}.chart-metrics{display:flex;flex-wrap:wrap;gap:6px;margin:14px 0}.chart-metrics button{border:1px solid #94a3b8;background:white;padding:5px 9px;cursor:pointer}.chart-metrics button[aria-pressed=true]{border-color:#047857;background:#d1fae5;color:#064e3b;font-weight:700}.chart svg{display:block;width:100%;height:auto;min-height:180px}.chart table{overflow:auto}@media print{body{margin:0;max-width:none}section{break-inside:auto}.chart-controls,.chart-metrics{display:none}}</style></head><body>
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Baseline report</title><style>body{font:15px/1.5 system-ui,sans-serif;color:#17212b;max-width:850px;margin:36px auto;padding:0 24px}h1{font-size:28px}h2{font-size:19px;border-bottom:1px solid #aaa;padding-bottom:5px;margin-top:30px}table{border-collapse:collapse;width:100%}th,td{padding:8px;border-bottom:1px solid #ddd;text-align:left;vertical-align:top}th{width:38%}.muted{color:#52606b}section{break-inside:avoid}.chart{border:1px solid #d1d5db;border-radius:4px;background:#fff;padding:16px;margin:16px 0;overflow:hidden}.chart-top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px}.chart-tabs{display:flex;flex-wrap:wrap;gap:4px}.chart-tabs button{border:1px solid #cbd5e1;border-radius:3px;background:#fff;color:#334155;padding:6px 10px;font:600 12px system-ui;cursor:pointer}.chart-tabs button[aria-pressed=true]{border-color:#047857;background:#ecfdf5;color:#065f46}.chart-tabs button:disabled{opacity:.4;cursor:not-allowed}.chart-periods{margin-top:12px;gap:0}.chart-periods button{border-radius:0}.chart-periods button[aria-pressed=true]{background:#111827;border-color:#111827;color:#fff}.chart-groups{margin-top:12px}.chart-groups button[aria-pressed=true]{background:#2563eb;border-color:#2563eb;color:#fff}.chart-plot-wrap{position:relative;margin-top:12px;overflow-x:auto}.chart svg{display:block;width:100%;min-width:560px;height:auto;background:#fff;touch-action:none}.chart-tooltip{position:absolute;right:8px;top:8px;max-width:55%;padding:8px 10px;border:1px solid #cbd5e1;border-radius:3px;background:#fff;box-shadow:0 3px 12px #0002;font-size:12px;pointer-events:none}.chart-tooltip[hidden]{display:none}.chart-metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin:14px 0}.chart-metrics button{display:flex;min-width:0;align-items:center;gap:7px;border:1px solid #cbd5e1;border-radius:3px;background:#fff;padding:7px 9px;text-align:left;cursor:pointer}.chart-metrics button[aria-pressed=false]{opacity:.5}.chart-metrics button strong{margin-left:auto;font-size:12px}.chart-dot{width:10px;height:10px;flex:none;border-radius:50%}@media(max-width:570px){.chart-metrics{grid-template-columns:1fr}.chart-tooltip{max-width:75%}}@media print{body{margin:0;max-width:none}section{break-inside:auto}.chart-tabs,.chart-metrics{display:none}}</style></head><body>
   <h1>Building baseline report</h1><p class="muted">Generated ${escapeHtml(new Date().toLocaleString("en-GB"))} · Owner-only evidence pack · Not a licensed buyer package</p>
   ${section("Building and evidence", `<table>${row("Building record", baseline.buildingId || "Pending")}${row("Floor area", metric(baseline.area, "m²"))}${row("Meter period", `${energyExport.periodStart || "Unknown"} to ${energyExport.periodEnd || "Unknown"}`)}${row("Days with meter readings", energyExport.meteredDays ?? "Unknown")}${row("Coverage", "Days with readings do not prove complete half-hour coverage")}</table>`)}
   ${section("Energy performance", `<table>${row("Observed annual EUI", metric(eui, "kWh/m²/year"))}${row("WBP planning target", metric(target, "kWh/m²/year"))}${row("Target comparison", Number.isFinite(eui) && Number.isFinite(target) ? (eui > target ? "Above target" : "At or below target") : "Pending")}${row("Average electricity day", metric(baseline.electricityDailyKwh, "kWh"))}${row("Average gas day", metric(baseline.gasDailyKwh, "kWh"))}${row("Observed-weather extrapolation", metric(heat.weatherNormalisedEui, "kWh/m²/year"))}${fuelRows}</table><p>The 35 kWh/m²/year target, where shown, is WBP's planning threshold, not an EPC, SAP, HEM, LETI or EnerPHit rating.</p>`)}

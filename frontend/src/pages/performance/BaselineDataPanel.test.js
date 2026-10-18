@@ -129,10 +129,13 @@ test("detailed report includes HLA evidence and dated seasonal trends", () => {
   expect(html).toContain("5.0 kWh/day");
   expect(html).toContain("Not available");
   expect(html).toContain("not proof of complete seasonal coverage");
-  expect(html).toContain('id="chart-season"');
-  expect(html).toContain('name="chart-period" value="day"');
-  expect(html).toContain('name="chart-period" value="week"');
-  expect(html).toContain('name="chart-period" value="month"');
+  expect(html).toContain('id="chart-seasons"');
+  expect(html).toContain('data-period="day"');
+  expect(html).toContain('data-period="week"');
+  expect(html).toContain('data-period="month"');
+  expect(html).toContain('data-group="energy"');
+  expect(html).toContain('data-group="temperature"');
+  expect(html).toContain('data-group="humidity"');
   expect(html).toContain('id="chart-plot"');
 });
 
