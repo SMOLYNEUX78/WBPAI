@@ -16,6 +16,7 @@ const PRIMARY_HEALTH_FIELDS = [
   { field: "upstairs_humidity", label: "Upstairs humidity" },
 ];
 const FABRIC_CONCERN_KEYS = new Set(["hdd", "htc", "night-cooldown", "heat-exclusion"]);
+const LETI_RETROFIT_EUI = 50;
 const formatHealthMeasurement = (finding) => {
   const digits = finding.unit === "°C" || finding.unit === "%" ? 1 : 0;
   const format = (value) => Number(value).toFixed(digits);
@@ -28,20 +29,20 @@ const fabricExplanation = (concern) => {
   if (concern.key === "hdd") {
     const period = Number(concern.evidenceDays) > 0 ? `Across ${concern.evidenceDays} colder days, ` : "";
     return concern.abovePlanningThreshold === false
-      ? `${period}the available readings did not demonstrate consistently warm indoor temperatures; energy use alone does not show why.`
-      : `${period}energy use per degree of cold exceeded WBP's planning threshold. This includes non-heating use.`;
+      ? `${period}the home was not consistently warm. These readings cannot tell us why on their own.`
+      : `${period}the home used more energy than our weather-adjusted guide suggests. This also includes hot water and appliances, so it does not prove heat is escaping.`;
   }
   if (concern.key === "heat-exclusion") {
     const hours = Number(concern.sampleHours);
     const hotThreshold = Number(concern.hotThreshold) || 24;
     const comparison = concern.detail || "less cool than expected";
-    if (!Number.isFinite(hours) || hours <= 0) return `On hot days, inside averaged ${comparison}.`;
+    if (!Number.isFinite(hours) || hours <= 0) return `On hot days, the rooms were ${comparison}.`;
     const overheatedHours = concern.overheatedHours != null && Number.isFinite(Number(concern.overheatedHours))
       ? Number(concern.overheatedHours)
       : concern.overheatingShare != null && Number.isFinite(Number(concern.overheatingShare))
       ? Math.round(Number(concern.overheatingShare) * hours)
       : null;
-    return `Across ${hours} paired hours at ${hotThreshold}°C+ outside, inside averaged ${comparison}${overheatedHours === null ? "." : `; ${overheatedHours} reached 28°C indoors.`}`;
+    return `When it was ${hotThreshold}°C or hotter outside, the rooms averaged ${comparison} across ${hours} matched hours${overheatedHours === null ? "." : `; they reached 28°C or more for ${overheatedHours} of those hours.`}`;
   }
   return concern.explanation;
 };
@@ -63,9 +64,7 @@ export default function BaselineDataPanel({ DetailSurface, onOpenDetailedReport,
   const [ownerPackageLoading, setOwnerPackageLoading] = useState(false);
   const area = Number(baseline.area);
   const eui = Number(baseline.annualEui);
-  const target = Number(baseline.targetEui);
   const hasEui = Number.isFinite(eui) && eui > 0;
-  const aboveTarget = hasEui && Number.isFinite(target) && target > 0 && eui > target;
   useEffect(() => {
     let cancelled = false;
     if (!baseline.buildingId) {
@@ -96,9 +95,30 @@ export default function BaselineDataPanel({ DetailSurface, onOpenDetailedReport,
     return () => { cancelled = true; };
   }, [baseline.buildingId, baseline.propertyRecordId, baseline.sourceBuildingId, historyRetry]);
   const historicalFlags = historicalHealth.findings.filter((finding) => finding.redDays > 0);
-  const otherHistoricalFlags = historicalFlags.filter((finding) => !PRIMARY_HEALTH_FIELDS.some((item) => item.field === finding.field));
   const fabricConcerns = (baseline.performanceConcerns || []).filter((concern) => FABRIC_CONCERN_KEYS.has(concern.key));
   const otherPerformanceConcerns = (baseline.performanceConcerns || []).filter((concern) => !FABRIC_CONCERN_KEYS.has(concern.key));
+  const temperatureFinding = historicalHealth.findings.find((finding) => finding.field === "internal_temp");
+  const summerHeatFinding = fabricConcerns.find((concern) => concern.key === "heat-exclusion");
+  const temperatureDetail = [
+    temperatureFinding?.redDays > 0 ? `Room temperatures were outside the preferred range on ${temperatureFinding.redDays} of ${temperatureFinding.observedDays} monitored days.` : null,
+    summerHeatFinding ? fabricExplanation(summerHeatFinding) : null,
+  ].filter(Boolean).join(" ");
+  const concernItems = [
+    ...(temperatureDetail ? [{ key: "temperature", label: "Temperature", measurement: temperatureFinding?.redDays > 0 ? formatHealthMeasurement(temperatureFinding) : summerHeatFinding?.measurement || "Hot-weather concern", detail: temperatureDetail, tone: "red" }] : []),
+    ...historicalFlags.filter((finding) => finding.field !== "internal_temp").map((finding) => ({
+      key: finding.field, label: PRIMARY_HEALTH_FIELDS.find((item) => item.field === finding.field)?.label || finding.label,
+      measurement: formatHealthMeasurement(finding), tone: "red",
+      detail: `${finding.redDays} of ${finding.observedDays} monitored days were outside the preferred range.${finding.field.includes("humidity") ? " Damp air can increase the chance of condensation and mould." : " The figure shows the range of daily averages on those days."}`,
+    })),
+    ...fabricConcerns.filter((concern) => concern.key !== "heat-exclusion").map((concern) => ({
+      key: concern.key, label: concern.key === "hdd" ? "Energy on cold days" : concern.label,
+      measurement: concern.measurement || concern.detail, detail: fabricExplanation(concern), tone: concern.status === "poor" ? "red" : "amber",
+    })),
+    ...otherPerformanceConcerns.map((concern) => ({
+      key: concern.key, label: concern.label, measurement: concern.measurement || concern.detail,
+      detail: concern.explanation, tone: concern.status === "poor" ? "red" : "amber",
+    })),
+  ];
   const downloadPackage = (filename, content) => {
     const url = URL.createObjectURL(new Blob([JSON.stringify(content, null, 2)], { type: "application/json" }));
     const link = document.createElement("a");
@@ -134,41 +154,19 @@ export default function BaselineDataPanel({ DetailSurface, onOpenDetailedReport,
         <button type="button" onClick={onOpenDetailedReport} className="border border-emerald-800 px-2 py-1.5 text-xs font-semibold text-emerald-900 hover:bg-emerald-50">Detailed report</button>
       </div>
     </div>
-    <div className="wbp-baseline-scores mt-3 grid gap-3 sm:grid-cols-2">
-      <div className={`border p-4 ${!hasEui ? "border-gray-300 bg-gray-100" : aboveTarget ? "border-amber-400 bg-amber-50" : "border-emerald-400 bg-emerald-50"}`}>
-        <div className="flex items-baseline justify-between gap-3">
-          <h3 className="text-base font-bold">Energy</h3>
-          <span className="text-sm font-bold">{Number.isFinite(baseline.energyScore) ? `${Math.round(baseline.energyScore)}/100` : "Pending"}</span>
-        </div>
-        <div className="mt-4">
-          <ConcernRow label="EUI" heading plain measurement={hasEui ? `${eui.toFixed(1)} kWh/m²/year` : "Pending"} detail={hasEui && Number.isFinite(target) && target > 0 ? `${aboveTarget ? "Above" : "At or below"} WBP’s ${target.toFixed(0)} kWh/m²/year planning target.` : null} />
-        </div>
-        {fabricConcerns.length > 0 ? <div className="mt-4 space-y-2" aria-label="Fabric">
-          <h4 className="text-sm font-bold">Fabric</h4>
-          {fabricConcerns.map((concern) => <ConcernRow key={concern.key} plain={!['hdd', 'heat-exclusion'].includes(concern.key)} label={concern.key === "heat-exclusion" ? "Heat exclusion" : concern.label} measurement={concern.measurement || concern.detail} detail={fabricExplanation(concern)} />)}
-        </div> : null}
-      </div>
-      <div className={`border p-4 ${!Number.isFinite(baseline.healthScore) ? "border-gray-300 bg-gray-100" : baseline.healthScore < 60 ? "border-red-400 bg-red-50" : baseline.healthScore < 80 ? "border-amber-400 bg-amber-50" : "border-emerald-400 bg-emerald-50"}`}>
-        <div className="flex items-baseline justify-between gap-3">
-          <h3 className="text-base font-bold">Health</h3>
-          <span className="text-sm font-bold">{Number.isFinite(baseline.healthScore) ? `${Math.round(baseline.healthScore)}/100` : "Pending"}</span>
-        </div>
-        <div className="mt-4">
-        {historicalHealth.status === "ready" ? <div className="space-y-2 text-sm">
-          {historyError ? <p role="status" className="text-amber-800">Showing the last saved readings. <button type="button" className="underline" onClick={() => setHistoryRetry((value) => value + 1)}>Retry</button></p> : null}
-          {PRIMARY_HEALTH_FIELDS.map(({ field, label }) => {
-            const finding = historicalHealth.findings.find((item) => item.field === field);
-            return finding && (field !== "upstairs_humidity" || finding.redDays > 0) ? <ConcernRow key={field} plain={finding.redDays === 0} label={label} measurement={formatHealthMeasurement(finding)} detail={`${finding.redDays} of ${finding.observedDays} observed days in the red${finding.redDays > 0 ? "; range of red-day daily averages" : "; overall daily average shown"}`} /> : null;
-          })}
-          {otherHistoricalFlags.map((finding) => <ConcernRow key={finding.field} label={finding.label} measurement={formatHealthMeasurement(finding)} detail={`${finding.redDays} of ${finding.observedDays} observed days in the red; range of red-day daily averages`} />)}
-          {!historicalHealth.findings.length ? <p>Historical sensor readings unavailable</p> : null}
-        </div> : <p className="mt-2 text-sm">{historicalHealth.status === "loading" ? "Checking past readings..." : <>Historical readings unavailable. <button type="button" className="underline" onClick={() => setHistoryRetry((value) => value + 1)}>Retry</button></>}</p>}
-        </div>
-      </div>
+    <div className="mt-3 flex flex-wrap items-center gap-2" aria-label="Performance scores">
+      <div className={`flex items-center gap-2 border px-3 py-1.5 text-sm ${!Number.isFinite(baseline.energyScore) ? "border-gray-300 bg-gray-100" : baseline.energyScore < 60 ? "border-red-400 bg-red-50" : baseline.energyScore < 80 ? "border-amber-400 bg-amber-50" : "border-emerald-400 bg-emerald-50"}`}><strong>Energy</strong><span>{Number.isFinite(baseline.energyScore) ? `${Math.round(baseline.energyScore)}/100` : "Pending"}</span></div>
+      <div className={`flex items-center gap-2 border px-3 py-1.5 text-sm ${!Number.isFinite(baseline.healthScore) ? "border-gray-300 bg-gray-100" : baseline.healthScore < 60 ? "border-red-400 bg-red-50" : baseline.healthScore < 80 ? "border-amber-400 bg-amber-50" : "border-emerald-400 bg-emerald-50"}`}><strong>Health</strong><span>{Number.isFinite(baseline.healthScore) ? `${Math.round(baseline.healthScore)}/100` : "Pending"}</span></div>
     </div>
-    {otherPerformanceConcerns.length > 0 ? <div className="mt-4 space-y-2" aria-label="Other areas to review">
-      {otherPerformanceConcerns.map((concern) => <ConcernRow key={concern.key} label={concern.label} tone={concern.status === "poor" ? "red" : "amber"} measurement={concern.measurement || concern.detail} detail={concern.explanation} />)}
-    </div> : null}
+    <div className="mt-3 border-t border-gray-200 pt-3">
+      <ConcernRow label="Energy use per square metre" heading plain measurement={hasEui ? `${eui.toFixed(1)} kWh/m²/year` : "Pending"} detail={hasEui ? `If this rate continued for a year, that is ${eui > LETI_RETROFIT_EUI ? "above" : "below"} LETI's 50 kWh/m²/year best-practice retrofit design target. This is an estimate from the readings, not a formal retrofit rating.` : "We need more energy readings to estimate this."} />
+    </div>
+    <div className="mt-4 space-y-3" aria-label="Key findings">
+      {concernItems.map((concern) => <div key={concern.key} className="border-t border-gray-200 pt-3"><ConcernRow {...concern} /></div>)}
+      {historicalHealth.status === "ready" && !historicalHealth.findings.length ? <p className="text-sm">Past room readings are not available yet.</p> : null}
+      {historicalHealth.status !== "ready" ? <p className="text-sm">{historicalHealth.status === "loading" ? "Checking past room readings..." : <>Past room readings are unavailable. <button type="button" className="underline" onClick={() => setHistoryRetry((value) => value + 1)}>Retry</button></>}</p> : null}
+      {historyError ? <p role="status" className="text-sm text-amber-800">Showing the last saved readings. <button type="button" className="underline" onClick={() => setHistoryRetry((value) => value + 1)}>Retry</button></p> : null}
+    </div>
     <div className="wbp-baseline-options mt-7 border-t border-gray-200 pt-5">
       <h3 className="mb-3 text-base font-bold">Options</h3>
       <button type="button" onClick={() => setOpenPanel("retrofit")} className="wbp-baseline-option group relative flex min-h-44 w-full items-end overflow-hidden border border-emerald-900 bg-emerald-950 p-5 text-left text-white sm:min-h-52 sm:p-7" style={{ backgroundImage: "linear-gradient(90deg, rgba(9, 43, 34, .8), rgba(9, 43, 34, .12) 75%), url('/images/retrofit-options.png')", backgroundSize: "cover", backgroundPosition: "center" }}><span className="relative text-xl font-bold drop-shadow sm:text-2xl">Explore retrofit options <span aria-hidden="true">→</span></span></button>
