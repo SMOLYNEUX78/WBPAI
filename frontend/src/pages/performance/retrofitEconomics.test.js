@@ -141,3 +141,22 @@ test("price stress changes money values without changing energy or carbon tonnes
   expect(stressed.billSavedGbp).toBeCloseTo(base.billSavedGbp * 1.5);
   expect(stressed.carbonValueGbp).toBeCloseTo(base.carbonValueGbp * 2);
 });
+
+test("heating, self-used solar and tariff choices affect the bill separately", () => {
+  const inputs = { option: getRetrofitOption(100), annualEui: 100, area: 100,
+    electricityDailyKwh: 5, gasDailyKwh: 10, gasHeatingShare: 0.7,
+    billReview: { electricityUnitRatePence: 25, gasUnitRatePence: 8 } };
+  const gas = projectRetrofit(inputs);
+  const pump = projectRetrofit({ ...inputs, allElectric: true });
+  expect(gas.gasDisconnected).toBe(false);
+  expect(pump.gasDisconnected).toBe(true);
+  const solar = projectRetrofit({ ...inputs, renewableSelfConsumedKwh: 500 });
+  expect(solar.renewableOffsetKwh).toBe(500);
+  expect(solar.billSavedGbp - gas.billSavedGbp).toBeCloseTo(125);
+  expect(solar.energySavedKwh).toBe(gas.energySavedKwh);
+  expect(solar.carbonSavedTonnes).toBe(gas.carbonSavedTonnes);
+  const capped = projectRetrofit({ ...inputs, renewableSelfConsumedKwh: 1e9 });
+  expect(capped.renewableOffsetKwh).toBeLessThan(1e9);
+  const tariff = projectRetrofit({ ...inputs, improvedElectricityRatePence: 20 });
+  expect(tariff.billSavedGbp).toBeGreaterThan(gas.billSavedGbp);
+});

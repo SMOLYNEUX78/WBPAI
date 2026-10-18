@@ -450,6 +450,11 @@
 .wbp-retrofit-controls label strong { color: #17212b; font-size: 14px; }
 .wbp-retrofit-controls input[type="range"] { width: 100%; min-height: 24px; accent-color: #047857; }
 .wbp-retrofit-controls input[type="number"] { width: 100%; min-width: 0; border: 1px solid #9ca3af; border-radius: 3px; background: white; padding: 7px 9px; font-size: 13px; color: #17212b; }
+.wbp-retrofit-choice-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.wbp-retrofit-choice-grid button { min-height: 42px; border: 1px solid #9ca3af; border-radius: 3px; background: #fff; color: #17212b; font-size: 14px; font-weight: 600; }
+.wbp-retrofit-choice-grid button[aria-pressed="true"] { border-color: #047857; background: #e7f5ee; color: #064e3b; }
+.wbp-retrofit-choice-grid button:focus-visible { outline: 2px solid #047857; outline-offset: 2px; }
+.wbp-retrofit-bill-result { padding: 8px 0; color: #064e3b; font-size: 16px; }
 .wbp-retrofit-range-labels { display: flex; justify-content: space-between; gap: 4px; font-size: 10px; line-height: 1.2; }
 .wbp-retrofit-range-labels span { max-width: 33%; }
 .wbp-retrofit-range-labels span:last-child { text-align: right; }

@@ -14,6 +14,10 @@ export default function RetrofitPlanner({ ready, embedded = false, postcode, loc
   const [worksScope, setWorksScope] = useState(0);
   const [packOpen, setPackOpen] = useState(false);
   const [annualPremium, setAnnualPremium] = useState("");
+  const [heatingMode, setHeatingMode] = useState("gas");
+  const [renewables, setRenewables] = useState(false);
+  const [specialistTariff, setSpecialistTariff] = useState(false);
+  const [solarSelfUseInput, setSolarSelfUseInput] = useState("");
   const [heatingShareInput, setHeatingShareInput] = useState(() => Number.isFinite(gasHeatingDailyKwh) && gasHeatingDailyKwh > 0 && gasDailyKwh > 0
     ? String(Math.round(Math.min(1, gasHeatingDailyKwh / gasDailyKwh) * 100)) : "");
   const [heatPumpSpfInput, setHeatPumpSpfInput] = useState("3.1");
@@ -23,7 +27,9 @@ export default function RetrofitPlanner({ ready, embedded = false, postcode, loc
   const gasHotWaterShare = Number.isFinite(gasDhwDailyKwh) && gasDhwDailyKwh > 0 && gasDailyKwh > 0 ? Math.min(1, gasDhwDailyKwh / gasDailyKwh) : 0;
   const option = getRetrofitOption(worksScope);
   const projection = projectRetrofit({ option, annualEui, area, electricityDailyKwh, gasDailyKwh, gasHeatingShare, gasHotWaterShare, heatPumpSpf,
-    improvedElectricityRatePence: projectedElectricityRateInput === "" ? null : Number(projectedElectricityRateInput), billReview, allElectric: true });
+    improvedElectricityRatePence: specialistTariff && projectedElectricityRateInput !== "" ? Number(projectedElectricityRateInput) : null,
+    renewableSelfConsumedKwh: renewables && solarSelfUseInput !== "" ? Number(solarSelfUseInput) : 0,
+    billReview, allElectric: heatingMode === "heat-pump" });
   const annualBenefit = getAnnualBenefitBreakdown(projection.scenarios[1], annualPremium);
   const lowBenefit = getAnnualBenefitBreakdown(projection.scenarios[0], annualPremium);
   const highBenefit = getAnnualBenefitBreakdown(projection.scenarios[2], annualPremium);
@@ -50,21 +56,33 @@ export default function RetrofitPlanner({ ready, embedded = false, postcode, loc
               <input type="range" min="0" max="100" step="1" value={worksScope} onChange={(event) => setWorksScope(Number(event.target.value))} aria-label="Extent of retrofit works" />
               <span className="wbp-retrofit-range-labels"><span>Fabric first</span><span>Clean heat</span><span>Whole-home</span><span>EnerPHit pathway</span></span>
             </label>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="wbp-retrofit-choice-grid" role="group" aria-label="Heating system">
+              <button type="button" aria-pressed={heatingMode === "gas"} onClick={() => setHeatingMode("gas")}>Gas boiler</button>
+              <button type="button" aria-pressed={heatingMode === "heat-pump"} onClick={() => setHeatingMode("heat-pump")}>Heat pump</button>
+            </div>
+            <div className="wbp-retrofit-choice-grid" role="group" aria-label="Bill-saving options">
+              <button type="button" aria-pressed={renewables} onClick={() => setRenewables((value) => !value)}>Renewables</button>
+              <button type="button" aria-pressed={specialistTariff} onClick={() => setSpecialistTariff((value) => !value)}>Specialist tariff</button>
+            </div>
+            {heatingMode === "heat-pump" ? <div className="grid gap-3 sm:grid-cols-2">
               <label>Space heating share of gas (%)
                 <input type="number" min="0" max="100" step="1" inputMode="numeric" value={heatingShareInput} onChange={(event) => setHeatingShareInput(event.target.value)} placeholder="Enter an estimate" />
               </label>
               <label>Heat pump seasonal efficiency (SPF)
                 <input type="number" min="1.1" max="6" step="0.1" inputMode="decimal" value={heatPumpSpfInput} onChange={(event) => setHeatPumpSpfInput(event.target.value)} />
               </label>
-            </div>
-            <label>Projected electricity rate (p/kWh, optional)
-              <input type="number" min="0" max="100" step="0.01" inputMode="decimal" value={projectedElectricityRateInput} onChange={(event) => setProjectedElectricityRateInput(event.target.value)} placeholder="Use current bill rate" />
-            </label>
-            <p className="text-xs text-gray-600">{projection.spaceHeatingEuiShare === null ? "Space-heating share of overall EUI is not established. Enter a gas heating share to model a full switch." : `Estimated space heating: ${(projection.spaceHeatingEuiShare * 100).toFixed(0)}% of overall EUI.`} The gas split is provisional. At the far right, space heating uses the selected SPF; estimated hot water uses 2.5 and other gas use switches one-for-one to electricity. The gas standing charge is removed only when gas use reaches zero.</p>
+            </div> : null}
+            {renewables ? <label>Solar electricity used at home (kWh/year)
+              <input type="number" min="0" step="1" inputMode="numeric" value={solarSelfUseInput} onChange={(event) => setSolarSelfUseInput(event.target.value)} placeholder="Enter a system estimate" />
+            </label> : null}
+            {specialistTariff ? <label>Quoted effective electricity rate (p/kWh)
+              <input type="number" min="0" max="100" step="0.01" inputMode="decimal" value={projectedElectricityRateInput} onChange={(event) => setProjectedElectricityRateInput(event.target.value)} placeholder="Enter a quoted rate" />
+            </label> : null}
+            {heatingMode === "heat-pump" ? <p className="text-xs text-gray-600">{projection.spaceHeatingEuiShare === null ? "Enter a gas heating share to model the switch." : `Estimated space heating: ${(projection.spaceHeatingEuiShare * 100).toFixed(0)}% of overall EUI.`} The gas split is provisional. Heat-pump conversion phases in at the deep-retrofit end of the slider; gas standing charge is removed only if gas is fully disconnected.</p> : null}
           </div>
           <div className="wbp-retrofit-forecast">
-            <p><strong>{option.name}</strong> · {option.measures}</p>
+            <p><strong>{option.name}</strong> · {heatingMode === "gas" && worksScope > 75 ? "Deep fabric pathway with the gas boiler retained in this bill comparison; EnerPHit certification would need a separate design review." : option.measures}</p>
+            <p className="wbp-retrofit-bill-result"><strong>{projection.billSavedGbp === null ? "Bill comparison pending" : projection.billSavedGbp >= 0 ? `Estimated bill saving ${formatGbp(projection.billSavedGbp)}/yr` : `Estimated bill increase ${formatGbp(-projection.billSavedGbp)}/yr`}</strong></p>
             <div className="wbp-retrofit-benefit" aria-label="Potential annual benefit breakdown">
               <div className="wbp-retrofit-benefit-main">
                 <p>Potential annual value</p>
@@ -84,7 +102,7 @@ export default function RetrofitPlanner({ ready, embedded = false, postcode, loc
               </div>
             </div>
             <p className="wbp-retrofit-outcome">{projection.scenarios[1].energySavedKwh === null ? "Energy saving pending" : `${Math.round(projection.scenarios[1].energySavedKwh).toLocaleString("en-GB")} kWh/yr energy saved`} · {projection.scenarios[1].carbonSavedTonnes === null ? "Carbon saving pending" : `${projection.scenarios[1].carbonSavedTonnes.toFixed(2)} tCO₂e/yr carbon saved`} · {projection.targetEui === null ? "Target EUI pending" : `Target EUI ${projection.targetEui.toFixed(1)} kWh/m²/yr`}</p>
-            <p className="text-xs text-gray-600">Bill comparison uses {projection.usingBillElectricityRate ? "your electricity rate" : "a reference electricity rate"} and {projection.usingBillGasRate ? "your gas rate" : "a reference gas rate"}{projection.usingProjectedElectricityRate ? ", with your projected electricity rate after works" : " before and after works"}. {projection.gasDisconnected ? `Gas standing charge avoided: ${formatGbp(projection.avoidedGasStandingGbp)}/yr; electricity standing charge unchanged.` : "Standing charges unchanged until gas is disconnected."}</p>
+            <p className="text-xs text-gray-600">Bill comparison uses {projection.usingBillElectricityRate ? "your electricity rate" : "a reference electricity rate"} and {projection.usingBillGasRate ? "your gas rate" : "a reference gas rate"}{projection.usingProjectedElectricityRate ? ", with your entered tariff rate after works" : " before and after works"}. {projection.renewableOffsetKwh > 0 ? `Solar self-use offsets ${Math.round(projection.renewableOffsetKwh).toLocaleString("en-GB")} kWh of grid electricity; export income is excluded. ` : ""}{projection.gasDisconnected ? `Gas standing charge avoided: ${formatGbp(projection.avoidedGasStandingGbp)}/yr; electricity standing charge unchanged.` : "Standing charges unchanged until gas is disconnected."}</p>
             <p className="wbp-retrofit-caveat">Indicative comparison only. Winter baseline and survey still needed; carbon, data licensing and insurance income is not secured. Data licensing is included in the pie but is independent of the retrofit result. The EnerPHit endpoint uses CC's illustrative demand proxy, not a certified design. Heating changes need a separate design.</p>
             {!embedded ? <div className="wbp-retrofit-actions"><button type="button" onClick={() => setPackOpen(true)}>View retrofit pack</button></div> : null}
             {embedded ? <div className="wbp-retrofit-next-steps">

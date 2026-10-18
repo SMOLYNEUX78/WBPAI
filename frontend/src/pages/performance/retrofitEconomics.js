@@ -90,7 +90,7 @@ export function repriceCarbonSummary(summary, billReview = {}) {
   };
 }
 
-export function projectRetrofit({ option, annualEui, area, electricityDailyKwh, gasDailyKwh, gasHeatingShare = null, gasHotWaterShare = 0, heatPumpSpf = 3.1, improvedElectricityRatePence = null, billReview = {}, energyPriceChangePercent = 0, carbonPriceChangePercent = 0, allElectric = false }) {
+export function projectRetrofit({ option, annualEui, area, electricityDailyKwh, gasDailyKwh, gasHeatingShare = null, gasHotWaterShare = 0, heatPumpSpf = 3.1, improvedElectricityRatePence = null, renewableSelfConsumedKwh = 0, billReview = {}, energyPriceChangePercent = 0, carbonPriceChangePercent = 0, allElectric = false }) {
   const validArea = Number.isFinite(area) && area > 0;
   const validEui = Number.isFinite(annualEui) && annualEui > 0;
   const progress = option.enerphitProgress || 0;
@@ -127,12 +127,14 @@ export function projectRetrofit({ option, annualEui, area, electricityDailyKwh, 
   const electricityRate = electricityBillRate ?? OFGEM_OCT_2026_PENCE.electricity;
   const gasRate = gasBillRate ?? OFGEM_OCT_2026_PENCE.gas;
   const improvedElectricityRate = billUnitRatePence(improvedElectricityRatePence) ?? electricityRate;
+  const renewableOffsetKwh = improvedElectricityKwh === null || !Number.isFinite(renewableSelfConsumedKwh)
+    ? 0 : Math.min(improvedElectricityKwh, Math.max(0, renewableSelfConsumedKwh));
   const gasStandingRate = billUnitRatePence(billReview.gasStandingChargePence) ?? OFGEM_OCT_2026_PENCE.gasStanding;
   const gasDisconnected = modelFuelSwitch && hasFuelSplit && gasDailyKwh > 0 && improvedGasKwh < 1e-9;
   const avoidedGasStandingGbp = gasDisconnected ? gasStandingRate * 365 / 100 : 0;
   const billSavedGbp = hasFuelSplit && energySavedKwh !== null
     ? (baselineKwh * electricityShare * electricityRate + baselineKwh * gasShare * gasRate
-      - improvedElectricityKwh * improvedElectricityRate - improvedGasKwh * gasRate) / 100 + avoidedGasStandingGbp : null;
+      - (improvedElectricityKwh - renewableOffsetKwh) * improvedElectricityRate - improvedGasKwh * gasRate) / 100 + avoidedGasStandingGbp : null;
   const carbonSavedTonnes = hasFuelSplit && energySavedKwh !== null
     ? (electricitySavedKwh * DESNZ_2026_KG_CO2E_PER_KWH.electricity + gasSavedKwh * DESNZ_2026_KG_CO2E_PER_KWH.gas) / 1000 : null;
   const costRangeGbp = validArea ? option.fixedCost.map((fixed, index) => fixed + area * option.areaCost[index]) : null;
@@ -161,6 +163,7 @@ export function projectRetrofit({ option, annualEui, area, electricityDailyKwh, 
     heatPumpModelled: modelFuelSwitch,
     gasDisconnected,
     avoidedGasStandingGbp,
+    renewableOffsetKwh,
     usingProjectedElectricityRate: billUnitRatePence(improvedElectricityRatePence) !== null,
     hotWaterShare,
   };
