@@ -34,7 +34,9 @@ const ConcernRow = ({ label, measurement, detail, tone = "red", heading = false 
 
 export default function BaselineDataPanel({ DetailSurface, onOpenDetailedReport, baseline = {} }) {
   const [openPanel, setOpenPanel] = useState(null);
-  const [historicalHealth, setHistoricalHealth] = useState(() => readHistoricalHealthSnapshot(baseline.buildingId, baseline.sourceBuildingId || "home") || { status: "loading", findings: [] });
+  const [historicalHealth, setHistoricalHealth] = useState(() => readHistoricalHealthSnapshot(baseline.buildingId, baseline.sourceBuildingId || "home") || readHistoricalHealthSnapshot(baseline.propertyRecordId, baseline.sourceBuildingId || "home") || { status: "loading", findings: [] });
+  const [historyRetry, setHistoryRetry] = useState(0);
+  const [historyError, setHistoryError] = useState(false);
   const area = Number(baseline.area);
   const eui = Number(baseline.annualEui);
   const target = Number(baseline.targetEui);
@@ -47,25 +49,28 @@ export default function BaselineDataPanel({ DetailSurface, onOpenDetailedReport,
       return undefined;
     }
     const sourceBuildingId = baseline.sourceBuildingId || "home";
-    const snapshot = readHistoricalHealthSnapshot(baseline.buildingId, sourceBuildingId);
-    if (snapshot) {
-      setHistoricalHealth(snapshot);
-      return undefined;
-    }
-    setHistoricalHealth({ status: "loading", findings: [] });
+    const snapshot = readHistoricalHealthSnapshot(baseline.buildingId, sourceBuildingId) || readHistoricalHealthSnapshot(baseline.propertyRecordId, sourceBuildingId);
+    if (snapshot) setHistoricalHealth(snapshot);
+    else setHistoricalHealth({ status: "loading", findings: [] });
+    setHistoryError(false);
+    if (snapshot?.date === new Date().toISOString().slice(0, 10) && historyRetry === 0) return undefined;
     fetchHistoricalHealthDays(supabase, sourceBuildingId)
       .then((rows) => {
         if (!cancelled) {
           const findings = summariseHistoricalHealth(rows);
           writeHistoricalHealthSnapshot(baseline.buildingId, sourceBuildingId, findings);
-          setHistoricalHealth({ status: "ready", findings });
+          setHistoricalHealth({ status: "ready", findings, date: new Date().toISOString().slice(0, 10) });
         }
       })
-      .catch(() => {
-        if (!cancelled) setHistoricalHealth({ status: "unavailable", findings: [] });
+      .catch((error) => {
+        if (!cancelled) {
+          setHistoryError(true);
+          if (!snapshot) setHistoricalHealth({ status: "unavailable", findings: [] });
+          console.error("Historical health readings could not be refreshed", error);
+        }
       });
     return () => { cancelled = true; };
-  }, [baseline.buildingId, baseline.sourceBuildingId]);
+  }, [baseline.buildingId, baseline.propertyRecordId, baseline.sourceBuildingId, historyRetry]);
   const historicalFlags = historicalHealth.findings.filter((finding) => finding.redDays > 0);
   const otherHistoricalFlags = historicalFlags.filter((finding) => !PRIMARY_HEALTH_FIELDS.some((item) => item.field === finding.field));
   const fabricConcerns = (baseline.performanceConcerns || []).filter((concern) => FABRIC_CONCERN_KEYS.has(concern.key));
@@ -99,13 +104,14 @@ export default function BaselineDataPanel({ DetailSurface, onOpenDetailedReport,
         </div>
         <div className="mt-4">
         {historicalHealth.status === "ready" ? <div className="space-y-2 text-sm">
+          {historyError ? <p role="status" className="text-amber-800">Showing the last saved readings. <button type="button" className="underline" onClick={() => setHistoryRetry((value) => value + 1)}>Retry</button></p> : null}
           {PRIMARY_HEALTH_FIELDS.map(({ field, label }) => {
             const finding = historicalHealth.findings.find((item) => item.field === field);
             return finding && (field !== "upstairs_humidity" || finding.redDays > 0) ? <ConcernRow key={field} label={label} tone={finding.redDays > 0 ? "red" : "green"} measurement={formatHealthMeasurement(finding)} detail={`${finding.redDays} of ${finding.observedDays} observed days in the red${finding.redDays > 0 ? "; range of red-day daily averages" : "; overall daily average shown"}`} /> : null;
           })}
           {otherHistoricalFlags.map((finding) => <ConcernRow key={finding.field} label={finding.label} measurement={formatHealthMeasurement(finding)} detail={`${finding.redDays} of ${finding.observedDays} observed days in the red; range of red-day daily averages`} />)}
           {!historicalHealth.findings.length ? <p>Historical sensor readings unavailable</p> : null}
-        </div> : <p className="mt-2 text-sm">{historicalHealth.status === "loading" ? "Checking past readings..." : "Historical readings unavailable"}</p>}
+        </div> : <p className="mt-2 text-sm">{historicalHealth.status === "loading" ? "Checking past readings..." : <>Historical readings unavailable. <button type="button" className="underline" onClick={() => setHistoryRetry((value) => value + 1)}>Retry</button></>}</p>}
         </div>
       </div>
     </div>

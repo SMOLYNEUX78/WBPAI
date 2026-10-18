@@ -1,12 +1,12 @@
 const DAY_MS = 24 * 60 * 60 * 1000;
 const SNAPSHOT_VERSION = 2;
 
-export function readHistoricalHealthSnapshot(buildingId, sourceBuildingId, now = new Date()) {
+export function readHistoricalHealthSnapshot(buildingId, sourceBuildingId) {
   if (!buildingId || typeof localStorage === "undefined") return null;
   try {
     const snapshot = JSON.parse(localStorage.getItem(`wbp:historical-health:${buildingId}:${sourceBuildingId}`) || "null");
-    return snapshot?.version === SNAPSHOT_VERSION && snapshot?.date === now.toISOString().slice(0, 10) && Array.isArray(snapshot.findings)
-      ? { status: "ready", findings: snapshot.findings } : null;
+    return snapshot?.version === SNAPSHOT_VERSION && Array.isArray(snapshot.findings)
+      ? { status: "ready", findings: snapshot.findings, date: snapshot.date } : null;
   } catch { return null; }
 }
 

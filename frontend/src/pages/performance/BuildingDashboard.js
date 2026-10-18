@@ -8884,7 +8884,8 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange })
         setTrendPeriod("month");
         setOccupyDetail("report");
       }} baseline={{
-        buildingId: homePassportDatabaseId,
+        buildingId: building.id,
+        propertyRecordId: homePassportDatabaseId,
         postcode: homePassport?.propertyDiscovery?.postcode,
         localAuthority: homePassport?.propertyDiscovery?.localAuthority,
         sourceBuildingId: dataSourceBuildingId,

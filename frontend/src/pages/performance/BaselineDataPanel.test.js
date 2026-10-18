@@ -151,12 +151,13 @@ test("detailed report includes HLA evidence and dated seasonal trends", () => {
   expect(html).toContain('id="chart-plot"');
 });
 
-test("historical health snapshot is reused only for the same building and day", () => {
+test("historical health snapshot remains available across days for the same building", () => {
   const date = new Date("2026-10-18T12:00:00Z");
   writeHistoricalHealthSnapshot("record-1", "home", [{ field: "internal_temp", redDays: 2, observedDays: 10 }], date);
   expect(readHistoricalHealthSnapshot("record-1", "home", date)?.findings[0].redDays).toBe(2);
   expect(readHistoricalHealthSnapshot("record-2", "home", date)).toBeNull();
-  expect(readHistoricalHealthSnapshot("record-1", "home", new Date("2026-10-19T12:00:00Z"))).toBeNull();
+  expect(readHistoricalHealthSnapshot("record-1", "home")?.findings[0].redDays).toBe(2);
+  expect(readHistoricalHealthSnapshot("record-1", "home")?.date).toBe("2026-10-18");
 });
 
 test("historical health counts red daily averages only on observed days", () => {
