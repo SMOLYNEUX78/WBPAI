@@ -9,6 +9,7 @@ import PrototypeTabs from "../../PrototypeTabs";
 import { getReadinessGates } from "./readinessGates";
 import { mergeMonthlyHlaRows } from "./monthlyHla";
 import { liveRedReadings } from "./liveRedReadings";
+import { homeComfortSuggestion } from "./comfortSuggestions";
 import { extractEnergyBillImage, extractEnergyBillPdf, normaliseBillReview } from "./energyBill";
 import RetrofitPlanner from "./RetrofitPlanner";
 import BaselineDataPanel from "./BaselineDataPanel";
@@ -1285,7 +1286,7 @@ const getEstimatedInternalArea = (modelId, building) => {
   return building.estimatedInternalArea;
 };
 
-const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange }) => {
+const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, onComfortSuggestionChange }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const dataSourceBuildingId = building.dataSourceId || building.id;
@@ -7153,9 +7154,13 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange })
     }
   };
   const redReadings = useMemo(() => dataSourceBuildingId === "home" ? liveRedReadings(roomIaqData, alertClock) : [], [dataSourceBuildingId, roomIaqData, alertClock]);
+  const comfortSuggestion = useMemo(() => dataSourceBuildingId === "home" ? homeComfortSuggestion(roomIaqData, alertClock) : null, [dataSourceBuildingId, roomIaqData, alertClock]);
   useEffect(() => {
     if (isActive) onLiveRedChange?.(redReadings);
   }, [isActive, onLiveRedChange, redReadings]);
+  useEffect(() => {
+    if (isActive) onComfortSuggestionChange?.(comfortSuggestion);
+  }, [isActive, onComfortSuggestionChange, comfortSuggestion]);
   const baselinePerformanceConcerns = [
     { key: "hdd", label: "Heat demand", status: hddStatus, measurement: Number.isFinite(hddIntensityPerM2) ? `${hddIntensityPerM2.toFixed(3)} kWh/m²/HDD` : "", detail: Number.isFinite(hddIntensityPerM2) ? `${hddIntensityPerM2.toFixed(3)} kWh/m²/HDD` : "" },
     { key: "htc", label: "Heat loss", status: htcStatus, measurement: Number.isFinite(htcPerM2) ? `${htcPerM2.toFixed(1)} W/m²K` : "", detail: Number.isFinite(htcPerM2) ? `${htcPerM2.toFixed(1)} W/m²K` : "" },
@@ -13598,6 +13603,12 @@ const BuildingDashboard = () => {
   const navigate = useNavigate();
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [headerRedReadings, setHeaderRedReadings] = useState([]);
+  const [comfortSuggestion, setComfortSuggestion] = useState(null);
+  const [comfortNoticesEnabled, setComfortNoticesEnabled] = useState(() => window.localStorage.getItem("wbp-comfort-notices") === "yes");
+  const [comfortNoticeStatus, setComfortNoticeStatus] = useState("");
+  const [dismissedComfort, setDismissedComfort] = useState(() => {
+    try { return JSON.parse(window.localStorage.getItem("wbp-comfort-dismissed") || "null"); } catch { return null; }
+  });
   const accountMenuRef = useRef(null);
   const [accruedDataDays, setAccruedDataDays] = useState(null);
   const accessParams = new URLSearchParams(location.search);
@@ -13621,6 +13632,60 @@ const BuildingDashboard = () => {
   });
 
   const activeBuilding = BUILDINGS[activeIndex];
+  const showComfortBanner = accessRole === "homeowner" && ["home", "bl", "cc"].includes(activeBuilding.id)
+    && comfortSuggestion && !(dismissedComfort?.key === comfortSuggestion.key && dismissedComfort.until > Date.now());
+
+  const toggleComfortNotices = async () => {
+    if (comfortNoticesEnabled) {
+      window.localStorage.removeItem("wbp-comfort-notices");
+      setComfortNoticesEnabled(false);
+      setComfortNoticeStatus("");
+      return;
+    }
+    if (!("Notification" in window) || !("serviceWorker" in navigator)) {
+      setComfortNoticeStatus("Phone notifications are not available in this browser. Suggestions will still appear here.");
+      return;
+    }
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") {
+        setComfortNoticeStatus("Notification permission was not granted. Suggestions will still appear here.");
+        return;
+      }
+      await navigator.serviceWorker.register("/comfort-sw.js");
+      window.localStorage.setItem("wbp-comfort-notices", "yes");
+      setComfortNoticesEnabled(true);
+      setComfortNoticeStatus("Phone suggestions enabled while WBP is running.");
+    } catch {
+      setComfortNoticeStatus("Could not enable phone notifications on this device.");
+    }
+  };
+
+  useEffect(() => {
+    if (accessRole !== "homeowner" || !comfortSuggestion) {
+      window.localStorage.removeItem("wbp-comfort-pending");
+      return undefined;
+    }
+    const now = Date.now();
+    let pending;
+    try { pending = JSON.parse(window.localStorage.getItem("wbp-comfort-pending") || "null"); } catch { pending = null; }
+    if (pending?.key !== comfortSuggestion.key || now - pending.since > 24 * 60 * 60 * 1000) {
+      window.localStorage.setItem("wbp-comfort-pending", JSON.stringify({ key: comfortSuggestion.key, since: now }));
+      return undefined;
+    }
+    if (!comfortNoticesEnabled || now - pending.since < 20 * 60 * 1000 || window.Notification?.permission !== "granted") return undefined;
+    let last;
+    try { last = JSON.parse(window.localStorage.getItem("wbp-comfort-last-notice") || "null"); } catch { last = null; }
+    if (last?.key === comfortSuggestion.key && now - last.at < 12 * 60 * 60 * 1000) return undefined;
+    let cancelled = false;
+    navigator.serviceWorker.ready.then((registration) => {
+      if (cancelled) return;
+      return registration.showNotification(comfortSuggestion.title, {
+        body: comfortSuggestion.message, icon: "/wbp-rounded-192.png", tag: `wbp-${comfortSuggestion.key}`,
+      }).then(() => window.localStorage.setItem("wbp-comfort-last-notice", JSON.stringify({ key: comfortSuggestion.key, at: Date.now() })));
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [accessRole, comfortSuggestion, comfortNoticesEnabled]);
 
   useEffect(() => {
     if (!accountMenuOpen) return undefined;
@@ -13657,6 +13722,10 @@ const BuildingDashboard = () => {
     await supabase.auth.signOut();
     window.localStorage.removeItem("wbp-user-role");
     window.localStorage.removeItem("wbp-user-email");
+    window.localStorage.removeItem("wbp-comfort-notices");
+    window.localStorage.removeItem("wbp-comfort-pending");
+    window.localStorage.removeItem("wbp-comfort-last-notice");
+    window.localStorage.removeItem("wbp-comfort-dismissed");
     navigate("/login");
   };
 
@@ -13764,11 +13833,21 @@ const BuildingDashboard = () => {
                   <span className="mt-1 block text-xs text-emerald-800">Confirmed proceeds £0.00</span>
                   <span className="mt-1 block text-xs text-emerald-800">Exchange</span>
                 </button> : null}
+                {accessRole === "homeowner" ? <label className="flex items-start gap-2 border-b border-gray-200 px-2 py-3 text-xs text-gray-800"><input type="checkbox" className="mt-0.5" checked={comfortNoticesEnabled} onChange={toggleComfortNotices} /><span>Phone comfort suggestions<span className="mt-1 block text-gray-600">While WBP is running; only after readings stay elevated.</span></span></label> : null}
+                {comfortNoticeStatus ? <p role="status" className="px-2 py-1 text-xs text-gray-700">{comfortNoticeStatus}</p> : null}
                 <button type="button" onClick={logOut} className="w-full px-2 py-2 text-left font-semibold text-gray-900 hover:bg-gray-100">Log out</button>
               </div> : null}
             </div>
             </div>
           </div>
+          {showComfortBanner ? <div className="mx-auto mt-3 flex max-w-7xl items-start gap-3 border-l-4 border-amber-600 bg-white px-3 py-2 text-sm text-gray-900" role="status">
+            <div className="min-w-0 flex-1"><strong>{comfortSuggestion.title}</strong><p>{comfortSuggestion.message}</p></div>
+            <button type="button" aria-label="Dismiss comfort suggestion" className="shrink-0 px-2 text-lg leading-none" onClick={() => {
+              const dismissed = { key: comfortSuggestion.key, until: Date.now() + 12 * 60 * 60 * 1000 };
+              window.localStorage.setItem("wbp-comfort-dismissed", JSON.stringify(dismissed));
+              setDismissedComfort(dismissed);
+            }}>×</button>
+          </div> : null}
         </section>
       ) : null}
       </div>
@@ -13802,7 +13881,7 @@ const BuildingDashboard = () => {
                 ) : building.exchangeOnly ? (
                   <ExchangeDashboardPanel homeValue={new URLSearchParams(location.search).get("source") === "cc" ? bridgewoodValue : null} />
                 ) : (
-                  <BuildingDashboardPanel building={building} isActive={isActiveSlide} onLiveRedChange={setHeaderRedReadings} />
+                  <BuildingDashboardPanel building={building} isActive={isActiveSlide} onLiveRedChange={setHeaderRedReadings} onComfortSuggestionChange={setComfortSuggestion} />
                 )}
               </div>
             );
