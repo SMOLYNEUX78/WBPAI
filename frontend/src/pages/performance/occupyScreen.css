@@ -530,9 +530,9 @@
 .wbp-baseline-sale-buyers i { display: block; height: 18px; border: 1px solid #80bca8; border-left: 3px solid #047857; background: #ecfdf5; }
 .wbp-baseline-sale-buyers i:nth-child(2) { border-color: #91b9da; border-left-color: #2b69a4; background: #eff6ff; }
 .wbp-baseline-sale-buyers i:nth-child(3) { border-color: #edc49e; border-left-color: #c27132; background: #fff7ed; }
-.wbp-baseline-sale-label { position: relative; display: flex; min-width: 0; flex: 1; align-self: stretch; align-items: flex-end; padding: 12px 16px; font-size: 18px; font-weight: 700; line-height: 1.15; }
-.wbp-baseline-sale-label > span:last-child { position: relative; z-index: 1; min-width: 0; overflow-wrap: anywhere; }
-.wbp-baseline-sale-data { position: absolute; top: 14px; right: 16px; left: 16px; display: flex; height: 58px; flex-direction: column; justify-content: space-between; }
+.wbp-baseline-sale-label { display: flex; min-width: 0; flex: 1; align-self: stretch; align-items: flex-end; padding: 12px 16px; font-size: 18px; font-weight: 700; line-height: 1.15; }
+.wbp-baseline-sale-label > span { min-width: 0; overflow-wrap: anywhere; }
+.wbp-baseline-sale-data { display: flex; width: clamp(48px, 13%, 92px); height: 58px; flex: none; flex-direction: column; justify-content: space-between; margin-right: 8px; }
 .wbp-baseline-sale-data i { display: block; height: 12px; background: linear-gradient(90deg, #047857 0 12%, #c8d8d2 12% 48%, #e4ece8 48% 52%, #8fb6a8 52% 78%, #d6e2dc 78%); }
 .wbp-baseline-sale-data i:nth-child(2) { background: linear-gradient(90deg, #2b69a4 0 20%, #c9d9e6 20% 57%, #e4ece8 57% 61%, #8fb6a8 61% 88%, #d6e2dc 88%); }
 .wbp-baseline-sale-data i:nth-child(3) { background: linear-gradient(90deg, #c27132 0 15%, #e6d4c3 15% 39%, #e4ece8 39% 43%, #8fb6a8 43% 71%, #d6e2dc 71%); }
@@ -544,7 +544,7 @@
   .wbp-baseline-sale-buyers { width: 25px; height: 54px; }
   .wbp-baseline-sale-buyers i { height: 14px; }
   .wbp-baseline-sale-label { padding: 8px; font-size: 16px; }
-  .wbp-baseline-sale-data { top: 9px; right: 8px; left: 8px; height: 43px; }
+  .wbp-baseline-sale-data { width: 30px; height: 43px; margin-right: 4px; }
   .wbp-baseline-sale-data i { height: 9px; }
 }
 @media (max-width: 520px) {

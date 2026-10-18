@@ -153,9 +153,9 @@ export default function BaselineDataPanel({ DetailSurface, onOpenDetailedReport,
       <button type="button" onClick={() => setOpenPanel("retrofit")} className="wbp-baseline-option group relative flex min-h-44 w-full items-end overflow-hidden border border-emerald-900 bg-emerald-950 p-5 text-left text-white sm:min-h-52 sm:p-7" style={{ backgroundImage: "linear-gradient(90deg, rgba(9, 43, 34, .8), rgba(9, 43, 34, .12) 75%), url('/images/retrofit-options.png')", backgroundSize: "cover", backgroundPosition: "center" }}><span className="relative text-xl font-bold drop-shadow sm:text-2xl">Explore retrofit options <span aria-hidden="true">→</span></span></button>
       <button type="button" onClick={() => setOpenPanel("sale")} className="wbp-baseline-option wbp-baseline-sale-option group mt-3 flex min-h-32 w-full items-center overflow-hidden border border-gray-300 bg-gray-100 text-left text-gray-900 hover:border-emerald-700">
         <span className="wbp-baseline-sale-label">
-          <span aria-hidden="true" className="wbp-baseline-sale-data"><i /><i /><i /></span>
           <span>Sell baseline data <span aria-hidden="true">→</span></span>
         </span>
+        <span aria-hidden="true" className="wbp-baseline-sale-data"><i /><i /><i /></span>
         <span aria-hidden="true" className="wbp-baseline-sale-buyers"><i /><i /><i /></span>
         <span aria-hidden="true" className="wbp-baseline-sale-flow wbp-baseline-sale-flow--out"><i /><i /><i /></span>
         <span aria-hidden="true" className="wbp-baseline-sale-report"><i /><i /><i /><i /></span>
