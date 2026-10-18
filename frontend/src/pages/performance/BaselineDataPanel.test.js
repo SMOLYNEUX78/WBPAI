@@ -109,6 +109,9 @@ test("downloaded detailed report preserves the rendered deep dive and interactiv
   expect(html).toContain("Fabric performance");
   expect(html).toContain("HDD intensity: 1.25");
   expect(html).toContain("Seasonal Performance Trends");
+  expect(html).toContain("Full Picture");
+  expect(html).toContain('data-area="upstairs"');
+  expect(html).toContain('data-area="downstairs"');
   expect(html).toContain("Winter 2026");
   expect(html).toContain("Days with readings: 31");
   expect(html).not.toContain("App-only control");
@@ -129,6 +132,26 @@ test("downloaded seasonal chart carries the app's prepared periods and health me
   expect(chart.data[0].periods.week[0].upstairsPm25).toBe(14);
   expect(chart.data[0].periods.month[0]).toMatchObject({ label: "Week of 2026-01-05", dayCount: 5 });
   expect(chart.metrics.map((metric) => metric.key)).toContain("upstairsNo2");
+});
+
+test("downloaded chart runs Full Picture and room IAQ controls offline", () => {
+  const detail = document.createElement("div");
+  const html = buildDetailedReportHtml(detail, [{ name: "Winter", year: 2026,
+    data: [{ label: "Mon 09:00", hour: 9, electricity: 1, upstairsPm25: 14, downstairsPm25: 8 }],
+    reportPeriods: {
+      day: [{ label: "09:00", hour: 9, electricity: 1, upstairsPm25: 14, downstairsPm25: 8 }],
+      week: [{ label: "Mon 09:00", hour: 9, electricity: 1, upstairsPm25: 14, downstairsPm25: 8 }],
+      month: [{ label: "Week of 2026-01-05", date: "2026-01-05", electricity: 3, upstairsPm25: 14, downstairsPm25: 8 }],
+    } }], {});
+  document.body.innerHTML = html;
+  const script = [...document.querySelectorAll("script")].find((node) => !node.type);
+  expect(() => new Function(script.textContent)()).not.toThrow();
+  expect(document.querySelector('#chart-groups [data-group="all"]').getAttribute("aria-pressed")).toBe("true");
+  document.querySelector('#chart-groups [data-group="health"]').click();
+  document.querySelector('#chart-areas [data-area="upstairs"]').click();
+  expect(document.querySelector("#chart-metrics").textContent).toContain("Upstairs PM2.5");
+  expect(document.querySelector("#chart-metrics").textContent).not.toContain("Downstairs PM2.5");
+  document.body.innerHTML = "";
 });
 
 test("detailed report includes HLA evidence and dated seasonal trends", () => {

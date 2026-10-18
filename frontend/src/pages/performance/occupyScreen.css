@@ -508,11 +508,11 @@
 .wbp-dashboard--baseline > .overflow-hidden > .flex { min-height: 100%; }
 .wbp-dashboard--baseline > .overflow-hidden > .flex > [aria-hidden="false"] { display: flex; flex-direction: column; }
 .wbp-dashboard--baseline .wbp-occupy-panel { flex: 1; min-height: 0; }
-.wbp-baseline-options { max-width: 720px !important; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.wbp-baseline-options { display: grid; max-width: 720px !important; grid-template-columns: minmax(0, 1fr); gap: 18px; }
 .wbp-baseline-options h3 { grid-column: 1 / -1; }
-.wbp-baseline-options .wbp-baseline-option { min-height: 96px; margin-top: 0; padding: 16px; font-size: 18px; }
+.wbp-baseline-options .wbp-baseline-option { min-height: 148px; margin-top: 0; padding: 18px; font-size: 18px; }
 .wbp-baseline-options .wbp-baseline-option > span { font-size: 18px; }
-.wbp-baseline-options .wbp-baseline-sale-option { padding: 0; min-height: 112px; box-shadow: inset 4px 0 #047857; }
+.wbp-baseline-options .wbp-baseline-sale-option { padding: 0; min-height: 148px; box-shadow: inset 4px 0 #047857; }
 .wbp-baseline-sale-house { width: 108px; height: 108px; flex: none; object-fit: contain; background: white; }
 .wbp-baseline-sale-flow { position: relative; display: flex; width: clamp(20px, 5%, 42px); height: 56px; flex: none; align-items: center; justify-content: space-around; }
 .wbp-baseline-sale-flow::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; border-top: 2px dotted #047857; }
@@ -543,7 +543,7 @@
 }
 @media (max-width: 520px) {
   .wbp-baseline-options { grid-template-columns: minmax(0, 1fr); }
-  .wbp-baseline-options .wbp-baseline-option { min-height: 78px; }
+  .wbp-baseline-options .wbp-baseline-option { min-height: 122px; }
 }
 
 @media (min-width: 600px) and (max-width: 1100px) and (orientation: portrait) {
@@ -554,9 +554,9 @@
   .wbp-baseline-scores .space-y-2 > * + * { margin-top: 5px; }
   .wbp-baseline-scores h3, .wbp-baseline-scores h4 { font-size: 13px; }
   .wbp-baseline-scores p, .wbp-baseline-scores .text-sm { font-size: 12px; }
-  .wbp-baseline-options { display: grid; max-width: 960px !important; grid-template-columns: minmax(0, 1fr); gap: 10px; margin-top: 14px; padding-top: 12px; }
+  .wbp-baseline-options { display: grid; max-width: 960px !important; grid-template-columns: minmax(0, 1fr); gap: 18px; margin-top: 14px; padding-top: 12px; }
   .wbp-baseline-options h3 { grid-column: 1 / -1; margin-bottom: 0; }
-  .wbp-baseline-options .wbp-baseline-option { min-height: 112px; margin-top: 0; padding: 18px; font-size: 18px; }
+  .wbp-baseline-options .wbp-baseline-option { min-height: 148px; margin-top: 0; padding: 18px; font-size: 18px; }
   .wbp-baseline-options .wbp-baseline-option > span { font-size: 18px; }
 }
 

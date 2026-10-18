@@ -7112,15 +7112,37 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange })
         throw new Error("These readings could not be verified.");
       }
       const report = document.querySelector('[role="dialog"][aria-label="Detailed report"] [data-report-deep-dive]');
-      const reportSeasons = seasonalTrendRecords.map((record) => {
-        const weekly = record === selectedSeasonRecord ? selectedSeasonTrendData
-          : fillHistoricalHealthTrend(record.data || [], record.dailyData || []);
+      const reportSeasons = await Promise.all(seasonalTrendRecords.map(async (record) => {
+        let dailyData = record.dailyData || [];
+        if (record.startDate && record.endDate) {
+          const { data: iaqRows, error: iaqError } = await supabase.rpc("get_seasonal_performance_daily", {
+            p_building_id: dataSourceBuildingId,
+            p_start_date: record.startDate,
+            p_end_date: record.endDate,
+          });
+          if (iaqError) throw new Error("Could not load seasonal IAQ readings for the report.");
+          const byDate = new Map(dailyData.map((row) => [row.date, row]));
+          (iaqRows || []).forEach((row) => {
+            const previous = byDate.get(row.reading_date) || { date: row.reading_date };
+            byDate.set(row.reading_date, { ...previous,
+              internalTemp: row.internal_temp, externalTemp: row.external_temp,
+              externalTempPeak: row.external_temp_peak,
+              upstairsHumidity: row.upstairs_humidity, downstairsHumidity: row.downstairs_humidity,
+              upstairsPm25: row.upstairs_pm25, downstairsPm25: row.downstairs_pm25,
+              upstairsVocs: row.upstairs_vocs, downstairsVocs: row.downstairs_vocs,
+              upstairsPm10: row.upstairs_pm10, upstairsHcho: row.upstairs_hcho,
+              upstairsNo2: row.upstairs_no2,
+            });
+          });
+          dailyData = [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
+        }
+        const weekly = fillHistoricalHealthTrend(record === selectedSeasonRecord ? selectedSeasonTrendData : record.data || [], dailyData);
         return { ...record, reportPeriods: {
           day: aggregateTypicalDay(weekly),
           week: weekly,
-          month: aggregateCalendarTrend(record.dailyData || [], "seasonal-weekly", record.startDate, record.endDate),
-        } };
-      });
+          month: aggregateCalendarTrend(dailyData, "seasonal-weekly", record.startDate, record.endDate),
+        }, dailyData };
+      }));
       const html = buildDetailedReportHtml(report, reportSeasons, payload);
       const url = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
       const link = document.createElement("a");

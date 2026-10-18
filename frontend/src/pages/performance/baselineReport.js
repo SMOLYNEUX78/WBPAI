@@ -69,7 +69,7 @@ const interactiveSeasonalChart = (records) => {
   })).filter((record) => record.weekly.length || record.daily.length);
   if (!data.length) return "";
   const encoded = JSON.stringify({ data, metrics: CHART_METRICS }).replace(/</g, "\\u003c");
-  return `<div id="seasonal-chart" class="chart"><div class="chart-top"><strong>Seasonal Performance Trends</strong><div id="chart-seasons" class="chart-tabs" role="group" aria-label="Season">${data.map((record, index) => `<button type="button" data-season="${index}" aria-pressed="${index === 0}">${escapeHtml(record.name)}</button>`).join("")}</div></div><div id="chart-periods" class="chart-tabs chart-periods" role="group" aria-label="Trend period"><button type="button" data-period="day" aria-pressed="false">Day</button><button type="button" data-period="week" aria-pressed="false">Week</button><button type="button" data-period="month" aria-pressed="true">Month</button></div><div id="chart-groups" class="chart-tabs chart-groups" role="group" aria-label="Measure group"><button type="button" data-group="energy" aria-pressed="true">Energy</button><button type="button" data-group="comfort" aria-pressed="false">Comfort</button><button type="button" data-group="health" aria-pressed="false">Health</button></div><div class="chart-plot-wrap"><svg id="chart-plot" viewBox="0 0 800 310" role="img" aria-label="Seasonal performance trend chart"></svg><div id="chart-tooltip" class="chart-tooltip" hidden></div></div><div id="chart-metrics" class="chart-metrics" aria-label="Show or hide measures"></div><p id="chart-caption" class="muted"></p></div><script type="application/json" id="chart-data">${encoded}</script>`;
+  return `<div id="seasonal-chart" class="chart"><div class="chart-top"><strong>Seasonal Performance Trends</strong><div id="chart-seasons" class="chart-tabs" role="group" aria-label="Season">${data.map((record, index) => `<button type="button" data-season="${index}" aria-pressed="${index === 0}">${escapeHtml(record.name)}</button>`).join("")}</div></div><div id="chart-periods" class="chart-tabs chart-periods" role="group" aria-label="Trend period"><button type="button" data-period="day" aria-pressed="false">Day</button><button type="button" data-period="week" aria-pressed="false">Week</button><button type="button" data-period="month" aria-pressed="true">Month</button></div><div id="chart-groups" class="chart-tabs chart-groups" role="group" aria-label="Measure group"><button type="button" data-group="all" aria-pressed="true">Full Picture</button><button type="button" data-group="energy" aria-pressed="false">Energy</button><button type="button" data-group="comfort" aria-pressed="false">Comfort</button><button type="button" data-group="health" aria-pressed="false">Health</button></div><div id="chart-areas" class="chart-tabs chart-areas" role="group" aria-label="Health area" hidden><button type="button" data-area="all" aria-pressed="true">All</button><button type="button" data-area="upstairs" aria-pressed="false">Upstairs</button><button type="button" data-area="downstairs" aria-pressed="false">Downstairs</button></div><div class="chart-plot-wrap"><svg id="chart-plot" viewBox="0 0 800 310" role="img" aria-label="Seasonal performance trend chart"></svg><div id="chart-tooltip" class="chart-tooltip" hidden></div></div><div id="chart-metrics" class="chart-metrics" aria-label="Show or hide measures"></div><p id="chart-caption" class="muted"></p></div><script type="application/json" id="chart-data">${encoded}</script>`;
 };
 
 const INTERACTIVE_CHART_SCRIPT = `<script>(function(){
@@ -80,7 +80,7 @@ const INTERACTIVE_CHART_SCRIPT = `<script>(function(){
   var caption=document.getElementById('chart-caption');
   var tooltip=document.getElementById('chart-tooltip');
   var ns='http://www.w3.org/2000/svg';
-  var seasonIndex=0,period='month',group='energy',selected=new Set();
+  var seasonIndex=0,period='month',group='all',area='all',selected=new Set();
   var plotted=[],visible=[],chartMin=0,chartMax=1;
   function average(rows,key){var values=rows.map(function(row){return row[key]}).filter(Number.isFinite);return values.length?values.reduce(function(a,b){return a+b},0)/values.length:null}
   function points(record,period){
@@ -103,14 +103,17 @@ const INTERACTIVE_CHART_SCRIPT = `<script>(function(){
     document.querySelectorAll('#chart-seasons button').forEach(function(button){button.setAttribute('aria-pressed',String(Number(button.dataset.season)===seasonIndex))});
     document.querySelectorAll('#chart-periods button').forEach(function(button){button.setAttribute('aria-pressed',String(button.dataset.period===period))});
     document.querySelectorAll('#chart-groups button').forEach(function(button){button.setAttribute('aria-pressed',String(button.dataset.group===group))});
+    document.querySelectorAll('#chart-areas button').forEach(function(button){button.setAttribute('aria-pressed',String(button.dataset.area===area))});
   }
   function draw(){
     var record=source.data[seasonIndex],rows=points(record,period);
-    var groups=['energy','comfort','health'];
-    function availableFor(key){return source.metrics.filter(function(item){return item.group===key&&rows.some(function(row){return Number.isFinite(row[item.key])})})}
+    var groups=['all','energy','comfort','health'];
+    function availableFor(key){return source.metrics.filter(function(item){return (key==='all'||item.group===key)&&rows.some(function(row){return Number.isFinite(row[item.key])})})}
     if(!availableFor(group).length)group=groups.find(function(key){return availableFor(key).length})||'energy';
     document.querySelectorAll('#chart-groups button').forEach(function(button){button.disabled=!availableFor(button.dataset.group).length});
-    var available=availableFor(group);
+    document.getElementById('chart-areas').style.display=group==='health'?'flex':'none';
+    var available=availableFor(group).filter(function(item){return group!=='health'||area==='all'||item.key.startsWith(area)});
+    if(!available.length&&group==='health'){area='all';available=availableFor(group)}
     if(!available.some(function(item){return selected.has(item.key)}))selected=new Set(group==='health'?[available[0].key]:available.map(function(item){return item.key}));
     visible=available.filter(function(item){return selected.has(item.key)});
     syncButtons();tooltip.hidden=true;metricBox.replaceChildren();svg.replaceChildren();
@@ -123,27 +126,32 @@ const INTERACTIVE_CHART_SCRIPT = `<script>(function(){
     });
     if(!visible.length){caption.textContent='No readings for this season and view.';return}
     var values=rows.flatMap(function(row){return visible.map(function(item){return row[item.key]})}).filter(Number.isFinite);
-    if(group==='health'&&visible.every(function(item){return item.key.indexOf('Humidity')>=0})){chartMin=0;chartMax=100}
+    var domains={};
+    if(group==='all')visible.forEach(function(item){var own=rows.map(function(row){return row[item.key]}).filter(Number.isFinite);domains[item.key]={min:Math.min.apply(null,own),max:Math.max.apply(null,own)}});
+    function plotValue(item,value){if(group!=='all')return value;var domain=domains[item.key];return domain.max===domain.min?50:(value-domain.min)/(domain.max-domain.min)*100}
+    if(group==='all'){chartMin=0;chartMax=100}
+    else if(group==='health'&&visible.every(function(item){return item.key.indexOf('Humidity')>=0})){chartMin=0;chartMax=100}
     else if(group==='comfort'){chartMin=Math.min(-5,Math.floor(Math.min.apply(null,values)-2));chartMax=Math.max(35,Math.ceil(Math.max.apply(null,values)+2))}
     else {chartMin=0;chartMax=Math.max(1,Math.ceil(Math.max.apply(null,values)*1.15))}
     if(group==='comfort'){addBand(chartMin,16,'#fecaca','Cold');addBand(16,18,'#fde68a','Cool');addBand(18,22,'#bbf7d0','Comfort');addBand(22,24,'#fde68a','Warm');addBand(24,chartMax,'#fecaca','Hot')}
     if(group==='health'&&chartMax===100){addBand(0,30,'#fecaca','Dry');addBand(30,40,'#fde68a','Low');addBand(40,60,'#bbf7d0','Comfort');addBand(60,70,'#fde68a','High');addBand(70,100,'#fecaca','Humid')}
     for(var tick=0;tick<=4;tick++){var value=chartMax-(chartMax-chartMin)*tick/4,yy=y(value);svg.appendChild(element('line',{x1:56,y1:yy,x2:770,y2:yy,stroke:'#d1d5db','stroke-width':1}));svg.appendChild(element('text',{x:49,y:yy+4,'text-anchor':'end',fill:'#475569','font-size':11},value.toFixed(group==='energy'?1:0)))}
-    svg.appendChild(element('text',{x:55,y:20,fill:'#334155','font-size':11,'font-weight':600},group==='energy'?(period==='month'?'kWh/day':'kWh/h'):visible[0].unit));
+    svg.appendChild(element('text',{x:55,y:20,fill:'#334155','font-size':11,'font-weight':600},group==='all'?'Relative trend (each measure scaled 0–100)':group==='energy'?(period==='month'?'kWh/day':'kWh/h'):visible[0].unit));
     var labels=period==='day'?[0,6,12,18,23]:period==='week'?[0,24,48,72,96,120,144]:rows.map(function(_,index){return index}).filter(function(index){return index===0||index===rows.length-1||index%Math.max(1,Math.ceil(rows.length/7))===0});
     labels.forEach(function(index){if(index>=rows.length)return;var xx=x(index,rows.length);svg.appendChild(element('line',{x1:xx,y1:46,x2:xx,y2:246,stroke:'#e5e7eb','stroke-width':1}));var label=period==='week'?['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][Math.floor(index/24)]||'':period==='day'?String(index).padStart(2,'0')+':00':rows[index].label.slice(5,10);svg.appendChild(element('text',{x:xx,y:270,'text-anchor':'middle',fill:'#64748b','font-size':10},label))});
     plotted=rows;
     visible.forEach(function(item){
       var path='',previous=false;
-      rows.forEach(function(row,index){var value=row[item.key];if(!Number.isFinite(value)){previous=false;return}path+=(previous?' L':' M')+x(index,rows.length).toFixed(1)+' '+y(value).toFixed(1);previous=true});
+      rows.forEach(function(row,index){var value=row[item.key];if(!Number.isFinite(value)){previous=false;return}path+=(previous?' L':' M')+x(index,rows.length).toFixed(1)+' '+y(plotValue(item,value)).toFixed(1);previous=true});
       svg.appendChild(element('path',{d:path,fill:'none',stroke:item.color,'stroke-width':2.5,'stroke-linecap':'round','stroke-linejoin':'round'}));
-      if(period==='month'||rows.length<=2)rows.forEach(function(row,index){if(!Number.isFinite(row[item.key]))return;var dot=element('circle',{cx:x(index,rows.length),cy:y(row[item.key]),r:4,fill:item.color});dot.appendChild(element('title',{},row.label+': '+item.label+' '+row[item.key].toFixed(2)+' '+item.unit));svg.appendChild(dot)});
+      if(period==='month'||rows.length<=2)rows.forEach(function(row,index){if(!Number.isFinite(row[item.key]))return;var dot=element('circle',{cx:x(index,rows.length),cy:y(plotValue(item,row[item.key])),r:4,fill:item.color});dot.appendChild(element('title',{},row.label+': '+item.label+' '+row[item.key].toFixed(2)+' '+item.unit));svg.appendChild(dot)});
     });
-    caption.textContent=record.name+' · '+period+' · '+rows.length+' time slots. Empty slots mean no measured reading.';
+    caption.textContent=record.name+' · '+period+' · '+rows.length+' time slots. '+(group==='all'?'Full Picture scales each measure independently; read actual values in the legend or tooltip. ':'')+'Empty slots mean no measured reading.';
   }
   document.querySelectorAll('#chart-seasons button').forEach(function(button){button.onclick=function(){seasonIndex=Number(button.dataset.season);selected.clear();draw()}});
   document.querySelectorAll('#chart-periods button').forEach(function(button){button.onclick=function(){period=button.dataset.period;selected.clear();draw()}});
   document.querySelectorAll('#chart-groups button').forEach(function(button){button.onclick=function(){group=button.dataset.group;selected.clear();draw()}});
+  document.querySelectorAll('#chart-areas button').forEach(function(button){button.onclick=function(){area=button.dataset.area;selected.clear();draw()}});
   function inspect(event){if(!plotted.length||!visible.length)return;var bounds=svg.getBoundingClientRect();if(!bounds.width)return;var px=(event.clientX-bounds.left)/bounds.width*800;var index=Math.max(0,Math.min(plotted.length-1,Math.round((px-56)/714*(plotted.length-1))));var point=plotted[index];if(!point)return;var lines=[point.label];visible.forEach(function(item){if(Number.isFinite(point[item.key]))lines.push(item.label+': '+point[item.key].toFixed(2)+' '+item.unit)});tooltip.textContent=lines.join(' · ');tooltip.hidden=false}
   svg.addEventListener('pointermove',inspect);svg.addEventListener('pointerdown',inspect);svg.addEventListener('pointerleave',function(){tooltip.hidden=true});draw();
 })();</script>`;
