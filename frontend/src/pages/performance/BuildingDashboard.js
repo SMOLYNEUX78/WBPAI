@@ -13671,8 +13671,9 @@ const BuildingDashboard = () => {
               <span className={`px-2 py-1 text-xs font-bold uppercase text-white ${accessRole === "architect" ? "bg-blue-700" : accessRole === "builder" ? "bg-amber-700" : "bg-emerald-700"}`}>
                 {roleLabel}
               </span>
-              {accessRole === "homeowner" && ["home", "bl", "rf", "cc"].includes(activeBuilding.id) ? headerRedReadings.map((reading) => <span key={reading.key} role="status" className="border-l-4 border-red-700 bg-red-50 px-2 py-1 text-xs font-semibold text-red-900">{reading.label}: {reading.value}{reading.unit === "%" ? "%" : ` ${reading.unit}`}</span>) : null}
             </div>
+            <div className="flex min-w-0 items-center justify-end gap-2">
+              {accessRole === "homeowner" && ["home", "bl", "rf", "cc"].includes(activeBuilding.id) ? <div className="flex min-w-0 flex-wrap justify-end gap-1">{headerRedReadings.map((reading) => <span key={reading.key} role="status" className="max-w-[42vw] truncate border-l-4 border-red-700 bg-red-50 px-2 py-1 text-xs font-semibold text-red-900">{reading.label}: {reading.value}{reading.unit === "%" ? "%" : ` ${reading.unit}`}</span>)}</div> : null}
             <div ref={accountMenuRef} className="relative shrink-0">
               <button type="button" aria-label="Open account menu" aria-expanded={accountMenuOpen} aria-controls="wbp-account-menu" onClick={() => setAccountMenuOpen((open) => !open)} className="flex h-9 w-10 items-center justify-center border border-gray-300 bg-white text-xl leading-none text-gray-900 hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-700">{"\u2630"}</button>
               {accountMenuOpen ? <div id="wbp-account-menu" className="absolute right-0 top-full z-50 mt-2 w-60 max-w-[calc(100vw-2rem)] border border-gray-300 bg-white p-2 text-sm shadow-lg">
@@ -13684,6 +13685,7 @@ const BuildingDashboard = () => {
                 </button> : null}
                 <button type="button" onClick={logOut} className="w-full px-2 py-2 text-left font-semibold text-gray-900 hover:bg-gray-100">Log out</button>
               </div> : null}
+            </div>
             </div>
           </div>
         </section>

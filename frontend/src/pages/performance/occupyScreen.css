@@ -512,9 +512,9 @@
   .wbp-baseline-scores .space-y-2 > * + * { margin-top: 5px; }
   .wbp-baseline-scores h3, .wbp-baseline-scores h4 { font-size: 13px; }
   .wbp-baseline-scores p, .wbp-baseline-scores .text-sm { font-size: 12px; }
-  .wbp-baseline-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 14px; padding-top: 12px; }
+  .wbp-baseline-options { display: grid; max-width: 960px !important; grid-template-columns: minmax(0, 1fr); gap: 10px; margin-top: 14px; padding-top: 12px; }
   .wbp-baseline-options h3 { grid-column: 1 / -1; margin-bottom: 0; }
-  .wbp-baseline-options .wbp-baseline-option { min-height: 92px; margin-top: 0; padding: 14px; font-size: 18px; }
+  .wbp-baseline-options .wbp-baseline-option { min-height: 112px; margin-top: 0; padding: 18px; font-size: 18px; }
   .wbp-baseline-options .wbp-baseline-option > span { font-size: 18px; }
 }
 
