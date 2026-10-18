@@ -7841,7 +7841,7 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange })
             <span>Baseline confidence</span><strong>{baselineConfidence.label} · {baselineConfidence.score}%</strong>
           </div>
           <div role="progressbar" aria-label="Baseline confidence" aria-valuenow={baselineConfidence.score} aria-valuemin={0} aria-valuemax={100} className="mt-2 h-2 bg-gray-200"><div className="h-full bg-emerald-500" style={{ width: `${baselineConfidence.score}%` }} /></div>
-          <RetrofitPlanner ready postcode={homePassport?.propertyDiscovery?.postcode} localAuthority={homePassport?.propertyDiscovery?.localAuthority} annualEui={measuredAnnualEui} area={Number(matterportMetadata.internalArea)} electricityDailyKwh={energySummary.electricityDailyAverage} gasDailyKwh={energySummary.gasDailyAverage} gasHeatingDailyKwh={energySummary.gasHeatingDaily} billReview={normaliseBillReview(homeSetup.billReview)} DetailSurface={DetailSurface} />
+          <RetrofitPlanner ready postcode={homePassport?.propertyDiscovery?.postcode} localAuthority={homePassport?.propertyDiscovery?.localAuthority} annualEui={measuredAnnualEui} area={Number(matterportMetadata.internalArea)} electricityDailyKwh={energySummary.electricityDailyAverage} gasDailyKwh={energySummary.gasDailyAverage} gasHeatingDailyKwh={energySummary.gasHeatingDaily} gasDhwDailyKwh={energySummary.gasDhwDaily} billReview={normaliseBillReview(homeSetup.billReview)} DetailSurface={DetailSurface} />
         </section>
       ) : null}
       <div className={building.id === "rf" ? "hidden" : dataSourceBuildingId === "home" ? "wbp-performance-stage wbp-performance-stage--linear -mx-4" : "wbp-performance-stage bg-gray-100 p-3 sm:p-4 rounded shadow"}>
@@ -8895,6 +8895,7 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange })
         electricityDailyKwh: energySummary.electricityDailyAverage,
         gasDailyKwh: energySummary.gasDailyAverage,
         gasHeatingDailyKwh: energySummary.gasHeatingDaily,
+        gasDhwDailyKwh: energySummary.gasDhwDaily,
         billReview: normaliseBillReview(homeSetup.billReview),
         heatLoss: heatLossSummary,
         hlaScore: performanceBreakdown.hla,

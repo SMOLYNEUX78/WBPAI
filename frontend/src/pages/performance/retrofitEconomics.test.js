@@ -9,20 +9,21 @@ test("interpolates works scope between package anchors", () => {
   expect(getRetrofitOption(25).fixedCost).toEqual([8000, 13500]);
 });
 
-test("far-right pathway applies heat-pump efficiency only to estimated space heating", () => {
+test("far-right pathway converts heating, hot water and other gas, then drops the gas standing charge", () => {
   const annualEui = 41.47;
   const area = 99.2;
   const result = projectRetrofit({
     option: getRetrofitOption(100), annualEui, area, allElectric: true,
-    electricityDailyKwh: 5, gasDailyKwh: 7, gasHeatingShare: 0.8, heatPumpSpf: 3.1,
-    billReview: { electricityUnitRatePence: 25, gasUnitRatePence: 8 },
+    electricityDailyKwh: 5, gasDailyKwh: 7, gasHeatingShare: 0.8, gasHotWaterShare: 0.15, heatPumpSpf: 3.1,
+    billReview: { electricityUnitRatePence: 25, gasUnitRatePence: 8, gasStandingChargePence: 30 },
   });
   const baselineKwh = annualEui * area;
-  const improvedGasKwh = 25 * area * (7 / 12) * 0.2;
-  const improvedElectricityKwh = 25 * area * (5 / 12) + 25 * area * (7 / 12) * 0.8 * 0.85 / 3.1;
-  expect(result.targetEui).toBeCloseTo((improvedGasKwh + improvedElectricityKwh) / area);
-  expect(result.energySavedKwh).toBeCloseTo(baselineKwh - improvedGasKwh - improvedElectricityKwh);
-  expect(result.billSavedGbp).toBeCloseTo((baselineKwh * (5 / 12) * 25 + baselineKwh * (7 / 12) * 8 - improvedElectricityKwh * 25 - improvedGasKwh * 8) / 100);
+  const improvedElectricityKwh = 25 * area * (5 / 12) + 25 * area * (7 / 12) * (0.8 * 0.85 / 3.1 + 0.15 * 0.85 / 2.5 + 0.05);
+  expect(result.targetEui).toBeCloseTo(improvedElectricityKwh / area);
+  expect(result.energySavedKwh).toBeCloseTo(baselineKwh - improvedElectricityKwh);
+  expect(result.billSavedGbp).toBeCloseTo((baselineKwh * (5 / 12) * 25 + baselineKwh * (7 / 12) * 8 - improvedElectricityKwh * 25) / 100 + 30 * 365 / 100);
+  expect(result.gasDisconnected).toBe(true);
+  expect(result.avoidedGasStandingGbp).toBeCloseTo(109.5);
   expect(result.spaceHeatingEuiShare).toBeCloseTo(7 / 12 * 0.8);
   expect(result.costRangeGbp).toEqual([54760, 99520]);
 });
@@ -33,6 +34,19 @@ test("unknown heating split does not invent a heat-pump saving", () => {
   expect(result.spaceHeatingEuiShare).toBeNull();
   expect(result.heatPumpModelled).toBe(false);
   expect(result.targetEui).toBe(CC_CANDIDATE_PROFILE.annualEui);
+  expect(result.gasDisconnected).toBe(false);
+  expect(result.avoidedGasStandingGbp).toBe(0);
+});
+
+test("an entered post-works electricity rate affects only the projected bill", () => {
+  const inputs = { option: getRetrofitOption(100), annualEui: 80, area: 100,
+    electricityDailyKwh: 5, gasDailyKwh: 7, gasHeatingShare: 0.8, allElectric: true,
+    billReview: { electricityUnitRatePence: 26, gasUnitRatePence: 8 } };
+  const standard = projectRetrofit(inputs);
+  const specialist = projectRetrofit({ ...inputs, improvedElectricityRatePence: 20 });
+  expect(specialist.energySavedKwh).toBeCloseTo(standard.energySavedKwh);
+  expect(specialist.billSavedGbp - standard.billSavedGbp).toBeCloseTo((standard.energySavedKwh === null ? 0 : (inputs.annualEui * inputs.area - standard.energySavedKwh)) * 0.06);
+  expect(specialist.usingProjectedElectricityRate).toBe(true);
 });
 
 test("increasing scope never reverses EUI or bill savings with a consistent fuel assumption", () => {
