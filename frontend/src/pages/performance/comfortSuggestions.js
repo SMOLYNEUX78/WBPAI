@@ -13,12 +13,14 @@ export const homeComfortSuggestion = (rooms, now = Date.now()) => {
     return {
       key: "high-humidity",
       title: "Home comfort suggestion",
+      bannerText: cool ? "Comfort: heating could be turned on" : "Comfort: check ventilation",
       message: `${humid.label} humidity is ${Math.round(Number(humid.humidity))}%${cool ? ` at ${temp.toFixed(1)}°C` : ""}. Check for condensation and use kitchen or bathroom extraction if needed. If the room feels cool, consider gentle heating as well as ventilation.`,
     };
   }
   const cold = fresh.filter((room) => Number(room.internalTemp) > 0 && Number(room.internalTemp) < 18)
     .sort((a, b) => Number(a.internalTemp) - Number(b.internalTemp))[0];
   if (cold) return { key: "cool-room", title: "Home comfort suggestion",
+    bannerText: "Comfort: heating could be turned on",
     message: `${cold.label} is ${Number(cold.internalTemp).toFixed(1)}°C. Consider warming the room if it is occupied.` };
   return null;
 };

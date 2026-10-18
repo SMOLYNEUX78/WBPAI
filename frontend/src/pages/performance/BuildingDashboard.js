@@ -13841,7 +13841,7 @@ const BuildingDashboard = () => {
             </div>
           </div>
           {showComfortBanner ? <div className="mx-auto mt-3 flex max-w-7xl items-start gap-3 border-l-4 border-amber-600 bg-white px-3 py-2 text-sm text-gray-900" role="status">
-            <div className="min-w-0 flex-1"><strong>{comfortSuggestion.title}</strong><p>{comfortSuggestion.message}</p></div>
+            <p className="min-w-0 flex-1">{comfortSuggestion.bannerText || comfortSuggestion.message}</p>
             <button type="button" aria-label="Dismiss comfort suggestion" className="shrink-0 px-2 text-lg leading-none" onClick={() => {
               const dismissed = { key: comfortSuggestion.key, until: Date.now() + 12 * 60 * 60 * 1000 };
               window.localStorage.setItem("wbp-comfort-dismissed", JSON.stringify(dismissed));

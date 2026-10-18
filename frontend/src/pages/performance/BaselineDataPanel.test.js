@@ -267,11 +267,11 @@ test("baseline shows every historical red metric plus performance and recent con
   expect(screen.getByText("Upstairs VOCs")).toBeInTheDocument();
   expect(screen.getByText("Upstairs HCHO")).toBeInTheDocument();
   expect(screen.getByText("Upstairs NO2")).toBeInTheDocument();
-  expect(screen.getByText("Summer heat")).toBeInTheDocument();
+  expect(screen.getByText("Heat exclusion")).toBeInTheDocument();
   const fabric = screen.getByRole("heading", { name: "Fabric" });
   expect(screen.getByRole("heading", { name: "Energy" }).parentElement.parentElement).toContainElement(fabric);
   expect(fabric.parentElement).toHaveTextContent("Heat demand");
-  expect(fabric.parentElement).toHaveTextContent("Summer heat");
+  expect(fabric.parentElement).toHaveTextContent("Heat exclusion");
   expect(screen.queryByText("Upstairs RH recently")).not.toBeInTheDocument();
   expect(screen.getByText("Downstairs PM2.5 recently")).toBeInTheDocument();
   rpc.mockRestore();

@@ -24,10 +24,10 @@ const formatHealthMeasurement = (finding) => {
   }
   return Number.isFinite(finding.observedAverage) ? `${format(finding.observedAverage)} ${finding.unit}` : "Pending";
 };
-const ConcernRow = ({ label, measurement, detail, tone = "red", heading = false }) => {
+const ConcernRow = ({ label, measurement, detail, tone = "red", heading = false, plain = false }) => {
   const Label = heading ? "h4" : "span";
   return <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,auto)] items-start gap-x-3 gap-y-1 text-sm">
-  <Label className={`min-w-0 border-l-4 px-2 py-1 font-semibold ${tone === "red" ? "border-red-700 bg-red-50 text-red-900" : tone === "amber" ? "border-amber-600 bg-amber-50 text-amber-900" : tone === "green" ? "border-emerald-700 bg-emerald-50 text-emerald-900" : "border-gray-400 bg-gray-100 text-gray-900"}`}>{label}</Label>
+  <Label className={plain ? "min-w-0 py-1 font-semibold" : `min-w-0 border-l-4 px-2 py-1 font-semibold ${tone === "red" ? "border-red-700 bg-red-50 text-red-900" : tone === "amber" ? "border-amber-600 bg-amber-50 text-amber-900" : tone === "green" ? "border-emerald-700 bg-emerald-50 text-emerald-900" : "border-gray-400 bg-gray-100 text-gray-900"}`}>{label}</Label>
   <strong className="min-w-0 py-1 text-right text-sm font-semibold break-words">{measurement || "Pending"}</strong>
   {detail ? <span className="col-span-2 text-xs text-gray-700">{detail}</span> : null}
 </div>;
@@ -113,33 +113,33 @@ export default function BaselineDataPanel({ DetailSurface, onOpenDetailedReport,
         <button type="button" onClick={onOpenDetailedReport} className="border border-emerald-800 px-2 py-1.5 text-xs font-semibold text-emerald-900 hover:bg-emerald-50">Detailed report</button>
       </div>
     </div>
-    <div className="wbp-baseline-scores mt-3 grid gap-6 sm:grid-cols-2">
-      <div className={`border-l-4 p-4 ${!hasEui ? "border-gray-400 bg-gray-100" : aboveTarget ? "border-amber-600 bg-amber-50" : "border-emerald-700 bg-emerald-50"}`}>
+    <div className="wbp-baseline-scores mt-3 grid gap-3 sm:grid-cols-2">
+      <div className={`border p-4 ${!hasEui ? "border-gray-300 bg-gray-100" : aboveTarget ? "border-amber-400 bg-amber-50" : "border-emerald-400 bg-emerald-50"}`}>
         <div className="flex items-baseline justify-between gap-3">
           <h3 className="text-base font-bold">Energy</h3>
-          <span className="text-lg font-bold">{Number.isFinite(baseline.energyScore) ? `${Math.round(baseline.energyScore)}/100` : "Pending"}</span>
+          <span className="text-sm font-bold">{Number.isFinite(baseline.energyScore) ? `${Math.round(baseline.energyScore)}/100` : "Pending"}</span>
         </div>
         <div className="mt-4">
-          <ConcernRow label="EUI" heading measurement={hasEui ? `${eui.toFixed(1)} kWh/m²/year` : "Pending"} tone={aboveTarget ? "amber" : hasEui ? "green" : "neutral"} detail={hasEui && Number.isFinite(target) && target > 0 ? `${aboveTarget ? "Above" : "At or below"} WBP’s ${target.toFixed(0)} kWh/m²/year planning target.` : null} />
+          <ConcernRow label="EUI" heading plain measurement={hasEui ? `${eui.toFixed(1)} kWh/m²/year` : "Pending"} detail={hasEui && Number.isFinite(target) && target > 0 ? `${aboveTarget ? "Above" : "At or below"} WBP’s ${target.toFixed(0)} kWh/m²/year planning target.` : null} />
         </div>
         {fabricConcerns.length > 0 ? <div className="mt-4 space-y-2" aria-label="Fabric">
           <h4 className="text-sm font-bold">Fabric</h4>
-          {fabricConcerns.map((concern) => <ConcernRow key={concern.key} label={concern.label} tone={concern.status === "poor" ? "red" : "amber"} measurement={concern.measurement || concern.detail} detail={concern.explanation} />)}
+          {fabricConcerns.map((concern) => <ConcernRow key={concern.key} plain label={concern.key === "heat-exclusion" ? "Heat exclusion" : concern.label} measurement={concern.measurement || concern.detail} detail={concern.explanation} />)}
         </div> : null}
       </div>
-      <div className={`border-l-4 p-4 ${!Number.isFinite(baseline.healthScore) ? "border-gray-400 bg-gray-100" : baseline.healthScore < 60 ? "border-red-700 bg-red-50" : baseline.healthScore < 80 ? "border-amber-600 bg-amber-50" : "border-emerald-700 bg-emerald-50"}`}>
+      <div className={`border p-4 ${!Number.isFinite(baseline.healthScore) ? "border-gray-300 bg-gray-100" : baseline.healthScore < 60 ? "border-red-400 bg-red-50" : baseline.healthScore < 80 ? "border-amber-400 bg-amber-50" : "border-emerald-400 bg-emerald-50"}`}>
         <div className="flex items-baseline justify-between gap-3">
           <h3 className="text-base font-bold">Health</h3>
-          <span className="text-lg font-bold">{Number.isFinite(baseline.healthScore) ? `${Math.round(baseline.healthScore)}/100` : "Pending"}</span>
+          <span className="text-sm font-bold">{Number.isFinite(baseline.healthScore) ? `${Math.round(baseline.healthScore)}/100` : "Pending"}</span>
         </div>
         <div className="mt-4">
         {historicalHealth.status === "ready" ? <div className="space-y-2 text-sm">
           {historyError ? <p role="status" className="text-amber-800">Showing the last saved readings. <button type="button" className="underline" onClick={() => setHistoryRetry((value) => value + 1)}>Retry</button></p> : null}
           {PRIMARY_HEALTH_FIELDS.map(({ field, label }) => {
             const finding = historicalHealth.findings.find((item) => item.field === field);
-            return finding && (field !== "upstairs_humidity" || finding.redDays > 0) ? <ConcernRow key={field} label={label} tone={finding.redDays > 0 ? "red" : "green"} measurement={formatHealthMeasurement(finding)} detail={`${finding.redDays} of ${finding.observedDays} observed days in the red${finding.redDays > 0 ? "; range of red-day daily averages" : "; overall daily average shown"}`} /> : null;
+            return finding && (field !== "upstairs_humidity" || finding.redDays > 0) ? <ConcernRow key={field} plain label={label} measurement={formatHealthMeasurement(finding)} detail={`${finding.redDays} of ${finding.observedDays} observed days in the red${finding.redDays > 0 ? "; range of red-day daily averages" : "; overall daily average shown"}`} /> : null;
           })}
-          {otherHistoricalFlags.map((finding) => <ConcernRow key={finding.field} label={finding.label} measurement={formatHealthMeasurement(finding)} detail={`${finding.redDays} of ${finding.observedDays} observed days in the red; range of red-day daily averages`} />)}
+          {otherHistoricalFlags.map((finding) => <ConcernRow key={finding.field} plain label={finding.label} measurement={formatHealthMeasurement(finding)} detail={`${finding.redDays} of ${finding.observedDays} observed days in the red; range of red-day daily averages`} />)}
           {!historicalHealth.findings.length ? <p>Historical sensor readings unavailable</p> : null}
         </div> : <p className="mt-2 text-sm">{historicalHealth.status === "loading" ? "Checking past readings..." : <>Historical readings unavailable. <button type="button" className="underline" onClick={() => setHistoryRetry((value) => value + 1)}>Retry</button></>}</p>}
         </div>
