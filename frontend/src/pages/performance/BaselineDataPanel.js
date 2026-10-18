@@ -3,7 +3,7 @@ import supabase from "../../supabaseClient";
 import { DATA_LICENCE_REFERENCE_GBP_PER_YEAR } from "./retrofitEconomics";
 import RetrofitPlanner from "./RetrofitPlanner";
 import { buildBaselineReportHtml } from "./baselineReport";
-import { fetchHistoricalHealthDays, summariseHistoricalHealth } from "./historicalHealth";
+import { fetchHistoricalHealthDays, readHistoricalHealthSnapshot, summariseHistoricalHealth, writeHistoricalHealthSnapshot } from "./historicalHealth";
 
 const LICENCE_PARTS = [
   { label: "Energy performance", value: 144, colour: "#087f5b" },
@@ -26,7 +26,7 @@ export default function BaselineDataPanel({ DetailSurface, onOpenDetailedReport,
   const [ownerExport, setOwnerExport] = useState(null);
   const [exportError, setExportError] = useState("");
   const [downloadLoading, setDownloadLoading] = useState(false);
-  const [historicalHealth, setHistoricalHealth] = useState({ status: "loading", findings: [] });
+  const [historicalHealth, setHistoricalHealth] = useState(() => readHistoricalHealthSnapshot(baseline.buildingId, baseline.sourceBuildingId || "home") || { status: "loading", findings: [] });
   const area = Number(baseline.area);
   const eui = Number(baseline.annualEui);
   const target = Number(baseline.targetEui);
@@ -38,10 +38,20 @@ export default function BaselineDataPanel({ DetailSurface, onOpenDetailedReport,
       setHistoricalHealth({ status: "unavailable", findings: [] });
       return undefined;
     }
+    const sourceBuildingId = baseline.sourceBuildingId || "home";
+    const snapshot = readHistoricalHealthSnapshot(baseline.buildingId, sourceBuildingId);
+    if (snapshot) {
+      setHistoricalHealth(snapshot);
+      return undefined;
+    }
     setHistoricalHealth({ status: "loading", findings: [] });
-    fetchHistoricalHealthDays(supabase, baseline.sourceBuildingId || "home")
+    fetchHistoricalHealthDays(supabase, sourceBuildingId)
       .then((rows) => {
-        if (!cancelled) setHistoricalHealth({ status: "ready", findings: summariseHistoricalHealth(rows) });
+        if (!cancelled) {
+          const findings = summariseHistoricalHealth(rows);
+          writeHistoricalHealthSnapshot(baseline.buildingId, sourceBuildingId, findings);
+          setHistoricalHealth({ status: "ready", findings });
+        }
       })
       .catch(() => {
         if (!cancelled) setHistoricalHealth({ status: "unavailable", findings: [] });
@@ -52,7 +62,6 @@ export default function BaselineDataPanel({ DetailSurface, onOpenDetailedReport,
   const otherHistoricalFlags = historicalFlags.filter((finding) => !PRIMARY_HEALTH_FIELDS.some((item) => item.field === finding.field));
   const fabricConcerns = (baseline.performanceConcerns || []).filter((concern) => FABRIC_CONCERN_KEYS.has(concern.key));
   const otherPerformanceConcerns = (baseline.performanceConcerns || []).filter((concern) => !FABRIC_CONCERN_KEYS.has(concern.key));
-  const otherRecentReadings = (baseline.redReadings || []).filter((reading) => reading.key !== "upstairs:humidity");
 
   const loadOwnerExport = async () => {
     if (!baseline.buildingId) throw new Error("Save this home profile before viewing its readings.");
@@ -131,9 +140,8 @@ export default function BaselineDataPanel({ DetailSurface, onOpenDetailedReport,
         </div>
       </div>
     </div>
-    {(otherPerformanceConcerns.length > 0 || otherRecentReadings.length > 0) ? <div className="mt-4 space-y-2" aria-label="Other areas to review">
+    {otherPerformanceConcerns.length > 0 ? <div className="mt-4 space-y-2" aria-label="Other areas to review">
       {otherPerformanceConcerns.map((concern) => <ConcernRow key={concern.key} label={concern.label} tone={concern.status === "poor" ? "red" : "amber"} detail={concern.detail} />)}
-      {otherRecentReadings.map((reading) => <ConcernRow key={reading.key} label={`${reading.label} recently`} detail={`${reading.value} ${reading.unit}`} />)}
     </div> : null}
     {exportError ? <p role="alert" className="mt-2 text-right text-sm text-red-800">{exportError}</p> : null}
     <div className="wbp-baseline-options mt-7 border-t border-gray-200 pt-5">

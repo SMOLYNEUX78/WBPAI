@@ -1290,7 +1290,7 @@ const getEstimatedInternalArea = (modelId, building) => {
   return building.estimatedInternalArea;
 };
 
-const BuildingDashboardPanel = ({ building, isActive = false }) => {
+const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const dataSourceBuildingId = building.dataSourceId || building.id;
@@ -7092,7 +7092,10 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
     ? "good"
     : nightCooldownStatus;
   const shouldShowDeepDive = Boolean(occupyDetail);
-  const redReadings = dataSourceBuildingId === "home" ? liveRedReadings(roomIaqData, alertClock) : [];
+  const redReadings = useMemo(() => dataSourceBuildingId === "home" ? liveRedReadings(roomIaqData, alertClock) : [], [dataSourceBuildingId, roomIaqData, alertClock]);
+  useEffect(() => {
+    if (isActive) onLiveRedChange?.(redReadings);
+  }, [isActive, onLiveRedChange, redReadings]);
   const baselinePerformanceConcerns = [
     { key: "hdd", label: "Heat demand", status: hddStatus, detail: Number.isFinite(hddIntensityPerM2) ? `${hddIntensityPerM2.toFixed(3)} kWh/m²/HDD` : "" },
     { key: "htc", label: "Heat loss", status: htcStatus, detail: Number.isFinite(htcPerM2) ? `${htcPerM2.toFixed(1)} W/m²K` : "" },
@@ -7859,15 +7862,6 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
               showStandardDeepDiveToggle: true,
             })
           )}
-
-          {redReadings.length > 0 ? <div className="mx-3 mb-3 border-l-4 border-red-600 bg-red-50 px-4 py-3 text-red-950 sm:mx-5 sm:px-5" role="status" aria-label="Live readings in the red band">
-            <p className="text-base font-bold sm:text-lg">Live readings in the red</p>
-            <div className="mt-2 flex flex-wrap gap-x-5 gap-y-2">
-              {redReadings.map((reading) => <span key={reading.key} className="text-sm font-semibold sm:text-base">
-                {reading.label}: <strong>{reading.value} {reading.unit}</strong>
-              </span>)}
-            </div>
-          </div> : null}
 
           {!isCarbonCreditTab && building.id === "museum" ? (
             <button type="button" className="wbp-museum-deep-dive-button" onClick={() => setOccupyDetail("performance")}>Deep Dive</button>
@@ -13522,6 +13516,7 @@ const BuildingDashboard = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [headerRedReadings, setHeaderRedReadings] = useState([]);
   const accountMenuRef = useRef(null);
   const [accruedDataDays, setAccruedDataDays] = useState(null);
   const accessParams = new URLSearchParams(location.search);
@@ -13676,6 +13671,7 @@ const BuildingDashboard = () => {
               <span className={`px-2 py-1 text-xs font-bold uppercase text-white ${accessRole === "architect" ? "bg-blue-700" : accessRole === "builder" ? "bg-amber-700" : "bg-emerald-700"}`}>
                 {roleLabel}
               </span>
+              {accessRole === "homeowner" && ["home", "bl", "rf", "cc"].includes(activeBuilding.id) ? headerRedReadings.map((reading) => <span key={reading.key} role="status" className="border-l-4 border-red-700 bg-red-50 px-2 py-1 text-xs font-semibold text-red-900">{reading.label}: {reading.value}{reading.unit === "%" ? "%" : ` ${reading.unit}`}</span>) : null}
             </div>
             <div ref={accountMenuRef} className="relative shrink-0">
               <button type="button" aria-label="Open account menu" aria-expanded={accountMenuOpen} aria-controls="wbp-account-menu" onClick={() => setAccountMenuOpen((open) => !open)} className="flex h-9 w-10 items-center justify-center border border-gray-300 bg-white text-xl leading-none text-gray-900 hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-700">{"\u2630"}</button>
@@ -13723,7 +13719,7 @@ const BuildingDashboard = () => {
                 ) : building.exchangeOnly ? (
                   <ExchangeDashboardPanel homeValue={new URLSearchParams(location.search).get("source") === "cc" ? bridgewoodValue : null} />
                 ) : (
-                  <BuildingDashboardPanel building={building} isActive={isActiveSlide} />
+                  <BuildingDashboardPanel building={building} isActive={isActiveSlide} onLiveRedChange={setHeaderRedReadings} />
                 )}
               </div>
             );

@@ -2,10 +2,11 @@ import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import BaselineDataPanel from "./BaselineDataPanel";
 import { buildBaselineReportHtml } from "./baselineReport";
-import { summariseHistoricalHealth } from "./historicalHealth";
+import { readHistoricalHealthSnapshot, summariseHistoricalHealth, writeHistoricalHealthSnapshot } from "./historicalHealth";
 import supabase from "../../supabaseClient";
 
 const Surface = ({ title, children, onClose }) => <div role="dialog" aria-label={title}>{children}<button type="button" onClick={onClose}>Close</button></div>;
+beforeEach(() => localStorage.clear());
 
 test("baseline report keeps the page concise and colour-codes the scores", () => {
   render(<BaselineDataPanel DetailSurface={Surface} baseline={{
@@ -94,7 +95,7 @@ test("downloaded report includes architect evidence and excludes HTML injection"
   expect(html).toContain("1703.0 kWh");
   expect(html).toContain("long-term local weather reference");
   expect(html).toContain("Data licensing preparation");
-  expect(html).not.toContain("<script>");
+  expect(html).not.toContain("<script>alert(1)</script>");
   expect(html).toContain("4 of 20 observed days");
   expect(html).toContain("Areas to review");
   expect(html).toContain("Summer heat: 1.2 °C hotter than outside");
@@ -128,6 +129,19 @@ test("detailed report includes HLA evidence and dated seasonal trends", () => {
   expect(html).toContain("5.0 kWh/day");
   expect(html).toContain("Not available");
   expect(html).toContain("not proof of complete seasonal coverage");
+  expect(html).toContain('id="chart-season"');
+  expect(html).toContain('name="chart-period" value="day"');
+  expect(html).toContain('name="chart-period" value="week"');
+  expect(html).toContain('name="chart-period" value="month"');
+  expect(html).toContain('id="chart-plot"');
+});
+
+test("historical health snapshot is reused only for the same building and day", () => {
+  const date = new Date("2026-10-18T12:00:00Z");
+  writeHistoricalHealthSnapshot("record-1", "home", [{ field: "internal_temp", redDays: 2, observedDays: 10 }], date);
+  expect(readHistoricalHealthSnapshot("record-1", "home", date)?.findings[0].redDays).toBe(2);
+  expect(readHistoricalHealthSnapshot("record-2", "home", date)).toBeNull();
+  expect(readHistoricalHealthSnapshot("record-1", "home", new Date("2026-10-19T12:00:00Z"))).toBeNull();
 });
 
 test("historical health counts red daily averages only on observed days", () => {

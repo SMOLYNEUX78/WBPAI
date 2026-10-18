@@ -1,4 +1,23 @@
 const DAY_MS = 24 * 60 * 60 * 1000;
+const SNAPSHOT_VERSION = 1;
+
+export function readHistoricalHealthSnapshot(buildingId, sourceBuildingId, now = new Date()) {
+  if (!buildingId || typeof localStorage === "undefined") return null;
+  try {
+    const snapshot = JSON.parse(localStorage.getItem(`wbp:historical-health:${buildingId}:${sourceBuildingId}`) || "null");
+    return snapshot?.version === SNAPSHOT_VERSION && snapshot?.date === now.toISOString().slice(0, 10) && Array.isArray(snapshot.findings)
+      ? { status: "ready", findings: snapshot.findings } : null;
+  } catch { return null; }
+}
+
+export function writeHistoricalHealthSnapshot(buildingId, sourceBuildingId, findings, now = new Date()) {
+  if (!buildingId || typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(`wbp:historical-health:${buildingId}:${sourceBuildingId}`, JSON.stringify({
+      version: SNAPSHOT_VERSION, date: now.toISOString().slice(0, 10), findings,
+    }));
+  } catch { /* Storage may be unavailable; the live result remains usable. */ }
+}
 
 const checks = [
   { field: "internal_temp", label: "Whole-home temperature", red: (v) => v < 16 || v >= 24 },
