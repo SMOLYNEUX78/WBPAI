@@ -17,7 +17,7 @@ test("baseline report keeps the page concise and colour-codes the scores", () =>
     rooms: [{ key: "upstairs", label: "Upstairs", timestamp: "2026-10-17T12:00:00Z" }, { key: "downstairs", label: "Downstairs", timestamp: "2026-10-17T12:00:00Z" }],
     redReadings: [{ key: "upstairs:humidity", label: "Upstairs RH", value: 72, unit: "%" }],
   }} />);
-  expect(screen.getByRole("heading", { name: "Baseline report" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Baseline report: issues found" })).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: "Energy" }).parentElement).toHaveTextContent("74/100");
   expect(screen.getByRole("heading", { name: "Health" }).parentElement).toHaveTextContent("72/100");
   expect(screen.getByRole("heading", { name: "Energy" }).parentElement.parentElement).toHaveClass("bg-amber-50");
@@ -29,7 +29,7 @@ test("baseline report keeps the page concise and colour-codes the scores", () =>
   expect(screen.queryByText(/Upstairs RH: 72 %/)).not.toBeInTheDocument();
   expect(screen.getByText(/WBP’s 35 kWh\/m²\/year planning target/)).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Detailed report" })).toBeInTheDocument();
-  expect(screen.getByRole("heading", { name: "Baseline report" }).parentElement).toContainElement(screen.getByRole("button", { name: "Detailed report" }));
+  expect(screen.getByRole("heading", { name: "Baseline report: issues found" }).parentElement).toContainElement(screen.getByRole("button", { name: "Detailed report" }));
   expect(screen.getByRole("button", { name: /Sell baseline data/ })).toHaveClass("min-h-32");
   expect(screen.queryByText(/100% baseline scenario/)).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: /Property report/ })).not.toBeInTheDocument();
@@ -215,6 +215,7 @@ test("health concerns show red-day measurements opposite the label and counts be
   writeHistoricalHealthSnapshot("record-1", "home", [{ field: "downstairs_humidity", label: "Downstairs humidity", unit: "%", observedDays: 121, redDays: 29, redMin: 70, redMax: 78, observedAverage: 66 }]);
   render(<BaselineDataPanel DetailSurface={Surface} baseline={{ buildingId: "record-1", sourceBuildingId: "home", healthScore: 72 }} />);
   const label = screen.getByText("Downstairs humidity");
+  expect(label).toHaveClass("bg-red-50", "border-red-700");
   expect(label.nextElementSibling).toHaveTextContent("70.0–78.0 %");
   expect(label.nextElementSibling).toHaveClass("text-sm");
   expect(label.parentElement).toHaveTextContent("29 of 121 observed days in the red");
@@ -230,6 +231,8 @@ test("health summary shows historical red days rather than a live flag", async (
   expect(await screen.findByText("Upstairs humidity")).toBeInTheDocument();
   expect(screen.getByText("Downstairs humidity")).toBeInTheDocument();
   expect(screen.getByText("Temperature")).toBeInTheDocument();
+  expect(screen.getByText("Temperature")).toHaveClass("bg-red-50");
+  expect(screen.getByText("Downstairs humidity")).toHaveClass("bg-red-50");
   expect(screen.getAllByText("1 of 2 observed days in the red")).toHaveLength(3);
   expect(screen.queryByText(/Observed days have a usable daily average/)).not.toBeInTheDocument();
   expect(screen.queryByText(/Upstairs RH: 80/)).not.toBeInTheDocument();

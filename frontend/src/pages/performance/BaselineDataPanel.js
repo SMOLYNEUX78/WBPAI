@@ -106,9 +106,9 @@ export default function BaselineDataPanel({ DetailSurface, onOpenDetailedReport,
     }
   };
 
-  return <section className="wbp-baseline-report -mx-4 border-t border-gray-300 bg-white px-4 py-4 text-gray-900 sm:px-8" aria-label="Baseline report">
+  return <section className="wbp-baseline-report -mx-4 border-t border-gray-300 bg-white px-4 py-4 text-gray-900 sm:px-8" aria-label="Baseline report: issues found">
     <div className="flex flex-wrap items-center justify-between gap-3">
-      <h2 className="text-base font-bold">Baseline report</h2>
+      <h2 className="text-base font-bold">Baseline report: issues found</h2>
       <div className="flex shrink-0 items-center gap-2">
         <button type="button" onClick={onOpenDetailedReport} className="border border-emerald-800 px-2 py-1.5 text-xs font-semibold text-emerald-900 hover:bg-emerald-50">Detailed report</button>
       </div>
@@ -137,9 +137,9 @@ export default function BaselineDataPanel({ DetailSurface, onOpenDetailedReport,
           {historyError ? <p role="status" className="text-amber-800">Showing the last saved readings. <button type="button" className="underline" onClick={() => setHistoryRetry((value) => value + 1)}>Retry</button></p> : null}
           {PRIMARY_HEALTH_FIELDS.map(({ field, label }) => {
             const finding = historicalHealth.findings.find((item) => item.field === field);
-            return finding && (field !== "upstairs_humidity" || finding.redDays > 0) ? <ConcernRow key={field} plain label={label} measurement={formatHealthMeasurement(finding)} detail={`${finding.redDays} of ${finding.observedDays} observed days in the red${finding.redDays > 0 ? "; range of red-day daily averages" : "; overall daily average shown"}`} /> : null;
+            return finding && (field !== "upstairs_humidity" || finding.redDays > 0) ? <ConcernRow key={field} plain={finding.redDays === 0} label={label} measurement={formatHealthMeasurement(finding)} detail={`${finding.redDays} of ${finding.observedDays} observed days in the red${finding.redDays > 0 ? "; range of red-day daily averages" : "; overall daily average shown"}`} /> : null;
           })}
-          {otherHistoricalFlags.map((finding) => <ConcernRow key={finding.field} plain label={finding.label} measurement={formatHealthMeasurement(finding)} detail={`${finding.redDays} of ${finding.observedDays} observed days in the red; range of red-day daily averages`} />)}
+          {otherHistoricalFlags.map((finding) => <ConcernRow key={finding.field} label={finding.label} measurement={formatHealthMeasurement(finding)} detail={`${finding.redDays} of ${finding.observedDays} observed days in the red; range of red-day daily averages`} />)}
           {!historicalHealth.findings.length ? <p>Historical sensor readings unavailable</p> : null}
         </div> : <p className="mt-2 text-sm">{historicalHealth.status === "loading" ? "Checking past readings..." : <>Historical readings unavailable. <button type="button" className="underline" onClick={() => setHistoryRetry((value) => value + 1)}>Retry</button></>}</p>}
         </div>
