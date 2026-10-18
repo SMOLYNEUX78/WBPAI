@@ -529,6 +529,8 @@ async function upsertCarbonSavingsSummary({ rows, toDate }) {
     (sum, row) => sum + row.carbon_credits,
     0
   );
+  const fuelTotal = (field) => summaryRows.reduce((sum, row) =>
+    sum + Number(row.raw_payload?.[field] ?? row[field] ?? 0), 0);
   const latest = summaryRows[summaryRows.length - 1] || null;
   const first = summaryRows[0] || null;
   const uniqueMeteredDays = new Set(summaryRows.map(rowDate).filter(Boolean)).size;
@@ -558,6 +560,10 @@ async function upsertCarbonSavingsSummary({ rows, toDate }) {
       gasKgCo2ePerKwh: GAS_KGCO2E_PER_KWH,
       electricityPriceGbpPerKwh: ELECTRICITY_PRICE_GBP_PER_KWH,
       gasPriceGbpPerKwh: GAS_PRICE_GBP_PER_KWH,
+      baselineElectricityKwh: fuelTotal("baseline_electricity_kwh"),
+      baselineGasKwh: fuelTotal("baseline_gas_kwh"),
+      improvedElectricityKwh: fuelTotal("improved_electricity_kwh"),
+      improvedGasKwh: fuelTotal("improved_gas_kwh"),
       energyValueMethod: ENERGY_VALUE_METHOD,
       summaryAggregation: "interval_accrued_plus_daily_fallback",
       summaryRows: summaryRows.length,

@@ -15,7 +15,7 @@ export default function RetrofitPlanner({ ready, embedded = false, postcode, loc
   const [packOpen, setPackOpen] = useState(false);
   const [annualPremium, setAnnualPremium] = useState("");
   const option = getRetrofitOption(worksScope);
-  const projection = projectRetrofit({ option, annualEui, area, electricityDailyKwh, gasDailyKwh, billReview });
+  const projection = projectRetrofit({ option, annualEui, area, electricityDailyKwh, gasDailyKwh, billReview, allElectric: true });
   const annualBenefit = getAnnualBenefitBreakdown(projection.scenarios[1], annualPremium);
   const lowBenefit = getAnnualBenefitBreakdown(projection.scenarios[0], annualPremium);
   const highBenefit = getAnnualBenefitBreakdown(projection.scenarios[2], annualPremium);
@@ -64,7 +64,8 @@ export default function RetrofitPlanner({ ready, embedded = false, postcode, loc
               </div>
             </div>
             <p className="wbp-retrofit-outcome">{projection.scenarios[1].energySavedKwh === null ? "Energy saving pending" : `${Math.round(projection.scenarios[1].energySavedKwh).toLocaleString("en-GB")} kWh/yr energy saved`} · {projection.scenarios[1].carbonSavedTonnes === null ? "Carbon saving pending" : `${projection.scenarios[1].carbonSavedTonnes.toFixed(2)} tCO₂e/yr carbon saved`} · {projection.targetEui === null ? "Target EUI pending" : `Target EUI ${projection.targetEui.toFixed(1)} kWh/m²/yr`}</p>
-            <p className="wbp-retrofit-caveat">Indicative comparison only. Winter baseline and survey still needed; carbon, data licensing and insurance income is not secured. Data licensing is included in the pie but is independent of the retrofit result. The EnerPHit endpoint uses CC's illustrative EUI target, not a certified design. Bill and carbon savings hold the current fuel mix; heating changes need a separate design.</p>
+            <p className="text-xs text-gray-600">Bill savings use {projection.usingBillElectricityRate ? "your electricity rate" : "a reference electricity rate"} and {projection.usingBillGasRate ? "your gas rate" : "a reference gas rate"}. Standing charges are unchanged.</p>
+            <p className="wbp-retrofit-caveat">Indicative comparison only. Winter baseline and survey still needed; carbon, data licensing and insurance income is not secured. Data licensing is included in the pie but is independent of the retrofit result. The EnerPHit endpoint uses CC's illustrative all-electric EUI target, not a certified design. Heating changes need a separate design.</p>
             {!embedded ? <div className="wbp-retrofit-actions"><button type="button" onClick={() => setPackOpen(true)}>View retrofit pack</button></div> : null}
             {embedded ? <div className="wbp-retrofit-next-steps">
               <div><h3>Funding avenues{localAuthority ? ` · ${localAuthority}` : ""}</h3>{postcode ? <p>Property postcode: {postcode}</p> : null}<p>Possible routes to check against the proposed measures and household eligibility. No award is assumed or deducted from the works cost.</p><ul>{fundingRoutes.map((source) => <li key={source.name}><a href={source.href} target="_blank" rel="noreferrer">{source.name}</a><span>{source.note}</span></li>)}</ul></div>

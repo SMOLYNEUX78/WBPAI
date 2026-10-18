@@ -13,7 +13,7 @@ import { extractEnergyBillImage, extractEnergyBillPdf, normaliseBillReview } fro
 import RetrofitPlanner from "./RetrofitPlanner";
 import BaselineDataPanel from "./BaselineDataPanel";
 import { buildDetailedReportHtml } from "./baselineReport";
-import { CC_CANDIDATE_PROFILE } from "./retrofitEconomics";
+import { CC_CANDIDATE_PROFILE, repriceCarbonSummary } from "./retrofitEconomics";
 import { normaliseSerial, readDeviceScan, suggestDeviceCandidates, visibleDeviceCandidates } from "./deviceScan";
 import { connectionForSensor } from "./sensorConnectors";
 import { calculateModelledWalletBalance } from "./dataWallet";
@@ -1631,8 +1631,7 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange })
     Number(summary.totalSavedKgCo2e) >= 0 &&
     Number.isFinite(Number(summary?.totalSavedKwh)) &&
     Number(summary.totalSavedKwh) >= 0 &&
-    Number.isFinite(Number(summary?.energyCostSavedGbp)) &&
-    Number(summary.energyCostSavedGbp) >= 0;
+    Number.isFinite(Number(summary?.energyCostSavedGbp));
   const normaliseCarbonIntervalSummary = (summary) =>
     hasUsableCarbonIntervalSummary(summary)
       ? {
@@ -5101,9 +5100,10 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange })
       summaryRow,
       calculationStatus = "current"
     ) => {
+      const billPricing = repriceCarbonSummary(summaryRow, normaliseBillReview(homeSetup.billReview));
       const totalSavedKgCo2e = Number(summaryRow.total_saved_kgco2e);
       const totalSavedKwh = Number(summaryRow.total_saved_kwh);
-      const energyCostSavedGbp = Number(summaryRow.total_energy_cost_saved_gbp);
+      const energyCostSavedGbp = billPricing?.valueGbp ?? Number(summaryRow.total_energy_cost_saved_gbp);
       const totalCredits = Number(summaryRow.carbon_credits);
       const latestSavedKgCo2e = Number(summaryRow.latest_saved_kgco2e);
 
@@ -5137,6 +5137,9 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange })
         carbonCredits: Number.isFinite(totalCredits) ? totalCredits : null,
         calculationVersion: summaryRow.calculation_version || null,
         calculationStatus,
+        energyTariffSource: billPricing
+          ? billPricing.electricityFromBill && billPricing.gasFromBill ? "uploaded bill" : "uploaded bill + reference"
+          : "reference",
       });
     };
     const isCurrentPersistedSavingsSummary = (summaryRow) => {
@@ -5621,7 +5624,7 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange })
     return () => clearInterval(interval);
     // CC values should refresh from the persisted summary, not raw readings.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dataSourceBuildingId, isCarbonCreditTab]);
+  }, [dataSourceBuildingId, isCarbonCreditTab, homeSetup.billReview?.electricityUnitRatePence, homeSetup.billReview?.gasUnitRatePence]);
 
   const estimatedElectricityDailyKwh = Number.isFinite(
     energySummary.electricityDailyAverage
@@ -6250,6 +6253,7 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange })
       energy: {
         savedKwh: carbonIntervalSavingsSummary.totalSavedKwh,
         energyValueGbp: carbonIntervalSavingsSummary.energyCostSavedGbp,
+        unitRateSource: carbonIntervalSavingsSummary.energyTariffSource || "reference",
       },
       checks: evidencePackChecks,
       checkGroups: groupedEvidencePackChecks,
@@ -8439,7 +8443,7 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange })
               {Number.isFinite(carbonIntervalSavingsSummary.totalSavedKwh) ? formatNumber(carbonIntervalSavingsSummary.totalSavedKwh, 1) : "--"}
             </p>
             <p className="text-sm text-gray-600">kWh</p>
-            <p className="mt-2 text-sm text-gray-600">Value: {Number.isFinite(carbonIntervalSavingsSummary.energyCostSavedGbp) ? formatCurrency(carbonIntervalSavingsSummary.energyCostSavedGbp) : "Pending calculation"}</p>
+            <p className="mt-2 text-sm text-gray-600">Energy bill impact: {Number.isFinite(carbonIntervalSavingsSummary.energyCostSavedGbp) ? formatCurrency(carbonIntervalSavingsSummary.energyCostSavedGbp) : "Pending calculation"} {carbonIntervalSavingsSummary.energyTariffSource ? `(${carbonIntervalSavingsSummary.energyTariffSource} unit rates)` : null}</p>
           </div>
           <div className="min-w-0 border-t border-gray-200 pt-4 sm:border-l sm:border-t-0 sm:pl-5 sm:pt-0">
             <p className="text-xs font-semibold uppercase text-gray-600">Potential data value</p>

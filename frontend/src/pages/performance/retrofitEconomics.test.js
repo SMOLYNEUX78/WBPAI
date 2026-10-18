@@ -1,4 +1,4 @@
-import { CC_CANDIDATE_PROFILE, getAnnualBenefitBreakdown, getRetrofitOption, projectInsuranceSaving, projectRetrofit, RETROFIT_OPTIONS } from "./retrofitEconomics";
+import { CC_CANDIDATE_PROFILE, getAnnualBenefitBreakdown, getRetrofitOption, projectInsuranceSaving, projectRetrofit, repriceCarbonSummary, RETROFIT_OPTIONS } from "./retrofitEconomics";
 
 test("interpolates works scope between package anchors", () => {
   expect(getRetrofitOption(0).reduction).toBe(15);
@@ -66,6 +66,27 @@ test("uses measured fuel shares and bill rates for conditional annual values", (
   expect(result.scenarios.map((scenario) => scenario.carbonValueGbp)).toEqual([
     0, result.carbonSavedTonnes * 65, result.carbonSavedTonnes * 1.25 * 150,
   ]);
+});
+
+test("recognises a confirmed bill rate even when it matches the reference rate", () => {
+  const result = projectRetrofit({ option: RETROFIT_OPTIONS[0], annualEui: 100, area: 100,
+    electricityDailyKwh: 5, gasDailyKwh: 5,
+    billReview: { electricityUnitRatePence: "26.32", gasUnitRatePence: "7.97" } });
+  expect(result.usingBillElectricityRate).toBe(true);
+  expect(result.usingBillGasRate).toBe(true);
+});
+
+test("reprices CC fuel quantities with uploaded unit rates, without standing charges", () => {
+  const summary = { raw_payload: { baselineElectricityKwh: 100, baselineGasKwh: 200,
+    improvedElectricityKwh: 150, improvedGasKwh: 0,
+    electricityPriceGbpPerKwh: 0.245, gasPriceGbpPerKwh: 0.06 } };
+  expect(repriceCarbonSummary(summary, { electricityUnitRatePence: "25", gasUnitRatePence: "8",
+    gasStandingChargePence: "35" })).toMatchObject({ valueGbp: 3.5,
+    electricityFromBill: true, gasFromBill: true });
+  expect(repriceCarbonSummary(summary, { electricityUnitRatePence: "25" })).toMatchObject({
+    valueGbp: -0.5, electricityFromBill: true, gasFromBill: false });
+  expect(repriceCarbonSummary(summary, {})).toBeNull();
+  expect(repriceCarbonSummary({ raw_payload: { electricityPriceGbpPerKwh: 0.245 } }, { electricityUnitRatePence: "25" })).toBeNull();
 });
 
 test("does not invent fuel-dependent earnings without a metered split", () => {

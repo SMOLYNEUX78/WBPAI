@@ -55,10 +55,40 @@ export function getAnnualBenefitBreakdown(scenario, annualPremium) {
   return { parts, total: parts.reduce((sum, part) => sum + part.value, 0) - energyCostIncrease, energyCostIncrease, insuranceIncluded: insuranceSaving !== null };
 }
 
-const validRate = (value, fallback) => {
+export const billUnitRatePence = (value) => {
   const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed > 0 && parsed < 100 ? parsed : fallback;
+  return Number.isFinite(parsed) && parsed > 0 && parsed < 100 ? parsed : null;
 };
+
+export function energyBillImpactGbp({ baselineElectricityKwh, baselineGasKwh, improvedElectricityKwh, improvedGasKwh = 0, electricityRatePence, gasRatePence }) {
+  return ((baselineElectricityKwh - improvedElectricityKwh) * electricityRatePence
+    + (baselineGasKwh - improvedGasKwh) * gasRatePence) / 100;
+}
+
+export function repriceCarbonSummary(summary, billReview = {}) {
+  let raw = summary?.raw_payload || {};
+  if (typeof raw === "string") {
+    try { raw = JSON.parse(raw); } catch { return null; }
+  }
+  const quantityKeys = ["baselineElectricityKwh", "baselineGasKwh", "improvedElectricityKwh", "improvedGasKwh"];
+  if (!quantityKeys.every((key) => Object.prototype.hasOwnProperty.call(raw, key))) return null;
+  const quantities = quantityKeys.map((key) => Number(raw[key]));
+  const electricityBillRate = billUnitRatePence(billReview.electricityUnitRatePence);
+  const gasBillRate = billUnitRatePence(billReview.gasUnitRatePence);
+  if (quantities.some((value) => !Number.isFinite(value) || value < 0) || (!electricityBillRate && !gasBillRate)) return null;
+  const electricityRatePence = electricityBillRate ?? Number(raw.electricityPriceGbpPerKwh) * 100;
+  const gasRatePence = gasBillRate ?? Number(raw.gasPriceGbpPerKwh) * 100;
+  if (![electricityRatePence, gasRatePence].every((value) => Number.isFinite(value) && value > 0)) return null;
+  return {
+    valueGbp: energyBillImpactGbp({
+      baselineElectricityKwh: quantities[0], baselineGasKwh: quantities[1],
+      improvedElectricityKwh: quantities[2], improvedGasKwh: quantities[3],
+      electricityRatePence, gasRatePence,
+    }),
+    electricityFromBill: electricityBillRate !== null,
+    gasFromBill: gasBillRate !== null,
+  };
+}
 
 export function projectRetrofit({ option, annualEui, area, electricityDailyKwh, gasDailyKwh, billReview = {}, energyPriceChangePercent = 0, carbonPriceChangePercent = 0, allElectric = false }) {
   const validArea = Number.isFinite(area) && area > 0;
@@ -78,10 +108,16 @@ export function projectRetrofit({ option, annualEui, area, electricityDailyKwh, 
   const fuelSwitchProgress = allElectric ? progress : 0;
   const electricitySavedKwh = energySavedKwh !== null && hasFuelSplit ? baselineKwh * electricityShare - (targetKwh - targetKwh * gasShare * (1 - fuelSwitchProgress)) : null;
   const gasSavedKwh = energySavedKwh !== null && hasFuelSplit ? baselineKwh * gasShare - targetKwh * gasShare * (1 - fuelSwitchProgress) : null;
-  const electricityRate = validRate(billReview.electricityUnitRatePence, OFGEM_OCT_2026_PENCE.electricity);
-  const gasRate = validRate(billReview.gasUnitRatePence, OFGEM_OCT_2026_PENCE.gas);
+  const electricityBillRate = billUnitRatePence(billReview.electricityUnitRatePence);
+  const gasBillRate = billUnitRatePence(billReview.gasUnitRatePence);
+  const electricityRate = electricityBillRate ?? OFGEM_OCT_2026_PENCE.electricity;
+  const gasRate = gasBillRate ?? OFGEM_OCT_2026_PENCE.gas;
   const billSavedGbp = hasFuelSplit && energySavedKwh !== null
-    ? (electricitySavedKwh * electricityRate + gasSavedKwh * gasRate) / 100 : null;
+    ? energyBillImpactGbp({ baselineElectricityKwh: baselineKwh * electricityShare,
+      baselineGasKwh: baselineKwh * gasShare,
+      improvedElectricityKwh: baselineKwh * electricityShare - electricitySavedKwh,
+      improvedGasKwh: baselineKwh * gasShare - gasSavedKwh,
+      electricityRatePence: electricityRate, gasRatePence: gasRate }) : null;
   const carbonSavedTonnes = hasFuelSplit && energySavedKwh !== null
     ? (electricitySavedKwh * DESNZ_2026_KG_CO2E_PER_KWH.electricity + gasSavedKwh * DESNZ_2026_KG_CO2E_PER_KWH.gas) / 1000 : null;
   const costRangeGbp = validArea ? option.fixedCost.map((fixed, index) => fixed + area * option.areaCost[index]) : null;
@@ -104,7 +140,7 @@ export function projectRetrofit({ option, annualEui, area, electricityDailyKwh, 
     carbonReferenceGbp: carbonSavedTonnes === null ? null : carbonSavedTonnes * CARBON_REFERENCE_GBP_PER_TONNE,
     costRangeGbp,
     scenarios,
-    usingBillElectricityRate: electricityRate !== OFGEM_OCT_2026_PENCE.electricity,
-    usingBillGasRate: gasRate !== OFGEM_OCT_2026_PENCE.gas,
+    usingBillElectricityRate: electricityBillRate !== null,
+    usingBillGasRate: gasBillRate !== null,
   };
 }
