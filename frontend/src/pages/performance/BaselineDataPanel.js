@@ -2,7 +2,6 @@ import React, { useEffect, useState } from "react";
 import supabase from "../../supabaseClient";
 import { DATA_LICENCE_REFERENCE_GBP_PER_YEAR } from "./retrofitEconomics";
 import RetrofitPlanner from "./RetrofitPlanner";
-import BillReconciliation from "./BillReconciliation";
 import { fetchHistoricalHealthDays, readHistoricalHealthSnapshot, summariseHistoricalHealth, writeHistoricalHealthSnapshot } from "./historicalHealth";
 
 const LICENCE_PARTS = [
@@ -77,14 +76,14 @@ export default function BaselineDataPanel({ DetailSurface, onOpenDetailedReport,
   const fabricConcerns = (baseline.performanceConcerns || []).filter((concern) => FABRIC_CONCERN_KEYS.has(concern.key));
   const otherPerformanceConcerns = (baseline.performanceConcerns || []).filter((concern) => !FABRIC_CONCERN_KEYS.has(concern.key));
 
-  return <section className="wbp-baseline-report -mx-4 border-t border-gray-300 bg-white px-4 py-6 text-gray-900 sm:px-8" aria-label="Baseline report">
+  return <section className="wbp-baseline-report -mx-4 border-t border-gray-300 bg-white px-4 py-4 text-gray-900 sm:px-8" aria-label="Baseline report">
     <div className="flex flex-wrap items-center justify-between gap-3">
-      <h2 className="text-lg font-bold">Baseline report</h2>
+      <h2 className="text-base font-bold">Baseline report</h2>
       <div className="flex shrink-0 items-center gap-2">
-        <button type="button" onClick={onOpenDetailedReport} className="border border-emerald-800 px-3 py-2 text-sm font-semibold text-emerald-900 hover:bg-emerald-50">Detailed report</button>
+        <button type="button" onClick={onOpenDetailedReport} className="border border-emerald-800 px-2 py-1.5 text-xs font-semibold text-emerald-900 hover:bg-emerald-50">Detailed report</button>
       </div>
     </div>
-    <div className="wbp-baseline-scores mt-4 grid gap-6 sm:grid-cols-2">
+    <div className="wbp-baseline-scores mt-3 grid gap-6 sm:grid-cols-2">
       <div className={`border-l-4 p-4 ${!hasEui ? "border-gray-400 bg-gray-100" : aboveTarget ? "border-amber-600 bg-amber-50" : "border-emerald-700 bg-emerald-50"}`}>
         <div className="flex items-baseline justify-between gap-3">
           <h3 className="text-base font-bold">Energy</h3>
@@ -119,10 +118,6 @@ export default function BaselineDataPanel({ DetailSurface, onOpenDetailedReport,
     {otherPerformanceConcerns.length > 0 ? <div className="mt-4 space-y-2" aria-label="Other areas to review">
       {otherPerformanceConcerns.map((concern) => <ConcernRow key={concern.key} label={concern.label} tone={concern.status === "poor" ? "red" : "amber"} measurement={concern.measurement || concern.detail} detail={concern.explanation} />)}
     </div> : null}
-    <div className="mt-4 border-t border-gray-200 pt-3" aria-label="Energy data check">
-      <h3 className="mb-2 text-sm font-bold">Energy data check</h3>
-      <BillReconciliation recordId={baseline.propertyRecordId} periods={baseline.billReview?.readingPeriods || []} />
-    </div>
     <div className="wbp-baseline-options mt-7 border-t border-gray-200 pt-5">
       <h3 className="mb-3 text-base font-bold">Options</h3>
       <button type="button" onClick={() => setOpenPanel("retrofit")} className="wbp-baseline-option group relative flex min-h-44 w-full items-end overflow-hidden border border-emerald-900 bg-emerald-950 p-5 text-left text-white sm:min-h-52 sm:p-7" style={{ backgroundImage: "linear-gradient(90deg, rgba(9, 43, 34, .8), rgba(9, 43, 34, .12) 75%), url('/images/retrofit-options.png')", backgroundSize: "cover", backgroundPosition: "center" }}><span className="relative text-xl font-bold drop-shadow sm:text-2xl">Explore retrofit options <span aria-hidden="true">→</span></span></button>
