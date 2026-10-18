@@ -63,6 +63,24 @@ test("increasing scope never reverses EUI or bill savings with a consistent fuel
   }
 });
 
+test("heat-pump bill saving has no late dip or endpoint standing-charge jump", () => {
+  for (const annualEui of [20, 35, 41.47, 120]) {
+    for (const extras of [{}, { renewableSelfConsumedKwh: 400 }, { improvedElectricityRatePence: 20 },
+      { renewableSelfConsumedKwh: 400, improvedElectricityRatePence: 20 }]) {
+      let previous = null;
+      for (let scope = 0; scope <= 100; scope += 1) {
+        const current = projectRetrofit({ ...extras, option: getRetrofitOption(scope), annualEui, area: 99.2,
+          electricityDailyKwh: 5, gasDailyKwh: 7, gasHeatingShare: 0.7, heatPumpSpf: 3.1,
+          billReview: { electricityUnitRatePence: 26, gasUnitRatePence: 8, gasStandingChargePence: 30 },
+          allElectric: true });
+        expect(current.gasDisconnected).toBe(true);
+        if (previous !== null) expect(current.billSavedGbp).toBeGreaterThanOrEqual(previous - 1e-8);
+        previous = current.billSavedGbp;
+      }
+    }
+  }
+});
+
 test("insurance sensitivity requires a premium and never assumes a confirmed discount", () => {
   expect(projectInsuranceSaving("", 0.1)).toBeNull();
   expect(projectInsuranceSaving("500", 0)).toBe(0);

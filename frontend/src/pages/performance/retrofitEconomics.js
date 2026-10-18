@@ -108,7 +108,7 @@ export function projectRetrofit({ option, annualEui, area, electricityDailyKwh, 
   const validSpf = Number.isFinite(heatPumpSpf) && heatPumpSpf > 1 && heatPumpSpf <= 6;
   const modelFuelSwitch = allElectric && validHeatingShare && validSpf;
   const hotWaterShare = Number.isFinite(gasHotWaterShare) ? Math.max(0, Math.min(gasHotWaterShare, 1 - (validHeatingShare ? gasHeatingShare : 0))) : 0;
-  const switchedGasKwh = demandProxyKwh !== null && hasFuelSplit && modelFuelSwitch ? demandProxyKwh * gasShare * progress : 0;
+  const switchedGasKwh = demandProxyKwh !== null && hasFuelSplit && modelFuelSwitch ? demandProxyKwh * gasShare : 0;
   const switchedHeatingGasKwh = switchedGasKwh * gasHeatingShare;
   const switchedHotWaterGasKwh = switchedGasKwh * hotWaterShare;
   const switchedOtherGasKwh = switchedGasKwh - switchedHeatingGasKwh - switchedHotWaterGasKwh;
