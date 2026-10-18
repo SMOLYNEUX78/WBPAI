@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import supabase from "../../supabaseClient";
 import { DATA_LICENCE_REFERENCE_GBP_PER_YEAR } from "./retrofitEconomics";
 import RetrofitPlanner from "./RetrofitPlanner";
+import { buildBuyerSampleTemplate, buildOwnerBaselinePackage } from "./baselinePackages";
 import { fetchHistoricalHealthDays, readHistoricalHealthSnapshot, summariseHistoricalHealth, writeHistoricalHealthSnapshot } from "./historicalHealth";
 
 const LICENCE_PARTS = [
@@ -37,6 +38,8 @@ export default function BaselineDataPanel({ DetailSurface, onOpenDetailedReport,
   const [historicalHealth, setHistoricalHealth] = useState(() => readHistoricalHealthSnapshot(baseline.buildingId, baseline.sourceBuildingId || "home") || readHistoricalHealthSnapshot(baseline.propertyRecordId, baseline.sourceBuildingId || "home") || { status: "loading", findings: [] });
   const [historyRetry, setHistoryRetry] = useState(0);
   const [historyError, setHistoryError] = useState(false);
+  const [packageError, setPackageError] = useState("");
+  const [ownerPackageLoading, setOwnerPackageLoading] = useState(false);
   const area = Number(baseline.area);
   const eui = Number(baseline.annualEui);
   const target = Number(baseline.targetEui);
@@ -75,6 +78,33 @@ export default function BaselineDataPanel({ DetailSurface, onOpenDetailedReport,
   const otherHistoricalFlags = historicalFlags.filter((finding) => !PRIMARY_HEALTH_FIELDS.some((item) => item.field === finding.field));
   const fabricConcerns = (baseline.performanceConcerns || []).filter((concern) => FABRIC_CONCERN_KEYS.has(concern.key));
   const otherPerformanceConcerns = (baseline.performanceConcerns || []).filter((concern) => !FABRIC_CONCERN_KEYS.has(concern.key));
+  const downloadPackage = (filename, content) => {
+    const url = URL.createObjectURL(new Blob([JSON.stringify(content, null, 2)], { type: "application/json" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+  const downloadOwnerPackage = async () => {
+    setPackageError("");
+    setOwnerPackageLoading(true);
+    try {
+      if (!baseline.propertyRecordId) throw new Error("Save this home profile before preparing its evidence pack.");
+      const { data: payload, error } = await supabase.rpc("wbp_owner_baseline_export", { p_building_record_id: baseline.propertyRecordId });
+      if (error) throw error;
+      if (payload?.shareable !== false || payload?.buildingRecordId?.toLowerCase() !== baseline.propertyRecordId.toLowerCase()) {
+        throw new Error("The owner-only readings could not be verified.");
+      }
+      downloadPackage("wbp-owner-baseline-evidence.json", buildOwnerBaselinePackage(baseline, payload, historicalHealth));
+    } catch (error) {
+      setPackageError(error.message || "Evidence pack unavailable.");
+    } finally {
+      setOwnerPackageLoading(false);
+    }
+  };
 
   return <section className="wbp-baseline-report -mx-4 border-t border-gray-300 bg-white px-4 py-4 text-gray-900 sm:px-8" aria-label="Baseline report">
     <div className="flex flex-wrap items-center justify-between gap-3">
@@ -145,6 +175,12 @@ export default function BaselineDataPanel({ DetailSurface, onOpenDetailedReport,
           <div className="w-full space-y-2">{LICENCE_PARTS.map((part) => <div key={part.label} className="flex items-center gap-2"><span className="h-3 w-3 shrink-0" style={{ backgroundColor: part.colour }} /><span className="flex-1">{part.label}</span><strong>£{part.value}</strong></div>)}</div>
         </div>
         <div><strong>£0 secured</strong><p className="mt-1 text-gray-700">No buyer, price, licence or payment is agreed. For one home, buyers may offer much less or nothing; portfolio-scale data may be more attractive.</p></div>
+        <div className="grid gap-3 border-t border-gray-200 pt-4 sm:grid-cols-2">
+          <button type="button" disabled={ownerPackageLoading} onClick={downloadOwnerPackage} className="border border-emerald-800 px-3 py-2 text-left font-semibold text-emerald-900 disabled:opacity-50">{ownerPackageLoading ? "Preparing private pack..." : "Download private owner pack"}</button>
+          <button type="button" onClick={() => downloadPackage("wbp-buyer-sample-template.json", buildBuyerSampleTemplate())} className="border border-gray-400 px-3 py-2 text-left font-semibold text-gray-900">Download buyer sample template</button>
+        </div>
+        {packageError ? <p role="alert" className="text-red-700">{packageError}</p> : null}
+        <p className="text-xs text-gray-600">The buyer template contains no home readings. Neither download shares data or starts a sale.</p>
         <p className="border-t border-gray-200 pt-4 text-gray-700">WBP would check the data, find a suitable buyer and show you the exact use and payment before asking you to agree. Nothing is shared automatically. Data licensing is separate from retrofit savings and carbon credits.</p>
       </div>
     </DetailSurface> : null}
