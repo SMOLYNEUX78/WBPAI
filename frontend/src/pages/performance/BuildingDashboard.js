@@ -13693,12 +13693,12 @@ const BuildingDashboard = () => {
   return (
     <div className={`min-h-screen bg-white ${activeBuilding.id === "home" ? "wbp-dashboard--occupy" : ""} ${activeBuilding.id === "bl" ? "wbp-dashboard--baseline" : ""}`}>
       <div className="sticky top-0 z-20">
-      {activeBuilding.id !== "bl" ? <div className="border-b bg-white px-4 py-3">
+      <div className="border-b bg-white px-4 py-3">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
           {accessRole === "homeowner" ? <PrototypeTabs activePath={`/dashboard/${activeBuilding.id}`} onDashboardTab={openBuildingById} /> : accessRole === "architect" ? <PrototypeTabs scope="design" activePath={`/dashboard/${activeBuilding.id}`} onDashboardTab={openBuildingById} /> : <strong className="text-lg">WBP Prototype</strong>}
 
         </div>
-      </div> : null}
+      </div>
 
       {roleLabel ? (
         <section className={`border-b px-4 py-3 ${accessRole === "architect" ? "border-blue-200 bg-blue-50" : accessRole === "builder" ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50"}`}>
@@ -13713,10 +13713,6 @@ const BuildingDashboard = () => {
             <div ref={accountMenuRef} className="relative shrink-0">
               <button type="button" aria-label="Open account menu" aria-expanded={accountMenuOpen} aria-controls="wbp-account-menu" onClick={() => setAccountMenuOpen((open) => !open)} className="flex h-9 w-10 items-center justify-center border border-gray-300 bg-white text-xl leading-none text-gray-900 hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-700">{"\u2630"}</button>
               {accountMenuOpen ? <div id="wbp-account-menu" className="absolute right-0 top-full z-50 mt-2 w-60 max-w-[calc(100vw-2rem)] border border-gray-300 bg-white p-2 text-sm shadow-lg">
-                {accessRole === "homeowner" && activeBuilding.id === "bl" ? <div className="border-b border-gray-200 py-1">
-                  <button type="button" onClick={() => { setAccountMenuOpen(false); openBuildingById("home"); }} className="w-full px-2 py-2 text-left font-semibold text-gray-900 hover:bg-gray-100">Home</button>
-                  <button type="button" onClick={() => { setAccountMenuOpen(false); openBuildingById("rf"); }} className="w-full px-2 py-2 text-left font-semibold text-gray-900 hover:bg-gray-100">Retrofit pathway</button>
-                </div> : null}
                 {accessRole === "homeowner" ? <button type="button" onClick={() => { setAccountMenuOpen(false); navigate("/dashboard/exchange?source=cc"); }} className="w-full border-b border-gray-200 bg-emerald-50 px-3 py-3 text-left text-emerald-950 hover:bg-emerald-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-700">
                   <span className="block text-xs font-semibold uppercase">Portfolio value · modelled</span>
                   <strong className="mt-1 block text-lg leading-tight">{modelledWalletBalance === null ? accruedDataDays === "unavailable" ? "Unavailable" : "Calculating" : new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(modelledWalletBalance)}</strong>
