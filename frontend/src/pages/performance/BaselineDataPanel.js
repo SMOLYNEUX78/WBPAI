@@ -88,12 +88,12 @@ export default function BaselineDataPanel({ DetailSurface, baseline = {} }) {
     }
   };
 
-  return <section className="-mx-4 border-t border-gray-300 bg-white px-4 py-6 text-gray-900 sm:px-8" aria-label="Baseline report">
+  return <section className="wbp-baseline-report -mx-4 border-t border-gray-300 bg-white px-4 py-6 text-gray-900 sm:px-8" aria-label="Baseline report">
     <div className="flex items-center justify-between gap-3">
       <h2 className="text-lg font-bold">Baseline report</h2>
       <button type="button" onClick={downloadReport} disabled={downloadLoading} className="shrink-0 border border-emerald-800 px-3 py-2 text-sm font-semibold text-emerald-900 hover:bg-emerald-50 disabled:cursor-wait">{downloadLoading ? "Preparing report..." : "Detailed report"}</button>
     </div>
-    <div className="mt-4 grid gap-6 sm:grid-cols-2">
+    <div className="wbp-baseline-scores mt-4 grid gap-6 sm:grid-cols-2">
       <div className={`border-l-4 p-4 ${!hasEui ? "border-gray-400 bg-gray-100" : aboveTarget ? "border-amber-600 bg-amber-50" : "border-emerald-700 bg-emerald-50"}`}>
         <div className="flex items-baseline justify-between gap-3">
           <h3 className="text-base font-bold">Energy</h3>
@@ -133,10 +133,10 @@ export default function BaselineDataPanel({ DetailSurface, baseline = {} }) {
       {otherRecentReadings.map((reading) => <ConcernRow key={reading.key} label={`${reading.label} recently`} detail={`${reading.value} ${reading.unit}`} />)}
     </div> : null}
     {exportError ? <p role="alert" className="mt-2 text-right text-sm text-red-800">{exportError}</p> : null}
-    <div className="mt-7 border-t border-gray-200 pt-5">
+    <div className="wbp-baseline-options mt-7 border-t border-gray-200 pt-5">
       <h3 className="mb-3 text-base font-bold">Options</h3>
-      <button type="button" onClick={() => setOpenPanel("retrofit")} className="group relative flex min-h-44 w-full items-end overflow-hidden border border-emerald-900 bg-emerald-950 p-5 text-left text-white sm:min-h-52 sm:p-7" style={{ backgroundImage: "linear-gradient(90deg, rgba(9, 43, 34, .8), rgba(9, 43, 34, .12) 75%), url('/images/retrofit-options.png')", backgroundSize: "cover", backgroundPosition: "center" }}><span className="relative text-xl font-bold drop-shadow sm:text-2xl">Explore retrofit options <span aria-hidden="true">→</span></span></button>
-      <button type="button" onClick={() => setOpenPanel("sale")} className="mt-3 flex min-h-32 w-full items-end justify-between gap-4 border border-emerald-800 bg-emerald-50 px-5 py-5 text-left text-xl font-bold text-emerald-950 hover:bg-emerald-100 sm:px-7 sm:text-2xl"><span>Sell baseline data</span><span aria-hidden="true">→</span></button>
+      <button type="button" onClick={() => setOpenPanel("retrofit")} className="wbp-baseline-option group relative flex min-h-44 w-full items-end overflow-hidden border border-emerald-900 bg-emerald-950 p-5 text-left text-white sm:min-h-52 sm:p-7" style={{ backgroundImage: "linear-gradient(90deg, rgba(9, 43, 34, .8), rgba(9, 43, 34, .12) 75%), url('/images/retrofit-options.png')", backgroundSize: "cover", backgroundPosition: "center" }}><span className="relative text-xl font-bold drop-shadow sm:text-2xl">Explore retrofit options <span aria-hidden="true">→</span></span></button>
+      <button type="button" onClick={() => setOpenPanel("sale")} className="wbp-baseline-option mt-3 flex min-h-32 w-full items-end justify-between gap-4 border border-emerald-800 bg-emerald-50 px-5 py-5 text-left text-xl font-bold text-emerald-950 hover:bg-emerald-100 sm:px-7 sm:text-2xl"><span>Sell baseline data</span><span aria-hidden="true">→</span></button>
     </div>
 
     {openPanel === "retrofit" ? <DetailSurface modal title="Explore Retrofit Options" onClose={() => setOpenPanel(null)}>
