@@ -30,6 +30,7 @@ export function getRetrofitOption(scope) {
 const OFGEM_OCT_2026_PENCE = { electricity: 26.32, gas: 7.97, gasStanding: 29.68 };
 const DESNZ_2026_KG_CO2E_PER_KWH = { electricity: 0.13096, gas: 0.18231 };
 export const DATA_LICENCE_REFERENCE_GBP_PER_YEAR = 144 + 120 + 180;
+export const BUILDINGS_INSURANCE_REFERENCE_GBP_PER_YEAR = 309;
 export const CARBON_REFERENCE_GBP_PER_TONNE = 65;
 export const RETROFIT_SCENARIOS = [
   { id: "low", label: "Conservative", savingsFactor: 0.5, carbonPrice: 0, dataIncome: 0, insuranceDiscount: 0 },

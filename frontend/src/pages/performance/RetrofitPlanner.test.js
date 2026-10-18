@@ -40,8 +40,9 @@ test("shows assumption-based scenarios and opens the selected pack", () => {
   expect(screen.getByRole("img", { name: /Data licences £222/i })).toBeInTheDocument();
   expect(screen.queryByRole("heading", { name: "Other occupant value" })).not.toBeInTheDocument();
   expect(screen.queryByText("Potential funding input")).not.toBeInTheDocument();
-  fireEvent.change(screen.getByRole("spinbutton", { name: /current annual buildings insurance premium/i }), { target: { value: "500" } });
-  expect(screen.getByRole("img", { name: /Insurance £25/i })).toBeInTheDocument();
+  expect(screen.queryByRole("spinbutton", { name: /current annual buildings insurance premium/i })).not.toBeInTheDocument();
+  expect(screen.getByRole("img", { name: /Insurance £15/i })).toBeInTheDocument();
+  expect(screen.getByText(/ABI UK buildings-only average of £309\/year/)).toBeInTheDocument();
   expect(screen.queryByText(/Illustrative insurance saving:/)).not.toBeInTheDocument();
   expect(screen.getByText("Estimated works cost")).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Adjust assumptions" })).not.toBeInTheDocument();

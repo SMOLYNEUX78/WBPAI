@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { billUnitRatePence, getAnnualBenefitBreakdown, getRetrofitOption, projectRetrofit } from "./retrofitEconomics";
+import { BUILDINGS_INSURANCE_REFERENCE_GBP_PER_YEAR, billUnitRatePence, getAnnualBenefitBreakdown, getRetrofitOption, projectRetrofit } from "./retrofitEconomics";
 
 const FUNDING = [
   { name: "Warm Homes: Local Grant", href: "https://www.gov.uk/apply-warm-homes-local-grant", note: "England: council-approved insulation and possibly windows or doors; amount follows eligibility and a survey." },
@@ -13,7 +13,6 @@ const formatGbp = (value) => `${value < 0 ? "-" : ""}£${Math.round(Math.abs(val
 export default function RetrofitPlanner({ ready, embedded = false, postcode, localAuthority, annualEui, area, electricityDailyKwh, gasDailyKwh, gasHeatingDailyKwh, gasDhwDailyKwh, billReview, originalTeam = {}, DetailSurface }) {
   const [worksScope, setWorksScope] = useState(0);
   const [packOpen, setPackOpen] = useState(false);
-  const [annualPremium, setAnnualPremium] = useState("");
   const [heatingMode, setHeatingMode] = useState("gas");
   const [renewables, setRenewables] = useState(false);
   const [specialistTariff, setSpecialistTariff] = useState(false);
@@ -26,9 +25,9 @@ export default function RetrofitPlanner({ ready, embedded = false, postcode, loc
     improvedElectricityRatePence: specialistTariff ? referenceElectricityRate * 0.8 : null,
     renewableSelfConsumedKwh: renewables && Number.isFinite(electricityDailyKwh) ? Math.max(0, electricityDailyKwh * 365 * 0.25) : 0,
     billReview, allElectric: heatingMode === "heat-pump" });
-  const annualBenefit = getAnnualBenefitBreakdown(projection.scenarios[1], annualPremium);
-  const lowBenefit = getAnnualBenefitBreakdown(projection.scenarios[0], annualPremium);
-  const highBenefit = getAnnualBenefitBreakdown(projection.scenarios[2], annualPremium);
+  const annualBenefit = getAnnualBenefitBreakdown(projection.scenarios[1], BUILDINGS_INSURANCE_REFERENCE_GBP_PER_YEAR);
+  const lowBenefit = getAnnualBenefitBreakdown(projection.scenarios[0], BUILDINGS_INSURANCE_REFERENCE_GBP_PER_YEAR);
+  const highBenefit = getAnnualBenefitBreakdown(projection.scenarios[2], BUILDINGS_INSURANCE_REFERENCE_GBP_PER_YEAR);
   const benefitTotals = lowBenefit && highBenefit ? [lowBenefit.total, highBenefit.total].sort((a, b) => a - b) : null;
   const potentialAnnualCost = benefitTotals ? Math.max(0, -benefitTotals[0]) : 0;
   const suffolkProperty = isSuffolkCouncil(localAuthority);
@@ -75,9 +74,7 @@ export default function RetrofitPlanner({ ready, embedded = false, postcode, loc
                 <strong>Planning split · {annualBenefit ? `${formatGbp(Math.abs(annualBenefit.total))}/yr${annualBenefit.total < 0 ? " net cost" : ""}` : "pending"}</strong>
                 {annualBenefit?.parts.map((part) => <div key={part.label}><i style={{ backgroundColor: part.colour }} /><span>{part.label}</span><strong>{formatGbp(part.value)}</strong></div>)}
                 {annualBenefit?.energyCostIncrease > 0 ? <small>Energy cost increase: {formatGbp(annualBenefit.energyCostIncrease)}/yr, deducted from total.</small> : null}
-                <label className="wbp-retrofit-premium">Current annual buildings insurance premium (£)
-                  <input type="number" min="0" max="100000" step="1" inputMode="decimal" value={annualPremium} onChange={(event) => setAnnualPremium(event.target.value)} placeholder="Enter your annual premium" />
-                </label>
+                <small>Insurance uses the ABI UK buildings-only average of £309/year (Q2 2026). The 5% planning reduction is illustrative, not an insurer offer.</small>
               </div>
             </div>
             <p className="wbp-retrofit-outcome">{projection.scenarios[1].energySavedKwh === null ? "Energy saving pending" : `${Math.round(projection.scenarios[1].energySavedKwh).toLocaleString("en-GB")} kWh/yr energy saved`} · {projection.scenarios[1].carbonSavedTonnes === null ? "Carbon saving pending" : `${projection.scenarios[1].carbonSavedTonnes.toFixed(2)} tCO₂e/yr carbon saved`} · {projection.targetEui === null ? "Target EUI pending" : `Target EUI ${projection.targetEui.toFixed(1)} kWh/m²/yr`}</p>
