@@ -121,7 +121,11 @@ export default function BaselineDataPanel({ DetailSurface, onOpenDetailedReport,
     <div className="wbp-baseline-options mt-7 border-t border-gray-200 pt-5">
       <h3 className="mb-3 text-base font-bold">Options</h3>
       <button type="button" onClick={() => setOpenPanel("retrofit")} className="wbp-baseline-option group relative flex min-h-44 w-full items-end overflow-hidden border border-emerald-900 bg-emerald-950 p-5 text-left text-white sm:min-h-52 sm:p-7" style={{ backgroundImage: "linear-gradient(90deg, rgba(9, 43, 34, .8), rgba(9, 43, 34, .12) 75%), url('/images/retrofit-options.png')", backgroundSize: "cover", backgroundPosition: "center" }}><span className="relative text-xl font-bold drop-shadow sm:text-2xl">Explore retrofit options <span aria-hidden="true">→</span></span></button>
-      <button type="button" onClick={() => setOpenPanel("sale")} className="wbp-baseline-option mt-3 flex min-h-32 w-full items-end justify-between gap-4 border border-emerald-800 bg-emerald-50 px-5 py-5 text-left text-xl font-bold text-emerald-950 hover:bg-emerald-100 sm:px-7 sm:text-2xl"><span>Sell baseline data</span><span aria-hidden="true">→</span></button>
+      <button type="button" onClick={() => setOpenPanel("sale")} className="wbp-baseline-option group relative mt-3 flex min-h-32 w-full items-center justify-end overflow-hidden border border-emerald-900 bg-emerald-950 p-5 text-left text-white hover:bg-emerald-900 sm:p-7">
+        <img src="/images/bridgewood-baseline.png" alt="" className="absolute inset-y-0 left-0 h-full w-[46%] object-cover object-center" />
+        <span aria-hidden="true" className="absolute inset-0 bg-gradient-to-r from-transparent via-emerald-950/70 to-emerald-950" />
+        <span className="relative flex w-[58%] items-center justify-between gap-3 text-xl font-bold sm:text-2xl"><span>Sell baseline data</span><span aria-hidden="true">→</span></span>
+      </button>
     </div>
 
     {openPanel === "retrofit" ? <DetailSurface modal title="Explore Retrofit Options" onClose={() => setOpenPanel(null)}>
