@@ -21,7 +21,7 @@ const ConcernRow = ({ label, detail, tone = "red" }) => <div className="flex fle
   <span>{detail}</span>
 </div>;
 
-export default function BaselineDataPanel({ DetailSurface, baseline = {} }) {
+export default function BaselineDataPanel({ DetailSurface, onOpenDetailedReport, baseline = {} }) {
   const [openPanel, setOpenPanel] = useState(null);
   const [ownerExport, setOwnerExport] = useState(null);
   const [exportError, setExportError] = useState("");
@@ -89,9 +89,12 @@ export default function BaselineDataPanel({ DetailSurface, baseline = {} }) {
   };
 
   return <section className="wbp-baseline-report -mx-4 border-t border-gray-300 bg-white px-4 py-6 text-gray-900 sm:px-8" aria-label="Baseline report">
-    <div className="flex items-center justify-between gap-3">
+    <div className="flex flex-wrap items-center justify-between gap-3">
       <h2 className="text-lg font-bold">Baseline report</h2>
-      <button type="button" onClick={downloadReport} disabled={downloadLoading} className="shrink-0 border border-emerald-800 px-3 py-2 text-sm font-semibold text-emerald-900 hover:bg-emerald-50 disabled:cursor-wait">{downloadLoading ? "Preparing report..." : "Detailed report"}</button>
+      <div className="flex shrink-0 items-center gap-2">
+        <button type="button" onClick={onOpenDetailedReport} className="border border-emerald-800 px-3 py-2 text-sm font-semibold text-emerald-900 hover:bg-emerald-50">Detailed report</button>
+        <button type="button" onClick={downloadReport} disabled={downloadLoading} aria-label="Download baseline evidence" title="Download baseline evidence" className="border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:cursor-wait">{downloadLoading ? "Preparing..." : "Download"}</button>
+      </div>
     </div>
     <div className="wbp-baseline-scores mt-4 grid gap-6 sm:grid-cols-2">
       <div className={`border-l-4 p-4 ${!hasEui ? "border-gray-400 bg-gray-100" : aboveTarget ? "border-amber-600 bg-amber-50" : "border-emerald-700 bg-emerald-50"}`}>

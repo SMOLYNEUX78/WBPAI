@@ -5233,7 +5233,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
   };
 
   useEffect(() => {
-    if (!isActive || occupyDetail !== "trends" || dataSourceBuildingId !== "home") return;
+    if (!isActive || !["trends", "report"].includes(occupyDetail) || dataSourceBuildingId !== "home") return;
     const archive = readCachedSeasonalTrendArchive();
     const season = Object.values(archive.seasons).find((record) => record.name === selectedTrendSeason)
       || (selectedTrendSeason === activeSeasonInfo.name ? activeSeasonInfo : null);
@@ -5294,7 +5294,7 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
   }, [occupyDetail, selectedTrendSeason, isActive, dataSourceBuildingId]);
 
   useEffect(() => {
-    if (!isActive || occupyDetail !== "trends" || selectedTrendSeason !== "Summer") return;
+    if (!isActive || !["trends", "report"].includes(occupyDetail) || selectedTrendSeason !== "Summer") return;
     const summer = Object.values(readCachedSeasonalTrendArchive().seasons)
       .find((record) => record.name === "Summer");
     if (!summer?.startDate || !summer?.endDate || !Array.isArray(summer.data)) return;
@@ -7230,6 +7230,467 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
       ) : null}
     </div>
   );
+  const seasonalChartsContent = (
+        <div className="mt-4 bg-white rounded border p-3 sm:p-4 space-y-3 overflow-hidden">
+          {building.id === "rf" ? <p className="text-xs text-gray-600">Measured WBP-001 seasonal readings, not a retrofit forecast.</p> : null}
+          {isCarbonCreditTab ? <p className="text-xs text-gray-600">{ccStage === "before" ? "Historical seasonal readings; the before baseline is still being gathered, not locked." : "Measured seasonal readings for context; these are not a forecast of the EnerPHit retrofit."}</p> : null}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="font-semibold">Seasonal Performance Trends</h3>
+            <div className="flex flex-wrap gap-1 text-xs">
+              {SEASON_NAMES.map((season) => {
+                const seasonAvailable = availableSeasonNames.includes(season);
+                const seasonSelected = selectedTrendSeason === season;
+
+                return (
+                  <button
+                    type="button"
+                    key={season}
+                    onClick={() => {
+                      if (seasonAvailable) {
+                        setSelectedTrendSeason(season);
+                        setHoveredTrendSlot(null);
+                      }
+                    }}
+                    disabled={!seasonAvailable}
+                    className={`rounded border px-2 py-1 ${
+                      seasonSelected
+                        ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+                        : seasonAvailable
+                        ? "border-gray-300 bg-white text-gray-700"
+                        : "border-gray-200 bg-gray-50 text-gray-500"
+                    }`}
+                  >
+                    {season}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="flex w-fit border border-gray-300 text-xs" role="group" aria-label="Trend period">
+            {[["day", "Day"], ["week", "Week"], ["month", "Month"]].map(([period, label]) => (
+              <button key={period} type="button" aria-pressed={trendPeriod === period}
+                onClick={() => {
+                  setTrendPeriod(period);
+                  setHoveredTrendSlot(null);
+                }}
+                className={`px-3 py-1.5 font-semibold transition-colors ${trendPeriod === period ? "bg-gray-900 text-white" : "bg-white text-gray-700 hover:bg-gray-100"}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+          {datedTrendError && (trendPeriod !== "week" || selectedTrendSeason !== activeSeasonInfo.name)
+            ? <p className="text-xs text-red-700">{datedTrendError}</p> : null}
+
+          {activeTrendMetrics.length > 0 ? (
+            <>
+              <div className="flex flex-wrap gap-2 text-xs">
+                {activeTrendMetricGroups.map((group) => {
+                  const groupSelected =
+                    selectedTrendMetricGroupKey === group.key ||
+                    (group.key === "health" && healthTrendSelected);
+
+                  return (
+                    <button
+                      type="button"
+                      key={group.key}
+                      onClick={() => selectTrendMetricGroup(group.metricKeys)}
+                      className={`rounded border px-3 py-1.5 font-semibold transition ${
+                        groupSelected
+                          ? "border-blue-600 bg-blue-600 text-white"
+                          : "border-gray-300 bg-white text-gray-700"
+                      }`}
+                    >
+                      {group.label}
+                    </button>
+                  );
+                })}
+              </div>
+              {dataSourceBuildingId === "home" && healthTrendSelected ? (
+                <div className="flex flex-wrap gap-2 text-xs">
+                  {healthTrendAreaOptions.map((option) => {
+                    const optionSelected =
+                      (activeHealthTrendArea?.key || "all") === option.key;
+
+                    return (
+                      <button
+                        type="button"
+                        key={option.key}
+                        onClick={() => selectHealthTrendArea(option.key)}
+                        className={`rounded border px-3 py-1.5 font-semibold transition ${
+                          optionSelected
+                            ? "border-purple-600 bg-purple-600 text-white"
+                            : "border-gray-300 bg-white text-gray-700"
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
+
+              <div className="w-full overflow-x-auto">
+                <svg
+                  viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+                  className="w-full h-auto"
+                  preserveAspectRatio="xMidYMid meet"
+                  role="img"
+                  aria-label={`${trendPeriod} seasonal performance trend chart`}
+                  onPointerMove={updateHoveredTrendSlot}
+                  onPointerDown={updateHoveredTrendSlot}
+                  onPointerLeave={clearHoveredTrendSlot}
+                  style={{ touchAction: "none" }}
+                >
+                  {([
+                    { min: 85, max: 100, color: "#fecaca", label: "+ BAD" },
+                    { min: 70, max: 85, color: "#fde68a", label: "+ RISK" },
+                    { min: 30, max: 70, color: "#bbf7d0", label: "0 OK" },
+                    { min: 15, max: 30, color: "#fde68a", label: "- RISK" },
+                    { min: 0, max: 15, color: "#fecaca", label: "- BAD" },
+                  ]).map((band) => {
+                    const yTop = trendY({ min: 0, max: 100 }, band.max);
+                    const yBottom = trendY({ min: 0, max: 100 }, band.min);
+
+                    return (
+                      <g key={band.label}>
+                        <rect
+                          x={chartPadding.left}
+                          y={Math.min(yTop, yBottom)}
+                          width={plotWidth}
+                          height={Math.abs(yBottom - yTop)}
+                          fill={band.color}
+                          opacity="0.34"
+                        />
+                        <rect
+                          x={chartPadding.left}
+                          y={Math.min(yTop, yBottom)}
+                          width={plotWidth}
+                          height={Math.abs(yBottom - yTop)}
+                          fill="none"
+                          stroke="#ffffff"
+                          strokeWidth="1.5"
+                          opacity="0.62"
+                        />
+                        <text
+                          x={chartPadding.left + 8}
+                          y={Math.min(yTop, yBottom) + 17}
+                          fontSize="10"
+                          fontWeight="700"
+                          fill="#111827"
+                          opacity="0.4"
+                        >
+                          {band.label}
+                        </text>
+                      </g>
+                    );
+                  })}
+                  {[0, 0.25, 0.5, 0.75, 1].map((tick) => {
+                    const y = chartPadding.top + tick * plotHeight;
+                    return (
+                      <line
+                        key={tick}
+                        x1={chartPadding.left}
+                        x2={chartWidth - chartPadding.right}
+                        y1={y}
+                        y2={y}
+                        stroke="#e5e7eb"
+                        strokeWidth="1"
+                      />
+                    );
+                  })}
+                  {trendPeriod === "week" ? chartTrendData
+                    .filter((point) => point.hour === 0)
+                    .map((point) => {
+                      const x =
+                        chartPadding.left +
+                         (point.slot / (chartTrendData.length - 1)) *
+                          plotWidth;
+                      return (
+                        <line
+                          key={`day-line-${point.dayLabel}`}
+                          x1={x}
+                          x2={x}
+                          y1={chartPadding.top}
+                          y2={chartPadding.top + plotHeight}
+                          stroke="#d1d5db"
+                          strokeWidth="1"
+                        />
+                      );
+                    }) : null}
+                  {trendPeriod !== "month" ? chartTrendData
+                    .filter((point) => point.hour % 6 === 0)
+                    .map((point) => {
+                      const x =
+                        chartPadding.left +
+                         (point.slot / (chartTrendData.length - 1)) *
+                          plotWidth;
+                      return (
+                        <line
+                          key={`hour-line-${point.slot}`}
+                          x1={x}
+                          x2={x}
+                          y1={chartPadding.top}
+                          y2={chartPadding.top + plotHeight}
+                          stroke="#f3f4f6"
+                          strokeWidth="1"
+                        />
+                      );
+                    }) : null}
+                  {trendPeriod === "week" ? ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(
+                    (dayLabel, dayIndex) => {
+                      const midpointSlot = dayIndex * 24 + 11.5;
+                      const x =
+                        chartPadding.left +
+                         (midpointSlot / (chartTrendData.length - 1)) *
+                          plotWidth;
+                      return (
+                        <text
+                          key={dayLabel}
+                          x={x}
+                          y={chartHeight - 14}
+                          textAnchor="middle"
+                          fontSize="11"
+                          fill="#4b5563"
+                        >
+                          {dayLabel}
+                        </text>
+                      );
+                    }
+                  ) : trendPeriod === "month" ? chartTrendData.map((point, index) => {
+                    const x = chartPadding.left +
+                      (chartTrendData.length > 1 ? index / (chartTrendData.length - 1) * plotWidth : plotWidth / 2);
+                    return <g key={`period-${point.date}`}>
+                      <line x1={x} x2={x} y1={chartPadding.top} y2={chartPadding.top + plotHeight} stroke="#e5e7eb" />
+                      <text x={x} y={chartHeight - 16} textAnchor="middle" fontSize="10" fill="#4b5563">
+                         {new Date(`${point.date}T00:00:00.000Z`)
+                          .toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" })}
+                      </text>
+                    </g>;
+                  }) : null}
+                  {seasonMonthGroups.map((group) => {
+                    const midpoint = (group.first + group.last) / 2;
+                    const x = chartPadding.left + (chartTrendData.length > 1
+                      ? midpoint / (chartTrendData.length - 1) * plotWidth : plotWidth / 2);
+                    return <text key={`season-month-${group.month}`} x={x} y={chartPadding.top + 13}
+                      textAnchor="middle" fontSize="12" fontWeight="700" fill="#374151">
+                      {new Date(`${group.month}-01T00:00:00.000Z`)
+                        .toLocaleDateString("en-GB", { month: "long", timeZone: "UTC" })}
+                    </text>;
+                  })}
+                  {trendPeriod !== "month" ? chartTrendData
+                    .filter((point) => (trendPeriod === "day" || point.dayIndex === 0) && point.hour % 6 === 0)
+                    .map((point) => {
+                    const x =
+                      chartPadding.left +
+                       (point.slot / (chartTrendData.length - 1)) *
+                        plotWidth;
+                    return (
+                      <text
+                        key={`hour-label-${point.hour}`}
+                        x={x}
+                        y={chartHeight - 28}
+                        textAnchor="middle"
+                        fontSize="9"
+                        fill="#9ca3af"
+                      >
+                        {point.hourLabel}
+                      </text>
+                    );
+                  }) : null}
+                  {[0, 0.15, 0.3, 0.5, 0.7, 0.85, 1].map((tick) => {
+                      const value = 100 - 100 * tick;
+                      const y = chartPadding.top + tick * plotHeight;
+
+                      return (
+                        <text
+                          key={`left-range-${tick}`}
+                          x={chartPadding.left - 8}
+                          y={y + 3}
+                          textAnchor="end"
+                          fontSize="9"
+                          fill="#374151"
+                        >
+                          {formatDeviationScore(value)}
+                        </text>
+                      );
+                    })}
+                  {plottedTrendMetrics.map((metric) => <g key={metric.key}>
+                    {comfortTemperatureAxis && trendPeriod === "month" ? chartTrendData.map((point, index) => {
+                      const min = point[`${metric.key}Min`];
+                      const max = point[`${metric.key}Max`];
+                      if (!Number.isFinite(min) || !Number.isFinite(max)) return null;
+                      const x = chartPadding.left + (chartTrendData.length > 1
+                        ? index / (chartTrendData.length - 1) * plotWidth : plotWidth / 2);
+                      return <line key={`${metric.key}-range-${point.date}`} x1={x} x2={x}
+                        y1={trendY(metricRanges[metric.key], trendHealthScore(metric, min))}
+                        y2={trendY(metricRanges[metric.key], trendHealthScore(metric, max))}
+                        stroke={metric.color} strokeWidth="5" opacity="0.3" />;
+                    }) : null}
+                    <path d={trendPath(chartTrendData, metricRanges, metric)} fill="none"
+                      stroke={metric.color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                    {trendPeriod === "month" ? chartTrendData.map((point, index) => {
+                      const location = trendPoint(chartTrendData, metricRanges, point, metric, index);
+                      return location ? <circle key={`${metric.key}-${point.date}`} cx={location.x} cy={location.y} r="4" fill={metric.color} /> : null;
+                    }) : null}
+                  </g>)}
+                  {plottedTrendMetrics.some((metric) => metric.key === "externalTemp")
+                    ? chartTrendData.map((point) => {
+                        if (!Number.isFinite(point.externalTempPeak)) return null;
+                        const x = chartPadding.left + (chartTrendData.length > 1
+                          ? point.slot / (chartTrendData.length - 1) * plotWidth : plotWidth / 2);
+                        const y = trendY(
+                          metricRanges.externalTemp,
+                          trendHealthScore(
+                            trendMetrics.find((metric) => metric.key === "externalTemp"),
+                            point.externalTempPeak
+                          )
+                        );
+                        return Number.isFinite(y) ? (
+                          <circle key={`outdoor-peak-${point.slot}`} cx={x} cy={y}
+                            r="2" fill="#4338ca" opacity="0.75" />
+                        ) : null;
+                      })
+                    : null}
+                  {hoveredTrendPoint && Number.isFinite(hoveredTrendX) ? (
+                    <g pointerEvents="none">
+                      <line
+                        x1={hoveredTrendX}
+                        x2={hoveredTrendX}
+                        y1={chartPadding.top}
+                        y2={chartPadding.top + plotHeight}
+                        stroke="#111827"
+                        strokeWidth="1.5"
+                        strokeDasharray="4 3"
+                      />
+                      {Number.isFinite(hoveredTrendY) ? (
+                        <>
+                          <line
+                            x1={chartPadding.left}
+                            x2={hoveredTrendX}
+                            y1={hoveredTrendY}
+                            y2={hoveredTrendY}
+                            stroke="#111827"
+                            strokeWidth="1.2"
+                            strokeDasharray="4 3"
+                          />
+                          <text
+                            x={chartPadding.left - 8}
+                            y={hoveredTrendY + 3}
+                            textAnchor="end"
+                            fontSize="9"
+                            fontWeight="600"
+                            fill="#111827"
+                          >
+                            {hoveredTrendMetric &&
+                            Number.isFinite(hoveredTrendPoint?.[hoveredTrendMetric.key])
+                              ? formatDeviationScore(
+                                  trendHealthScore(
+                                    hoveredTrendMetric,
+                                    hoveredTrendPoint[hoveredTrendMetric.key],
+                                    hoveredTrendPoint
+                                  )
+                                )
+                              : ""}
+                          </text>
+                        </>
+                      ) : null}
+                      <rect
+                        x={Math.min(
+                          chartWidth - chartPadding.right - 210,
+                          Math.max(chartPadding.left, hoveredTrendX + 8)
+                        )}
+                        y={chartPadding.top + 8}
+                        width="200"
+                        height={32 + visibleTrendMetrics.length * 16}
+                        rx="4"
+                        fill="white"
+                        stroke="#d1d5db"
+                      />
+                      <text
+                        x={Math.min(
+                          chartWidth - chartPadding.right - 200,
+                          Math.max(chartPadding.left + 10, hoveredTrendX + 18)
+                        )}
+                        y={chartPadding.top + 27}
+                        fontSize="11"
+                        fontWeight="600"
+                        fill="#111827"
+                      >
+                        {hoveredTrendPoint.label}{trendPeriod === "month" ? ` (${hoveredTrendPoint.dayCount} day(s))` : ""}
+                      </text>
+                      {visibleTrendMetrics.map((metric, index) => {
+                        const value = hoveredTrendPoint[metric.key];
+                        const y = chartPadding.top + 46 + index * 16;
+                        const x = Math.min(
+                          chartWidth - chartPadding.right - 200,
+                          Math.max(chartPadding.left + 10, hoveredTrendX + 18)
+                        );
+
+                        return (
+                          <g key={`hover-${metric.key}`}>
+                            <circle
+                              cx={x + 4}
+                              cy={y - 4}
+                              r="3"
+                              fill={metric.color}
+                            />
+                            <text x={x + 12} y={y} fontSize="10" fill="#374151">
+                              {metric.key === "warmthBuffer" && selectedTrendSeason === "Summer"
+                                ? "Indoor–outdoor" : metric.label}:{" "}
+                              {Number.isFinite(value)
+                                ? `${formatMeasurement(value)} ${trendPeriod === "month" && metric.energyStatus ? "kWh/day" : metric.unit}${trendPeriod === "month" && hoveredTrendPoint.metricDayCounts?.[metric.key] ? ` · ${hoveredTrendPoint.metricDayCounts[metric.key]} day(s)` : ""}`
+                                : "No Data"}
+                            </text>
+                          </g>
+                        );
+                      })}
+                    </g>
+                  ) : null}
+                  <rect
+                    x={chartPadding.left}
+                    y={chartPadding.top}
+                    width={plotWidth}
+                    height={plotHeight}
+                    fill="transparent"
+                  />
+                </svg>
+              </div>
+
+              {showFloorMetricColumns ? (
+                <div className="space-y-3 text-xs">
+                  {visibleOtherMetrics.length > 0 ? (
+                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                      {visibleOtherMetrics.map(renderTrendMetricButton)}
+                    </div>
+                  ) : null}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="flex min-w-0 flex-col gap-2">
+                      {visibleDownstairsMetrics.map(renderTrendMetricButton)}
+                    </div>
+                    <div className="flex min-w-0 flex-col gap-2">
+                      {visibleUpstairsMetrics.map(renderTrendMetricButton)}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 text-xs">
+                  {(healthTrendSelected ? visibleTrendMetrics : activeTrendMetrics)
+                    .map(renderTrendMetricButton)}
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="rounded border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
+              {trendPeriod === "week"
+                ? "The typical weekly pattern will appear once this season has hourly readings."
+                : trendPeriod === "day"
+                ? "No hourly seasonal readings are available yet."
+                : "No dated readings are available for this season yet."}
+            </div>
+          )}
+        </div>
+  );
   return (
     <div
       className={`bg-white p-4 flex flex-col ${dataSourceBuildingId === "home" ? "wbp-occupy-panel--linear space-y-0" : "space-y-6"} ${
@@ -7412,8 +7873,8 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
             <button type="button" className="wbp-museum-deep-dive-button" onClick={() => setOccupyDetail("performance")}>Deep Dive</button>
           ) : null}
 
-          {!shouldShowDeepDive || occupyDetail !== "performance" ? null : (
-          <DetailSurface modal={Boolean(occupyPerformanceTabs) || building.id === "museum"} title={occupyPerformanceTabs ? "" : "Performance deep dive"} onClose={() => setOccupyDetail(null)} headerExtra={occupyPerformanceTabs}>
+          {!shouldShowDeepDive || !["performance", "report"].includes(occupyDetail) ? null : (
+          <DetailSurface modal={occupyDetail === "report" || Boolean(occupyPerformanceTabs) || building.id === "museum"} title={occupyDetail === "report" ? "Detailed report" : occupyPerformanceTabs ? "" : "Performance deep dive"} onClose={() => setOccupyDetail(null)} headerExtra={occupyDetail === "report" ? null : occupyPerformanceTabs}>
           <div className="bg-white rounded border p-2.5 sm:p-4 min-w-0 overflow-hidden">
             {building.id === "rf" ? <p className="mb-3 text-xs text-gray-600">Measured WBP-001 baseline context, not post-retrofit performance.</p> : null}
             {isCarbonCreditTab ? (
@@ -7926,471 +8387,14 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
               </div>
             </div>
           </div>
+          {occupyDetail === "report" ? seasonalChartsContent : null}
           </DetailSurface>
           )}
         </div>
 
         {!shouldShowDeepDive || occupyDetail !== "trends" ? null : (
         <DetailSurface modal={Boolean(occupyPerformanceTabs)} title={occupyPerformanceTabs ? "" : "Seasonal performance trends"} onClose={() => setOccupyDetail(null)} headerExtra={occupyPerformanceTabs}>
-        <div className="mt-4 bg-white rounded border p-3 sm:p-4 space-y-3 overflow-hidden">
-          {building.id === "rf" ? <p className="text-xs text-gray-600">Measured WBP-001 seasonal readings, not a retrofit forecast.</p> : null}
-          {isCarbonCreditTab ? <p className="text-xs text-gray-600">{ccStage === "before" ? "Historical seasonal readings; the before baseline is still being gathered, not locked." : "Measured seasonal readings for context; these are not a forecast of the EnerPHit retrofit."}</p> : null}
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="font-semibold">Seasonal Performance Trends</h3>
-            <div className="flex flex-wrap gap-1 text-xs">
-              {SEASON_NAMES.map((season) => {
-                const seasonAvailable = availableSeasonNames.includes(season);
-                const seasonSelected = selectedTrendSeason === season;
-
-                return (
-                  <button
-                    type="button"
-                    key={season}
-                    onClick={() => {
-                      if (seasonAvailable) {
-                        setSelectedTrendSeason(season);
-                        setHoveredTrendSlot(null);
-                      }
-                    }}
-                    disabled={!seasonAvailable}
-                    className={`rounded border px-2 py-1 ${
-                      seasonSelected
-                        ? "border-emerald-300 bg-emerald-50 text-emerald-800"
-                        : seasonAvailable
-                        ? "border-gray-300 bg-white text-gray-700"
-                        : "border-gray-200 bg-gray-50 text-gray-500"
-                    }`}
-                  >
-                    {season}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="flex w-fit border border-gray-300 text-xs" role="group" aria-label="Trend period">
-            {[["day", "Day"], ["week", "Week"], ["month", "Month"]].map(([period, label]) => (
-              <button key={period} type="button" aria-pressed={trendPeriod === period}
-                onClick={() => {
-                  setTrendPeriod(period);
-                  setHoveredTrendSlot(null);
-                }}
-                className={`px-3 py-1.5 font-semibold transition-colors ${trendPeriod === period ? "bg-gray-900 text-white" : "bg-white text-gray-700 hover:bg-gray-100"}`}>
-                {label}
-              </button>
-            ))}
-          </div>
-          {datedTrendError && (trendPeriod !== "week" || selectedTrendSeason !== activeSeasonInfo.name)
-            ? <p className="text-xs text-red-700">{datedTrendError}</p> : null}
-
-          {activeTrendMetrics.length > 0 ? (
-            <>
-              <div className="flex flex-wrap gap-2 text-xs">
-                {activeTrendMetricGroups.map((group) => {
-                  const groupSelected =
-                    selectedTrendMetricGroupKey === group.key ||
-                    (group.key === "health" && healthTrendSelected);
-
-                  return (
-                    <button
-                      type="button"
-                      key={group.key}
-                      onClick={() => selectTrendMetricGroup(group.metricKeys)}
-                      className={`rounded border px-3 py-1.5 font-semibold transition ${
-                        groupSelected
-                          ? "border-blue-600 bg-blue-600 text-white"
-                          : "border-gray-300 bg-white text-gray-700"
-                      }`}
-                    >
-                      {group.label}
-                    </button>
-                  );
-                })}
-              </div>
-              {dataSourceBuildingId === "home" && healthTrendSelected ? (
-                <div className="flex flex-wrap gap-2 text-xs">
-                  {healthTrendAreaOptions.map((option) => {
-                    const optionSelected =
-                      (activeHealthTrendArea?.key || "all") === option.key;
-
-                    return (
-                      <button
-                        type="button"
-                        key={option.key}
-                        onClick={() => selectHealthTrendArea(option.key)}
-                        className={`rounded border px-3 py-1.5 font-semibold transition ${
-                          optionSelected
-                            ? "border-purple-600 bg-purple-600 text-white"
-                            : "border-gray-300 bg-white text-gray-700"
-                        }`}
-                      >
-                        {option.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : null}
-
-              <div className="w-full overflow-x-auto">
-                <svg
-                  viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-                  className="w-full h-auto"
-                  preserveAspectRatio="xMidYMid meet"
-                  role="img"
-                  aria-label={`${trendPeriod} seasonal performance trend chart`}
-                  onPointerMove={updateHoveredTrendSlot}
-                  onPointerDown={updateHoveredTrendSlot}
-                  onPointerLeave={clearHoveredTrendSlot}
-                  style={{ touchAction: "none" }}
-                >
-                  {([
-                    { min: 85, max: 100, color: "#fecaca", label: "+ BAD" },
-                    { min: 70, max: 85, color: "#fde68a", label: "+ RISK" },
-                    { min: 30, max: 70, color: "#bbf7d0", label: "0 OK" },
-                    { min: 15, max: 30, color: "#fde68a", label: "- RISK" },
-                    { min: 0, max: 15, color: "#fecaca", label: "- BAD" },
-                  ]).map((band) => {
-                    const yTop = trendY({ min: 0, max: 100 }, band.max);
-                    const yBottom = trendY({ min: 0, max: 100 }, band.min);
-
-                    return (
-                      <g key={band.label}>
-                        <rect
-                          x={chartPadding.left}
-                          y={Math.min(yTop, yBottom)}
-                          width={plotWidth}
-                          height={Math.abs(yBottom - yTop)}
-                          fill={band.color}
-                          opacity="0.34"
-                        />
-                        <rect
-                          x={chartPadding.left}
-                          y={Math.min(yTop, yBottom)}
-                          width={plotWidth}
-                          height={Math.abs(yBottom - yTop)}
-                          fill="none"
-                          stroke="#ffffff"
-                          strokeWidth="1.5"
-                          opacity="0.62"
-                        />
-                        <text
-                          x={chartPadding.left + 8}
-                          y={Math.min(yTop, yBottom) + 17}
-                          fontSize="10"
-                          fontWeight="700"
-                          fill="#111827"
-                          opacity="0.4"
-                        >
-                          {band.label}
-                        </text>
-                      </g>
-                    );
-                  })}
-                  {[0, 0.25, 0.5, 0.75, 1].map((tick) => {
-                    const y = chartPadding.top + tick * plotHeight;
-                    return (
-                      <line
-                        key={tick}
-                        x1={chartPadding.left}
-                        x2={chartWidth - chartPadding.right}
-                        y1={y}
-                        y2={y}
-                        stroke="#e5e7eb"
-                        strokeWidth="1"
-                      />
-                    );
-                  })}
-                  {trendPeriod === "week" ? chartTrendData
-                    .filter((point) => point.hour === 0)
-                    .map((point) => {
-                      const x =
-                        chartPadding.left +
-                         (point.slot / (chartTrendData.length - 1)) *
-                          plotWidth;
-                      return (
-                        <line
-                          key={`day-line-${point.dayLabel}`}
-                          x1={x}
-                          x2={x}
-                          y1={chartPadding.top}
-                          y2={chartPadding.top + plotHeight}
-                          stroke="#d1d5db"
-                          strokeWidth="1"
-                        />
-                      );
-                    }) : null}
-                  {trendPeriod !== "month" ? chartTrendData
-                    .filter((point) => point.hour % 6 === 0)
-                    .map((point) => {
-                      const x =
-                        chartPadding.left +
-                         (point.slot / (chartTrendData.length - 1)) *
-                          plotWidth;
-                      return (
-                        <line
-                          key={`hour-line-${point.slot}`}
-                          x1={x}
-                          x2={x}
-                          y1={chartPadding.top}
-                          y2={chartPadding.top + plotHeight}
-                          stroke="#f3f4f6"
-                          strokeWidth="1"
-                        />
-                      );
-                    }) : null}
-                  {trendPeriod === "week" ? ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(
-                    (dayLabel, dayIndex) => {
-                      const midpointSlot = dayIndex * 24 + 11.5;
-                      const x =
-                        chartPadding.left +
-                         (midpointSlot / (chartTrendData.length - 1)) *
-                          plotWidth;
-                      return (
-                        <text
-                          key={dayLabel}
-                          x={x}
-                          y={chartHeight - 14}
-                          textAnchor="middle"
-                          fontSize="11"
-                          fill="#4b5563"
-                        >
-                          {dayLabel}
-                        </text>
-                      );
-                    }
-                  ) : trendPeriod === "month" ? chartTrendData.map((point, index) => {
-                    const x = chartPadding.left +
-                      (chartTrendData.length > 1 ? index / (chartTrendData.length - 1) * plotWidth : plotWidth / 2);
-                    return <g key={`period-${point.date}`}>
-                      <line x1={x} x2={x} y1={chartPadding.top} y2={chartPadding.top + plotHeight} stroke="#e5e7eb" />
-                      <text x={x} y={chartHeight - 16} textAnchor="middle" fontSize="10" fill="#4b5563">
-                         {new Date(`${point.date}T00:00:00.000Z`)
-                          .toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" })}
-                      </text>
-                    </g>;
-                  }) : null}
-                  {seasonMonthGroups.map((group) => {
-                    const midpoint = (group.first + group.last) / 2;
-                    const x = chartPadding.left + (chartTrendData.length > 1
-                      ? midpoint / (chartTrendData.length - 1) * plotWidth : plotWidth / 2);
-                    return <text key={`season-month-${group.month}`} x={x} y={chartPadding.top + 13}
-                      textAnchor="middle" fontSize="12" fontWeight="700" fill="#374151">
-                      {new Date(`${group.month}-01T00:00:00.000Z`)
-                        .toLocaleDateString("en-GB", { month: "long", timeZone: "UTC" })}
-                    </text>;
-                  })}
-                  {trendPeriod !== "month" ? chartTrendData
-                    .filter((point) => (trendPeriod === "day" || point.dayIndex === 0) && point.hour % 6 === 0)
-                    .map((point) => {
-                    const x =
-                      chartPadding.left +
-                       (point.slot / (chartTrendData.length - 1)) *
-                        plotWidth;
-                    return (
-                      <text
-                        key={`hour-label-${point.hour}`}
-                        x={x}
-                        y={chartHeight - 28}
-                        textAnchor="middle"
-                        fontSize="9"
-                        fill="#9ca3af"
-                      >
-                        {point.hourLabel}
-                      </text>
-                    );
-                  }) : null}
-                  {[0, 0.15, 0.3, 0.5, 0.7, 0.85, 1].map((tick) => {
-                      const value = 100 - 100 * tick;
-                      const y = chartPadding.top + tick * plotHeight;
-
-                      return (
-                        <text
-                          key={`left-range-${tick}`}
-                          x={chartPadding.left - 8}
-                          y={y + 3}
-                          textAnchor="end"
-                          fontSize="9"
-                          fill="#374151"
-                        >
-                          {formatDeviationScore(value)}
-                        </text>
-                      );
-                    })}
-                  {plottedTrendMetrics.map((metric) => <g key={metric.key}>
-                    {comfortTemperatureAxis && trendPeriod === "month" ? chartTrendData.map((point, index) => {
-                      const min = point[`${metric.key}Min`];
-                      const max = point[`${metric.key}Max`];
-                      if (!Number.isFinite(min) || !Number.isFinite(max)) return null;
-                      const x = chartPadding.left + (chartTrendData.length > 1
-                        ? index / (chartTrendData.length - 1) * plotWidth : plotWidth / 2);
-                      return <line key={`${metric.key}-range-${point.date}`} x1={x} x2={x}
-                        y1={trendY(metricRanges[metric.key], trendHealthScore(metric, min))}
-                        y2={trendY(metricRanges[metric.key], trendHealthScore(metric, max))}
-                        stroke={metric.color} strokeWidth="5" opacity="0.3" />;
-                    }) : null}
-                    <path d={trendPath(chartTrendData, metricRanges, metric)} fill="none"
-                      stroke={metric.color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                    {trendPeriod === "month" ? chartTrendData.map((point, index) => {
-                      const location = trendPoint(chartTrendData, metricRanges, point, metric, index);
-                      return location ? <circle key={`${metric.key}-${point.date}`} cx={location.x} cy={location.y} r="4" fill={metric.color} /> : null;
-                    }) : null}
-                  </g>)}
-                  {plottedTrendMetrics.some((metric) => metric.key === "externalTemp")
-                    ? chartTrendData.map((point) => {
-                        if (!Number.isFinite(point.externalTempPeak)) return null;
-                        const x = chartPadding.left + (chartTrendData.length > 1
-                          ? point.slot / (chartTrendData.length - 1) * plotWidth : plotWidth / 2);
-                        const y = trendY(
-                          metricRanges.externalTemp,
-                          trendHealthScore(
-                            trendMetrics.find((metric) => metric.key === "externalTemp"),
-                            point.externalTempPeak
-                          )
-                        );
-                        return Number.isFinite(y) ? (
-                          <circle key={`outdoor-peak-${point.slot}`} cx={x} cy={y}
-                            r="2" fill="#4338ca" opacity="0.75" />
-                        ) : null;
-                      })
-                    : null}
-                  {hoveredTrendPoint && Number.isFinite(hoveredTrendX) ? (
-                    <g pointerEvents="none">
-                      <line
-                        x1={hoveredTrendX}
-                        x2={hoveredTrendX}
-                        y1={chartPadding.top}
-                        y2={chartPadding.top + plotHeight}
-                        stroke="#111827"
-                        strokeWidth="1.5"
-                        strokeDasharray="4 3"
-                      />
-                      {Number.isFinite(hoveredTrendY) ? (
-                        <>
-                          <line
-                            x1={chartPadding.left}
-                            x2={hoveredTrendX}
-                            y1={hoveredTrendY}
-                            y2={hoveredTrendY}
-                            stroke="#111827"
-                            strokeWidth="1.2"
-                            strokeDasharray="4 3"
-                          />
-                          <text
-                            x={chartPadding.left - 8}
-                            y={hoveredTrendY + 3}
-                            textAnchor="end"
-                            fontSize="9"
-                            fontWeight="600"
-                            fill="#111827"
-                          >
-                            {hoveredTrendMetric &&
-                            Number.isFinite(hoveredTrendPoint?.[hoveredTrendMetric.key])
-                              ? formatDeviationScore(
-                                  trendHealthScore(
-                                    hoveredTrendMetric,
-                                    hoveredTrendPoint[hoveredTrendMetric.key],
-                                    hoveredTrendPoint
-                                  )
-                                )
-                              : ""}
-                          </text>
-                        </>
-                      ) : null}
-                      <rect
-                        x={Math.min(
-                          chartWidth - chartPadding.right - 210,
-                          Math.max(chartPadding.left, hoveredTrendX + 8)
-                        )}
-                        y={chartPadding.top + 8}
-                        width="200"
-                        height={32 + visibleTrendMetrics.length * 16}
-                        rx="4"
-                        fill="white"
-                        stroke="#d1d5db"
-                      />
-                      <text
-                        x={Math.min(
-                          chartWidth - chartPadding.right - 200,
-                          Math.max(chartPadding.left + 10, hoveredTrendX + 18)
-                        )}
-                        y={chartPadding.top + 27}
-                        fontSize="11"
-                        fontWeight="600"
-                        fill="#111827"
-                      >
-                        {hoveredTrendPoint.label}{trendPeriod === "month" ? ` (${hoveredTrendPoint.dayCount} day(s))` : ""}
-                      </text>
-                      {visibleTrendMetrics.map((metric, index) => {
-                        const value = hoveredTrendPoint[metric.key];
-                        const y = chartPadding.top + 46 + index * 16;
-                        const x = Math.min(
-                          chartWidth - chartPadding.right - 200,
-                          Math.max(chartPadding.left + 10, hoveredTrendX + 18)
-                        );
-
-                        return (
-                          <g key={`hover-${metric.key}`}>
-                            <circle
-                              cx={x + 4}
-                              cy={y - 4}
-                              r="3"
-                              fill={metric.color}
-                            />
-                            <text x={x + 12} y={y} fontSize="10" fill="#374151">
-                              {metric.key === "warmthBuffer" && selectedTrendSeason === "Summer"
-                                ? "Indoor–outdoor" : metric.label}:{" "}
-                              {Number.isFinite(value)
-                                ? `${formatMeasurement(value)} ${trendPeriod === "month" && metric.energyStatus ? "kWh/day" : metric.unit}${trendPeriod === "month" && hoveredTrendPoint.metricDayCounts?.[metric.key] ? ` · ${hoveredTrendPoint.metricDayCounts[metric.key]} day(s)` : ""}`
-                                : "No Data"}
-                            </text>
-                          </g>
-                        );
-                      })}
-                    </g>
-                  ) : null}
-                  <rect
-                    x={chartPadding.left}
-                    y={chartPadding.top}
-                    width={plotWidth}
-                    height={plotHeight}
-                    fill="transparent"
-                  />
-                </svg>
-              </div>
-
-              {showFloorMetricColumns ? (
-                <div className="space-y-3 text-xs">
-                  {visibleOtherMetrics.length > 0 ? (
-                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                      {visibleOtherMetrics.map(renderTrendMetricButton)}
-                    </div>
-                  ) : null}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="flex min-w-0 flex-col gap-2">
-                      {visibleDownstairsMetrics.map(renderTrendMetricButton)}
-                    </div>
-                    <div className="flex min-w-0 flex-col gap-2">
-                      {visibleUpstairsMetrics.map(renderTrendMetricButton)}
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 text-xs">
-                  {(healthTrendSelected ? visibleTrendMetrics : activeTrendMetrics)
-                    .map(renderTrendMetricButton)}
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="rounded border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
-              {trendPeriod === "week"
-                ? "The typical weekly pattern will appear once this season has hourly readings."
-                : trendPeriod === "day"
-                ? "No hourly seasonal readings are available yet."
-                : "No dated readings are available for this season yet."}
-            </div>
-          )}
-        </div>
+        {seasonalChartsContent}
         </DetailSurface>
         )}
       </div>
@@ -8844,7 +8848,12 @@ const BuildingDashboardPanel = ({ building, isActive = false }) => {
             document.body
           )
         : null}
-      {building.id === "bl" ? <BaselineDataPanel DetailSurface={DetailSurface} baseline={{
+      {building.id === "bl" ? <BaselineDataPanel DetailSurface={DetailSurface} onOpenDetailedReport={() => {
+        const archivedSeason = seasonalTrendRecords.find((record) => record.status === "complete");
+        setSelectedTrendSeason(archivedSeason?.name || activeSeasonInfo.name);
+        setTrendPeriod("month");
+        setOccupyDetail("report");
+      }} baseline={{
         buildingId: homePassportDatabaseId,
         postcode: homePassport?.propertyDiscovery?.postcode,
         localAuthority: homePassport?.propertyDiscovery?.localAuthority,

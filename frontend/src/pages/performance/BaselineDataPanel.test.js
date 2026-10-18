@@ -69,9 +69,12 @@ test("sale pie is illustrative and does not claim a buyer or earnings", () => {
   expect(screen.getByText(/Nothing is shared automatically/)).toBeInTheDocument();
 });
 
-test("report download needs a saved building record", async () => {
-  render(<BaselineDataPanel DetailSurface={Surface} />);
+test("detailed report opens the interactive view while evidence download remains protected", async () => {
+  const onOpenDetailedReport = jest.fn();
+  render(<BaselineDataPanel DetailSurface={Surface} onOpenDetailedReport={onOpenDetailedReport} />);
   fireEvent.click(screen.getByRole("button", { name: "Detailed report" }));
+  expect(onOpenDetailedReport).toHaveBeenCalledTimes(1);
+  fireEvent.click(screen.getByRole("button", { name: "Download baseline evidence" }));
   await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/Save this home profile/));
 });
 
