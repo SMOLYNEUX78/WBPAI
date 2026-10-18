@@ -119,6 +119,9 @@ export default function BaselineDataPanel({ DetailSurface, onOpenDetailedReport,
       detail: concern.explanation, tone: concern.status === "poor" ? "red" : "amber",
     })),
   ];
+  const scores = [baseline.energyScore, baseline.healthScore].filter(Number.isFinite);
+  const lowestScore = scores.length ? Math.min(...scores) : null;
+  const reportTone = lowestScore === null ? "border-gray-300 bg-gray-50" : lowestScore < 60 ? "border-red-400 bg-red-50" : lowestScore < 80 ? "border-amber-400 bg-amber-50" : "border-emerald-400 bg-emerald-50";
   const downloadPackage = (filename, content) => {
     const url = URL.createObjectURL(new Blob([JSON.stringify(content, null, 2)], { type: "application/json" }));
     const link = document.createElement("a");
@@ -148,6 +151,7 @@ export default function BaselineDataPanel({ DetailSurface, onOpenDetailedReport,
   };
 
   return <section className="wbp-baseline-report -mx-4 border-t border-gray-300 bg-white px-4 py-4 text-gray-900 sm:px-8" aria-label="Baseline report: issues found">
+    <div className={`border p-4 sm:p-5 ${reportTone}`}>
     <div className="flex flex-wrap items-center justify-between gap-3">
       <h2 className="text-base font-bold">Baseline report: issues found</h2>
       <div className="flex shrink-0 items-center gap-2">
@@ -158,14 +162,15 @@ export default function BaselineDataPanel({ DetailSurface, onOpenDetailedReport,
       <div className={`flex items-center gap-2 border px-3 py-1.5 text-sm ${!Number.isFinite(baseline.energyScore) ? "border-gray-300 bg-gray-100" : baseline.energyScore < 60 ? "border-red-400 bg-red-50" : baseline.energyScore < 80 ? "border-amber-400 bg-amber-50" : "border-emerald-400 bg-emerald-50"}`}><strong>Energy</strong><span>{Number.isFinite(baseline.energyScore) ? `${Math.round(baseline.energyScore)}/100` : "Pending"}</span></div>
       <div className={`flex items-center gap-2 border px-3 py-1.5 text-sm ${!Number.isFinite(baseline.healthScore) ? "border-gray-300 bg-gray-100" : baseline.healthScore < 60 ? "border-red-400 bg-red-50" : baseline.healthScore < 80 ? "border-amber-400 bg-amber-50" : "border-emerald-400 bg-emerald-50"}`}><strong>Health</strong><span>{Number.isFinite(baseline.healthScore) ? `${Math.round(baseline.healthScore)}/100` : "Pending"}</span></div>
     </div>
-    <div className="mt-3 border-t border-gray-200 pt-3">
+    <div className="mt-3 border-t border-gray-900/10 pt-3">
       <ConcernRow label="Energy use per square metre" heading plain measurement={hasEui ? `${eui.toFixed(1)} kWh/m²/year` : "Pending"} detail={hasEui ? `If this rate continued for a year, that is ${eui > LETI_RETROFIT_EUI ? "above" : "below"} LETI's 50 kWh/m²/year best-practice retrofit design target. This is an estimate from the readings, not a formal retrofit rating.` : "We need more energy readings to estimate this."} />
     </div>
     <div className="mt-4 space-y-3" aria-label="Key findings">
-      {concernItems.map((concern) => <div key={concern.key} className="border-t border-gray-200 pt-3"><ConcernRow {...concern} /></div>)}
+      {concernItems.map((concern) => <div key={concern.key} className="border-t border-gray-900/10 pt-3"><ConcernRow {...concern} /></div>)}
       {historicalHealth.status === "ready" && !historicalHealth.findings.length ? <p className="text-sm">Past room readings are not available yet.</p> : null}
       {historicalHealth.status !== "ready" ? <p className="text-sm">{historicalHealth.status === "loading" ? "Checking past room readings..." : <>Past room readings are unavailable. <button type="button" className="underline" onClick={() => setHistoryRetry((value) => value + 1)}>Retry</button></>}</p> : null}
       {historyError ? <p role="status" className="text-sm text-amber-800">Showing the last saved readings. <button type="button" className="underline" onClick={() => setHistoryRetry((value) => value + 1)}>Retry</button></p> : null}
+    </div>
     </div>
     <div className="wbp-baseline-options mt-7 border-t border-gray-200 pt-5">
       <h3 className="mb-3 text-base font-bold">Options</h3>

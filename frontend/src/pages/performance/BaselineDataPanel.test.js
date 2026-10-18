@@ -22,6 +22,7 @@ test("baseline report keeps the page concise and colour-codes the scores", () =>
   expect(screen.getByText("Health").parentElement).toHaveTextContent("72/100");
   expect(screen.getByText("Energy").parentElement).toHaveClass("bg-amber-50");
   expect(screen.getByText("Health").parentElement).toHaveClass("bg-amber-50");
+  expect(screen.getByRole("heading", { name: "Baseline report: issues found" }).parentElement.parentElement).toHaveClass("bg-amber-50", "border-amber-400");
   expect(screen.getByRole("heading", { name: "Energy use per square metre" }).parentElement).toHaveTextContent("42.3 kWh/m²/year");
   expect(screen.getByText("42.3", { exact: false })).toBeInTheDocument();
   expect(screen.getByText("72/100")).toBeInTheDocument();
@@ -37,6 +38,12 @@ test("baseline report keeps the page concise and colour-codes the scores", () =>
   expect(saleButton.lastElementChild).toHaveClass("wbp-baseline-sale-house");
   expect(screen.queryByText(/100% baseline scenario/)).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: /Property report/ })).not.toBeInTheDocument();
+});
+
+test("the unified report takes the colour of the lower performance score", () => {
+  render(<BaselineDataPanel DetailSurface={Surface} baseline={{ energyScore: 88, healthScore: 55, annualEui: 42.3 }} />);
+  expect(screen.getByRole("heading", { name: "Baseline report: issues found" }).parentElement.parentElement).toHaveClass("bg-red-50", "border-red-400");
+  expect(screen.getByText("Energy").parentElement).toHaveClass("bg-emerald-50");
 });
 
 test("retrofit option opens the cost and funding planner without introductory copy", () => {
