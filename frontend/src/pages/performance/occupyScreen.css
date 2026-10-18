@@ -530,8 +530,15 @@
 .wbp-baseline-sale-buyers i { display: block; height: 18px; border: 1px solid #80bca8; border-left: 3px solid #047857; background: #ecfdf5; }
 .wbp-baseline-sale-buyers i:nth-child(2) { border-color: #91b9da; border-left-color: #2b69a4; background: #eff6ff; }
 .wbp-baseline-sale-buyers i:nth-child(3) { border-color: #edc49e; border-left-color: #c27132; background: #fff7ed; }
-.wbp-baseline-sale-label { display: flex; min-width: 0; flex: 1; align-self: stretch; align-items: flex-end; padding: 12px 16px; font-size: 18px; font-weight: 700; line-height: 1.15; }
-.wbp-baseline-sale-label > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.wbp-baseline-sale-label { display: flex; min-width: 0; flex: 1; align-self: stretch; flex-direction: column; align-items: flex-start; justify-content: space-between; padding: 12px 16px; font-size: 18px; font-weight: 700; line-height: 1.15; }
+.wbp-baseline-sale-label > span:last-child { min-width: 0; overflow-wrap: anywhere; }
+.wbp-baseline-sale-chart { display: flex; width: min(100%, 118px); height: 45px; flex: none; align-items: flex-end; gap: 5px; border-bottom: 2px solid #8da99d; }
+.wbp-baseline-sale-chart i { flex: 1; min-width: 0; height: 40%; background: #80bca8; }
+.wbp-baseline-sale-chart i:nth-child(2) { height: 62%; background: #2b69a4; }
+.wbp-baseline-sale-chart i:nth-child(3) { height: 48%; }
+.wbp-baseline-sale-chart i:nth-child(4) { height: 84%; background: #c27132; }
+.wbp-baseline-sale-chart i:nth-child(5) { height: 69%; background: #2b69a4; }
+.wbp-baseline-sale-chart i:nth-child(6) { height: 96%; background: #047857; }
 @media (max-width: 520px) {
   .wbp-baseline-sale-house { width: clamp(72px, 24vw, 108px); height: 108px; }
   .wbp-baseline-sale-flow { width: 20px; }
@@ -540,6 +547,7 @@
   .wbp-baseline-sale-buyers { width: 25px; height: 54px; }
   .wbp-baseline-sale-buyers i { height: 14px; }
   .wbp-baseline-sale-label { padding: 8px; font-size: 16px; }
+  .wbp-baseline-sale-chart { height: 34px; gap: 3px; }
 }
 @media (max-width: 520px) {
   .wbp-baseline-options { grid-template-columns: minmax(0, 1fr); }

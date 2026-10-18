@@ -33,6 +33,7 @@ test("baseline report keeps the page concise and colour-codes the scores", () =>
   const saleButton = screen.getByRole("button", { name: /Sell baseline data/ });
   expect(saleButton).toHaveClass("min-h-32");
   expect(saleButton.firstElementChild).toHaveTextContent("Sell baseline data");
+  expect(saleButton.querySelectorAll(".wbp-baseline-sale-chart i")).toHaveLength(6);
   expect(saleButton.lastElementChild).toHaveClass("wbp-baseline-sale-house");
   expect(screen.queryByText(/100% baseline scenario/)).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: /Property report/ })).not.toBeInTheDocument();
