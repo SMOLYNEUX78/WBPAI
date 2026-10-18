@@ -124,7 +124,7 @@ export default function BaselineDataPanel({ DetailSurface, onOpenDetailedReport,
         </div>
         {fabricConcerns.length > 0 ? <div className="mt-4 space-y-2" aria-label="Fabric">
           <h4 className="text-sm font-bold">Fabric</h4>
-          {fabricConcerns.map((concern) => <ConcernRow key={concern.key} plain label={concern.key === "heat-exclusion" ? "Heat exclusion" : concern.label} measurement={concern.measurement || concern.detail} detail={concern.key === "hdd" ? "Energy use adjusted for how cold it was outside. Higher values may suggest more heat is needed to keep the home warm." : concern.key === "heat-exclusion" ? `How well the home stays cooler than outside in hot weather. ${concern.explanation ? `${concern.explanation}. ` : ""}Being hotter inside can signal overheating risk.` : concern.explanation} />)}
+          {fabricConcerns.map((concern) => <ConcernRow key={concern.key} plain={!['hdd', 'heat-exclusion'].includes(concern.key)} label={concern.key === "heat-exclusion" ? "Heat exclusion" : concern.label} measurement={concern.measurement || concern.detail} detail={concern.key === "hdd" ? "Higher energy use than expected for the cold weather." : concern.key === "heat-exclusion" ? `On hot days, the home was ${concern.detail || concern.explanation || "not consistently cooler than outside"}.` : concern.explanation} />)}
         </div> : null}
       </div>
       <div className={`border p-4 ${!Number.isFinite(baseline.healthScore) ? "border-gray-300 bg-gray-100" : baseline.healthScore < 60 ? "border-red-400 bg-red-50" : baseline.healthScore < 80 ? "border-amber-400 bg-amber-50" : "border-emerald-400 bg-emerald-50"}`}>

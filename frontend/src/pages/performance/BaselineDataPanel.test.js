@@ -275,8 +275,10 @@ test("baseline shows every historical red metric plus performance and recent con
   expect(screen.getByRole("heading", { name: "Energy" }).parentElement.parentElement).toContainElement(fabric);
   expect(fabric.parentElement).toHaveTextContent("Heat demand");
   expect(fabric.parentElement).toHaveTextContent("Heat exclusion");
-  expect(fabric.parentElement).toHaveTextContent("adjusted for how cold it was outside");
-  expect(fabric.parentElement).toHaveTextContent("Being hotter inside can signal overheating risk");
+  expect(screen.getByText("Heat demand")).toHaveClass("bg-red-50", "border-red-700");
+  expect(screen.getByText("Heat exclusion")).toHaveClass("bg-red-50", "border-red-700");
+  expect(fabric.parentElement).toHaveTextContent("Higher energy use than expected for the cold weather.");
+  expect(fabric.parentElement).toHaveTextContent("On hot days, the home was 1.2 °C hotter than outside.");
   expect(screen.queryByText("Upstairs RH recently")).not.toBeInTheDocument();
   expect(screen.getByText("Downstairs PM2.5 recently")).toBeInTheDocument();
   rpc.mockRestore();
