@@ -530,7 +530,7 @@
 .wbp-baseline-sale-buyers i { display: block; height: 18px; border: 1px solid #80bca8; border-left: 3px solid #047857; background: #ecfdf5; }
 .wbp-baseline-sale-buyers i:nth-child(2) { border-color: #91b9da; border-left-color: #2b69a4; background: #eff6ff; }
 .wbp-baseline-sale-buyers i:nth-child(3) { border-color: #edc49e; border-left-color: #c27132; background: #fff7ed; }
-.wbp-baseline-sale-label { display: flex; min-width: 0; flex: 1; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 16px; font-size: 18px; font-weight: 700; line-height: 1.15; }
+.wbp-baseline-sale-label { display: flex; min-width: 0; flex: 1; align-self: stretch; align-items: flex-end; padding: 12px 16px; font-size: 18px; font-weight: 700; line-height: 1.15; }
 .wbp-baseline-sale-label > span:first-child { min-width: 0; overflow-wrap: anywhere; }
 @media (max-width: 520px) {
   .wbp-baseline-sale-house { width: clamp(72px, 24vw, 108px); height: 108px; }

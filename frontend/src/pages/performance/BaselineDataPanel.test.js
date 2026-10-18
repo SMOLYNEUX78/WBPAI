@@ -30,7 +30,10 @@ test("baseline report keeps the page concise and colour-codes the scores", () =>
   expect(screen.getByText(/WBP’s 35 kWh\/m²\/year planning target/)).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Detailed report" })).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: "Baseline report: issues found" }).parentElement).toContainElement(screen.getByRole("button", { name: "Detailed report" }));
-  expect(screen.getByRole("button", { name: /Sell baseline data/ })).toHaveClass("min-h-32");
+  const saleButton = screen.getByRole("button", { name: /Sell baseline data/ });
+  expect(saleButton).toHaveClass("min-h-32");
+  expect(saleButton.firstElementChild).toHaveTextContent("Sell baseline data");
+  expect(saleButton.lastElementChild).toHaveClass("wbp-baseline-sale-house");
   expect(screen.queryByText(/100% baseline scenario/)).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: /Property report/ })).not.toBeInTheDocument();
 });
