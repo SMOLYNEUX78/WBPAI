@@ -70,6 +70,7 @@ export const mergeMonthlyHlaRows = (rows) => {
     heatExclusionSummary: {
       averageBuffer: totals.hotHours ? totals.hotBufferC / totals.hotHours : null,
       sampleCount: totals.hotHours,
+      overheatedHours: totals.overheatedHours,
       overheatingShare: totals.hotHours ? totals.overheatedHours / totals.hotHours : null,
       hotThreshold: 24,
     },

@@ -1558,6 +1558,7 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
   const defaultHeatExclusionSummary = {
     averageBuffer: null,
     sampleCount: 0,
+    overheatedHours: 0,
     overheatingShare: null,
     hotThreshold: 24,
   };
@@ -3900,6 +3901,7 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
     return {
       averageBuffer: hotWeatherBuffers.length ? average(hotWeatherBuffers) : null,
       sampleCount: hotWeatherBuffers.length,
+      overheatedHours: overheatingRows.length,
       overheatingShare: hotWeatherRows.length
         ? overheatingRows.length / hotWeatherRows.length
         : null,
@@ -7162,10 +7164,10 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
     if (isActive) onComfortSuggestionChange?.(comfortSuggestion);
   }, [isActive, onComfortSuggestionChange, comfortSuggestion]);
   const baselinePerformanceConcerns = [
-    { key: "hdd", label: "Heat demand", status: hddStatus, measurement: Number.isFinite(hddIntensityPerM2) ? `${hddIntensityPerM2.toFixed(3)} kWh/m²/HDD` : "", detail: Number.isFinite(hddIntensityPerM2) ? `${hddIntensityPerM2.toFixed(3)} kWh/m²/HDD` : "" },
+    { key: "hdd", label: "Heat demand", status: hddStatus, measurement: Number.isFinite(hddIntensityPerM2) ? `${hddIntensityPerM2.toFixed(3)} kWh/m²/HDD` : "", detail: Number.isFinite(hddIntensityPerM2) ? `${hddIntensityPerM2.toFixed(3)} kWh/m²/HDD` : "", evidenceDays: heatLossSummary.hddDays, abovePlanningThreshold: rawHddStatus !== "good" },
     { key: "htc", label: "Heat loss", status: htcStatus, measurement: Number.isFinite(htcPerM2) ? `${htcPerM2.toFixed(1)} W/m²K` : "", detail: Number.isFinite(htcPerM2) ? `${htcPerM2.toFixed(1)} W/m²K` : "" },
     { key: "night-cooldown", label: "Night cooldown", status: nightCooldownStatus, measurement: (heatLossSummary.nightCooldownNights || 0) < 3 ? `${heatLossSummary.nightCooldownNights || 0} nights` : Number.isFinite(nightCooldownHtcPerM2) ? `${nightCooldownHtcPerM2.toFixed(1)} W/m²K` : "", explanation: (heatLossSummary.nightCooldownNights || 0) < 3 ? "More evidence needed" : "", detail: (heatLossSummary.nightCooldownNights || 0) < 3 ? `${heatLossSummary.nightCooldownNights || 0} qualifying nights; more evidence needed` : Number.isFinite(nightCooldownHtcPerM2) ? `${nightCooldownHtcPerM2.toFixed(1)} W/m²K` : "" },
-    { key: "heat-exclusion", label: "Summer heat", status: heatExclusionStatus, measurement: Number.isFinite(heatExclusionSummary.averageBuffer) ? `${Math.abs(heatExclusionSummary.averageBuffer).toFixed(1)} °C` : "", explanation: Number.isFinite(heatExclusionSummary.averageBuffer) ? `${heatExclusionSummary.averageBuffer < 0 ? "Hotter" : "Cooler"} than outside` : "", detail: Number.isFinite(heatExclusionSummary.averageBuffer) ? `${Math.abs(heatExclusionSummary.averageBuffer).toFixed(1)} °C ${heatExclusionSummary.averageBuffer < 0 ? "hotter" : "cooler"} than outside` : "" },
+    { key: "heat-exclusion", label: "Summer heat", status: heatExclusionStatus, measurement: Number.isFinite(heatExclusionSummary.averageBuffer) ? `${Math.abs(heatExclusionSummary.averageBuffer).toFixed(1)} °C` : "", explanation: Number.isFinite(heatExclusionSummary.averageBuffer) ? `${heatExclusionSummary.averageBuffer < 0 ? "Hotter" : "Cooler"} than outside` : "", detail: Number.isFinite(heatExclusionSummary.averageBuffer) ? `${Math.abs(heatExclusionSummary.averageBuffer).toFixed(1)} °C ${heatExclusionSummary.averageBuffer < 0 ? "hotter" : "cooler"} than outside` : "", sampleHours: heatExclusionSummary.sampleCount, overheatedHours: heatExclusionSummary.overheatedHours, overheatingShare: heatExclusionSummary.overheatingShare, hotThreshold: heatExclusionSummary.hotThreshold },
     ...rainHumidityAreas.map(({ label, summary }) => ({ key: `rain-${label}`, label: `${label} after rain`, status: getRainHumidityStatus(summary), measurement: Number.isFinite(summary.rhUplift) ? `+${summary.rhUplift.toFixed(1)} pp RH` : "", detail: Number.isFinite(summary.rhUplift) ? `+${summary.rhUplift.toFixed(1)} percentage points RH` : "" })),
   ].filter(({ status }) => status === "poor" || status === "warning");
   const openCcPerformance = () => {

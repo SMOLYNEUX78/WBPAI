@@ -262,8 +262,8 @@ test("baseline shows every historical red metric plus performance and recent con
   ], error: null });
   render(<BaselineDataPanel DetailSurface={Surface} baseline={{ buildingId: "record-1", sourceBuildingId: "home", healthScore: 55,
     performanceConcerns: [
-      { key: "hdd", label: "Heat demand", status: "poor", detail: "High for the weather" },
-      { key: "heat-exclusion", label: "Summer heat", status: "poor", detail: "1.2 °C hotter than outside" },
+      { key: "hdd", label: "Heat demand", status: "poor", detail: "High for the weather", evidenceDays: 21, abovePlanningThreshold: true },
+      { key: "heat-exclusion", label: "Summer heat", status: "poor", detail: "1.2 °C hotter than outside", sampleHours: 18, overheatedHours: 4, hotThreshold: 24 },
     ],
     redReadings: [
       { key: "upstairs:humidity", label: "Upstairs RH", value: 72, unit: "%" },
@@ -282,8 +282,8 @@ test("baseline shows every historical red metric plus performance and recent con
   expect(fabric.parentElement).toHaveTextContent("Heat exclusion");
   expect(screen.getByText("Heat demand")).toHaveClass("bg-red-50", "border-red-700");
   expect(screen.getByText("Heat exclusion")).toHaveClass("bg-red-50", "border-red-700");
-  expect(fabric.parentElement).toHaveTextContent("Higher energy use than expected for the cold weather.");
-  expect(fabric.parentElement).toHaveTextContent("On hot days, the home was 1.2 °C hotter than outside.");
+  expect(fabric.parentElement).toHaveTextContent("Across 21 colder days, energy use per degree of cold exceeded WBP's planning threshold. This includes non-heating use.");
+  expect(fabric.parentElement).toHaveTextContent("Across 18 paired hours at 24°C+ outside, inside averaged 1.2 °C hotter than outside; 4 reached 28°C indoors.");
   expect(screen.queryByText("Upstairs RH recently")).not.toBeInTheDocument();
   expect(screen.getByText("Downstairs PM2.5 recently")).toBeInTheDocument();
   rpc.mockRestore();

@@ -24,6 +24,27 @@ const formatHealthMeasurement = (finding) => {
   }
   return Number.isFinite(finding.observedAverage) ? `${format(finding.observedAverage)} ${finding.unit}` : "Pending";
 };
+const fabricExplanation = (concern) => {
+  if (concern.key === "hdd") {
+    const period = Number(concern.evidenceDays) > 0 ? `Across ${concern.evidenceDays} colder days, ` : "";
+    return concern.abovePlanningThreshold === false
+      ? `${period}the available readings did not demonstrate consistently warm indoor temperatures; energy use alone does not show why.`
+      : `${period}energy use per degree of cold exceeded WBP's planning threshold. This includes non-heating use.`;
+  }
+  if (concern.key === "heat-exclusion") {
+    const hours = Number(concern.sampleHours);
+    const hotThreshold = Number(concern.hotThreshold) || 24;
+    const comparison = concern.detail || "less cool than expected";
+    if (!Number.isFinite(hours) || hours <= 0) return `On hot days, inside averaged ${comparison}.`;
+    const overheatedHours = concern.overheatedHours != null && Number.isFinite(Number(concern.overheatedHours))
+      ? Number(concern.overheatedHours)
+      : concern.overheatingShare != null && Number.isFinite(Number(concern.overheatingShare))
+      ? Math.round(Number(concern.overheatingShare) * hours)
+      : null;
+    return `Across ${hours} paired hours at ${hotThreshold}°C+ outside, inside averaged ${comparison}${overheatedHours === null ? "." : `; ${overheatedHours} reached 28°C indoors.`}`;
+  }
+  return concern.explanation;
+};
 const ConcernRow = ({ label, measurement, detail, tone = "red", heading = false, plain = false }) => {
   const Label = heading ? "h4" : "span";
   return <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,auto)] items-start gap-x-3 gap-y-1 text-sm">
@@ -124,7 +145,7 @@ export default function BaselineDataPanel({ DetailSurface, onOpenDetailedReport,
         </div>
         {fabricConcerns.length > 0 ? <div className="mt-4 space-y-2" aria-label="Fabric">
           <h4 className="text-sm font-bold">Fabric</h4>
-          {fabricConcerns.map((concern) => <ConcernRow key={concern.key} plain={!['hdd', 'heat-exclusion'].includes(concern.key)} label={concern.key === "heat-exclusion" ? "Heat exclusion" : concern.label} measurement={concern.measurement || concern.detail} detail={concern.key === "hdd" ? "Higher energy use than expected for the cold weather." : concern.key === "heat-exclusion" ? `On hot days, the home was ${concern.detail || concern.explanation || "not consistently cooler than outside"}.` : concern.explanation} />)}
+          {fabricConcerns.map((concern) => <ConcernRow key={concern.key} plain={!['hdd', 'heat-exclusion'].includes(concern.key)} label={concern.key === "heat-exclusion" ? "Heat exclusion" : concern.label} measurement={concern.measurement || concern.detail} detail={fabricExplanation(concern)} />)}
         </div> : null}
       </div>
       <div className={`border p-4 ${!Number.isFinite(baseline.healthScore) ? "border-gray-300 bg-gray-100" : baseline.healthScore < 60 ? "border-red-400 bg-red-50" : baseline.healthScore < 80 ? "border-amber-400 bg-amber-50" : "border-emerald-400 bg-emerald-50"}`}>

@@ -24,6 +24,7 @@ test("merges months by sample counts instead of averaging monthly averages", () 
   expect(result.heatLossSummary.nightCooldownHtc).toBeCloseTo(550 / 4);
   expect(result.heatLossSummary.nightCooldownTauHours).toBeCloseTo(110 / 4);
   expect(result.heatExclusionSummary.averageBuffer).toBe(5);
+  expect(result.heatExclusionSummary.overheatedHours).toBe(1);
   expect(result.heatExclusionSummary.overheatingShare).toBeCloseTo(0.2);
   expect(result.rainHumiditySummary.downstairs.rhUplift).toBeCloseTo(205 / 3 - 170 / 3);
   expect(result.rainHumiditySummary.downstairs.status).toBe("ready");
