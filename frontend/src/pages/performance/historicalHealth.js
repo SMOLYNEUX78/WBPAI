@@ -1,5 +1,5 @@
 const DAY_MS = 24 * 60 * 60 * 1000;
-const SNAPSHOT_VERSION = 1;
+const SNAPSHOT_VERSION = 2;
 
 export function readHistoricalHealthSnapshot(buildingId, sourceBuildingId, now = new Date()) {
   if (!buildingId || typeof localStorage === "undefined") return null;
@@ -20,16 +20,16 @@ export function writeHistoricalHealthSnapshot(buildingId, sourceBuildingId, find
 }
 
 const checks = [
-  { field: "internal_temp", label: "Whole-home temperature", red: (v) => v < 16 || v >= 24 },
-  { field: "upstairs_humidity", label: "Upstairs humidity", red: (v) => v < 30 || v >= 70 },
-  { field: "downstairs_humidity", label: "Downstairs humidity", red: (v) => v < 30 || v >= 70 },
-  { field: "upstairs_pm25", label: "Upstairs PM2.5", red: (v) => v >= 35 },
-  { field: "downstairs_pm25", label: "Downstairs PM2.5", red: (v) => v >= 35 },
-  { field: "upstairs_vocs", label: "Upstairs VOCs", red: (v) => v >= 500 },
-  { field: "downstairs_vocs", label: "Downstairs VOCs", red: (v) => v >= 500 },
-  { field: "upstairs_pm10", label: "Upstairs PM10", red: (v) => v >= 45 },
-  { field: "upstairs_hcho", label: "Upstairs HCHO", red: (v) => v >= 80 },
-  { field: "upstairs_no2", label: "Upstairs NO2", red: (v) => v >= 100 },
+  { field: "internal_temp", label: "Whole-home temperature", unit: "°C", red: (v) => v < 16 || v >= 24 },
+  { field: "upstairs_humidity", label: "Upstairs humidity", unit: "%", red: (v) => v < 30 || v >= 70 },
+  { field: "downstairs_humidity", label: "Downstairs humidity", unit: "%", red: (v) => v < 30 || v >= 70 },
+  { field: "upstairs_pm25", label: "Upstairs PM2.5", unit: "µg/m³", red: (v) => v >= 35 },
+  { field: "downstairs_pm25", label: "Downstairs PM2.5", unit: "µg/m³", red: (v) => v >= 35 },
+  { field: "upstairs_vocs", label: "Upstairs VOCs", unit: "ppb", red: (v) => v >= 500 },
+  { field: "downstairs_vocs", label: "Downstairs VOCs", unit: "ppb", red: (v) => v >= 500 },
+  { field: "upstairs_pm10", label: "Upstairs PM10", unit: "µg/m³", red: (v) => v >= 45 },
+  { field: "upstairs_hcho", label: "Upstairs HCHO", unit: "ppb", red: (v) => v >= 80 },
+  { field: "upstairs_no2", label: "Upstairs NO2", unit: "ppb", red: (v) => v >= 100 },
 ];
 
 export async function fetchHistoricalHealthDays(supabase, buildingId, now = new Date()) {
@@ -56,7 +56,11 @@ export function summariseHistoricalHealth(rows) {
         (check.field.includes("humidity") || check.field === "internal_temp" ? value > 0 : value >= 0));
     const red = observed.filter(({ value }) => check.red(value));
     return {
-      field: check.field, label: check.label, observedDays: observed.length, redDays: red.length,
+      field: check.field, label: check.label, unit: check.unit,
+      observedDays: observed.length, redDays: red.length,
+      observedAverage: observed.reduce((sum, item) => sum + item.value, 0) / observed.length,
+      redMin: red.length ? Math.min(...red.map((item) => item.value)) : null,
+      redMax: red.length ? Math.max(...red.map((item) => item.value)) : null,
       lastRedDate: red.length ? red[red.length - 1].date : null,
     };
   }).filter((item) => item.observedDays > 0)

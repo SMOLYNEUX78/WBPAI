@@ -23,6 +23,7 @@ test("baseline report keeps the page concise and colour-codes the scores", () =>
   expect(screen.getByRole("heading", { name: "Energy" }).parentElement.parentElement).toHaveClass("bg-amber-50");
   expect(screen.getByRole("heading", { name: "Health" }).parentElement.parentElement).toHaveClass("bg-amber-50");
   expect(screen.getByRole("heading", { name: "EUI" }).parentElement).toHaveTextContent("42.3 kWh/m²/year");
+  expect(screen.getByRole("heading", { name: "EUI" }).nextElementSibling).toHaveClass("text-sm");
   expect(screen.getByText("42.3", { exact: false })).toBeInTheDocument();
   expect(screen.getByText("72/100")).toBeInTheDocument();
   expect(screen.queryByText(/Upstairs RH: 72 %/)).not.toBeInTheDocument();
@@ -164,9 +165,18 @@ test("historical health counts red daily averages only on observed days", () => 
     { reading_date: "2026-10-02", upstairs_humidity: 65, downstairs_humidity: 71, upstairs_pm25: 36 },
     { reading_date: "2026-10-03", upstairs_humidity: null, downstairs_humidity: 0 },
   ]);
-  expect(findings.find((item) => item.field === "upstairs_humidity")).toMatchObject({ observedDays: 2, redDays: 1, lastRedDate: "2026-10-01" });
+  expect(findings.find((item) => item.field === "upstairs_humidity")).toMatchObject({ observedDays: 2, redDays: 1, redMin: 72, redMax: 72, unit: "%", lastRedDate: "2026-10-01" });
   expect(findings.find((item) => item.field === "downstairs_humidity")).toMatchObject({ observedDays: 1, redDays: 1 });
   expect(findings.find((item) => item.field === "upstairs_pm25")).toMatchObject({ observedDays: 2, redDays: 1 });
+});
+
+test("health concerns show red-day measurements opposite the label and counts below", () => {
+  writeHistoricalHealthSnapshot("record-1", "home", [{ field: "downstairs_humidity", label: "Downstairs humidity", unit: "%", observedDays: 121, redDays: 29, redMin: 70, redMax: 78, observedAverage: 66 }]);
+  render(<BaselineDataPanel DetailSurface={Surface} baseline={{ buildingId: "record-1", sourceBuildingId: "home", healthScore: 72 }} />);
+  const label = screen.getByText("Downstairs humidity");
+  expect(label.nextElementSibling).toHaveTextContent("70.0–78.0 %");
+  expect(label.nextElementSibling).toHaveClass("text-sm");
+  expect(label.parentElement).toHaveTextContent("29 of 121 observed days in the red");
 });
 
 test("health summary shows historical red days rather than a live flag", async () => {

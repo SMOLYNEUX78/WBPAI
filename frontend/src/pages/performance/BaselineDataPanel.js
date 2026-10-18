@@ -15,10 +15,22 @@ const PRIMARY_HEALTH_FIELDS = [
   { field: "upstairs_humidity", label: "Upstairs humidity" },
 ];
 const FABRIC_CONCERN_KEYS = new Set(["hdd", "htc", "night-cooldown", "heat-exclusion"]);
-const ConcernRow = ({ label, detail, tone = "red" }) => <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-  <span className={`inline-block min-w-36 border-l-4 px-2 py-1 font-semibold ${tone === "red" ? "border-red-700 bg-red-50 text-red-900" : tone === "amber" ? "border-amber-600 bg-amber-50 text-amber-900" : "border-emerald-700 bg-emerald-50 text-emerald-900"}`}>{label}</span>
-  <span>{detail}</span>
+const formatHealthMeasurement = (finding) => {
+  const digits = finding.unit === "°C" || finding.unit === "%" ? 1 : 0;
+  const format = (value) => Number(value).toFixed(digits);
+  if (finding.redDays > 0 && Number.isFinite(finding.redMin) && Number.isFinite(finding.redMax)) {
+    return `${format(finding.redMin)}${finding.redMin === finding.redMax ? "" : `–${format(finding.redMax)}`} ${finding.unit}`;
+  }
+  return Number.isFinite(finding.observedAverage) ? `${format(finding.observedAverage)} ${finding.unit}` : "Pending";
+};
+const ConcernRow = ({ label, measurement, detail, tone = "red", heading = false }) => {
+  const Label = heading ? "h4" : "span";
+  return <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,auto)] items-start gap-x-3 gap-y-1 text-sm">
+  <Label className={`min-w-0 border-l-4 px-2 py-1 font-semibold ${tone === "red" ? "border-red-700 bg-red-50 text-red-900" : tone === "amber" ? "border-amber-600 bg-amber-50 text-amber-900" : tone === "green" ? "border-emerald-700 bg-emerald-50 text-emerald-900" : "border-gray-400 bg-gray-100 text-gray-900"}`}>{label}</Label>
+  <strong className="min-w-0 py-1 text-right text-sm font-semibold break-words">{measurement || "Pending"}</strong>
+  {detail ? <span className="col-span-2 text-xs text-gray-700">{detail}</span> : null}
 </div>;
+};
 
 export default function BaselineDataPanel({ DetailSurface, onOpenDetailedReport, baseline = {} }) {
   const [openPanel, setOpenPanel] = useState(null);
@@ -73,15 +85,11 @@ export default function BaselineDataPanel({ DetailSurface, onOpenDetailedReport,
           <span className="text-lg font-bold">{Number.isFinite(baseline.energyScore) ? `${Math.round(baseline.energyScore)}/100` : "Pending"}</span>
         </div>
         <div className="mt-4">
-          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-            <h4 className="text-sm font-semibold">EUI</h4>
-            <p className="text-lg font-bold">{hasEui ? eui.toFixed(1) : "Pending"} <span className="text-sm font-normal">{hasEui ? "kWh/m²/year" : ""}</span></p>
-          </div>
-          {hasEui && Number.isFinite(target) && target > 0 ? <p className="mt-2 text-sm">{aboveTarget ? "Above" : "At or below"} WBP’s {target.toFixed(0)} kWh/m²/year planning target.</p> : null}
+          <ConcernRow label="EUI" heading measurement={hasEui ? `${eui.toFixed(1)} kWh/m²/year` : "Pending"} tone={aboveTarget ? "amber" : hasEui ? "green" : "neutral"} detail={hasEui && Number.isFinite(target) && target > 0 ? `${aboveTarget ? "Above" : "At or below"} WBP’s ${target.toFixed(0)} kWh/m²/year planning target.` : null} />
         </div>
         {fabricConcerns.length > 0 ? <div className="mt-4 space-y-2" aria-label="Fabric">
           <h4 className="text-sm font-bold">Fabric</h4>
-          {fabricConcerns.map((concern) => <ConcernRow key={concern.key} label={concern.label} tone={concern.status === "poor" ? "red" : "amber"} detail={concern.detail} />)}
+          {fabricConcerns.map((concern) => <ConcernRow key={concern.key} label={concern.label} tone={concern.status === "poor" ? "red" : "amber"} measurement={concern.measurement || concern.detail} detail={concern.explanation} />)}
         </div> : null}
       </div>
       <div className={`border-l-4 p-4 ${!Number.isFinite(baseline.healthScore) ? "border-gray-400 bg-gray-100" : baseline.healthScore < 60 ? "border-red-700 bg-red-50" : baseline.healthScore < 80 ? "border-amber-600 bg-amber-50" : "border-emerald-700 bg-emerald-50"}`}>
@@ -93,16 +101,16 @@ export default function BaselineDataPanel({ DetailSurface, onOpenDetailedReport,
         {historicalHealth.status === "ready" ? <div className="space-y-2 text-sm">
           {PRIMARY_HEALTH_FIELDS.map(({ field, label }) => {
             const finding = historicalHealth.findings.find((item) => item.field === field);
-            return finding && (field !== "upstairs_humidity" || finding.redDays > 0) ? <ConcernRow key={field} label={label} tone={finding.redDays > 0 ? "red" : "green"} detail={`${finding.redDays} of ${finding.observedDays} observed days in the red`} /> : null;
+            return finding && (field !== "upstairs_humidity" || finding.redDays > 0) ? <ConcernRow key={field} label={label} tone={finding.redDays > 0 ? "red" : "green"} measurement={formatHealthMeasurement(finding)} detail={`${finding.redDays} of ${finding.observedDays} observed days in the red${finding.redDays > 0 ? "; range of red-day daily averages" : "; overall daily average shown"}`} /> : null;
           })}
-          {otherHistoricalFlags.map((finding) => <ConcernRow key={finding.field} label={finding.label} detail={`${finding.redDays} of ${finding.observedDays} observed days in the red`} />)}
+          {otherHistoricalFlags.map((finding) => <ConcernRow key={finding.field} label={finding.label} measurement={formatHealthMeasurement(finding)} detail={`${finding.redDays} of ${finding.observedDays} observed days in the red; range of red-day daily averages`} />)}
           {!historicalHealth.findings.length ? <p>Historical sensor readings unavailable</p> : null}
         </div> : <p className="mt-2 text-sm">{historicalHealth.status === "loading" ? "Checking past readings..." : "Historical readings unavailable"}</p>}
         </div>
       </div>
     </div>
     {otherPerformanceConcerns.length > 0 ? <div className="mt-4 space-y-2" aria-label="Other areas to review">
-      {otherPerformanceConcerns.map((concern) => <ConcernRow key={concern.key} label={concern.label} tone={concern.status === "poor" ? "red" : "amber"} detail={concern.detail} />)}
+      {otherPerformanceConcerns.map((concern) => <ConcernRow key={concern.key} label={concern.label} tone={concern.status === "poor" ? "red" : "amber"} measurement={concern.measurement || concern.detail} detail={concern.explanation} />)}
     </div> : null}
     <div className="wbp-baseline-options mt-7 border-t border-gray-200 pt-5">
       <h3 className="mb-3 text-base font-bold">Options</h3>
