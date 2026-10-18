@@ -181,3 +181,40 @@ export function buildBaselineReportHtml(baseline, energyExport) {
   ${section("Data licensing preparation", `<p>This owner-only report can inform a redacted, purpose-specific licence pack. It is not itself approved for sharing. Define the buyer, permitted use, retention, consent, re-identification controls and price before release.</p><p>Candidate fields: period and coverage, fuel totals and intervals, area and EUI method, room/sensor inventory, health summaries, weather context, provenance and exclusions. Remove building identifiers and occupant-level traces unless explicitly licensed.</p>`)}
   <p class="muted">This report supports scoping, not a condition survey, EPC, retrofit design or independently verified carbon claim.</p>${INTERACTIVE_CHART_SCRIPT}</body></html>`;
 }
+
+const REPORT_STYLE_PROPERTIES = [
+  "display", "position", "box-sizing", "width", "max-width", "min-width", "height", "min-height",
+  "flex-direction", "flex-wrap", "flex-grow", "flex-shrink", "align-items", "align-self",
+  "justify-content", "grid-template-columns", "grid-column", "gap", "row-gap", "column-gap",
+  "margin", "padding", "border", "border-radius", "background", "background-color",
+  "color", "font-family", "font-size", "font-weight", "line-height", "text-align",
+  "text-decoration", "white-space", "overflow", "overflow-wrap", "vertical-align",
+];
+
+// Capture the rendered Deep Dive instead of maintaining a second report layout.
+export function buildDetailedReportHtml(deepDiveElement, seasonalTrends, energyExport) {
+  if (!deepDiveElement) throw new Error("Open the detailed report before downloading it.");
+  const clone = deepDiveElement.cloneNode(true);
+  const sourceNodes = [deepDiveElement, ...deepDiveElement.querySelectorAll("*")];
+  const cloneNodes = [clone, ...clone.querySelectorAll("*")];
+  const view = deepDiveElement.ownerDocument.defaultView;
+  sourceNodes.forEach((source, index) => {
+    const target = cloneNodes[index];
+    if (!target || !source.nodeType || source.nodeType !== 1) return;
+    const computed = view.getComputedStyle(source);
+    REPORT_STYLE_PROPERTIES.forEach((property) => {
+      const value = computed.getPropertyValue(property);
+      if (value) target.style.setProperty(property, value);
+    });
+    for (const attribute of [...target.attributes]) {
+      if (/^on/i.test(attribute.name)) target.removeAttribute(attribute.name);
+    }
+  });
+  clone.querySelectorAll("script,iframe,form,input,button").forEach((node) => node.remove());
+  const chart = interactiveSeasonalChart(seasonalTrends);
+  const generated = escapeHtml(new Date().toLocaleString("en-GB"));
+  const period = `${escapeHtml(energyExport?.periodStart || "Unknown")} to ${escapeHtml(energyExport?.periodEnd || "Unknown")}`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Detailed report</title><style>
+    *{box-sizing:border-box}body{margin:0;background:#f3f4f6;color:#111827;font:14px/1.5 system-ui,sans-serif}main{max-width:1080px;margin:0 auto;padding:24px}header{border-bottom:1px solid #d1d5db;margin-bottom:16px;padding-bottom:12px}h1{font-size:22px;margin:0 0 4px}.report-meta{color:#4b5563;font-size:12px;margin:0}.report-content{background:#fff;padding:16px;border:1px solid #d1d5db}.report-content svg{max-width:100%}.chart{border:1px solid #d1d5db;border-radius:4px;background:#fff;padding:16px;margin:16px 0;overflow:hidden}.chart-top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px}.chart-tabs{display:flex;flex-wrap:wrap;gap:4px}.chart-tabs button{border:1px solid #cbd5e1;border-radius:3px;background:#fff;color:#334155;padding:6px 10px;font:600 12px system-ui;cursor:pointer}.chart-tabs button[aria-pressed=true]{border-color:#047857;background:#ecfdf5;color:#065f46}.chart-tabs button:disabled{opacity:.4;cursor:not-allowed}.chart-periods{margin-top:12px;gap:0}.chart-periods button{border-radius:0}.chart-periods button[aria-pressed=true]{background:#111827;border-color:#111827;color:#fff}.chart-groups{margin-top:12px}.chart-groups button[aria-pressed=true]{background:#2563eb;border-color:#2563eb;color:#fff}.chart-plot-wrap{position:relative;margin-top:12px;overflow-x:auto}.chart svg{display:block;width:100%;min-width:560px;height:auto;background:#fff;touch-action:none}.chart-tooltip{position:absolute;right:8px;top:8px;max-width:55%;padding:8px 10px;border:1px solid #cbd5e1;border-radius:3px;background:#fff;box-shadow:0 3px 12px #0002;font-size:12px;pointer-events:none}.chart-tooltip[hidden]{display:none}.chart-metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin:14px 0}.chart-metrics button{display:flex;min-width:0;align-items:center;gap:7px;border:1px solid #cbd5e1;border-radius:3px;background:#fff;padding:7px 9px;text-align:left;cursor:pointer}.chart-metrics button[aria-pressed=false]{opacity:.5}.chart-metrics button strong{margin-left:auto;font-size:12px}.chart-dot{width:10px;height:10px;flex:none;border-radius:50%}@media(max-width:570px){main{padding:10px}.chart-metrics{grid-template-columns:1fr}.chart-tooltip{max-width:75%}}@media print{body{background:#fff}main{max-width:none;padding:0}.chart-tabs,.chart-metrics{display:none}}
+  </style></head><body><main><header><h1>Detailed report</h1><p class="report-meta">Owner-only · Generated ${generated} · Meter period ${period} · Days with readings: ${escapeHtml(energyExport?.meteredDays ?? "Unknown")}</p></header><div class="report-content">${clone.outerHTML}</div>${chart}</main>${INTERACTIVE_CHART_SCRIPT}</body></html>`;
+}

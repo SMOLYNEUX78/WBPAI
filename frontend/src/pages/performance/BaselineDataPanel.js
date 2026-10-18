@@ -2,7 +2,6 @@ import React, { useEffect, useState } from "react";
 import supabase from "../../supabaseClient";
 import { DATA_LICENCE_REFERENCE_GBP_PER_YEAR } from "./retrofitEconomics";
 import RetrofitPlanner from "./RetrofitPlanner";
-import { buildBaselineReportHtml } from "./baselineReport";
 import { fetchHistoricalHealthDays, readHistoricalHealthSnapshot, summariseHistoricalHealth, writeHistoricalHealthSnapshot } from "./historicalHealth";
 
 const LICENCE_PARTS = [
@@ -23,9 +22,6 @@ const ConcernRow = ({ label, detail, tone = "red" }) => <div className="flex fle
 
 export default function BaselineDataPanel({ DetailSurface, onOpenDetailedReport, baseline = {} }) {
   const [openPanel, setOpenPanel] = useState(null);
-  const [ownerExport, setOwnerExport] = useState(null);
-  const [exportError, setExportError] = useState("");
-  const [downloadLoading, setDownloadLoading] = useState(false);
   const [historicalHealth, setHistoricalHealth] = useState(() => readHistoricalHealthSnapshot(baseline.buildingId, baseline.sourceBuildingId || "home") || { status: "loading", findings: [] });
   const area = Number(baseline.area);
   const eui = Number(baseline.annualEui);
@@ -63,46 +59,11 @@ export default function BaselineDataPanel({ DetailSurface, onOpenDetailedReport,
   const fabricConcerns = (baseline.performanceConcerns || []).filter((concern) => FABRIC_CONCERN_KEYS.has(concern.key));
   const otherPerformanceConcerns = (baseline.performanceConcerns || []).filter((concern) => !FABRIC_CONCERN_KEYS.has(concern.key));
 
-  const loadOwnerExport = async () => {
-    if (!baseline.buildingId) throw new Error("Save this home profile before viewing its readings.");
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.access_token) throw new Error("Sign in again to view these readings.");
-    const { data: payload, error } = await supabase.rpc("wbp_owner_baseline_export", { p_building_record_id: baseline.buildingId });
-    if (error) throw new Error(error.message || "Readings unavailable.");
-    if (payload?.buildingRecordId?.toLowerCase() !== baseline.buildingId.toLowerCase() || payload.shareable !== false) {
-      throw new Error("These readings could not be verified.");
-    }
-    return payload;
-  };
-
-  const downloadReport = async () => {
-    setExportError("");
-    setDownloadLoading(true);
-    try {
-      const payload = ownerExport || await loadOwnerExport();
-      setOwnerExport(payload);
-      const file = new Blob([buildBaselineReportHtml({ ...baseline, historicalHealth }, payload)], { type: "text/html;charset=utf-8" });
-      const url = URL.createObjectURL(file);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = "wbp-baseline-report.html";
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-    } catch (error) {
-      setExportError(error.message || "Report unavailable.");
-    } finally {
-      setDownloadLoading(false);
-    }
-  };
-
   return <section className="wbp-baseline-report -mx-4 border-t border-gray-300 bg-white px-4 py-6 text-gray-900 sm:px-8" aria-label="Baseline report">
     <div className="flex flex-wrap items-center justify-between gap-3">
       <h2 className="text-lg font-bold">Baseline report</h2>
       <div className="flex shrink-0 items-center gap-2">
         <button type="button" onClick={onOpenDetailedReport} className="border border-emerald-800 px-3 py-2 text-sm font-semibold text-emerald-900 hover:bg-emerald-50">Detailed report</button>
-        <button type="button" onClick={downloadReport} disabled={downloadLoading} aria-label="Download baseline evidence" title="Download baseline evidence" className="border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:cursor-wait">{downloadLoading ? "Preparing..." : "Download"}</button>
       </div>
     </div>
     <div className="wbp-baseline-scores mt-4 grid gap-6 sm:grid-cols-2">
@@ -143,7 +104,6 @@ export default function BaselineDataPanel({ DetailSurface, onOpenDetailedReport,
     {otherPerformanceConcerns.length > 0 ? <div className="mt-4 space-y-2" aria-label="Other areas to review">
       {otherPerformanceConcerns.map((concern) => <ConcernRow key={concern.key} label={concern.label} tone={concern.status === "poor" ? "red" : "amber"} detail={concern.detail} />)}
     </div> : null}
-    {exportError ? <p role="alert" className="mt-2 text-right text-sm text-red-800">{exportError}</p> : null}
     <div className="wbp-baseline-options mt-7 border-t border-gray-200 pt-5">
       <h3 className="mb-3 text-base font-bold">Options</h3>
       <button type="button" onClick={() => setOpenPanel("retrofit")} className="wbp-baseline-option group relative flex min-h-44 w-full items-end overflow-hidden border border-emerald-900 bg-emerald-950 p-5 text-left text-white sm:min-h-52 sm:p-7" style={{ backgroundImage: "linear-gradient(90deg, rgba(9, 43, 34, .8), rgba(9, 43, 34, .12) 75%), url('/images/retrofit-options.png')", backgroundSize: "cover", backgroundPosition: "center" }}><span className="relative text-xl font-bold drop-shadow sm:text-2xl">Explore retrofit options <span aria-hidden="true">→</span></span></button>

@@ -495,6 +495,12 @@
 .wbp-retrofit-pack li span { color: #4b5563; }
 
 .wbp-baseline-report > :not(.wbp-detail-backdrop) { max-width: 960px; margin-left: auto; margin-right: auto; }
+.wbp-dashboard--baseline { display: flex; flex-direction: column; min-height: 100dvh; }
+.wbp-dashboard--baseline > .sticky { flex: none; }
+.wbp-dashboard--baseline > .overflow-hidden { flex: 1; min-height: 0; }
+.wbp-dashboard--baseline > .overflow-hidden > .flex { min-height: 100%; }
+.wbp-dashboard--baseline > .overflow-hidden > .flex > [aria-hidden="false"] { display: flex; flex-direction: column; }
+.wbp-dashboard--baseline .wbp-occupy-panel { flex: 1; min-height: 0; }
 .wbp-baseline-options { max-width: 720px !important; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .wbp-baseline-options h3 { grid-column: 1 / -1; }
 .wbp-baseline-options .wbp-baseline-option { min-height: 96px; margin-top: 0; padding: 16px; font-size: 18px; }

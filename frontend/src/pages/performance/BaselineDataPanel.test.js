@@ -1,7 +1,7 @@
 import React from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import BaselineDataPanel from "./BaselineDataPanel";
-import { buildBaselineReportHtml } from "./baselineReport";
+import { buildBaselineReportHtml, buildDetailedReportHtml } from "./baselineReport";
 import { readHistoricalHealthSnapshot, summariseHistoricalHealth, writeHistoricalHealthSnapshot } from "./historicalHealth";
 import supabase from "../../supabaseClient";
 
@@ -70,13 +70,12 @@ test("sale pie is illustrative and does not claim a buyer or earnings", () => {
   expect(screen.getByText(/Nothing is shared automatically/)).toBeInTheDocument();
 });
 
-test("detailed report opens the interactive view while evidence download remains protected", async () => {
+test("detailed report opens the view where its download is available", () => {
   const onOpenDetailedReport = jest.fn();
   render(<BaselineDataPanel DetailSurface={Surface} onOpenDetailedReport={onOpenDetailedReport} />);
   fireEvent.click(screen.getByRole("button", { name: "Detailed report" }));
   expect(onOpenDetailedReport).toHaveBeenCalledTimes(1);
-  fireEvent.click(screen.getByRole("button", { name: "Download baseline evidence" }));
-  await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/Save this home profile/));
+  expect(screen.queryByRole("button", { name: "Download baseline evidence" })).not.toBeInTheDocument();
 });
 
 test("downloaded report includes architect evidence and excludes HTML injection", () => {
@@ -100,6 +99,18 @@ test("downloaded report includes architect evidence and excludes HTML injection"
   expect(html).toContain("Areas to review");
   expect(html).toContain("Summer heat: 1.2 °C hotter than outside");
   expect(html).toContain("Upstairs RH (recent): 72 %");
+});
+
+test("downloaded detailed report preserves the rendered deep dive and interactive seasons", () => {
+  const detail = document.createElement("div");
+  detail.innerHTML = '<h2>Fabric performance</h2><p>HDD intensity: 1.25</p><button type="button">App-only control</button>';
+  const html = buildDetailedReportHtml(detail, [{ name: "Winter", year: 2026, data: [{ label: "Monday", electricity: 2 }], dailyData: [{ date: "2026-01-01", electricity: 3 }] }], { periodStart: "2026-01-01", periodEnd: "2026-02-01", meteredDays: 31 });
+  expect(html).toContain("Fabric performance");
+  expect(html).toContain("HDD intensity: 1.25");
+  expect(html).toContain("Seasonal Performance Trends");
+  expect(html).toContain("Winter 2026");
+  expect(html).toContain("Days with readings: 31");
+  expect(html).not.toContain("App-only control");
 });
 
 test("detailed report includes HLA evidence and dated seasonal trends", () => {

@@ -12,6 +12,7 @@ import { liveRedReadings } from "./liveRedReadings";
 import { extractEnergyBillImage, extractEnergyBillPdf, normaliseBillReview } from "./energyBill";
 import RetrofitPlanner from "./RetrofitPlanner";
 import BaselineDataPanel from "./BaselineDataPanel";
+import { buildDetailedReportHtml } from "./baselineReport";
 import { CC_CANDIDATE_PROFILE } from "./retrofitEconomics";
 import { normaliseSerial, readDeviceScan, suggestDeviceCandidates, visibleDeviceCandidates } from "./deviceScan";
 import { connectionForSensor } from "./sensorConnectors";
@@ -1424,6 +1425,8 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange })
   const activeSeasonInfo = useMemo(() => getMeteorologicalSeason(), []);
   const [deepDivePanel, setDeepDivePanel] = useState(null);
   const [occupyDetail, setOccupyDetail] = useState(null);
+  const [reportDownloadLoading, setReportDownloadLoading] = useState(false);
+  const [reportDownloadError, setReportDownloadError] = useState("");
   const [ccStage, setCcStage] = useState("before");
   const [activeMrvEvidenceField, setActiveMrvEvidenceField] = useState(null);
 
@@ -7092,6 +7095,34 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange })
     ? "good"
     : nightCooldownStatus;
   const shouldShowDeepDive = Boolean(occupyDetail);
+  const downloadDetailedReport = async () => {
+    setReportDownloadError("");
+    setReportDownloadLoading(true);
+    try {
+      if (!homePassportDatabaseId) throw new Error("Save this home profile before downloading its report.");
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error("Sign in again to download this report.");
+      const { data: payload, error } = await supabase.rpc("wbp_owner_baseline_export", { p_building_record_id: homePassportDatabaseId });
+      if (error) throw new Error(error.message || "Readings unavailable.");
+      if (payload?.buildingRecordId?.toLowerCase() !== homePassportDatabaseId.toLowerCase() || payload.shareable !== false) {
+        throw new Error("These readings could not be verified.");
+      }
+      const report = document.querySelector('[role="dialog"][aria-label="Detailed report"] [data-report-deep-dive]');
+      const html = buildDetailedReportHtml(report, seasonalTrendRecords, payload);
+      const url = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "wbp-detailed-report.html";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error) {
+      setReportDownloadError(error.message || "Report unavailable.");
+    } finally {
+      setReportDownloadLoading(false);
+    }
+  };
   const redReadings = useMemo(() => dataSourceBuildingId === "home" ? liveRedReadings(roomIaqData, alertClock) : [], [dataSourceBuildingId, roomIaqData, alertClock]);
   useEffect(() => {
     if (isActive) onLiveRedChange?.(redReadings);
@@ -7868,8 +7899,9 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange })
           ) : null}
 
           {!shouldShowDeepDive || !["performance", "report"].includes(occupyDetail) ? null : (
-          <DetailSurface modal={occupyDetail === "report" || Boolean(occupyPerformanceTabs) || building.id === "museum"} title={occupyDetail === "report" ? "Detailed report" : occupyPerformanceTabs ? "" : "Performance deep dive"} onClose={() => setOccupyDetail(null)} headerExtra={occupyDetail === "report" ? null : occupyPerformanceTabs}>
-          <div className="bg-white rounded border p-2.5 sm:p-4 min-w-0 overflow-hidden">
+          <DetailSurface modal={occupyDetail === "report" || Boolean(occupyPerformanceTabs) || building.id === "museum"} title={occupyDetail === "report" ? "Detailed report" : occupyPerformanceTabs ? "" : "Performance deep dive"} onClose={() => setOccupyDetail(null)} headerExtra={occupyDetail === "report" ? <button type="button" onClick={downloadDetailedReport} disabled={reportDownloadLoading} aria-label="Download detailed report">{reportDownloadLoading ? "Preparing..." : "Download"}</button> : occupyPerformanceTabs}>
+          {occupyDetail === "report" && reportDownloadError ? <p role="alert" className="mb-3 text-sm text-red-800">{reportDownloadError}</p> : null}
+          <div data-report-deep-dive={occupyDetail === "report" ? "" : undefined} className="bg-white rounded border p-2.5 sm:p-4 min-w-0 overflow-hidden">
             {building.id === "rf" ? <p className="mb-3 text-xs text-gray-600">Measured WBP-001 baseline context, not post-retrofit performance.</p> : null}
             {isCarbonCreditTab ? (
               <div className="mb-3 border-b border-gray-100 pb-2 text-xs text-gray-600">
@@ -13655,14 +13687,14 @@ const BuildingDashboard = () => {
   }, []);
 
   return (
-    <div className={`min-h-screen bg-white ${activeBuilding.id === "home" ? "wbp-dashboard--occupy" : ""}`}>
+    <div className={`min-h-screen bg-white ${activeBuilding.id === "home" ? "wbp-dashboard--occupy" : ""} ${activeBuilding.id === "bl" ? "wbp-dashboard--baseline" : ""}`}>
       <div className="sticky top-0 z-20">
-      <div className="border-b bg-white px-4 py-3">
+      {activeBuilding.id !== "bl" ? <div className="border-b bg-white px-4 py-3">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
           {accessRole === "homeowner" ? <PrototypeTabs activePath={`/dashboard/${activeBuilding.id}`} onDashboardTab={openBuildingById} /> : accessRole === "architect" ? <PrototypeTabs scope="design" activePath={`/dashboard/${activeBuilding.id}`} onDashboardTab={openBuildingById} /> : <strong className="text-lg">WBP Prototype</strong>}
 
         </div>
-      </div>
+      </div> : null}
 
       {roleLabel ? (
         <section className={`border-b px-4 py-3 ${accessRole === "architect" ? "border-blue-200 bg-blue-50" : accessRole === "builder" ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50"}`}>
@@ -13677,6 +13709,10 @@ const BuildingDashboard = () => {
             <div ref={accountMenuRef} className="relative shrink-0">
               <button type="button" aria-label="Open account menu" aria-expanded={accountMenuOpen} aria-controls="wbp-account-menu" onClick={() => setAccountMenuOpen((open) => !open)} className="flex h-9 w-10 items-center justify-center border border-gray-300 bg-white text-xl leading-none text-gray-900 hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-700">{"\u2630"}</button>
               {accountMenuOpen ? <div id="wbp-account-menu" className="absolute right-0 top-full z-50 mt-2 w-60 max-w-[calc(100vw-2rem)] border border-gray-300 bg-white p-2 text-sm shadow-lg">
+                {accessRole === "homeowner" && activeBuilding.id === "bl" ? <div className="border-b border-gray-200 py-1">
+                  <button type="button" onClick={() => { setAccountMenuOpen(false); openBuildingById("home"); }} className="w-full px-2 py-2 text-left font-semibold text-gray-900 hover:bg-gray-100">Home</button>
+                  <button type="button" onClick={() => { setAccountMenuOpen(false); openBuildingById("rf"); }} className="w-full px-2 py-2 text-left font-semibold text-gray-900 hover:bg-gray-100">Retrofit pathway</button>
+                </div> : null}
                 {accessRole === "homeowner" ? <button type="button" onClick={() => { setAccountMenuOpen(false); navigate("/dashboard/exchange?source=cc"); }} className="w-full border-b border-gray-200 bg-emerald-50 px-3 py-3 text-left text-emerald-950 hover:bg-emerald-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-700">
                   <span className="block text-xs font-semibold uppercase">Portfolio value · modelled</span>
                   <strong className="mt-1 block text-lg leading-tight">{modelledWalletBalance === null ? accruedDataDays === "unavailable" ? "Unavailable" : "Calculating" : new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(modelledWalletBalance)}</strong>
