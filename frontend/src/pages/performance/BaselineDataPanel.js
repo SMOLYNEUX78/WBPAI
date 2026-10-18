@@ -151,7 +151,7 @@ export default function BaselineDataPanel({ DetailSurface, onOpenDetailedReport,
     <div className="wbp-baseline-options mt-7 border-t border-gray-200 pt-5">
       <h3 className="mb-3 text-base font-bold">Options</h3>
       <button type="button" onClick={() => setOpenPanel("retrofit")} className="wbp-baseline-option group relative flex min-h-44 w-full items-end overflow-hidden border border-emerald-900 bg-emerald-950 p-5 text-left text-white sm:min-h-52 sm:p-7" style={{ backgroundImage: "linear-gradient(90deg, rgba(9, 43, 34, .8), rgba(9, 43, 34, .12) 75%), url('/images/retrofit-options.png')", backgroundSize: "cover", backgroundPosition: "center" }}><span className="relative text-xl font-bold drop-shadow sm:text-2xl">Explore retrofit options <span aria-hidden="true">→</span></span></button>
-      <button type="button" onClick={() => setOpenPanel("sale")} className="wbp-baseline-option wbp-baseline-sale-option group mt-3 flex min-h-32 w-full items-center overflow-hidden border border-gray-300 bg-white text-left text-gray-900 hover:border-emerald-700">
+      <button type="button" onClick={() => setOpenPanel("sale")} className="wbp-baseline-option wbp-baseline-sale-option group mt-3 flex min-h-32 w-full items-center overflow-hidden border border-gray-300 bg-gray-100 text-left text-gray-900 hover:border-emerald-700">
         <img src="/images/bridgewood-baseline.png" alt="" className="wbp-baseline-sale-house" />
         <span aria-hidden="true" className="wbp-baseline-sale-flow"><i /><i /><i /></span>
         <span aria-hidden="true" className="wbp-baseline-sale-report"><i /><i /><i /><i /></span>
