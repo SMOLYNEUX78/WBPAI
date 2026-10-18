@@ -510,10 +510,10 @@
 .wbp-dashboard--baseline .wbp-occupy-panel { flex: 1; min-height: 0; }
 .wbp-baseline-options { display: grid; max-width: 720px !important; grid-template-columns: minmax(0, 1fr); gap: 18px; }
 .wbp-baseline-options h3 { grid-column: 1 / -1; }
-.wbp-baseline-options .wbp-baseline-option { min-height: 148px; margin-top: 0; padding: 18px; font-size: 18px; }
+.wbp-baseline-options .wbp-baseline-option { min-height: 128px; margin-top: 0; padding: 18px; font-size: 18px; }
 .wbp-baseline-options .wbp-baseline-option > span { font-size: 18px; }
-.wbp-baseline-options .wbp-baseline-sale-option { padding: 0; min-height: 148px; box-shadow: inset 4px 0 #047857; }
-.wbp-baseline-sale-house { width: 108px; height: 108px; flex: none; object-fit: contain; background: white; }
+.wbp-baseline-options .wbp-baseline-sale-option { padding: 0; min-height: 128px; box-shadow: inset 4px 0 #047857; }
+.wbp-baseline-sale-house { width: 128px; height: 128px; flex: none; object-fit: cover; background: white; }
 .wbp-baseline-sale-flow { position: relative; display: flex; width: clamp(20px, 5%, 42px); height: 56px; flex: none; align-items: center; justify-content: space-around; }
 .wbp-baseline-sale-flow::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; border-top: 2px dotted #047857; }
 .wbp-baseline-sale-flow i { position: relative; width: 6px; height: 6px; border-radius: 50%; background: #047857; }
@@ -533,7 +533,7 @@
 .wbp-baseline-sale-label { display: flex; min-width: 0; flex: 1; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 16px; font-size: 18px; font-weight: 700; line-height: 1.15; }
 .wbp-baseline-sale-label > span:first-child { min-width: 0; overflow-wrap: anywhere; }
 @media (max-width: 520px) {
-  .wbp-baseline-sale-house { width: 68px; height: 82px; object-fit: contain; }
+  .wbp-baseline-sale-house { width: clamp(72px, 24vw, 108px); height: 108px; }
   .wbp-baseline-sale-flow { width: 20px; }
   .wbp-baseline-sale-report { width: 42px; height: 54px; padding: 6px; }
   .wbp-baseline-sale-flow--out { width: 16px; }
@@ -543,7 +543,8 @@
 }
 @media (max-width: 520px) {
   .wbp-baseline-options { grid-template-columns: minmax(0, 1fr); }
-  .wbp-baseline-options .wbp-baseline-option { min-height: 122px; }
+  .wbp-baseline-options .wbp-baseline-option,
+  .wbp-baseline-options .wbp-baseline-sale-option { min-height: 108px; }
 }
 
 @media (min-width: 600px) and (max-width: 1100px) and (orientation: portrait) {
@@ -556,8 +557,9 @@
   .wbp-baseline-scores p, .wbp-baseline-scores .text-sm { font-size: 12px; }
   .wbp-baseline-options { display: grid; max-width: 960px !important; grid-template-columns: minmax(0, 1fr); gap: 18px; margin-top: 14px; padding-top: 12px; }
   .wbp-baseline-options h3 { grid-column: 1 / -1; margin-bottom: 0; }
-  .wbp-baseline-options .wbp-baseline-option { min-height: 148px; margin-top: 0; padding: 18px; font-size: 18px; }
+  .wbp-baseline-options .wbp-baseline-option { min-height: 128px; margin-top: 0; padding: 18px; font-size: 18px; }
   .wbp-baseline-options .wbp-baseline-option > span { font-size: 18px; }
+  .wbp-baseline-options .wbp-baseline-sale-option { padding: 0; }
 }
 
 @media (min-width: 600px) and (max-width: 1100px) and (orientation: portrait) {
