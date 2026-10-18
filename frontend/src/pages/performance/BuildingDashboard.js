@@ -7112,7 +7112,16 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange })
         throw new Error("These readings could not be verified.");
       }
       const report = document.querySelector('[role="dialog"][aria-label="Detailed report"] [data-report-deep-dive]');
-      const html = buildDetailedReportHtml(report, seasonalTrendRecords, payload);
+      const reportSeasons = seasonalTrendRecords.map((record) => {
+        const weekly = record === selectedSeasonRecord ? selectedSeasonTrendData
+          : fillHistoricalHealthTrend(record.data || [], record.dailyData || []);
+        return { ...record, reportPeriods: {
+          day: aggregateTypicalDay(weekly),
+          week: weekly,
+          month: aggregateCalendarTrend(record.dailyData || [], "seasonal-weekly", record.startDate, record.endDate),
+        } };
+      });
+      const html = buildDetailedReportHtml(report, reportSeasons, payload);
       const url = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
       const link = document.createElement("a");
       link.href = url;
@@ -7269,7 +7278,7 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange })
     </div>
   );
   const seasonalChartsContent = (
-        <div className="mt-4 bg-white rounded border p-3 sm:p-4 space-y-3 overflow-hidden">
+        <div data-report-seasonal className="mt-4 bg-white rounded border p-3 sm:p-4 space-y-3 overflow-hidden">
           {building.id === "rf" ? <p className="text-xs text-gray-600">Measured WBP-001 seasonal readings, not a retrofit forecast.</p> : null}
           {isCarbonCreditTab ? <p className="text-xs text-gray-600">{ccStage === "before" ? "Historical seasonal readings; the before baseline is still being gathered, not locked." : "Measured seasonal readings for context; these are not a forecast of the EnerPHit retrofit."}</p> : null}
           <div className="flex flex-wrap items-center justify-between gap-2">

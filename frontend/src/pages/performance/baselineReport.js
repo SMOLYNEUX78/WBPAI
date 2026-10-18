@@ -35,10 +35,18 @@ const seasonalSummary = (records) => (records || [])
 const CHART_METRICS = [
   { key: "electricity", label: "Electricity", unit: "kWh", color: "#2563eb", group: "energy" },
   { key: "gas", label: "Gas", unit: "kWh", color: "#dc2626", group: "energy" },
-  { key: "internalTemp", label: "Indoor", unit: "°C", color: "#c2410c", group: "temperature" },
-  { key: "externalTemp", label: "Outside", unit: "°C", color: "#4338ca", group: "temperature" },
-  { key: "upstairsHumidity", label: "Upstairs RH", unit: "%", color: "#0891b2", group: "humidity" },
-  { key: "downstairsHumidity", label: "Downstairs RH", unit: "%", color: "#7c3aed", group: "humidity" },
+  { key: "internalTemp", label: "Internal", unit: "°C", color: "#c2410c", group: "comfort" },
+  { key: "externalTemp", label: "External", unit: "°C", color: "#4338ca", group: "comfort" },
+  { key: "warmthBuffer", label: "Warmth Buffer", unit: "°C", color: "#f59e0b", group: "comfort" },
+  { key: "upstairsHumidity", label: "Upstairs RH", unit: "%", color: "#4f46e5", group: "health" },
+  { key: "downstairsHumidity", label: "Downstairs RH", unit: "%", color: "#9333ea", group: "health" },
+  { key: "upstairsPm25", label: "Upstairs PM2.5", unit: "ug/m3", color: "#b45309", group: "health" },
+  { key: "downstairsPm25", label: "Downstairs PM2.5", unit: "ug/m3", color: "#e11d48", group: "health" },
+  { key: "upstairsVocs", label: "Upstairs VOCs", unit: "ppb", color: "#0d9488", group: "health" },
+  { key: "downstairsVocs", label: "Downstairs VOCs", unit: "ppb", color: "#be123c", group: "health" },
+  { key: "upstairsPm10", label: "Upstairs PM10", unit: "ug/m3", color: "#ea580c", group: "health" },
+  { key: "upstairsHcho", label: "Upstairs HCHO", unit: "ppb", color: "#0891b2", group: "health" },
+  { key: "upstairsNo2", label: "Upstairs NO2", unit: "ppb", color: "#475569", group: "health" },
 ];
 
 const interactiveSeasonalChart = (records) => {
@@ -46,16 +54,22 @@ const interactiveSeasonalChart = (records) => {
   const points = (rows, labelKey) => (rows || []).map((row) => ({
     label: String(row[labelKey] || row.label || ""),
     hour: row.hour,
+    date: row.date,
+    dayCount: row.dayCount,
+    metricDayCounts: row.metricDayCounts,
+    dailyMeanFallbackKeys: row.dailyMeanFallbackKeys,
     ...Object.fromEntries(fields.map((field) => [field, Number.isFinite(row[field]) ? row[field] : null])),
   }));
   const data = (records || []).map((record) => ({
     name: `${record.name || "Season"} ${record.year || (record.startDate || "").slice(0, 4)}`,
     weekly: points(record.data, "label"),
     daily: points(record.dailyData, "date"),
+    periods: record.reportPeriods ? Object.fromEntries(["day", "week", "month"].map((period) => [period,
+      points(record.reportPeriods[period], "label")])) : null,
   })).filter((record) => record.weekly.length || record.daily.length);
   if (!data.length) return "";
   const encoded = JSON.stringify({ data, metrics: CHART_METRICS }).replace(/</g, "\\u003c");
-  return `<div id="seasonal-chart" class="chart"><div class="chart-top"><strong>Seasonal Performance Trends</strong><div id="chart-seasons" class="chart-tabs" role="group" aria-label="Season">${data.map((record, index) => `<button type="button" data-season="${index}" aria-pressed="${index === 0}">${escapeHtml(record.name)}</button>`).join("")}</div></div><div id="chart-periods" class="chart-tabs chart-periods" role="group" aria-label="Trend period"><button type="button" data-period="day" aria-pressed="false">Day</button><button type="button" data-period="week" aria-pressed="false">Week</button><button type="button" data-period="month" aria-pressed="true">Month</button></div><div id="chart-groups" class="chart-tabs chart-groups" role="group" aria-label="Measure group"><button type="button" data-group="energy" aria-pressed="true">Energy</button><button type="button" data-group="temperature" aria-pressed="false">Temperature</button><button type="button" data-group="humidity" aria-pressed="false">Humidity</button></div><div class="chart-plot-wrap"><svg id="chart-plot" viewBox="0 0 800 310" role="img" aria-label="Seasonal performance trend chart"></svg><div id="chart-tooltip" class="chart-tooltip" hidden></div></div><div id="chart-metrics" class="chart-metrics" aria-label="Show or hide measures"></div><p id="chart-caption" class="muted"></p></div><script type="application/json" id="chart-data">${encoded}</script>`;
+  return `<div id="seasonal-chart" class="chart"><div class="chart-top"><strong>Seasonal Performance Trends</strong><div id="chart-seasons" class="chart-tabs" role="group" aria-label="Season">${data.map((record, index) => `<button type="button" data-season="${index}" aria-pressed="${index === 0}">${escapeHtml(record.name)}</button>`).join("")}</div></div><div id="chart-periods" class="chart-tabs chart-periods" role="group" aria-label="Trend period"><button type="button" data-period="day" aria-pressed="false">Day</button><button type="button" data-period="week" aria-pressed="false">Week</button><button type="button" data-period="month" aria-pressed="true">Month</button></div><div id="chart-groups" class="chart-tabs chart-groups" role="group" aria-label="Measure group"><button type="button" data-group="energy" aria-pressed="true">Energy</button><button type="button" data-group="comfort" aria-pressed="false">Comfort</button><button type="button" data-group="health" aria-pressed="false">Health</button></div><div class="chart-plot-wrap"><svg id="chart-plot" viewBox="0 0 800 310" role="img" aria-label="Seasonal performance trend chart"></svg><div id="chart-tooltip" class="chart-tooltip" hidden></div></div><div id="chart-metrics" class="chart-metrics" aria-label="Show or hide measures"></div><p id="chart-caption" class="muted"></p></div><script type="application/json" id="chart-data">${encoded}</script>`;
 };
 
 const INTERACTIVE_CHART_SCRIPT = `<script>(function(){
@@ -70,6 +84,7 @@ const INTERACTIVE_CHART_SCRIPT = `<script>(function(){
   var plotted=[],visible=[],chartMin=0,chartMax=1;
   function average(rows,key){var values=rows.map(function(row){return row[key]}).filter(Number.isFinite);return values.length?values.reduce(function(a,b){return a+b},0)/values.length:null}
   function points(record,period){
+    if(record.periods)return record.periods[period]||[];
     if(period==='week')return record.weekly;
     if(period==='day')return Array.from({length:24},function(_,hour){var rows=record.weekly.filter(function(row){return Number(row.hour)===hour});var point={label:String(hour).padStart(2,'0')+':00'};source.metrics.forEach(function(item){point[item.key]=average(rows,item.key)});return point});
     var sorted=record.daily.slice().sort(function(a,b){return a.label.localeCompare(b.label)});
@@ -91,12 +106,12 @@ const INTERACTIVE_CHART_SCRIPT = `<script>(function(){
   }
   function draw(){
     var record=source.data[seasonIndex],rows=points(record,period);
-    var groups=['energy','temperature','humidity'];
+    var groups=['energy','comfort','health'];
     function availableFor(key){return source.metrics.filter(function(item){return item.group===key&&rows.some(function(row){return Number.isFinite(row[item.key])})})}
     if(!availableFor(group).length)group=groups.find(function(key){return availableFor(key).length})||'energy';
     document.querySelectorAll('#chart-groups button').forEach(function(button){button.disabled=!availableFor(button.dataset.group).length});
     var available=availableFor(group);
-    if(!available.some(function(item){return selected.has(item.key)}))selected=new Set(available.map(function(item){return item.key}));
+    if(!available.some(function(item){return selected.has(item.key)}))selected=new Set(group==='health'?[available[0].key]:available.map(function(item){return item.key}));
     visible=available.filter(function(item){return selected.has(item.key)});
     syncButtons();tooltip.hidden=true;metricBox.replaceChildren();svg.replaceChildren();
     available.forEach(function(item){
@@ -104,15 +119,15 @@ const INTERACTIVE_CHART_SCRIPT = `<script>(function(){
       var dot=document.createElement('span');dot.className='chart-dot';dot.style.backgroundColor=item.color;
       var label=document.createElement('span');label.textContent=item.label;
       var value=document.createElement('strong');var mean=average(rows,item.key);value.textContent=Number.isFinite(mean)?mean.toFixed(1)+' '+(group==='energy'&&period!=='month'?'kWh/h':group==='energy'?'kWh/day':item.unit):'No data';
-      button.append(dot,label,value);button.onclick=function(){if(selected.has(item.key)&&selected.size>1)selected.delete(item.key);else selected.add(item.key);draw()};metricBox.appendChild(button);
+      button.append(dot,label,value);button.onclick=function(){if(group==='health')selected=new Set([item.key]);else if(selected.has(item.key)&&selected.size>1)selected.delete(item.key);else selected.add(item.key);draw()};metricBox.appendChild(button);
     });
     if(!visible.length){caption.textContent='No readings for this season and view.';return}
     var values=rows.flatMap(function(row){return visible.map(function(item){return row[item.key]})}).filter(Number.isFinite);
-    if(group==='humidity'){chartMin=0;chartMax=100}
-    else if(group==='temperature'){chartMin=Math.min(10,Math.floor(Math.min.apply(null,values)-2));chartMax=Math.max(30,Math.ceil(Math.max.apply(null,values)+2))}
+    if(group==='health'&&visible.every(function(item){return item.key.indexOf('Humidity')>=0})){chartMin=0;chartMax=100}
+    else if(group==='comfort'){chartMin=Math.min(-5,Math.floor(Math.min.apply(null,values)-2));chartMax=Math.max(35,Math.ceil(Math.max.apply(null,values)+2))}
     else {chartMin=0;chartMax=Math.max(1,Math.ceil(Math.max.apply(null,values)*1.15))}
-    if(group==='temperature'){addBand(chartMin,16,'#fecaca','Cold');addBand(16,18,'#fde68a','Cool');addBand(18,22,'#bbf7d0','Comfort');addBand(22,24,'#fde68a','Warm');addBand(24,chartMax,'#fecaca','Hot')}
-    if(group==='humidity'){addBand(0,30,'#fecaca','Dry');addBand(30,40,'#fde68a','Low');addBand(40,60,'#bbf7d0','Comfort');addBand(60,70,'#fde68a','High');addBand(70,100,'#fecaca','Humid')}
+    if(group==='comfort'){addBand(chartMin,16,'#fecaca','Cold');addBand(16,18,'#fde68a','Cool');addBand(18,22,'#bbf7d0','Comfort');addBand(22,24,'#fde68a','Warm');addBand(24,chartMax,'#fecaca','Hot')}
+    if(group==='health'&&chartMax===100){addBand(0,30,'#fecaca','Dry');addBand(30,40,'#fde68a','Low');addBand(40,60,'#bbf7d0','Comfort');addBand(60,70,'#fde68a','High');addBand(70,100,'#fecaca','Humid')}
     for(var tick=0;tick<=4;tick++){var value=chartMax-(chartMax-chartMin)*tick/4,yy=y(value);svg.appendChild(element('line',{x1:56,y1:yy,x2:770,y2:yy,stroke:'#d1d5db','stroke-width':1}));svg.appendChild(element('text',{x:49,y:yy+4,'text-anchor':'end',fill:'#475569','font-size':11},value.toFixed(group==='energy'?1:0)))}
     svg.appendChild(element('text',{x:55,y:20,fill:'#334155','font-size':11,'font-weight':600},group==='energy'?(period==='month'?'kWh/day':'kWh/h'):visible[0].unit));
     var labels=period==='day'?[0,6,12,18,23]:period==='week'?[0,24,48,72,96,120,144]:rows.map(function(_,index){return index}).filter(function(index){return index===0||index===rows.length-1||index%Math.max(1,Math.ceil(rows.length/7))===0});
@@ -124,7 +139,7 @@ const INTERACTIVE_CHART_SCRIPT = `<script>(function(){
       svg.appendChild(element('path',{d:path,fill:'none',stroke:item.color,'stroke-width':2.5,'stroke-linecap':'round','stroke-linejoin':'round'}));
       if(period==='month'||rows.length<=2)rows.forEach(function(row,index){if(!Number.isFinite(row[item.key]))return;var dot=element('circle',{cx:x(index,rows.length),cy:y(row[item.key]),r:4,fill:item.color});dot.appendChild(element('title',{},row.label+': '+item.label+' '+row[item.key].toFixed(2)+' '+item.unit));svg.appendChild(dot)});
     });
-    caption.textContent=record.name+' · '+period+' · '+rows.length+' time slots. Shading shows temperature or humidity bands; energy has no comfort band.';
+    caption.textContent=record.name+' · '+period+' · '+rows.length+' time slots. Empty slots mean no measured reading.';
   }
   document.querySelectorAll('#chart-seasons button').forEach(function(button){button.onclick=function(){seasonIndex=Number(button.dataset.season);selected.clear();draw()}});
   document.querySelectorAll('#chart-periods button').forEach(function(button){button.onclick=function(){period=button.dataset.period;selected.clear();draw()}});
@@ -210,7 +225,7 @@ export function buildDetailedReportHtml(deepDiveElement, seasonalTrends, energyE
       if (/^on/i.test(attribute.name)) target.removeAttribute(attribute.name);
     }
   });
-  clone.querySelectorAll("script,iframe,form,input,button").forEach((node) => node.remove());
+  clone.querySelectorAll("[data-report-seasonal],script,iframe,form,input,button").forEach((node) => node.remove());
   const chart = interactiveSeasonalChart(seasonalTrends);
   const generated = escapeHtml(new Date().toLocaleString("en-GB"));
   const period = `${escapeHtml(energyExport?.periodStart || "Unknown")} to ${escapeHtml(energyExport?.periodEnd || "Unknown")}`;

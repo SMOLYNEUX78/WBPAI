@@ -114,6 +114,23 @@ test("downloaded detailed report preserves the rendered deep dive and interactiv
   expect(html).not.toContain("App-only control");
 });
 
+test("downloaded seasonal chart carries the app's prepared periods and health measures", () => {
+  const detail = document.createElement("div");
+  const season = { name: "Winter", year: 2026, data: [{ label: "Mon 09:00", hour: 9, electricity: 1 }],
+    dailyData: [{ date: "2026-01-05", electricity: 3 }],
+    reportPeriods: {
+      day: [{ label: "09:00", hour: 9, electricity: 1 }],
+      week: [{ label: "Mon 09:00", hour: 9, electricity: 1, upstairsPm25: 14 }],
+      month: [{ label: "Week of 2026-01-05", date: "2026-01-05", dayCount: 5, electricity: 3, upstairsPm25: 12 }],
+    } };
+  const html = buildDetailedReportHtml(detail, [season], {});
+  const encoded = html.match(/<script type="application\/json" id="chart-data">([^<]+)<\/script>/)[1];
+  const chart = JSON.parse(encoded);
+  expect(chart.data[0].periods.week[0].upstairsPm25).toBe(14);
+  expect(chart.data[0].periods.month[0]).toMatchObject({ label: "Week of 2026-01-05", dayCount: 5 });
+  expect(chart.metrics.map((metric) => metric.key)).toContain("upstairsNo2");
+});
+
 test("detailed report includes HLA evidence and dated seasonal trends", () => {
   const html = buildBaselineReportHtml({
     hlaScore: 63.4,
