@@ -10,12 +10,17 @@ const isSuffolkCouncil = (value) => /^(?:East Suffolk|West Suffolk|Mid Suffolk|B
 
 const formatGbp = (value) => `${value < 0 ? "-" : ""}£${Math.round(Math.abs(value)).toLocaleString("en-GB")}`;
 
-export default function RetrofitPlanner({ ready, embedded = false, postcode, localAuthority, annualEui, area, electricityDailyKwh, gasDailyKwh, billReview, originalTeam = {}, DetailSurface }) {
+export default function RetrofitPlanner({ ready, embedded = false, postcode, localAuthority, annualEui, area, electricityDailyKwh, gasDailyKwh, gasHeatingDailyKwh, billReview, originalTeam = {}, DetailSurface }) {
   const [worksScope, setWorksScope] = useState(0);
   const [packOpen, setPackOpen] = useState(false);
   const [annualPremium, setAnnualPremium] = useState("");
+  const [heatingShareInput, setHeatingShareInput] = useState(() => Number.isFinite(gasHeatingDailyKwh) && gasHeatingDailyKwh > 0 && gasDailyKwh > 0
+    ? String(Math.round(Math.min(1, gasHeatingDailyKwh / gasDailyKwh) * 100)) : "");
+  const [heatPumpSpfInput, setHeatPumpSpfInput] = useState("3.1");
+  const gasHeatingShare = heatingShareInput === "" ? null : Number(heatingShareInput) / 100;
+  const heatPumpSpf = heatPumpSpfInput === "" ? null : Number(heatPumpSpfInput);
   const option = getRetrofitOption(worksScope);
-  const projection = projectRetrofit({ option, annualEui, area, electricityDailyKwh, gasDailyKwh, billReview, allElectric: true });
+  const projection = projectRetrofit({ option, annualEui, area, electricityDailyKwh, gasDailyKwh, gasHeatingShare, heatPumpSpf, billReview, allElectric: true });
   const annualBenefit = getAnnualBenefitBreakdown(projection.scenarios[1], annualPremium);
   const lowBenefit = getAnnualBenefitBreakdown(projection.scenarios[0], annualPremium);
   const highBenefit = getAnnualBenefitBreakdown(projection.scenarios[2], annualPremium);
@@ -42,6 +47,15 @@ export default function RetrofitPlanner({ ready, embedded = false, postcode, loc
               <input type="range" min="0" max="100" step="1" value={worksScope} onChange={(event) => setWorksScope(Number(event.target.value))} aria-label="Extent of retrofit works" />
               <span className="wbp-retrofit-range-labels"><span>Fabric first</span><span>Clean heat</span><span>Whole-home</span><span>EnerPHit pathway</span></span>
             </label>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label>Space heating share of gas (%)
+                <input type="number" min="0" max="100" step="1" inputMode="numeric" value={heatingShareInput} onChange={(event) => setHeatingShareInput(event.target.value)} placeholder="Enter an estimate" />
+              </label>
+              <label>Heat pump seasonal efficiency (SPF)
+                <input type="number" min="1.1" max="6" step="0.1" inputMode="decimal" value={heatPumpSpfInput} onChange={(event) => setHeatPumpSpfInput(event.target.value)} />
+              </label>
+            </div>
+            <p className="text-xs text-gray-600">{projection.spaceHeatingEuiShare === null ? "Space-heating share of overall EUI is not established. Enter a gas heating share to model a heat pump." : `Estimated space heating: ${(projection.spaceHeatingEuiShare * 100).toFixed(0)}% of overall EUI.`} The gas split is provisional; an SPF of 3.1 is illustrative. Hot water and cooking stay on gas in this comparison.</p>
           </div>
           <div className="wbp-retrofit-forecast">
             <p><strong>{option.name}</strong> · {option.measures}</p>
@@ -65,7 +79,7 @@ export default function RetrofitPlanner({ ready, embedded = false, postcode, loc
             </div>
             <p className="wbp-retrofit-outcome">{projection.scenarios[1].energySavedKwh === null ? "Energy saving pending" : `${Math.round(projection.scenarios[1].energySavedKwh).toLocaleString("en-GB")} kWh/yr energy saved`} · {projection.scenarios[1].carbonSavedTonnes === null ? "Carbon saving pending" : `${projection.scenarios[1].carbonSavedTonnes.toFixed(2)} tCO₂e/yr carbon saved`} · {projection.targetEui === null ? "Target EUI pending" : `Target EUI ${projection.targetEui.toFixed(1)} kWh/m²/yr`}</p>
             <p className="text-xs text-gray-600">Bill savings use {projection.usingBillElectricityRate ? "your electricity rate" : "a reference electricity rate"} and {projection.usingBillGasRate ? "your gas rate" : "a reference gas rate"}. Standing charges are unchanged.</p>
-            <p className="wbp-retrofit-caveat">Indicative comparison only. Winter baseline and survey still needed; carbon, data licensing and insurance income is not secured. Data licensing is included in the pie but is independent of the retrofit result. The EnerPHit endpoint uses CC's illustrative all-electric EUI target, not a certified design. Heating changes need a separate design.</p>
+            <p className="wbp-retrofit-caveat">Indicative comparison only. Winter baseline and survey still needed; carbon, data licensing and insurance income is not secured. Data licensing is included in the pie but is independent of the retrofit result. The EnerPHit endpoint uses CC's illustrative demand proxy, not a certified design. Heating changes need a separate design.</p>
             {!embedded ? <div className="wbp-retrofit-actions"><button type="button" onClick={() => setPackOpen(true)}>View retrofit pack</button></div> : null}
             {embedded ? <div className="wbp-retrofit-next-steps">
               <div><h3>Funding avenues{localAuthority ? ` · ${localAuthority}` : ""}</h3>{postcode ? <p>Property postcode: {postcode}</p> : null}<p>Possible routes to check against the proposed measures and household eligibility. No award is assumed or deducted from the works cost.</p><ul>{fundingRoutes.map((source) => <li key={source.name}><a href={source.href} target="_blank" rel="noreferrer">{source.name}</a><span>{source.note}</span></li>)}</ul></div>

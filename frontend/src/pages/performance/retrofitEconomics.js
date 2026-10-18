@@ -2,7 +2,7 @@ export const RETROFIT_OPTIONS = [
   { id: "fabric", name: "Fabric first", reduction: 15, fixedCost: [4000, 9000], areaCost: [40, 90], measures: "Survey heat loss, insulation, airtightness and ventilation together." },
   { id: "heat", name: "Fabric + clean heat", reduction: 30, fixedCost: [12000, 18000], areaCost: [100, 200], measures: "Improve the fabric, then size low-carbon heating against the reduced heat load." },
   { id: "whole", name: "Whole-home retrofit", reduction: 35, fixedCost: [18000, 28000], areaCost: [270, 470], measures: "Coordinate fabric, ventilation, heating and controls in one staged design." },
-  { id: "enerphit", name: "EnerPHit design pathway", reduction: 35, fixedCost: [25000, 40000], areaCost: [300, 600], measures: "Explore an all-electric deep retrofit with PHPP design and independent certification review." },
+  { id: "enerphit", name: "EnerPHit design pathway", reduction: 35, fixedCost: [25000, 40000], areaCost: [300, 600], measures: "Explore a deep fabric retrofit and heat-pump space heating with PHPP design and independent certification review." },
 ];
 
 // Shared with the CC prototype: total metered EUI is an illustration, not the EnerPHit heating-demand criterion.
@@ -23,7 +23,7 @@ export function getRetrofitOption(scope) {
     fixedCost: lower.fixedCost.map((value, index) => blend(value, upper.fixedCost[index])),
     areaCost: lower.areaCost.map((value, index) => blend(value, upper.areaCost[index])),
     enerphitProgress: position > 75 ? fraction : 0,
-    measures: position < 50 ? "Scale fabric, airtightness and ventilation works before adding clean heat." : position < 75 ? "Add clean heat and progressively extend to whole-home measures." : "Explore the CC all-electric candidate profile; PHPP and certification remain unverified.",
+    measures: position < 50 ? "Scale fabric, airtightness and ventilation works before adding clean heat." : position < 75 ? "Add clean heat and progressively extend to whole-home measures." : "Explore a heat-pump space-heating scenario; PHPP and certification remain unverified.",
   };
 }
 
@@ -90,24 +90,33 @@ export function repriceCarbonSummary(summary, billReview = {}) {
   };
 }
 
-export function projectRetrofit({ option, annualEui, area, electricityDailyKwh, gasDailyKwh, billReview = {}, energyPriceChangePercent = 0, carbonPriceChangePercent = 0, allElectric = false }) {
+export function projectRetrofit({ option, annualEui, area, electricityDailyKwh, gasDailyKwh, gasHeatingShare = null, heatPumpSpf = 3.1, billReview = {}, energyPriceChangePercent = 0, carbonPriceChangePercent = 0, allElectric = false }) {
   const validArea = Number.isFinite(area) && area > 0;
   const validEui = Number.isFinite(annualEui) && annualEui > 0;
   const progress = option.enerphitProgress || 0;
-  const targetEui = validEui
+  const demandProxyEui = validEui
     ? annualEui * (1 - option.reduction / 100) * (1 - progress) + Math.min(annualEui * (1 - option.reduction / 100), CC_CANDIDATE_PROFILE.annualEui) * progress
     : null;
   const baselineKwh = validArea && validEui ? annualEui * area : null;
-  const targetKwh = targetEui !== null && validArea ? targetEui * area : null;
-  const energySavedKwh = baselineKwh !== null ? baselineKwh - targetKwh : null;
+  const demandProxyKwh = demandProxyEui !== null && validArea ? demandProxyEui * area : null;
   const hasFuelSplit = Number.isFinite(electricityDailyKwh) && electricityDailyKwh >= 0
     && Number.isFinite(gasDailyKwh) && gasDailyKwh >= 0
     && electricityDailyKwh + gasDailyKwh > 0;
   const electricityShare = hasFuelSplit ? electricityDailyKwh / (electricityDailyKwh + gasDailyKwh) : null;
   const gasShare = hasFuelSplit ? 1 - electricityShare : null;
-  const fuelSwitchProgress = allElectric ? progress : 0;
-  const electricitySavedKwh = energySavedKwh !== null && hasFuelSplit ? baselineKwh * electricityShare - (targetKwh - targetKwh * gasShare * (1 - fuelSwitchProgress)) : null;
-  const gasSavedKwh = energySavedKwh !== null && hasFuelSplit ? baselineKwh * gasShare - targetKwh * gasShare * (1 - fuelSwitchProgress) : null;
+  const validHeatingShare = Number.isFinite(gasHeatingShare) && gasHeatingShare >= 0 && gasHeatingShare <= 1;
+  const validSpf = Number.isFinite(heatPumpSpf) && heatPumpSpf > 1 && heatPumpSpf <= 6;
+  const switchedGasKwh = demandProxyKwh !== null && hasFuelSplit && allElectric && validHeatingShare && validSpf
+    ? demandProxyKwh * gasShare * gasHeatingShare * progress : 0;
+  const improvedElectricityKwh = demandProxyKwh !== null && hasFuelSplit
+    ? demandProxyKwh * electricityShare + (validSpf ? switchedGasKwh * 0.85 / heatPumpSpf : 0) : null;
+  const improvedGasKwh = demandProxyKwh !== null && hasFuelSplit
+    ? demandProxyKwh * gasShare - switchedGasKwh : null;
+  const targetKwh = improvedElectricityKwh !== null ? improvedElectricityKwh + improvedGasKwh : demandProxyKwh;
+  const targetEui = targetKwh !== null && validArea ? targetKwh / area : null;
+  const energySavedKwh = baselineKwh !== null && targetKwh !== null ? baselineKwh - targetKwh : null;
+  const electricitySavedKwh = improvedElectricityKwh !== null ? baselineKwh * electricityShare - improvedElectricityKwh : null;
+  const gasSavedKwh = improvedGasKwh !== null ? baselineKwh * gasShare - improvedGasKwh : null;
   const electricityBillRate = billUnitRatePence(billReview.electricityUnitRatePence);
   const gasBillRate = billUnitRatePence(billReview.gasUnitRatePence);
   const electricityRate = electricityBillRate ?? OFGEM_OCT_2026_PENCE.electricity;
@@ -115,8 +124,7 @@ export function projectRetrofit({ option, annualEui, area, electricityDailyKwh, 
   const billSavedGbp = hasFuelSplit && energySavedKwh !== null
     ? energyBillImpactGbp({ baselineElectricityKwh: baselineKwh * electricityShare,
       baselineGasKwh: baselineKwh * gasShare,
-      improvedElectricityKwh: baselineKwh * electricityShare - electricitySavedKwh,
-      improvedGasKwh: baselineKwh * gasShare - gasSavedKwh,
+      improvedElectricityKwh, improvedGasKwh,
       electricityRatePence: electricityRate, gasRatePence: gasRate }) : null;
   const carbonSavedTonnes = hasFuelSplit && energySavedKwh !== null
     ? (electricitySavedKwh * DESNZ_2026_KG_CO2E_PER_KWH.electricity + gasSavedKwh * DESNZ_2026_KG_CO2E_PER_KWH.gas) / 1000 : null;
@@ -142,5 +150,7 @@ export function projectRetrofit({ option, annualEui, area, electricityDailyKwh, 
     scenarios,
     usingBillElectricityRate: electricityBillRate !== null,
     usingBillGasRate: gasBillRate !== null,
+    spaceHeatingEuiShare: hasFuelSplit && validHeatingShare ? gasShare * gasHeatingShare : null,
+    heatPumpModelled: allElectric && validHeatingShare && validSpf,
   };
 }
