@@ -1194,13 +1194,6 @@ const BUILDINGS = [
   },
   {
     ...HOME_BUILDING,
-    id: "rf",
-    name: "WBP-001rf",
-    subtitle: "Retrofit planning prototype",
-    dataSourceId: "home",
-  },
-  {
-    ...HOME_BUILDING,
     id: "cc",
     name: "WBP-001cc",
     subtitle: "Carbon credit token workspace",
@@ -13664,8 +13657,8 @@ const BuildingDashboard = () => {
       (building) => building.id === currentSection
     );
 
-    if (currentSection === "connect") {
-      navigate("/dashboard/home", { replace: true });
+    if (currentSection === "connect" || currentSection === "rf") {
+      navigate(currentSection === "rf" ? "/dashboard/bl" : "/dashboard/home", { replace: true });
       return;
     }
 

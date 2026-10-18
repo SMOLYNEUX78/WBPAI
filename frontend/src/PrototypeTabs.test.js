@@ -7,6 +7,8 @@ test("occupant prototype navigation starts with New and has no design or build t
   const tabs = screen.getByRole("navigation", { name: "Prototype pages" });
   expect([...tabs.querySelectorAll("button")].slice(0, 2).map((button) => button.textContent)).toEqual(["New", "WBP-001"]);
   expect(screen.queryByRole("button", { name: "Connect" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "WBP-001rf" })).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "WBP-001bl" })).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Design" })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Build" })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Portfolio" })).not.toBeInTheDocument();
