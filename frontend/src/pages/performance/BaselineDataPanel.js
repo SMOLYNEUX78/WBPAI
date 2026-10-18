@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import supabase from "../../supabaseClient";
 import { DATA_LICENCE_REFERENCE_GBP_PER_YEAR } from "./retrofitEconomics";
 import RetrofitPlanner from "./RetrofitPlanner";
+import BillReconciliation from "./BillReconciliation";
 import { fetchHistoricalHealthDays, readHistoricalHealthSnapshot, summariseHistoricalHealth, writeHistoricalHealthSnapshot } from "./historicalHealth";
 
 const LICENCE_PARTS = [
@@ -118,6 +119,10 @@ export default function BaselineDataPanel({ DetailSurface, onOpenDetailedReport,
     {otherPerformanceConcerns.length > 0 ? <div className="mt-4 space-y-2" aria-label="Other areas to review">
       {otherPerformanceConcerns.map((concern) => <ConcernRow key={concern.key} label={concern.label} tone={concern.status === "poor" ? "red" : "amber"} measurement={concern.measurement || concern.detail} detail={concern.explanation} />)}
     </div> : null}
+    <div className="mt-4 border-t border-gray-200 pt-3" aria-label="Energy data check">
+      <h3 className="mb-2 text-sm font-bold">Energy data check</h3>
+      <BillReconciliation recordId={baseline.propertyRecordId} periods={baseline.billReview?.readingPeriods || []} />
+    </div>
     <div className="wbp-baseline-options mt-7 border-t border-gray-200 pt-5">
       <h3 className="mb-3 text-base font-bold">Options</h3>
       <button type="button" onClick={() => setOpenPanel("retrofit")} className="wbp-baseline-option group relative flex min-h-44 w-full items-end overflow-hidden border border-emerald-900 bg-emerald-950 p-5 text-left text-white sm:min-h-52 sm:p-7" style={{ backgroundImage: "linear-gradient(90deg, rgba(9, 43, 34, .8), rgba(9, 43, 34, .12) 75%), url('/images/retrofit-options.png')", backgroundSize: "cover", backgroundPosition: "center" }}><span className="relative text-xl font-bold drop-shadow sm:text-2xl">Explore retrofit options <span aria-hidden="true">→</span></span></button>

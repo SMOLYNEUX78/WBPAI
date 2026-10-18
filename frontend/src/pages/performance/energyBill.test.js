@@ -1,4 +1,24 @@
-import { normaliseBillReview, parseEnergyBillText } from "./energyBill";
+import { normaliseBillReview, parseBillReadingPeriods, parseEnergyBillText } from "./energyBill";
+
+test("extracts a measured gas bill period without confusing cubic metres with kWh", () => {
+  expect(parseBillReadingPeriods(`Energy Charges for Meter E6P50222392200
+28th March 2026 16.3 Smart meter reading
+28th April 2026 60.7 Smart meter reading
+Consumption 44.3 Units (m3)
+Energy Used* 496.1 kWh @ 5.00p/kWh`)).toEqual([expect.objectContaining({
+    fuel: "gas", meter: "E6P50222392200", startDate: "2026-03-28", endDate: "2026-04-28",
+    startKind: "actual", endKind: "actual", billedKwh: 496.1,
+  })]);
+});
+
+test("keeps estimated electricity readings distinct from actual readings", () => {
+  expect(parseBillReadingPeriods(`Energy Charges for Meter 23E0008900
+18th Mar 2026 0.0 Data collector reading
+1st Apr 2026 39.5 Estimated reading
+Energy Used 39.5 kWh @ 23.06p/kWh`)[0]).toEqual(expect.objectContaining({
+    fuel: "electricity", endKind: "estimated", billedKwh: 39.5,
+  }));
+});
 
 test("extracts separate electricity and gas details from bill sections", () => {
   expect(parseEnergyBillText(`Supplier: Example Energy

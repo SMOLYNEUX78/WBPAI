@@ -60,12 +60,55 @@ export const parseEnergyBillText = (text) => {
     }
     if (!lineFuel && validTariff && !result.electricityTariff) result.electricityTariff = tariff;
   }
-  return normaliseBillReview(result);
+  const parsed = normaliseBillReview(result);
+  const periods = parseBillReadingPeriods(text);
+  if (periods.length) parsed.readingPeriods = periods;
+  return parsed;
 };
 
-const mergeBillFields = (primary, extra) => Object.fromEntries(
-  Object.keys(emptyBill).map((field) => [field, primary[field] || extra[field] || ""]),
-);
+const MONTHS = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
+const readingLine = (line) => {
+  const match = line.match(/\b(\d{1,2})(?:st|nd|rd|th)?\s+([a-z]{3})[a-z]*\.?\s+(20\d{2})\s+([\d,]+(?:\.\d+)?)\s+(smart meter|data collector|actual|estimated)\s+reading\b/i);
+  if (!match || !MONTHS[match[2].toLowerCase()]) return null;
+  const date = `${match[3]}-${String(MONTHS[match[2].toLowerCase()]).padStart(2, "0")}-${match[1].padStart(2, "0")}`;
+  return { date, value: Number(match[4].replace(/,/g, "")), kind: /estimated/i.test(match[5]) ? "estimated" : "actual" };
+};
+
+export const parseBillReadingPeriods = (text) => {
+  const lines = text.split(/\r?\n/).map((line) => line.replace(/\s+/g, " ").trim()).filter(Boolean);
+  const periods = [];
+  let block = null;
+  const finish = () => {
+    if (!block?.meter || !block?.fuel || !Number.isFinite(block.kwh) || block.readings.length < 2) return;
+    const start = block.readings[0];
+    const end = block.readings[block.readings.length - 1];
+    if (start.date >= end.date) return;
+    periods.push({ fuel: block.fuel, meter: block.meter, startDate: start.date, endDate: end.date,
+      startKind: start.kind, endKind: end.kind, billedKwh: block.kwh });
+  };
+  let sectionFuel = "";
+  for (const line of lines) {
+    if (/\bgas\s+charges\b|^gas\b/i.test(line)) sectionFuel = "gas";
+    else if (/\belectricity\s+charges\b|^electricity\b/i.test(line)) sectionFuel = "electricity";
+    const heading = line.match(/energy charges for meter\s+([a-z0-9]+)/i);
+    if (heading) { finish(); block = { meter: heading[1], fuel: sectionFuel, readings: [], kwh: NaN }; continue; }
+    if (!block) continue;
+    const reading = readingLine(line);
+    if (reading) block.readings.push(reading);
+    if (/\bunits?\s*\(?m3\)?|\bunits?\s*\(?m³\)?/i.test(line)) block.fuel = "gas";
+    const used = line.match(/energy used\*?\s*([\d,]+(?:\.\d+)?)\s*kwh\b/i);
+    if (used) { block.kwh = Number(used[1].replace(/,/g, "")); if (!block.fuel) block.fuel = "electricity"; }
+  }
+  finish();
+  return periods.filter((period, index) => periods.findIndex((other) => other.fuel === period.fuel && other.meter === period.meter && other.startDate === period.startDate && other.endDate === period.endDate) === index);
+};
+
+const mergeBillFields = (primary, extra) => {
+  const merged = Object.fromEntries(Object.keys(emptyBill).map((field) => [field, primary[field] || extra[field] || ""]));
+  const periods = [...(primary.readingPeriods || []), ...(extra.readingPeriods || [])];
+  if (periods.length) merged.readingPeriods = periods.filter((period, index) => periods.findIndex((other) => other.meter === period.meter && other.startDate === period.startDate && other.endDate === period.endDate) === index);
+  return merged;
+};
 
 const pdfPageLines = (items) => {
   const lines = [];
