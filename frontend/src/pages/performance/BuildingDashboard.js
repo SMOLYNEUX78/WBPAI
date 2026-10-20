@@ -19,6 +19,7 @@ import { CC_CANDIDATE_PROFILE, repriceCarbonSummary } from "./retrofitEconomics"
 import { normaliseSerial, readDeviceScan, suggestDeviceCandidates, visibleDeviceCandidates } from "./deviceScan";
 import { connectionForSensor } from "./sensorConnectors";
 import { calculateModelledWalletBalance } from "./dataWallet";
+import { performanceShade } from "./performanceShade";
 import "./occupyScreen.css";
 
 export const DetailSurface = ({ children, title, onClose, modal, headerExtra }) => {
@@ -1286,7 +1287,7 @@ const getEstimatedInternalArea = (modelId, building) => {
   return building.estimatedInternalArea;
 };
 
-const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, onComfortSuggestionChange }) => {
+const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, onComfortSuggestionChange, onPerformanceChange }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const dataSourceBuildingId = building.dataSourceId || building.id;
@@ -7163,6 +7164,9 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
   useEffect(() => {
     if (isActive) onComfortSuggestionChange?.(comfortSuggestion);
   }, [isActive, onComfortSuggestionChange, comfortSuggestion]);
+  useEffect(() => {
+    if (isActive) onPerformanceChange?.(performanceValue);
+  }, [isActive, onPerformanceChange, performanceValue]);
   const baselinePerformanceConcerns = [
     { key: "hdd", label: "Heat demand", status: hddStatus, measurement: Number.isFinite(hddIntensityPerM2) ? `${hddIntensityPerM2.toFixed(3)} kWh/m²/HDD` : "", detail: Number.isFinite(hddIntensityPerM2) ? `${hddIntensityPerM2.toFixed(3)} kWh/m²/HDD` : "", evidenceDays: heatLossSummary.hddDays, abovePlanningThreshold: rawHddStatus !== "good" },
     { key: "htc", label: "Heat loss", status: htcStatus, measurement: Number.isFinite(htcPerM2) ? `${htcPerM2.toFixed(1)} W/m²K` : "", detail: Number.isFinite(htcPerM2) ? `${htcPerM2.toFixed(1)} W/m²K` : "" },
@@ -13605,6 +13609,7 @@ const BuildingDashboard = () => {
   const navigate = useNavigate();
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [headerRedReadings, setHeaderRedReadings] = useState([]);
+  const [headerPerformanceValue, setHeaderPerformanceValue] = useState(null);
   const [comfortSuggestion, setComfortSuggestion] = useState(null);
   const [comfortNoticesEnabled, setComfortNoticesEnabled] = useState(() => window.localStorage.getItem("wbp-comfort-notices") === "yes");
   const [comfortNoticeStatus, setComfortNoticeStatus] = useState("");
@@ -13817,10 +13822,10 @@ const BuildingDashboard = () => {
       </div>
 
       {roleLabel ? (
-        <section className={`border-b px-4 py-3 ${accessRole === "architect" ? "border-blue-200 bg-blue-50" : accessRole === "builder" ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50"}`}>
+        <section className={`border-b px-4 py-3 ${accessRole === "architect" ? "border-blue-200 bg-blue-50" : accessRole === "builder" ? "border-amber-200 bg-amber-50" : "border-gray-300"}`} style={accessRole === "homeowner" ? { backgroundColor: (!activeBuilding.setupOnly && !activeBuilding.portfolioOnly && !activeBuilding.exchangeOnly && performanceShade(headerPerformanceValue)) || "#f3f4f6" } : undefined}>
           <div className="mx-auto flex max-w-7xl items-center justify-between gap-2">
             <div className="flex min-w-0 items-center gap-3">
-              <span className={`px-2 py-1 text-xs font-bold uppercase text-white ${accessRole === "architect" ? "bg-blue-700" : accessRole === "builder" ? "bg-amber-700" : "bg-emerald-700"}`}>
+              <span className={`px-2 py-1 text-xs font-bold uppercase text-white ${accessRole === "architect" ? "bg-blue-700" : accessRole === "builder" ? "bg-amber-700" : "bg-gray-900"}`}>
                 {roleLabel}
               </span>
             </div>
@@ -13883,7 +13888,7 @@ const BuildingDashboard = () => {
                 ) : building.exchangeOnly ? (
                   <ExchangeDashboardPanel homeValue={new URLSearchParams(location.search).get("source") === "cc" ? bridgewoodValue : null} />
                 ) : (
-                  <BuildingDashboardPanel building={building} isActive={isActiveSlide} onLiveRedChange={setHeaderRedReadings} onComfortSuggestionChange={setComfortSuggestion} />
+                  <BuildingDashboardPanel building={building} isActive={isActiveSlide} onLiveRedChange={setHeaderRedReadings} onComfortSuggestionChange={setComfortSuggestion} onPerformanceChange={setHeaderPerformanceValue} />
                 )}
               </div>
             );
