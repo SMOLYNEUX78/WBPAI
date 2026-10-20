@@ -7771,7 +7771,7 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
         isCarbonCreditTab ? "min-h-0" : "wbp-occupy-panel min-h-screen"
       }`}
     >
-      <div className={dataSourceBuildingId === "home" ? "-mx-4 -mt-4 flex flex-col bg-emerald-100 pb-3" : "bg-gray-100 p-4 rounded shadow"}>
+      <div className={dataSourceBuildingId === "home" ? "wbp-property-banner -mx-4 -mt-4 flex flex-col pb-3" : "bg-gray-100 p-4 rounded shadow"} style={dataSourceBuildingId === "home" ? { backgroundColor: performanceShade(performanceValue) || "#f3f4f6" } : undefined}>
         {dataSourceBuildingId !== "home" ? <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-lg font-bold">Building Input</h2>
         </div> : null}
@@ -13823,14 +13823,22 @@ const BuildingDashboard = () => {
 
       {roleLabel ? (
         <section className={`border-b px-4 py-3 ${accessRole === "architect" ? "border-blue-200 bg-blue-50" : accessRole === "builder" ? "border-amber-200 bg-amber-50" : "border-gray-300"}`} style={accessRole === "homeowner" ? { backgroundColor: (!activeBuilding.setupOnly && !activeBuilding.portfolioOnly && !activeBuilding.exchangeOnly && performanceShade(headerPerformanceValue)) || "#f3f4f6" } : undefined}>
-          <div className="mx-auto flex max-w-7xl items-center justify-between gap-2">
-            <div className="flex min-w-0 items-center gap-3">
+          <div className="mx-auto flex max-w-7xl items-center gap-1.5 sm:gap-2">
+            <div className="shrink-0">
               <span className={`px-2 py-1 text-xs font-bold uppercase text-white ${accessRole === "architect" ? "bg-blue-700" : accessRole === "builder" ? "bg-amber-700" : "bg-gray-900"}`}>
                 {roleLabel}
               </span>
             </div>
-            <div className="flex min-w-0 items-center justify-end gap-2">
-              {accessRole === "homeowner" && ["home", "bl", "rf", "cc"].includes(activeBuilding.id) ? <div className="flex min-w-0 flex-wrap justify-end gap-1">{headerRedReadings.map((reading) => <span key={reading.key} role="status" className="max-w-[42vw] truncate border-l-4 border-red-700 bg-red-50 px-2 py-1 text-xs font-semibold text-red-900">{reading.label}: {reading.value}{reading.unit === "%" ? "%" : ` ${reading.unit}`}</span>)}</div> : null}
+            {showComfortBanner ? <div className="flex min-w-0 flex-1 items-center border-l-4 border-amber-700 bg-white px-2 py-1 text-xs text-gray-900 sm:text-sm" role="status">
+              <p className="min-w-0 flex-1 truncate" title={comfortSuggestion.bannerText || comfortSuggestion.message}>{comfortSuggestion.bannerText || comfortSuggestion.message}</p>
+              <button type="button" aria-label="Dismiss comfort suggestion" className="ml-1 shrink-0 px-1 text-base leading-none" onClick={() => {
+                const dismissed = { key: comfortSuggestion.key, until: Date.now() + 12 * 60 * 60 * 1000 };
+                window.localStorage.setItem("wbp-comfort-dismissed", JSON.stringify(dismissed));
+                setDismissedComfort(dismissed);
+              }}>×</button>
+            </div> : <div className="min-w-0 flex-1" />}
+            <div className="flex min-w-0 shrink-0 items-center justify-end gap-1.5 sm:gap-2">
+              {accessRole === "homeowner" && ["home", "bl", "rf", "cc"].includes(activeBuilding.id) && headerRedReadings.length > 0 ? <div className="flex max-w-[28vw] min-w-0 items-center overflow-hidden border-l-4 border-red-700 bg-red-50 px-2 py-1 text-xs font-semibold text-red-900 sm:max-w-[36vw]" role="status" title={headerRedReadings.map((reading) => `${reading.label}: ${reading.value}${reading.unit === "%" ? "%" : ` ${reading.unit}`}`).join("; ")}><span className="min-w-0 truncate">{headerRedReadings[0].label}: {headerRedReadings[0].value}{headerRedReadings[0].unit === "%" ? "%" : ` ${headerRedReadings[0].unit}`}</span>{headerRedReadings.length > 1 ? <span className="ml-1 shrink-0">+{headerRedReadings.length - 1}</span> : null}</div> : null}
             <div ref={accountMenuRef} className="relative shrink-0">
               <button type="button" aria-label="Open account menu" aria-expanded={accountMenuOpen} aria-controls="wbp-account-menu" onClick={() => setAccountMenuOpen((open) => !open)} className="flex h-9 w-10 items-center justify-center border border-gray-300 bg-white text-xl leading-none text-gray-900 hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-700">{"\u2630"}</button>
               {accountMenuOpen ? <div id="wbp-account-menu" className="absolute right-0 top-full z-50 mt-2 w-60 max-w-[calc(100vw-2rem)] border border-gray-300 bg-white p-2 text-sm shadow-lg">
@@ -13847,14 +13855,6 @@ const BuildingDashboard = () => {
             </div>
             </div>
           </div>
-          {showComfortBanner ? <div className="mx-auto mt-3 flex max-w-7xl items-start gap-3 border-l-4 border-amber-600 bg-white px-3 py-2 text-sm text-gray-900" role="status">
-            <p className="min-w-0 flex-1">{comfortSuggestion.bannerText || comfortSuggestion.message}</p>
-            <button type="button" aria-label="Dismiss comfort suggestion" className="shrink-0 px-2 text-lg leading-none" onClick={() => {
-              const dismissed = { key: comfortSuggestion.key, until: Date.now() + 12 * 60 * 60 * 1000 };
-              window.localStorage.setItem("wbp-comfort-dismissed", JSON.stringify(dismissed));
-              setDismissedComfort(dismissed);
-            }}>×</button>
-          </div> : null}
         </section>
       ) : null}
       </div>
