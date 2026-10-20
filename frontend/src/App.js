@@ -17,6 +17,7 @@ import BuildProject from "./BuildProject";
 import supabase from "./supabaseClient";
 import { isProfessionalEmailAllowed, TEST_PROFESSIONAL_EMAIL } from "./professionalEmail";
 import { hasFullWorkspaceAccess, loadLinkedHistoricOutline } from "./workspaceAccess";
+import { parseStockCsv, STOCK_COLUMNS } from "./stockImport";
 
 const AUTH_INTENT_KEY = "wbp-auth-intent:v1";
 const ACTIVE_ROUTE_KEY = "wbp-active-route:v1";
@@ -1192,10 +1193,97 @@ const OrganisationAccountPreview = ({ role = "architect" }) => {
 
 const StockWorkspace = () => {
   const navigate = useNavigate();
+  const [organisations, setOrganisations] = useState([]);
+  const [organisationId, setOrganisationId] = useState("");
+  const [homes, setHomes] = useState([]);
+  const [rows, setRows] = useState([]);
+  const [fileName, setFileName] = useState("");
+  const [status, setStatus] = useState("Checking organisation access...");
+  const [busy, setBusy] = useState(false);
+  const [selectedHome, setSelectedHome] = useState(null);
+  const [selectedStage, setSelectedStage] = useState("occupy");
+
+  useEffect(() => {
+    let active = true;
+    supabase.rpc("wbp_stock_organisations").then(({ data, error }) => {
+      if (!active) return;
+      if (error) setStatus("Stock import is not configured yet. Ask an administrator to apply Managed Stock Import.sql.");
+      else if (!data?.length) setStatus("A verified organisation administrator must enable your stock access.");
+      else { setOrganisations(data); setOrganisationId(data[0].organisation_id); setStatus(""); }
+    });
+    return () => { active = false; };
+  }, []);
+
+  const loadHomes = useCallback(async (id) => {
+    const { data, error } = await supabase.rpc("wbp_stock_portfolio", { p_organisation_id: id });
+    if (error) setStatus(error.message);
+    else { setHomes(data || []); setStatus(""); }
+  }, []);
+
+  useEffect(() => { if (organisationId) loadHomes(organisationId); }, [organisationId, loadHomes]);
+
+  const chooseFile = async (event) => {
+    const file = event.target.files?.[0];
+    setRows([]);
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) { setStatus("Use a CSV smaller than 2 MB."); return; }
+    try {
+      setRows(parseStockCsv(await file.text()));
+      setFileName(file.name);
+      setStatus("");
+    } catch (error) { setStatus(error.message); }
+  };
+
+  const importHomes = async () => {
+    setBusy(true);
+    const { data, error } = await supabase.rpc("wbp_import_stock", {
+      p_organisation_id: organisationId, p_source_name: fileName, p_rows: rows,
+    });
+    setBusy(false);
+    if (error) { setStatus(error.message); return; }
+    setRows([]);
+    await loadHomes(organisationId);
+    setStatus(`${data} homes imported. Design and Build names remain unverified.`);
+  };
+
+  const downloadTemplate = () => {
+    const blob = new Blob([`${STOCK_COLUMNS.join(",")}\n`], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "wbp-stock-template.csv";
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
   return <main className="mx-auto max-w-4xl px-5 py-8 text-gray-900">
     <p className="text-sm font-semibold uppercase text-emerald-800">Occupy / Homes I manage</p>
     <h1 className="mt-2 text-2xl font-bold">Stock portfolio</h1>
-    <p className="mt-4 max-w-2xl text-sm leading-6">Organisation stock access is not enabled yet. No property or resident records are available through this workspace.</p>
+    {status ? <p role="status" className="mt-4 border border-amber-300 bg-amber-50 p-3 text-sm">{status}</p> : null}
+    {organisations.length ? <>
+      <label className="mt-6 block text-sm font-semibold">Organisation
+        <select className="mt-1 block w-full border p-2" value={organisationId} onChange={(event) => setOrganisationId(event.target.value)}>
+          {organisations.map((org) => <option key={org.organisation_id} value={org.organisation_id}>{org.organisation_name}</option>)}
+        </select>
+      </label>
+      <section className="mt-8 border-t pt-5">
+        <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-lg font-semibold">Import homes</h2><button type="button" className="border px-3 py-2 text-sm" onClick={downloadTemplate}>Download CSV template</button></div>
+        <p className="mt-2 text-sm text-gray-600">UPRN, address, legal owner and tenure are required. Imported Design and Build details are unverified until reviewed. Do not include resident names or case notes.</p>
+        <input className="mt-4 block w-full text-sm" type="file" accept=".csv,text/csv" aria-label="Stock CSV" onChange={chooseFile} />
+        {rows.length ? <div className="mt-4">
+          <p className="text-sm font-semibold">Review {rows.length} home{rows.length === 1 ? "" : "s"} from {fileName}</p>
+          <div className="mt-2 max-h-60 overflow-auto border"><table className="w-full text-left text-sm"><thead><tr><th className="p-2">UPRN</th><th className="p-2">Address</th><th className="p-2">Design</th><th className="p-2">Build</th></tr></thead><tbody>{rows.map((row) => <tr key={row.uprn} className="border-t"><td className="p-2">{row.uprn}</td><td className="p-2">{row.address}</td><td className="p-2">{row.design_organisation || "-"}</td><td className="p-2">{row.build_organisation || "-"}</td></tr>)}</tbody></table></div>
+          <button type="button" className="mt-3 bg-emerald-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" disabled={busy} onClick={importHomes}>{busy ? "Importing..." : `Import ${rows.length} homes`}</button>
+        </div> : null}
+      </section>
+      <section className="mt-8 border-t pt-5"><h2 className="text-lg font-semibold">Homes ({homes.length})</h2>
+        <div className="mt-3 divide-y border">{homes.map((home) => <button key={home.building_record_id} type="button" className="flex w-full justify-between gap-3 p-3 text-left hover:bg-gray-50" onClick={() => setSelectedHome(home)}><span><strong className="block">{home.address?.address || home.record_reference}</strong><small>UPRN {home.uprn} · {home.record_reference}</small></span><span className="text-sm text-emerald-800">Ready for monitoring</span></button>)}</div>
+        {selectedHome ? <div className="mt-4 border p-4"><div className="flex justify-between gap-3"><h3 className="font-semibold">{selectedHome.address?.address}</h3><button type="button" onClick={() => setSelectedHome(null)} aria-label="Close profile">×</button></div>
+          <div className="mt-4 flex gap-2 border-b" role="tablist" aria-label="Building stages">{["occupy", "design", "build"].map((stage) => <button type="button" role="tab" aria-selected={selectedStage === stage} key={stage} className={`px-3 py-2 text-sm font-semibold ${selectedStage === stage ? "border-b-2 border-emerald-700" : ""}`} onClick={() => setSelectedStage(stage)}>{stage[0].toUpperCase() + stage.slice(1)}</button>)}</div>
+          <div className="pt-4 text-sm" role="tabpanel">{selectedStage === "occupy" ? <p>Monitoring ready; no readings connected yet.</p> : <><p className="font-semibold">{selectedHome[`${selectedStage}_data`]?.organisation || "Organisation not supplied"}</p><p className="mt-1">{selectedHome[`${selectedStage}_data`]?.notes || "No notes supplied"}</p><p className="mt-2 text-gray-600">Imported from {selectedHome.source_name}; organisation link is provisional and unverified.</p></>}</div>
+        </div> : null}
+      </section>
+    </> : null}
     <button type="button" className="mt-6 border border-gray-400 px-4 py-2 text-sm font-semibold" onClick={() => navigate("/login")}>Back to sign in</button>
   </main>;
 };
