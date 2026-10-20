@@ -13829,14 +13829,15 @@ const BuildingDashboard = () => {
                 {roleLabel}
               </span>
             </div>
-            {showComfortBanner ? <div className="flex min-w-0 flex-1 items-center border-l-4 border-amber-700 bg-white px-2 py-1 text-xs text-gray-900 sm:text-sm" role="status">
-              <p className="min-w-0 flex-1 truncate" title={comfortSuggestion.bannerText || comfortSuggestion.message}>{comfortSuggestion.bannerText || comfortSuggestion.message}</p>
+            {showComfortBanner ? <div className="flex w-fit min-w-0 items-center border-l-4 border-amber-700 bg-white px-2 py-1 text-xs text-gray-900 sm:text-sm" role="status">
+              <p className="min-w-0 truncate" title={comfortSuggestion.bannerText || comfortSuggestion.message}>{comfortSuggestion.bannerText || comfortSuggestion.message}</p>
               <button type="button" aria-label="Dismiss comfort suggestion" className="ml-1 shrink-0 px-1 text-base leading-none" onClick={() => {
                 const dismissed = { key: comfortSuggestion.key, until: Date.now() + 12 * 60 * 60 * 1000 };
                 window.localStorage.setItem("wbp-comfort-dismissed", JSON.stringify(dismissed));
                 setDismissedComfort(dismissed);
               }}>×</button>
-            </div> : <div className="min-w-0 flex-1" />}
+            </div> : null}
+            <div className="min-w-0 flex-1" />
             <div className="flex min-w-0 shrink-0 items-center justify-end gap-1.5 sm:gap-2">
               {accessRole === "homeowner" && ["home", "bl", "rf", "cc"].includes(activeBuilding.id) && headerRedReadings.length > 0 ? <div className="flex max-w-[28vw] min-w-0 items-center overflow-hidden border-l-4 border-red-700 bg-red-50 px-2 py-1 text-xs font-semibold text-red-900 sm:max-w-[36vw]" role="status" title={headerRedReadings.map((reading) => `${reading.label}: ${reading.value}${reading.unit === "%" ? "%" : ` ${reading.unit}`}`).join("; ")}><span className="min-w-0 truncate">{headerRedReadings[0].label}: {headerRedReadings[0].value}{headerRedReadings[0].unit === "%" ? "%" : ` ${headerRedReadings[0].unit}`}</span>{headerRedReadings.length > 1 ? <span className="ml-1 shrink-0">+{headerRedReadings.length - 1}</span> : null}</div> : null}
             <div ref={accountMenuRef} className="relative shrink-0">
