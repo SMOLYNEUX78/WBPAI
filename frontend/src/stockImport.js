@@ -1,4 +1,15 @@
 export const STOCK_COLUMNS = ["uprn", "address", "postcode", "legal_owner_name", "tenure", "property_type", "floor_area_m2", "design_organisation", "design_notes", "build_organisation", "build_notes"];
+const HEADER_ALIASES = {
+  property_uprn: "uprn", unique_property_reference_number: "uprn",
+  property_address: "address", full_address: "address", site_address: "address",
+  postal_code: "postcode", post_code: "postcode",
+  legal_owner: "legal_owner_name", owner_name: "legal_owner_name",
+  tenancy: "tenure", tenure_type: "tenure",
+  dwelling_type: "property_type", property_category: "property_type",
+  floor_area: "floor_area_m2", gross_internal_area_m2: "floor_area_m2",
+  architect: "design_organisation", designer: "design_organisation",
+  contractor: "build_organisation", builder: "build_organisation",
+};
 
 export function parseStockCsv(input) {
   const text = input.replace(/^\uFEFF/, "");
@@ -29,7 +40,10 @@ export function parseStockCsv(input) {
   if (record.some(Boolean)) records.push(record);
   const [header, ...lines] = records;
   if (!header) throw new Error("The CSV is empty");
-  const columns = header.map((item) => item.toLowerCase());
+  const columns = header.map((item) => {
+    const name = item.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+    return HEADER_ALIASES[name] || name;
+  });
   if (new Set(columns).size !== columns.length) throw new Error("Duplicate CSV column");
   const required = ["uprn", "address", "legal_owner_name", "tenure"];
   const missing = required.filter((name) => !columns.includes(name));

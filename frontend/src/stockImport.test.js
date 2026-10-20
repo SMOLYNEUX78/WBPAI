@@ -9,3 +9,8 @@ test("rejects duplicate homes", () => {
   expect(() => parseStockCsv("uprn,address,legal_owner_name,tenure\n123,1 High Street,Council,rented\n123,2 High Street,Council,rented"))
     .toThrow(/duplicate UPRN/);
 });
+
+test("accepts common stock export headings", () => {
+  expect(parseStockCsv("Property UPRN,Full Address,Owner Name,Tenancy,Architect,Contractor\n123,1 High Street,Council,rented,Studio A,Builder B"))
+    .toEqual([{ uprn: "123", address: "1 High Street", legal_owner_name: "Council", tenure: "rented", design_organisation: "Studio A", build_organisation: "Builder B" }]);
+});

@@ -639,6 +639,22 @@ code {
 .wbp-occupy-choices strong { font-size: 16px; }
 .wbp-occupy-choices span, .wbp-stock-access-note { color: #4b5563; font-size: 13px; }
 .wbp-stock-access-note { margin: 20px 0 0; line-height: 1.5; }
+.wbp-stock-shell { min-height: 100vh; background: #f3f4f6; color: #111827; }
+.wbp-stock-nav { display: flex; align-items: center; justify-content: space-between; min-height: 64px; padding: 0 clamp(16px, 4vw, 58px); border-bottom: 1px solid #d1d5db; background: #fff; }
+.wbp-stock-nav strong { font-size: 19px; }
+.wbp-stock-nav button { min-height: 38px; padding: 0 14px; border: 1px solid #9ca3af; background: #fff; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.wbp-stock-banner { display: flex; align-items: center; gap: 16px; min-height: 85px; padding: 16px clamp(16px, 4vw, 58px); border-bottom: 1px solid #d9b94d; background: #f1d35f; }
+.wbp-stock-banner span { padding: 5px 9px; background: #111827; color: #fff; font-size: 12px; font-weight: 800; }
+.wbp-stock-banner h1 { margin: 0; font-size: 22px; font-weight: 750; }
+.wbp-stock-banner small { margin-left: auto; font-size: 13px; }
+.wbp-stock-content { padding: 24px clamp(16px, 4vw, 58px) 56px; }
+.wbp-stock-section { margin-top: 24px; padding-top: 18px; border-top: 1px solid #cbd5e1; }
+.wbp-stock-section h2 { margin: 0; font-size: 18px; font-weight: 750; }
+.wbp-stock-section > p { margin: 8px 0 0; color: #4b5563; font-size: 14px; }
+.wbp-stock-upload { display: flex; align-items: center; gap: 14px; width: fit-content; max-width: 100%; min-height: 46px; margin-top: 16px; padding: 8px 12px; border: 1px solid #374151; background: #fff; font-size: 14px; font-weight: 700; cursor: pointer; }
+.wbp-stock-upload input { max-width: 220px; font-size: 12px; font-weight: 400; }
+.wbp-stock-upload input::file-selector-button { padding: 7px 10px; border: 1px solid #9ca3af; background: #f3f4f6; color: #111827; font: inherit; font-weight: 700; cursor: pointer; }
+@media (max-width: 600px) { .wbp-stock-banner { flex-wrap: wrap; gap: 9px; } .wbp-stock-banner small { width: 100%; margin-left: 0; } .wbp-stock-upload { display: grid; } }
 
 .wbp-profile-name { align-items: baseline; }
 .wbp-profile-name span {
