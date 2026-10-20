@@ -40,10 +40,14 @@ test("managed stock asks for organisation details before enabling import", async
 
   render(<App />);
 
-  expect(await screen.findByRole("heading", { name: "Set up your organisation" })).toBeInTheDocument();
+  expect(await screen.findByRole("dialog", { name: "Set up your organisation" })).toBeInTheDocument();
   expect(screen.getByDisplayValue(user.email)).toHaveAttribute("readonly");
   expect(screen.getByRole("button", { name: "Request organisation approval" })).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: /Import \d+ homes/ })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Close setup" }));
+  expect(screen.queryByRole("dialog", { name: "Set up your organisation" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Set up organisation" }));
+  expect(screen.getByRole("dialog", { name: "Set up your organisation" })).toBeInTheDocument();
 });
 
 test("Occupy offers separate home and managed-homes paths", async () => {

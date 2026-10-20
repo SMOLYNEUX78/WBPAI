@@ -1205,6 +1205,8 @@ const StockWorkspace = () => {
   const [onboarding, setOnboarding] = useState(null);
   const [onboardingAvailable, setOnboardingAvailable] = useState(false);
   const [accountEmail, setAccountEmail] = useState("");
+  const [setupOpen, setSetupOpen] = useState(false);
+  const [setupError, setSetupError] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -1223,6 +1225,7 @@ const StockWorkspace = () => {
       setOnboarding(request.data?.[0] || null);
       if (!access.data?.length) {
         const requestStatus = request.data?.[0]?.request_status;
+        setSetupOpen(!requestStatus || requestStatus === "rejected");
         setStatus(requestStatus === "pending" ? "Organisation request awaiting review. You can preview a CSV meanwhile."
           : requestStatus === "approved" ? "Organisation approved, but this account cannot access its stock. Ask an administrator to check your membership and email domain." : "");
       } else {
@@ -1236,6 +1239,7 @@ const StockWorkspace = () => {
 
   const requestOrganisation = async (event) => {
     event.preventDefault();
+    setSetupError("");
     const fields = new FormData(event.currentTarget);
     setBusy(true);
     const { error } = await supabase.rpc("wbp_request_stock_organisation", {
@@ -1246,8 +1250,9 @@ const StockWorkspace = () => {
       p_website: fields.get("website"),
     });
     setBusy(false);
-    if (error) { setStatus(error.message); return; }
+    if (error) { setSetupError(error.message); return; }
     setOnboarding({ organisation_name: fields.get("name"), request_status: "pending" });
+    setSetupOpen(false);
     setStatus("Organisation request sent for review. No homes will be imported until approval.");
   };
 
@@ -1290,10 +1295,12 @@ const StockWorkspace = () => {
     <section className="wbp-stock-banner"><span>OCCUPY</span><h1>Homes I manage</h1>{organisations.length ? <small>{organisations.find((org) => org.organisation_id === organisationId)?.organisation_name}</small> : null}</section>
     <div className="wbp-stock-content">
     {status ? <p role="status" className="mt-4 border border-amber-300 bg-amber-50 p-3 text-sm">{status}</p> : null}
-    {!organisations.length && onboardingAvailable && (!onboarding || onboarding.request_status === "rejected") ? <section className="wbp-stock-section" aria-labelledby="stock-org-title">
-      <h2 id="stock-org-title">Set up your organisation</h2>
-      <p>Enter the RP or local authority once. We verify it before homes can be associated with it.</p>
-      <form className="wbp-stock-org-form" onSubmit={requestOrganisation}>
+    {!organisations.length && onboardingAvailable && (!onboarding || onboarding.request_status === "rejected") && !setupOpen ? <button type="button" className="wbp-stock-setup-trigger" onClick={() => setSetupOpen(true)}>Set up organisation</button> : null}
+    {setupOpen ? <div className="wbp-auth-backdrop wbp-profile-setup-backdrop" role="presentation" onMouseDown={() => setSetupOpen(false)}>
+      <section className="wbp-auth-modal wbp-profile-setup wbp-stock-setup" role="dialog" aria-modal="true" aria-labelledby="stock-org-title" onMouseDown={(event) => event.stopPropagation()}>
+        <button type="button" className="wbp-auth-close" aria-label="Close setup" onClick={() => setSetupOpen(false)}>&times;</button>
+        <div className="wbp-auth-heading"><p>Occupy · Homes I manage</p><h2 id="stock-org-title">Set up your organisation</h2><span>Enter the RP or local authority once. We verify it before homes can be associated with it.</span></div>
+        <form className="wbp-stock-org-form" onSubmit={requestOrganisation}>
         <label>Organisation name<input name="name" required minLength="2" maxLength="150" /></label>
         <label>Organisation type<select name="type" required><option value="housing-association">Registered provider / housing association</option><option value="local-authority">Local authority</option></select></label>
         <label>Registration number<input name="registration" maxLength="100" /></label>
@@ -1304,9 +1311,11 @@ const StockWorkspace = () => {
         <label>Town / city<input name="city" required minLength="2" maxLength="100" /></label>
         <label>Postcode<input name="postcode" required minLength="5" maxLength="12" /></label>
         <label>Website<input name="website" type="url" maxLength="250" placeholder="https://" /></label>
+        {setupError ? <p role="alert" className="wbp-stock-setup-error">{setupError}</p> : null}
         <button type="submit" disabled={busy || !accountEmail}>{busy ? "Sending..." : "Request organisation approval"}</button>
-      </form>
-    </section> : null}
+        </form>
+      </section>
+    </div> : null}
     {!organisations.length && onboarding?.request_status === "pending" ? <section className="wbp-stock-section"><h2>{onboarding.organisation_name}</h2><p>Approval pending. Your organisation and authority to manage its stock are being checked.</p></section> : null}
     {organisations.length ? <label className="mt-6 block text-sm font-semibold">Organisation
         <select className="mt-1 block w-full border p-2" value={organisationId} onChange={(event) => setOrganisationId(event.target.value)}>

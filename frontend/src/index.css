@@ -660,6 +660,10 @@ code {
 .wbp-stock-org-form input[readonly] { background: #e5e7eb; }
 .wbp-stock-org-form button { min-height: 42px; align-self: end; border: 0; background: #111827; color: #fff; font: inherit; font-size: 13px; font-weight: 750; cursor: pointer; }
 .wbp-stock-org-form button:disabled { opacity: .55; cursor: not-allowed; }
+.wbp-stock-setup { width: min(100%, 680px); }
+.wbp-stock-setup .wbp-stock-org-form { margin-top: 22px; }
+.wbp-stock-setup-error { grid-column: 1 / -1; margin: 0; color: #b91c1c; font-size: 13px; }
+.wbp-stock-setup-trigger { min-height: 42px; margin-top: 18px; padding: 0 15px; border: 1px solid #111827; background: #fff; color: #111827; font: inherit; font-size: 13px; font-weight: 750; cursor: pointer; }
 @media (max-width: 600px) { .wbp-stock-banner { flex-wrap: wrap; gap: 9px; } .wbp-stock-banner small { width: 100%; margin-left: 0; } .wbp-stock-upload { display: grid; } }
 @media (max-width: 600px) { .wbp-stock-org-form { grid-template-columns: minmax(0, 1fr); } }
 
