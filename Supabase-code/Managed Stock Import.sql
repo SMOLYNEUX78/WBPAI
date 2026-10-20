@@ -1,6 +1,125 @@
 -- Pilot stock import. Apply after Building Passport Core.sql,
 -- Organisation Access.sql and Provisional Organisation Projects.sql.
 -- Run as a database administrator. Only verified organisation admins can import.
+create table if not exists public."WBPStockOrganisationRequests" (
+  id uuid primary key default gen_random_uuid(),
+  requested_by uuid not null unique references auth.users(id) on delete cascade,
+  organisation_name text not null,
+  organisation_type text not null check (organisation_type in ('housing-association', 'local-authority')),
+  registration_number text,
+  contact_name text not null,
+  contact_email text not null,
+  contact_phone text,
+  office_address text not null,
+  city text not null,
+  postcode text not null,
+  website text,
+  email_domain text not null,
+  status text not null default 'pending' check (status in ('pending', 'approved', 'rejected')),
+  organisation_id uuid references public."WBPOrganisations"(id),
+  reviewed_by uuid references auth.users(id),
+  reviewed_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+alter table public."WBPStockOrganisationRequests" enable row level security;
+revoke all on public."WBPStockOrganisationRequests" from public, anon, authenticated;
+
+create or replace function public.wbp_stock_onboarding_status()
+returns table (organisation_name text, request_status text, submitted_at timestamptz)
+language sql stable security definer set search_path = public, auth as $$
+  select r.organisation_name, r.status, r.created_at
+  from public."WBPStockOrganisationRequests" r where r.requested_by = auth.uid();
+$$;
+
+create or replace function public.wbp_request_stock_organisation(
+  p_name text, p_type text, p_registration text, p_contact_name text,
+  p_phone text, p_address text, p_city text, p_postcode text, p_website text
+) returns text language plpgsql security definer set search_path = public, auth as $$
+declare
+  v_email text;
+  v_domain text;
+begin
+  select lower(u.email) into v_email from auth.users u
+  where u.id = auth.uid() and u.email_confirmed_at is not null;
+  if v_email is null then raise exception 'Confirm your work email first'; end if;
+  v_domain := split_part(v_email, '@', 2);
+  if v_domain = any(array['gmail.com','googlemail.com','outlook.com','hotmail.com','yahoo.com','icloud.com','aol.com','proton.me','protonmail.com']) then
+    raise exception 'Use an organisation email address';
+  end if;
+  if coalesce(p_type, '') not in ('housing-association', 'local-authority')
+      or length(trim(coalesce(p_name, ''))) not between 2 and 150
+      or length(trim(coalesce(p_contact_name, ''))) not between 2 and 150
+      or length(trim(coalesce(p_address, ''))) not between 5 and 250
+      or length(trim(coalesce(p_city, ''))) not between 2 and 100
+      or length(trim(coalesce(p_postcode, ''))) not between 5 and 12
+      or length(coalesce(p_registration, '')) > 100
+      or length(coalesce(p_phone, '')) > 40
+      or length(coalesce(p_website, '')) > 250 then
+    raise exception 'Check the organisation details';
+  end if;
+  if exists (select 1 from public."WBPStockOrganisationRequests" r
+    where r.requested_by = auth.uid() and r.status in ('pending', 'approved')) then
+    raise exception 'Your organisation request is already being reviewed';
+  end if;
+  insert into public."WBPStockOrganisationRequests" (
+    requested_by, organisation_name, organisation_type, registration_number,
+    contact_name, contact_email, contact_phone, office_address, city, postcode,
+    website, email_domain, status, organisation_id, reviewed_by, reviewed_at)
+  values (auth.uid(), trim(p_name), p_type, nullif(trim(coalesce(p_registration, '')), ''),
+    trim(p_contact_name), v_email, nullif(trim(coalesce(p_phone, '')), ''),
+    trim(p_address), trim(p_city), upper(trim(p_postcode)),
+    nullif(trim(coalesce(p_website, '')), ''), v_domain, 'pending', null, null, null)
+  on conflict (requested_by) do update set
+    organisation_name = excluded.organisation_name, organisation_type = excluded.organisation_type,
+    registration_number = excluded.registration_number, contact_name = excluded.contact_name,
+    contact_email = excluded.contact_email, contact_phone = excluded.contact_phone,
+    office_address = excluded.office_address, city = excluded.city, postcode = excluded.postcode,
+    website = excluded.website, email_domain = excluded.email_domain,
+    status = 'pending', organisation_id = null, reviewed_by = null, reviewed_at = null,
+    created_at = now();
+  return 'pending';
+end $$;
+
+-- Database administrator only. Inspect the request and independently verify the
+-- organisation, email domain and requester's authority before calling this.
+create or replace function public.wbp_approve_stock_organisation(p_request_id uuid, p_confirmed boolean)
+returns uuid language plpgsql security definer set search_path = public, auth as $$
+declare
+  v_request public."WBPStockOrganisationRequests"%rowtype;
+  v_org_id uuid;
+begin
+  if p_confirmed is distinct from true then raise exception 'Independent verification required'; end if;
+  select * into v_request from public."WBPStockOrganisationRequests"
+    where id = p_request_id and status = 'pending' for update;
+  if not found then raise exception 'Pending request not found'; end if;
+  if not exists (select 1 from auth.users u where u.id = v_request.requested_by
+    and u.email_confirmed_at is not null and lower(u.email) = v_request.contact_email
+    and split_part(lower(u.email), '@', 2) = v_request.email_domain) then
+    raise exception 'Requester email is no longer confirmed or has changed';
+  end if;
+  if exists (select 1 from public."WBPOrganisationDomains" where domain = v_request.email_domain) then
+    raise exception 'This email domain belongs to an existing organisation; review manually';
+  end if;
+  if exists (select 1 from public."WBPOrganisations" where lower(name) = lower(v_request.organisation_name)) then
+    raise exception 'An organisation with this name already exists; review manually';
+  end if;
+  insert into public."WBPOrganisations" (name, organisation_type, statutory_registration,
+    head_office, contact_details, verification_status, created_by)
+  values (v_request.organisation_name, v_request.organisation_type, v_request.registration_number,
+    jsonb_build_object('address', v_request.office_address, 'city', v_request.city, 'postcode', v_request.postcode),
+    jsonb_build_object('name', v_request.contact_name, 'email', v_request.contact_email,
+      'phone', v_request.contact_phone, 'website', v_request.website), 'verified', v_request.requested_by)
+  returning id into v_org_id;
+  insert into public."WBPOrganisationDomains" (organisation_id, domain)
+    values (v_org_id, v_request.email_domain);
+  insert into public."WBPOrganisationMembers" (organisation_id, user_id, access_role, approved_at)
+    values (v_org_id, v_request.requested_by, 'admin', now());
+  update public."WBPStockOrganisationRequests" set status = 'approved', organisation_id = v_org_id,
+    reviewed_at = now() where id = p_request_id;
+  return v_org_id;
+end $$;
+
 create table if not exists public."WBPStockProfiles" (
   building_record_id uuid primary key references public."WBPBuildingRecords"(id) on delete cascade,
   organisation_id uuid not null references public."WBPOrganisations"(id),
@@ -142,8 +261,13 @@ begin
 end $$;
 
 revoke all on function public.wbp_stock_organisations() from public;
+revoke all on function public.wbp_stock_onboarding_status() from public;
+revoke all on function public.wbp_request_stock_organisation(text,text,text,text,text,text,text,text,text) from public;
+revoke all on function public.wbp_approve_stock_organisation(uuid,boolean) from public, anon, authenticated;
 revoke all on function public.wbp_stock_portfolio(uuid) from public;
 revoke all on function public.wbp_import_stock(uuid, text, jsonb) from public;
 grant execute on function public.wbp_stock_organisations() to authenticated;
+grant execute on function public.wbp_stock_onboarding_status() to authenticated;
+grant execute on function public.wbp_request_stock_organisation(text,text,text,text,text,text,text,text,text) to authenticated;
 grant execute on function public.wbp_stock_portfolio(uuid) to authenticated;
 grant execute on function public.wbp_import_stock(uuid, text, jsonb) to authenticated;

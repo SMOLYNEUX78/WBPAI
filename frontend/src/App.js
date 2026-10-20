@@ -1202,17 +1202,54 @@ const StockWorkspace = () => {
   const [busy, setBusy] = useState(false);
   const [selectedHome, setSelectedHome] = useState(null);
   const [selectedStage, setSelectedStage] = useState("occupy");
+  const [onboarding, setOnboarding] = useState(null);
+  const [onboardingAvailable, setOnboardingAvailable] = useState(false);
+  const [accountEmail, setAccountEmail] = useState("");
 
   useEffect(() => {
     let active = true;
-    supabase.rpc("wbp_stock_organisations").then(({ data, error }) => {
+    Promise.all([
+      supabase.rpc("wbp_stock_organisations"),
+      supabase.rpc("wbp_stock_onboarding_status"),
+      supabase.auth.getUser(),
+    ]).then(([access, request, account]) => {
       if (!active) return;
-      if (error) setStatus("Stock import is not configured yet. Ask an administrator to apply Managed Stock Import.sql.");
-      else if (!data?.length) setStatus("A verified organisation administrator must enable your stock access.");
-      else { setOrganisations(data); setOrganisationId(data[0].organisation_id); setStatus(""); }
+      setAccountEmail(account.data?.user?.email || "");
+      if (access.error || request.error) {
+        setStatus("Organisation setup is not configured yet. The stock import database migration must be applied first.");
+        return;
+      }
+      setOnboardingAvailable(true);
+      setOnboarding(request.data?.[0] || null);
+      if (!access.data?.length) {
+        const requestStatus = request.data?.[0]?.request_status;
+        setStatus(requestStatus === "pending" ? "Organisation request awaiting review. You can preview a CSV meanwhile."
+          : requestStatus === "approved" ? "Organisation approved, but this account cannot access its stock. Ask an administrator to check your membership and email domain." : "");
+      } else {
+        setOrganisations(access.data);
+        setOrganisationId(access.data[0].organisation_id);
+        setStatus("");
+      }
     });
     return () => { active = false; };
   }, []);
+
+  const requestOrganisation = async (event) => {
+    event.preventDefault();
+    const fields = new FormData(event.currentTarget);
+    setBusy(true);
+    const { error } = await supabase.rpc("wbp_request_stock_organisation", {
+      p_name: fields.get("name"), p_type: fields.get("type"),
+      p_registration: fields.get("registration"), p_contact_name: fields.get("contactName"),
+      p_phone: fields.get("phone"), p_address: fields.get("address"),
+      p_city: fields.get("city"), p_postcode: fields.get("postcode"),
+      p_website: fields.get("website"),
+    });
+    setBusy(false);
+    if (error) { setStatus(error.message); return; }
+    setOnboarding({ organisation_name: fields.get("name"), request_status: "pending" });
+    setStatus("Organisation request sent for review. No homes will be imported until approval.");
+  };
 
   const loadHomes = useCallback(async (id) => {
     const { data, error } = await supabase.rpc("wbp_stock_portfolio", { p_organisation_id: id });
@@ -1253,6 +1290,24 @@ const StockWorkspace = () => {
     <section className="wbp-stock-banner"><span>OCCUPY</span><h1>Homes I manage</h1>{organisations.length ? <small>{organisations.find((org) => org.organisation_id === organisationId)?.organisation_name}</small> : null}</section>
     <div className="wbp-stock-content">
     {status ? <p role="status" className="mt-4 border border-amber-300 bg-amber-50 p-3 text-sm">{status}</p> : null}
+    {!organisations.length && onboardingAvailable && (!onboarding || onboarding.request_status === "rejected") ? <section className="wbp-stock-section" aria-labelledby="stock-org-title">
+      <h2 id="stock-org-title">Set up your organisation</h2>
+      <p>Enter the RP or local authority once. We verify it before homes can be associated with it.</p>
+      <form className="wbp-stock-org-form" onSubmit={requestOrganisation}>
+        <label>Organisation name<input name="name" required minLength="2" maxLength="150" /></label>
+        <label>Organisation type<select name="type" required><option value="housing-association">Registered provider / housing association</option><option value="local-authority">Local authority</option></select></label>
+        <label>Registration number<input name="registration" maxLength="100" /></label>
+        <label>Main contact<input name="contactName" required minLength="2" maxLength="150" /></label>
+        <label>Work email<input value={accountEmail} readOnly /></label>
+        <label>Contact phone<input name="phone" type="tel" maxLength="40" /></label>
+        <label>Office address<input name="address" required minLength="5" maxLength="250" /></label>
+        <label>Town / city<input name="city" required minLength="2" maxLength="100" /></label>
+        <label>Postcode<input name="postcode" required minLength="5" maxLength="12" /></label>
+        <label>Website<input name="website" type="url" maxLength="250" placeholder="https://" /></label>
+        <button type="submit" disabled={busy || !accountEmail}>{busy ? "Sending..." : "Request organisation approval"}</button>
+      </form>
+    </section> : null}
+    {!organisations.length && onboarding?.request_status === "pending" ? <section className="wbp-stock-section"><h2>{onboarding.organisation_name}</h2><p>Approval pending. Your organisation and authority to manage its stock are being checked.</p></section> : null}
     {organisations.length ? <label className="mt-6 block text-sm font-semibold">Organisation
         <select className="mt-1 block w-full border p-2" value={organisationId} onChange={(event) => setOrganisationId(event.target.value)}>
           {organisations.map((org) => <option key={org.organisation_id} value={org.organisation_id}>{org.organisation_name}</option>)}

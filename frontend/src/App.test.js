@@ -30,6 +30,22 @@ beforeEach(() => {
   supabase.rpc.mockResolvedValue({ data: [], error: null });
 });
 
+test("managed stock asks for organisation details before enabling import", async () => {
+  const user = { id: "stock-user", email: "contact@housing.example" };
+  supabase.auth.getSession.mockResolvedValue({ data: { session: { user } }, error: null });
+  supabase.auth.getUser.mockResolvedValue({ data: { user }, error: null });
+  supabase.auth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: jest.fn() } } });
+  supabase.rpc.mockResolvedValue({ data: [], error: null });
+  window.history.pushState({}, "", "/workspace/stock");
+
+  render(<App />);
+
+  expect(await screen.findByRole("heading", { name: "Set up your organisation" })).toBeInTheDocument();
+  expect(screen.getByDisplayValue(user.email)).toHaveAttribute("readonly");
+  expect(screen.getByRole("button", { name: "Request organisation approval" })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /Import \d+ homes/ })).not.toBeInTheDocument();
+});
+
 test("Occupy offers separate home and managed-homes paths", async () => {
   supabase.auth.getSession.mockResolvedValue({ data: { session: null }, error: null });
   supabase.auth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: jest.fn() } } });
