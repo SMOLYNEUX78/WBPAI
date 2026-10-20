@@ -15,7 +15,7 @@ const PRIMARY_HEALTH_FIELDS = [
   { field: "downstairs_humidity", label: "Downstairs humidity" },
   { field: "upstairs_humidity", label: "Upstairs humidity" },
 ];
-const FABRIC_CONCERN_KEYS = new Set(["hdd", "htc", "night-cooldown", "heat-exclusion"]);
+const FABRIC_CONCERN_KEYS = new Set(["htc", "night-cooldown", "heat-exclusion"]);
 const LETI_RETROFIT_EUI = 50;
 const formatHealthMeasurement = (finding) => {
   const digits = finding.unit === "°C" || finding.unit === "%" ? 1 : 0;
@@ -26,12 +26,6 @@ const formatHealthMeasurement = (finding) => {
   return Number.isFinite(finding.observedAverage) ? `${format(finding.observedAverage)} ${finding.unit}` : "Pending";
 };
 const fabricExplanation = (concern) => {
-  if (concern.key === "hdd") {
-    const period = Number(concern.evidenceDays) > 0 ? `Across ${concern.evidenceDays} colder days, ` : "";
-    return concern.abovePlanningThreshold === false
-      ? `${period}the home was not consistently warm. These readings cannot tell us why on their own.`
-      : `${period}the home used more energy than our weather-adjusted guide suggests. This also includes hot water and appliances, so it does not prove heat is escaping.`;
-  }
   if (concern.key === "heat-exclusion") {
     const hours = Number(concern.sampleHours);
     const hotThreshold = Number(concern.hotThreshold) || 24;
@@ -96,7 +90,7 @@ export default function BaselineDataPanel({ DetailSurface, onOpenDetailedReport,
   }, [baseline.buildingId, baseline.propertyRecordId, baseline.sourceBuildingId, historyRetry]);
   const historicalFlags = historicalHealth.findings.filter((finding) => finding.redDays > 0);
   const fabricConcerns = (baseline.performanceConcerns || []).filter((concern) => FABRIC_CONCERN_KEYS.has(concern.key));
-  const otherPerformanceConcerns = (baseline.performanceConcerns || []).filter((concern) => !FABRIC_CONCERN_KEYS.has(concern.key));
+  const otherPerformanceConcerns = (baseline.performanceConcerns || []).filter((concern) => concern.key !== "hdd" && !FABRIC_CONCERN_KEYS.has(concern.key));
   const temperatureFinding = historicalHealth.findings.find((finding) => finding.field === "internal_temp");
   const summerHeatFinding = fabricConcerns.find((concern) => concern.key === "heat-exclusion");
   const temperatureDetail = [
@@ -111,7 +105,7 @@ export default function BaselineDataPanel({ DetailSurface, onOpenDetailedReport,
       detail: `${finding.redDays} of ${finding.observedDays} monitored days were outside the preferred range.${finding.field.includes("humidity") ? " Damp air can increase the chance of condensation and mould." : " The figure shows the range of daily averages on those days."}`,
     })),
     ...fabricConcerns.filter((concern) => concern.key !== "heat-exclusion").map((concern) => ({
-      key: concern.key, label: concern.key === "hdd" ? "Energy on cold days" : concern.label,
+       key: concern.key, label: concern.label,
       measurement: concern.measurement || concern.detail, detail: fabricExplanation(concern), tone: concern.status === "poor" ? "red" : "amber",
     })),
     ...otherPerformanceConcerns.map((concern) => ({

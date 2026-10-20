@@ -283,8 +283,8 @@ test("baseline shows every historical red metric plus performance and recent con
   expect(screen.getByText("Upstairs NO2")).toBeInTheDocument();
   expect(screen.queryByText("Heat exclusion")).not.toBeInTheDocument();
   expect(screen.getByText("Temperature").parentElement).toHaveTextContent("1.2 °C hotter than outside");
-  expect(screen.getByText("Energy on cold days")).toHaveClass("bg-red-50", "border-red-700");
-  expect(screen.getByText(/Across 21 colder days, the home used more energy/)).toBeInTheDocument();
+   expect(screen.queryByText("Energy on cold days")).not.toBeInTheDocument();
+   expect(screen.queryByText(/Across 21 colder days/)).not.toBeInTheDocument();
   expect(screen.getByText(/they reached 28°C or more for 4 of those hours/)).toBeInTheDocument();
   expect(screen.queryByText("Upstairs RH recently")).not.toBeInTheDocument();
   expect(screen.getByText("Downstairs PM2.5 recently")).toBeInTheDocument();
