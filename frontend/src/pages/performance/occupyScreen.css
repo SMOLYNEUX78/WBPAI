@@ -524,7 +524,7 @@
 .wbp-dashboard--baseline > .overflow-hidden > .flex { min-height: 100%; }
 .wbp-dashboard--baseline > .overflow-hidden > .flex > [aria-hidden="false"] { display: flex; flex-direction: column; }
 .wbp-dashboard--baseline .wbp-occupy-panel { flex: 1; min-height: 0; }
-.wbp-baseline-options { display: grid; max-width: 720px !important; grid-template-columns: minmax(0, 1fr); gap: 18px; }
+.wbp-baseline-options { display: grid; width: 100%; max-width: 960px; grid-template-columns: minmax(0, 1fr); gap: 18px; }
 .wbp-baseline-options h3 { grid-column: 1 / -1; }
 .wbp-baseline-options .wbp-baseline-option { min-height: 128px; margin-top: 0; padding: 18px; font-size: 18px; }
 .wbp-baseline-options .wbp-baseline-option > span { font-size: 18px; }
@@ -572,7 +572,7 @@
 @media (min-width: 600px) and (max-width: 1100px) and (orientation: portrait) {
   .wbp-dashboard--baseline .wbp-linear-performance-track { margin-top: 10px; }
   .wbp-dashboard--baseline .wbp-performance-stage--linear { padding-bottom: 6px; }
-  .wbp-baseline-options { width: 100%; max-width: 960px !important; gap: 8px; margin-top: 0; padding-top: 6px; }
+  .wbp-baseline-options { gap: 8px; margin-top: 0; padding-top: 6px; }
   .wbp-baseline-options h3 { margin-bottom: 0; font-size: 14px; }
   .wbp-baseline-options .wbp-baseline-option { min-height: 88px; padding: 12px; }
   .wbp-baseline-options .wbp-baseline-option > span { font-size: 16px; }
