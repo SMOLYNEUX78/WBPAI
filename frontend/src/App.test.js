@@ -48,7 +48,8 @@ test("managed stock saves a draft profile before requesting approval", async () 
   fireEvent.change(screen.getByLabelText("Main contact"), { target: { value: "Alex Smith" } });
   fireEvent.click(screen.getByRole("button", { name: "Save profile" }));
   expect(await screen.findByRole("button", { name: "Request organisation approval" })).toBeInTheDocument();
-  expect(screen.getByText("Example Housing")).toBeInTheDocument();
+  expect(screen.getAllByText("Example Housing").length).toBeGreaterThan(0);
+  expect(within(screen.getByRole("region", { name: "Organisation profile" })).getByText("Alex Smith")).toBeInTheDocument();
   expect(screen.queryByRole("dialog", { name: "Organisation profile" })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Edit profile" }));
   fireEvent.click(screen.getByRole("button", { name: "Close setup" }));
@@ -70,6 +71,7 @@ test("managed stock does not reopen setup for a saved profile", async () => {
   render(<App />);
 
   expect(await screen.findByRole("button", { name: "Edit profile" })).toBeInTheDocument();
+  expect(screen.getAllByText("Example Housing").length).toBeGreaterThan(0);
   expect(screen.queryByRole("dialog", { name: "Organisation profile" })).not.toBeInTheDocument();
 });
 

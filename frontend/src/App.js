@@ -1334,11 +1334,21 @@ const StockWorkspace = () => {
 
   return <main className="wbp-stock-shell">
     <header className="wbp-stock-nav"><strong>Whole Build Profile</strong><button type="button" onClick={() => navigate("/login")}>Back</button></header>
-    <section className="wbp-stock-banner"><span>OCCUPY</span><h1>Homes I manage</h1>{organisations.length ? <small>{organisations.find((org) => org.organisation_id === organisationId)?.organisation_name}</small> : null}</section>
+    <section className="wbp-stock-banner"><span>OCCUPY</span><h1>Homes I manage</h1>{stockProfile?.organisationName ? <small>{stockProfile.organisationName}</small> : null}</section>
     <div className="wbp-stock-content">
     {status ? <p role="status" className="mt-4 border border-amber-300 bg-amber-50 p-3 text-sm">{status}</p> : null}
     <section className="wbp-stock-section" aria-label="Organisation profile">
       <div className="wbp-stock-profile-heading"><div><h2>{stockProfile?.organisationName || "Organisation profile"}</h2><p>{stockProfile ? `${stockProfile.organisationType === "local-authority" ? "Local authority" : "Housing provider"} · ${accountEmail}` : "Add your organisation details to get started."}</p></div><button type="button" className="wbp-stock-setup-trigger" onClick={() => setSetupOpen(true)}>{stockProfile ? "Edit profile" : "Set up profile"}</button></div>
+      {stockProfile?.organisationName ? <dl className="wbp-stock-profile-details">
+        {[
+          ["Main contact", stockProfile.contactName],
+          ["Work email", accountEmail],
+          ["Contact phone", stockProfile.phone],
+          ["Office", [stockProfile.address, stockProfile.city, stockProfile.postcode].filter(Boolean).join(", ")],
+          ["Registration number", stockProfile.registrationNumber],
+          ["Website", stockProfile.website],
+        ].filter(([, value]) => value).map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}
+      </dl> : null}
       {stockProfile && !organisations.length && onboardingAvailable && onboarding?.request_status !== "pending" ? <button type="button" className="wbp-stock-setup-trigger" disabled={busy} onClick={requestOrganisation}>Request organisation approval</button> : null}
     </section>
     {setupOpen ? <div className="wbp-auth-backdrop wbp-profile-setup-backdrop" role="presentation" onMouseDown={() => setSetupOpen(false)}>
@@ -1362,7 +1372,7 @@ const StockWorkspace = () => {
       </section>
     </div> : null}
     {!organisations.length && onboarding?.request_status === "pending" ? <section className="wbp-stock-section"><h2>{onboarding.organisation_name}</h2><p>Approval pending. Your organisation and authority to manage its stock are being checked.</p></section> : null}
-    {organisations.length ? <label className="mt-6 block text-sm font-semibold">Organisation
+    {organisations.length > 1 ? <label className="mt-6 block text-sm font-semibold">Organisation
         <select className="mt-1 block w-full border p-2" value={organisationId} onChange={(event) => setOrganisationId(event.target.value)}>
           {organisations.map((org) => <option key={org.organisation_id} value={org.organisation_id}>{org.organisation_name}</option>)}
         </select>
