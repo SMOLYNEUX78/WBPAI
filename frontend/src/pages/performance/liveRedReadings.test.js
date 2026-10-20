@@ -1,4 +1,4 @@
-import { liveRedReadings } from "./liveRedReadings";
+import { hasFreshRoomReading, liveRedReadings } from "./liveRedReadings";
 
 const now = Date.parse("2026-09-30T12:00:00Z");
 
@@ -16,4 +16,10 @@ test("ignores missing and stale readings", () => {
     { key: "downstairs", label: "Downstairs", timestamp: "2026-09-30T09:00:00Z", humidity: 80 },
     { key: "missing", label: "Missing", timestamp: "2026-09-30T11:59:00Z", humidity: 0, internalTemp: 0 },
   ], now)).toEqual([]);
+});
+
+test("distinguishes fresh normal readings from a delayed room feed", () => {
+  expect(hasFreshRoomReading([{ timestamp: "2026-09-30T11:59:00Z", humidity: 50 }], now)).toBe(true);
+  expect(hasFreshRoomReading([{ timestamp: "2026-09-30T09:00:00Z", humidity: 80 }], now)).toBe(false);
+  expect(hasFreshRoomReading([], now)).toBe(false);
 });

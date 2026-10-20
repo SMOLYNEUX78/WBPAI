@@ -1,5 +1,10 @@
 const FRESH_READING_MS = 2 * 60 * 60 * 1000;
 
+export const hasFreshRoomReading = (rooms, now = Date.now()) => (rooms || []).some((room) => {
+  const timestamp = Date.parse(room.timestamp || "");
+  return Number.isFinite(timestamp) && timestamp <= now && now - timestamp <= FRESH_READING_MS;
+});
+
 const redMetrics = [
   { key: "internalTemp", label: "Temperature", unit: "deg C", red: (value) => value < 16 || value >= 24 },
   { key: "humidity", label: "RH", unit: "%", red: (value) => value < 30 || value >= 70 },

@@ -8,7 +8,7 @@ import matterportMark from "../../assets/matterport-mark.png";
 import PrototypeTabs from "../../PrototypeTabs";
 import { getReadinessGates } from "./readinessGates";
 import { mergeMonthlyHlaRows } from "./monthlyHla";
-import { liveRedReadings } from "./liveRedReadings";
+import { hasFreshRoomReading, liveRedReadings } from "./liveRedReadings";
 import { homeComfortSuggestion } from "./comfortSuggestions";
 import { extractEnergyBillImage, extractEnergyBillPdf, normaliseBillReview } from "./energyBill";
 import RetrofitPlanner from "./RetrofitPlanner";
@@ -1287,7 +1287,7 @@ const getEstimatedInternalArea = (modelId, building) => {
   return building.estimatedInternalArea;
 };
 
-const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, onComfortSuggestionChange, onPerformanceChange }) => {
+const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, onComfortSuggestionChange, onPerformanceChange, onRoomFreshnessChange }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const dataSourceBuildingId = building.dataSourceId || building.id;
@@ -7164,6 +7164,9 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
   useEffect(() => {
     if (isActive) onComfortSuggestionChange?.(comfortSuggestion);
   }, [isActive, onComfortSuggestionChange, comfortSuggestion]);
+  useEffect(() => {
+    if (isActive) onRoomFreshnessChange?.(roomIaqData.length === 0 ? "unavailable" : hasFreshRoomReading(roomIaqData, alertClock) ? "fresh" : "delayed");
+  }, [isActive, onRoomFreshnessChange, roomIaqData, alertClock]);
   useEffect(() => {
     if (isActive) onPerformanceChange?.(performanceValue);
   }, [isActive, onPerformanceChange, performanceValue]);
@@ -13609,6 +13612,7 @@ const BuildingDashboard = () => {
   const navigate = useNavigate();
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [headerRedReadings, setHeaderRedReadings] = useState([]);
+  const [headerRoomFresh, setHeaderRoomFresh] = useState(null);
   const [headerPerformanceValue, setHeaderPerformanceValue] = useState(null);
   const [comfortSuggestion, setComfortSuggestion] = useState(null);
   const [comfortNoticesEnabled, setComfortNoticesEnabled] = useState(() => window.localStorage.getItem("wbp-comfort-notices") === "yes");
@@ -13839,6 +13843,7 @@ const BuildingDashboard = () => {
               }}>×</button>
             </div> : null}
             <div className="flex min-w-0 shrink-0 items-center justify-end gap-1.5 sm:gap-2">
+              {accessRole === "homeowner" && ["home", "bl", "cc"].includes(activeBuilding.id) && ["delayed", "unavailable"].includes(headerRoomFresh) ? <span role="status" className="max-w-[28vw] truncate border-l-4 border-gray-600 bg-white px-2 py-1 text-xs font-semibold text-gray-900" title={headerRoomFresh === "delayed" ? "The latest room sensor reading is over two hours old. Check the collector and sensor connection." : "No room sensor readings are available. Check the sensor and collector connection."}>{headerRoomFresh === "delayed" ? "Room readings delayed" : "Room readings unavailable"}</span> : null}
               {accessRole === "homeowner" && ["home", "bl", "rf", "cc"].includes(activeBuilding.id) && headerRedReadings.length > 0 ? <div className="flex max-w-[28vw] min-w-0 items-center overflow-hidden border-l-4 border-red-700 bg-red-50 px-2 py-1 text-xs font-semibold text-red-900 sm:max-w-[36vw]" role="status" title={headerRedReadings.map((reading) => `${reading.label}: ${reading.value}${reading.unit === "%" ? "%" : ` ${reading.unit}`}`).join("; ")}><span className="min-w-0 truncate">{headerRedReadings[0].label}: {headerRedReadings[0].value}{headerRedReadings[0].unit === "%" ? "%" : ` ${headerRedReadings[0].unit}`}</span>{headerRedReadings.length > 1 ? <span className="ml-1 shrink-0">+{headerRedReadings.length - 1}</span> : null}</div> : null}
             <div ref={accountMenuRef} className="relative shrink-0">
               <button type="button" aria-label="Open account menu" aria-expanded={accountMenuOpen} aria-controls="wbp-account-menu" onClick={() => setAccountMenuOpen((open) => !open)} className="flex h-9 w-10 items-center justify-center border border-gray-300 bg-white text-xl leading-none text-gray-900 hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-700">{"\u2630"}</button>
@@ -13889,7 +13894,7 @@ const BuildingDashboard = () => {
                 ) : building.exchangeOnly ? (
                   <ExchangeDashboardPanel homeValue={new URLSearchParams(location.search).get("source") === "cc" ? bridgewoodValue : null} />
                 ) : (
-                  <BuildingDashboardPanel building={building} isActive={isActiveSlide} onLiveRedChange={setHeaderRedReadings} onComfortSuggestionChange={setComfortSuggestion} onPerformanceChange={setHeaderPerformanceValue} />
+                  <BuildingDashboardPanel building={building} isActive={isActiveSlide} onLiveRedChange={setHeaderRedReadings} onComfortSuggestionChange={setComfortSuggestion} onPerformanceChange={setHeaderPerformanceValue} onRoomFreshnessChange={setHeaderRoomFresh} />
                 )}
               </div>
             );
