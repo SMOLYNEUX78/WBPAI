@@ -221,7 +221,7 @@ const RoleGateway = () => {
         profile: intent.profile,
         updated_at: new Date().toISOString(),
       }, { onConflict: "user_id,workspace_role" });
-      if (session.user.email?.toLowerCase() !== TEST_PROFESSIONAL_EMAIL) {
+      if (["architect", "builder"].includes(intent.role) && session.user.email?.toLowerCase() !== TEST_PROFESSIONAL_EMAIL) {
         await supabase.rpc("wbp_request_organisation_access", {
           p_workspace_role: intent.role,
           p_organisation_name: intent.profile.organisationName,
@@ -440,7 +440,7 @@ const RoleGateway = () => {
            <div className="wbp-auth-heading"><p>Occupy</p><h2 id="wbp-occupy-choice-title">Choose your view</h2></div>
            <div className="wbp-occupy-choices">
              <button type="button" onClick={() => { setOccupyChoiceOpen(false); setSelectedRole("homeowner"); setAuthMode("signup"); }}><strong>My home</strong><span>See and manage your own property</span></button>
-             <button type="button" onClick={() => { setOccupyChoiceOpen(false); setSelectedRole("stock"); setAuthMode("signin"); }}><strong>Homes I manage</strong><span>For councils and housing providers</span></button>
+             <button type="button" onClick={() => { setOccupyChoiceOpen(false); setSelectedRole("stock"); setAuthMode("signup"); }}><strong>Homes I manage</strong><span>For councils and housing providers</span></button>
            </div>
          </section>
        </div> : null}
@@ -471,10 +471,10 @@ const RoleGateway = () => {
               <span>{authMode === "signup" && selectedRole === "homeowner" ? "Let’s set up your property" : activeRole.detail}</span>
             </div>
 
-             {selectedRole !== "stock" ? <div className="wbp-auth-tabs" role="tablist" aria-label="Account access">
+             <div className="wbp-auth-tabs" role="tablist" aria-label="Account access">
               <button type="button" className={authMode === "signin" ? "is-active" : ""} onClick={() => setAuthMode("signin")}>Sign in</button>
               <button type="button" className={authMode === "signup" ? "is-active" : ""} onClick={() => setAuthMode("signup")}>Sign up</button>
-             </div> : <p className="wbp-stock-access-note">This is a preview for councils and housing providers. Sign-in opens an empty workspace; stock imports and property records are not available yet.</p>}
+             </div>
 
             {authStatus === "sent" ? (
               <div className="wbp-auth-form" role="status">
@@ -1207,6 +1207,7 @@ const StockWorkspace = () => {
   const [accountEmail, setAccountEmail] = useState("");
   const [setupOpen, setSetupOpen] = useState(false);
   const [setupError, setSetupError] = useState("");
+  const [stockProfile, setStockProfile] = useState(null);
 
   useEffect(() => {
     let active = true;
@@ -1214,9 +1215,16 @@ const StockWorkspace = () => {
       supabase.rpc("wbp_stock_organisations"),
       supabase.rpc("wbp_stock_onboarding_status"),
       supabase.auth.getUser(),
-    ]).then(([access, request, account]) => {
+    ]).then(async ([access, request, account]) => {
       if (!active) return;
-      setAccountEmail(account.data?.user?.email || "");
+      const user = account.data?.user;
+      setAccountEmail(user?.email || "");
+      if (user) {
+        const profileResult = await supabase.from("WBPWorkspaceProfiles").select("profile")
+          .eq("user_id", user.id).eq("workspace_role", "stock").maybeSingle();
+        if (active && !profileResult.error) setStockProfile(profileResult.data?.profile || null);
+      }
+      if (!active) return;
       if (access.error || request.error) {
         setStatus("Organisation setup is not configured yet. The stock import database migration must be applied first.");
         return;
@@ -1225,7 +1233,7 @@ const StockWorkspace = () => {
       setOnboarding(request.data?.[0] || null);
       if (!access.data?.length) {
         const requestStatus = request.data?.[0]?.request_status;
-        setSetupOpen(!requestStatus || requestStatus === "rejected");
+        setSetupOpen(false);
         setStatus(requestStatus === "pending" ? "Organisation request awaiting review. You can preview a CSV meanwhile."
           : requestStatus === "approved" ? "Organisation approved, but this account cannot access its stock. Ask an administrator to check your membership and email domain." : "");
       } else {
@@ -1237,22 +1245,53 @@ const StockWorkspace = () => {
     return () => { active = false; };
   }, []);
 
-  const requestOrganisation = async (event) => {
+  const saveStockProfile = async (event) => {
     event.preventDefault();
     setSetupError("");
     const fields = new FormData(event.currentTarget);
+    const profile = {
+      organisationName: String(fields.get("name") || "").trim(),
+      organisationType: fields.get("type"),
+      registrationNumber: String(fields.get("registration") || "").trim(),
+      contactName: String(fields.get("contactName") || "").trim(),
+      phone: String(fields.get("phone") || "").trim(),
+      address: String(fields.get("address") || "").trim(),
+      city: String(fields.get("city") || "").trim(),
+      postcode: String(fields.get("postcode") || "").trim(),
+      website: String(fields.get("website") || "").trim(),
+    };
     setBusy(true);
-    const { error } = await supabase.rpc("wbp_request_stock_organisation", {
-      p_name: fields.get("name"), p_type: fields.get("type"),
-      p_registration: fields.get("registration"), p_contact_name: fields.get("contactName"),
-      p_phone: fields.get("phone"), p_address: fields.get("address"),
-      p_city: fields.get("city"), p_postcode: fields.get("postcode"),
-      p_website: fields.get("website"),
-    });
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) { setBusy(false); setSetupError("Sign in again before saving."); return; }
+    const { error } = await supabase.from("WBPWorkspaceProfiles").upsert({
+      user_id: user.id, workspace_role: "stock", profile, updated_at: new Date().toISOString(),
+    }, { onConflict: "user_id,workspace_role" });
     setBusy(false);
     if (error) { setSetupError(error.message); return; }
-    setOnboarding({ organisation_name: fields.get("name"), request_status: "pending" });
+    setStockProfile(profile);
     setSetupOpen(false);
+    setStatus("Organisation profile saved. Stock access is separate.");
+  };
+
+  const requestOrganisation = async () => {
+    if (!stockProfile) return;
+    const { organisationName, organisationType, registrationNumber, contactName, phone, address, city, postcode, website } = stockProfile;
+    if (!address || !city || !postcode) {
+      setStatus("Add an office address, town and postcode to your profile before requesting approval.");
+      setSetupOpen(true);
+      return;
+    }
+    setBusy(true);
+    const { error } = await supabase.rpc("wbp_request_stock_organisation", {
+      p_name: organisationName, p_type: organisationType,
+      p_registration: registrationNumber, p_contact_name: contactName,
+      p_phone: phone, p_address: address,
+      p_city: city, p_postcode: postcode,
+      p_website: website,
+    });
+    setBusy(false);
+    if (error) { setStatus(error.message); return; }
+    setOnboarding({ organisation_name: organisationName, request_status: "pending" });
     setStatus("Organisation request sent for review. No homes will be imported until approval.");
   };
 
@@ -1295,24 +1334,27 @@ const StockWorkspace = () => {
     <section className="wbp-stock-banner"><span>OCCUPY</span><h1>Homes I manage</h1>{organisations.length ? <small>{organisations.find((org) => org.organisation_id === organisationId)?.organisation_name}</small> : null}</section>
     <div className="wbp-stock-content">
     {status ? <p role="status" className="mt-4 border border-amber-300 bg-amber-50 p-3 text-sm">{status}</p> : null}
-    {!organisations.length && onboardingAvailable && (!onboarding || onboarding.request_status === "rejected") && !setupOpen ? <button type="button" className="wbp-stock-setup-trigger" onClick={() => setSetupOpen(true)}>Set up organisation</button> : null}
+    <section className="wbp-stock-section" aria-label="Organisation profile">
+      <div className="wbp-stock-profile-heading"><div><h2>{stockProfile?.organisationName || "Organisation profile"}</h2><p>{stockProfile ? `${stockProfile.organisationType === "local-authority" ? "Local authority" : "Housing provider"} · ${accountEmail}` : "Add your organisation details to get started."}</p></div><button type="button" className="wbp-stock-setup-trigger" onClick={() => setSetupOpen(true)}>{stockProfile ? "Edit profile" : "Set up profile"}</button></div>
+      {stockProfile && !organisations.length && onboardingAvailable && onboarding?.request_status !== "pending" ? <button type="button" className="wbp-stock-setup-trigger" disabled={busy} onClick={requestOrganisation}>Request organisation approval</button> : null}
+    </section>
     {setupOpen ? <div className="wbp-auth-backdrop wbp-profile-setup-backdrop" role="presentation" onMouseDown={() => setSetupOpen(false)}>
       <section className="wbp-auth-modal wbp-profile-setup wbp-stock-setup" role="dialog" aria-modal="true" aria-labelledby="stock-org-title" onMouseDown={(event) => event.stopPropagation()}>
         <button type="button" className="wbp-auth-close" aria-label="Close setup" onClick={() => setSetupOpen(false)}>&times;</button>
-        <div className="wbp-auth-heading"><p>Occupy · Homes I manage</p><h2 id="stock-org-title">Set up your organisation</h2><span>Enter the RP or local authority once. We verify it before homes can be associated with it.</span></div>
-        <form className="wbp-stock-org-form" onSubmit={requestOrganisation}>
-        <label>Organisation name<input name="name" required minLength="2" maxLength="150" /></label>
-        <label>Organisation type<select name="type" required><option value="housing-association">Registered provider / housing association</option><option value="local-authority">Local authority</option></select></label>
-        <label>Registration number<input name="registration" maxLength="100" /></label>
-        <label>Main contact<input name="contactName" required minLength="2" maxLength="150" /></label>
+        <div className="wbp-auth-heading"><p>Occupy · Homes I manage</p><h2 id="stock-org-title">Organisation profile</h2><span>Save your details now. Stock access can be requested separately.</span></div>
+        <form className="wbp-stock-org-form" onSubmit={saveStockProfile} key={stockProfile?.organisationName || "new"}>
+        <label>Organisation name<input name="name" defaultValue={stockProfile?.organisationName || ""} required minLength="2" maxLength="150" /></label>
+        <label>Organisation type<select name="type" defaultValue={stockProfile?.organisationType || "housing-association"} required><option value="housing-association">Registered provider / housing association</option><option value="local-authority">Local authority</option></select></label>
+        <label>Registration number<input name="registration" defaultValue={stockProfile?.registrationNumber || ""} maxLength="100" /></label>
+        <label>Main contact<input name="contactName" defaultValue={stockProfile?.contactName || ""} required minLength="2" maxLength="150" /></label>
         <label>Work email<input value={accountEmail} readOnly /></label>
-        <label>Contact phone<input name="phone" type="tel" maxLength="40" /></label>
-        <label>Office address<input name="address" required minLength="5" maxLength="250" /></label>
-        <label>Town / city<input name="city" required minLength="2" maxLength="100" /></label>
-        <label>Postcode<input name="postcode" required minLength="5" maxLength="12" /></label>
-        <label>Website<input name="website" type="url" maxLength="250" placeholder="https://" /></label>
+        <label>Contact phone<input name="phone" defaultValue={stockProfile?.phone || ""} type="tel" maxLength="40" /></label>
+        <label>Office address<input name="address" defaultValue={stockProfile?.address || ""} maxLength="250" /></label>
+        <label>Town / city<input name="city" defaultValue={stockProfile?.city || ""} maxLength="100" /></label>
+        <label>Postcode<input name="postcode" defaultValue={stockProfile?.postcode || ""} maxLength="12" /></label>
+        <label>Website<input name="website" defaultValue={stockProfile?.website || ""} type="url" maxLength="250" placeholder="https://" /></label>
         {setupError ? <p role="alert" className="wbp-stock-setup-error">{setupError}</p> : null}
-        <button type="submit" disabled={busy || !accountEmail}>{busy ? "Sending..." : "Request organisation approval"}</button>
+        <button type="submit" disabled={busy || !accountEmail}>{busy ? "Saving..." : "Save profile"}</button>
         </form>
       </section>
     </div> : null}

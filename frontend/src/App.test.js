@@ -30,7 +30,7 @@ beforeEach(() => {
   supabase.rpc.mockResolvedValue({ data: [], error: null });
 });
 
-test("managed stock asks for organisation details before enabling import", async () => {
+test("managed stock saves a draft profile before requesting approval", async () => {
   const user = { id: "stock-user", email: "contact@housing.example" };
   supabase.auth.getSession.mockResolvedValue({ data: { session: { user } }, error: null });
   supabase.auth.getUser.mockResolvedValue({ data: { user }, error: null });
@@ -40,14 +40,21 @@ test("managed stock asks for organisation details before enabling import", async
 
   render(<App />);
 
-  expect(await screen.findByRole("dialog", { name: "Set up your organisation" })).toBeInTheDocument();
-  expect(screen.getByDisplayValue(user.email)).toHaveAttribute("readonly");
-  expect(screen.getByRole("button", { name: "Request organisation approval" })).toBeInTheDocument();
+  expect(await screen.findByRole("button", { name: "Set up profile" })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Request organisation approval" })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: /Import \d+ homes/ })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Set up profile" }));
+  expect(screen.getByRole("dialog", { name: "Organisation profile" })).toBeInTheDocument();
+  expect(screen.getByDisplayValue(user.email)).toHaveAttribute("readonly");
+  fireEvent.change(screen.getByLabelText("Organisation name"), { target: { value: "Example Housing" } });
+  fireEvent.change(screen.getByLabelText("Main contact"), { target: { value: "Alex Smith" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save profile" }));
+  expect(await screen.findByRole("button", { name: "Request organisation approval" })).toBeInTheDocument();
+  expect(screen.getByText("Example Housing")).toBeInTheDocument();
+  expect(screen.queryByRole("dialog", { name: "Organisation profile" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Edit profile" }));
   fireEvent.click(screen.getByRole("button", { name: "Close setup" }));
-  expect(screen.queryByRole("dialog", { name: "Set up your organisation" })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Set up organisation" }));
-  expect(screen.getByRole("dialog", { name: "Set up your organisation" })).toBeInTheDocument();
+  expect(screen.queryByRole("dialog", { name: "Organisation profile" })).not.toBeInTheDocument();
 });
 
 test("Occupy offers separate home and managed-homes paths", async () => {
@@ -62,9 +69,9 @@ test("Occupy offers separate home and managed-homes paths", async () => {
   expect(within(choice).getByRole("button", { name: /My home/ })).toBeInTheDocument();
   fireEvent.click(within(choice).getByRole("button", { name: /Homes I manage/ }));
 
-  const signIn = screen.getByRole("dialog", { name: "Welcome back" });
-  expect(within(signIn).getByText(/stock imports and property records are not available yet/i)).toBeInTheDocument();
-  expect(within(signIn).queryByRole("button", { name: "Sign up" })).not.toBeInTheDocument();
+  const signUp = screen.getByRole("dialog", { name: "Create your account" });
+  expect(within(signUp).getByRole("button", { name: "Sign up" })).toBeInTheDocument();
+  expect(within(signUp).getByRole("button", { name: "Sign in" })).toBeInTheDocument();
 });
 
 test("returning to an open app restores the previous dashboard route without the splash", async () => {

@@ -651,6 +651,8 @@ code {
 .wbp-stock-section { margin-top: 24px; padding-top: 18px; border-top: 1px solid #cbd5e1; }
 .wbp-stock-section h2 { margin: 0; font-size: 18px; font-weight: 750; }
 .wbp-stock-section > p { margin: 8px 0 0; color: #4b5563; font-size: 14px; }
+.wbp-stock-profile-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.wbp-stock-profile-heading p { margin: 5px 0 0; color: #4b5563; font-size: 13px; }
 .wbp-stock-upload { display: flex; align-items: center; gap: 14px; width: fit-content; max-width: 100%; min-height: 46px; margin-top: 16px; padding: 8px 12px; border: 1px solid #374151; background: #fff; font-size: 14px; font-weight: 700; cursor: pointer; }
 .wbp-stock-upload input { max-width: 220px; font-size: 12px; font-weight: 400; }
 .wbp-stock-upload input::file-selector-button { padding: 7px 10px; border: 1px solid #9ca3af; background: #f3f4f6; color: #111827; font: inherit; font-weight: 700; cursor: pointer; }

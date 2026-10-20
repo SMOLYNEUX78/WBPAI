@@ -2,6 +2,8 @@
 
 Apply `Supabase-code/Managed Stock Import.sql` after the three prerequisite SQL files listed at its top. This creates the organisation request, stock import and portfolio functions. Do not put a service-role key in the frontend.
 
+For an existing project, also apply `Supabase-code/Stock Workspace Profile.sql` after `Workspace Profiles.sql`. A council or housing-provider user can then save a private organisation profile before seeking approval. The profile is self-declared and does not confer stock access. Office address and postcode are needed only when requesting approval.
+
 An RP/LA contact signs in with a confirmed organisation email and submits the organisation form. This records a **pending** request only. CSV review works before approval; importing does not.
 
 In Supabase SQL Editor, a database administrator can inspect pending requests:
