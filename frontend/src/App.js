@@ -61,6 +61,11 @@ const ACCESS_ROLES = [
     position: "right",
   },
 ];
+const STOCK_ROLE = {
+  id: "stock",
+  label: "Homes I manage",
+  detail: "Council and housing-provider stock",
+};
 
 const SplashScreen = () => {
   const navigate = useNavigate();
@@ -152,6 +157,7 @@ const RoleGateway = () => {
   const occupySignup = new URLSearchParams(location.search).get("role") === "homeowner"
     && new URLSearchParams(location.search).get("mode") === "signup";
   const [selectedRole, setSelectedRole] = useState(designSignup ? "architect" : occupySignup ? "homeowner" : "");
+  const [occupyChoiceOpen, setOccupyChoiceOpen] = useState(false);
   const [authMode, setAuthMode] = useState(designSignup || occupySignup ? "signup" : "signin");
   const [occupyMode, setOccupyMode] = useState("new");
   const [email, setEmail] = useState("");
@@ -163,7 +169,7 @@ const RoleGateway = () => {
   const [useTestEmailLink, setUseTestEmailLink] = useState(false);
   const [passwordSetupOpen, setPasswordSetupOpen] = useState(false);
   const [passwordSetupStatus, setPasswordSetupStatus] = useState("");
-  const activeRole = ACCESS_ROLES.find((role) => role.id === selectedRole);
+  const activeRole = [...ACCESS_ROLES, STOCK_ROLE].find((role) => role.id === selectedRole);
   const testPasswordSignIn = authMode === "signin" && email.trim().toLowerCase() === TEST_PROFESSIONAL_EMAIL && !useTestEmailLink;
 
   const setTestPassword = async (event) => {
@@ -191,7 +197,7 @@ const RoleGateway = () => {
     if (intent.role !== "homeowner" && !isProfessionalEmailAllowed(session.user.email)) {
       window.localStorage.removeItem(AUTH_INTENT_KEY);
       setAuthStatus("error");
-      setAuthMessage("Use a company email address for Design or Build access.");
+      setAuthMessage("Use your organisation email address.");
       return;
     }
     window.localStorage.setItem("wbp-user-role", intent.role);
@@ -276,7 +282,7 @@ const RoleGateway = () => {
     setAuthMessage("");
     if (selectedRole !== "homeowner" && !isProfessionalEmailAllowed(email)) {
       setAuthStatus("error");
-      setAuthMessage("Use a company email address for Design or Build access.");
+      setAuthMessage("Use your organisation email address.");
       return;
     }
     const formData = new FormData(event.currentTarget);
@@ -401,6 +407,10 @@ const RoleGateway = () => {
             className={`wbp-route-band is-${role.position}`}
             key={role.id}
             onClick={() => {
+              if (role.id === "homeowner") {
+                setOccupyChoiceOpen(true);
+                return;
+              }
               if (testSession) {
                 finishAuthenticatedAccess(testSession, {
                   role: role.id,
@@ -422,6 +432,17 @@ const RoleGateway = () => {
           </button>
         ))}
       </section>
+
+       {occupyChoiceOpen ? <div className="wbp-auth-backdrop" role="presentation" onMouseDown={() => setOccupyChoiceOpen(false)}>
+         <section className="wbp-auth-modal" role="dialog" aria-modal="true" aria-labelledby="wbp-occupy-choice-title" onMouseDown={(event) => event.stopPropagation()}>
+           <button type="button" className="wbp-auth-close" aria-label="Close" onClick={() => setOccupyChoiceOpen(false)}>&#215;</button>
+           <div className="wbp-auth-heading"><p>Occupy</p><h2 id="wbp-occupy-choice-title">Choose your view</h2></div>
+           <div className="wbp-occupy-choices">
+             <button type="button" onClick={() => { setOccupyChoiceOpen(false); setSelectedRole("homeowner"); setAuthMode("signup"); }}><strong>My home</strong><span>See and manage your own property</span></button>
+             <button type="button" onClick={() => { setOccupyChoiceOpen(false); setSelectedRole("stock"); setAuthMode("signin"); }}><strong>Homes I manage</strong><span>For councils and housing providers</span></button>
+           </div>
+         </section>
+       </div> : null}
 
       {activeRole ? (
         <div className="wbp-auth-backdrop" role="presentation" onMouseDown={() => setSelectedRole("")}>
@@ -449,10 +470,10 @@ const RoleGateway = () => {
               <span>{authMode === "signup" && selectedRole === "homeowner" ? "Let’s set up your property" : activeRole.detail}</span>
             </div>
 
-            <div className="wbp-auth-tabs" role="tablist" aria-label="Account access">
+             {selectedRole !== "stock" ? <div className="wbp-auth-tabs" role="tablist" aria-label="Account access">
               <button type="button" className={authMode === "signin" ? "is-active" : ""} onClick={() => setAuthMode("signin")}>Sign in</button>
               <button type="button" className={authMode === "signup" ? "is-active" : ""} onClick={() => setAuthMode("signup")}>Sign up</button>
-            </div>
+             </div> : <p className="wbp-stock-access-note">This is a preview for councils and housing providers. Sign-in opens an empty workspace; stock imports and property records are not available yet.</p>}
 
             {authStatus === "sent" ? (
               <div className="wbp-auth-form" role="status">
@@ -1169,6 +1190,16 @@ const OrganisationAccountPreview = ({ role = "architect" }) => {
   </main>;
 };
 
+const StockWorkspace = () => {
+  const navigate = useNavigate();
+  return <main className="mx-auto max-w-4xl px-5 py-8 text-gray-900">
+    <p className="text-sm font-semibold uppercase text-emerald-800">Occupy / Homes I manage</p>
+    <h1 className="mt-2 text-2xl font-bold">Stock portfolio</h1>
+    <p className="mt-4 max-w-2xl text-sm leading-6">Organisation stock access is not enabled yet. No property or resident records are available through this workspace.</p>
+    <button type="button" className="mt-6 border border-gray-400 px-4 py-2 text-sm font-semibold" onClick={() => navigate("/login")}>Back to sign in</button>
+  </main>;
+};
+
 const App = () => (
   <Router>
     <AppUpdateNotice />
@@ -1178,6 +1209,7 @@ const App = () => (
       <Route path="/login" element={<RoleGateway />} />
       <Route path="/workspaces" element={<AuthenticatedRoute><WorkspaceSwitcher /></AuthenticatedRoute>} />
       <Route path="/workspace/history" element={<AuthenticatedRoute><WorkspaceSwitcher historicalOnly /></AuthenticatedRoute>} />
+      <Route path="/workspace/stock" element={<AuthenticatedRoute><StockWorkspace /></AuthenticatedRoute>} />
       <Route path="/workspace/occupy-profile/:buildingId" element={<AuthenticatedRoute><LinkedOccupyProfile /></AuthenticatedRoute>} />
       <Route path="/workspace/build-linked-home/:buildingId" element={<AuthenticatedRoute><LinkedOccupyProfile role="builder" /></AuthenticatedRoute>} />
       <Route path="/workspace/design-match/:buildingId" element={<AuthenticatedRoute><DesignPracticeMatch /></AuthenticatedRoute>} />

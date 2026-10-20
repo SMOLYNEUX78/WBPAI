@@ -30,6 +30,23 @@ beforeEach(() => {
   supabase.rpc.mockResolvedValue({ data: [], error: null });
 });
 
+test("Occupy offers separate home and managed-homes paths", async () => {
+  supabase.auth.getSession.mockResolvedValue({ data: { session: null }, error: null });
+  supabase.auth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: jest.fn() } } });
+  window.history.pushState({}, "", "/login");
+
+  render(<App />);
+
+  fireEvent.click(await screen.findByRole("button", { name: /Occupy/ }));
+  const choice = screen.getByRole("dialog", { name: "Choose your view" });
+  expect(within(choice).getByRole("button", { name: /My home/ })).toBeInTheDocument();
+  fireEvent.click(within(choice).getByRole("button", { name: /Homes I manage/ }));
+
+  const signIn = screen.getByRole("dialog", { name: "Welcome back" });
+  expect(within(signIn).getByText(/stock imports and property records are not available yet/i)).toBeInTheDocument();
+  expect(within(signIn).queryByRole("button", { name: "Sign up" })).not.toBeInTheDocument();
+});
+
 test("returning to an open app restores the previous dashboard route without the splash", async () => {
   const session = { user: { id: "returning-user", email: "owner@example.com" } };
   supabase.auth.getSession.mockResolvedValue({ data: { session }, error: null });
