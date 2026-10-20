@@ -1222,7 +1222,11 @@ const StockWorkspace = () => {
       if (user) {
         const profileResult = await supabase.from("WBPWorkspaceProfiles").select("profile")
           .eq("user_id", user.id).eq("workspace_role", "stock").maybeSingle();
-        if (active && !profileResult.error) setStockProfile(profileResult.data?.profile || null);
+        if (active && !profileResult.error) {
+          const savedProfile = profileResult.data?.profile || null;
+          setStockProfile(savedProfile);
+          setSetupOpen(!savedProfile?.organisationName);
+        }
       }
       if (!active) return;
       if (access.error || request.error) {
@@ -1233,7 +1237,6 @@ const StockWorkspace = () => {
       setOnboarding(request.data?.[0] || null);
       if (!access.data?.length) {
         const requestStatus = request.data?.[0]?.request_status;
-        setSetupOpen(false);
         setStatus(requestStatus === "pending" ? "Organisation request awaiting review. You can preview a CSV meanwhile."
           : requestStatus === "approved" ? "Organisation approved, but this account cannot access its stock. Ask an administrator to check your membership and email domain." : "");
       } else {

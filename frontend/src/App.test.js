@@ -40,11 +40,9 @@ test("managed stock saves a draft profile before requesting approval", async () 
 
   render(<App />);
 
-  expect(await screen.findByRole("button", { name: "Set up profile" })).toBeInTheDocument();
+  expect(await screen.findByRole("dialog", { name: "Organisation profile" })).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Request organisation approval" })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: /Import \d+ homes/ })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Set up profile" }));
-  expect(screen.getByRole("dialog", { name: "Organisation profile" })).toBeInTheDocument();
   expect(screen.getByDisplayValue(user.email)).toHaveAttribute("readonly");
   fireEvent.change(screen.getByLabelText("Organisation name"), { target: { value: "Example Housing" } });
   fireEvent.change(screen.getByLabelText("Main contact"), { target: { value: "Alex Smith" } });
@@ -54,6 +52,24 @@ test("managed stock saves a draft profile before requesting approval", async () 
   expect(screen.queryByRole("dialog", { name: "Organisation profile" })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Edit profile" }));
   fireEvent.click(screen.getByRole("button", { name: "Close setup" }));
+  expect(screen.queryByRole("dialog", { name: "Organisation profile" })).not.toBeInTheDocument();
+});
+
+test("managed stock does not reopen setup for a saved profile", async () => {
+  const user = { id: "stock-user", email: "contact@housing.example" };
+  supabase.auth.getSession.mockResolvedValue({ data: { session: { user } }, error: null });
+  supabase.auth.getUser.mockResolvedValue({ data: { user }, error: null });
+  supabase.auth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: jest.fn() } } });
+  supabase.from.mockImplementation(() => ({
+    select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: async () => ({
+      data: { profile: { organisationName: "Example Housing", organisationType: "housing-association" } }, error: null,
+    }) }) }) }),
+  }));
+  window.history.pushState({}, "", "/workspace/stock");
+
+  render(<App />);
+
+  expect(await screen.findByRole("button", { name: "Edit profile" })).toBeInTheDocument();
   expect(screen.queryByRole("dialog", { name: "Organisation profile" })).not.toBeInTheDocument();
 });
 
