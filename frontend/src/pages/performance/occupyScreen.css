@@ -570,18 +570,26 @@
 }
 
 @media (min-width: 600px) and (max-width: 1100px) and (orientation: portrait) {
-  .wbp-baseline-report { padding-top: 14px; padding-bottom: 14px; }
-  .wbp-baseline-scores { gap: 12px; margin-top: 10px; }
-  .wbp-baseline-scores > div { padding: 12px; }
-  .wbp-baseline-scores > div > div + div { margin-top: 9px; }
-  .wbp-baseline-scores .space-y-2 > * + * { margin-top: 5px; }
-  .wbp-baseline-scores h3, .wbp-baseline-scores h4 { font-size: 13px; }
-  .wbp-baseline-scores p, .wbp-baseline-scores .text-sm { font-size: 12px; }
-  .wbp-baseline-options { display: grid; max-width: 960px !important; grid-template-columns: minmax(0, 1fr); gap: 18px; margin-top: 14px; padding-top: 12px; }
-  .wbp-baseline-options h3 { grid-column: 1 / -1; margin-bottom: 0; }
-  .wbp-baseline-options .wbp-baseline-option { min-height: 128px; margin-top: 0; padding: 18px; font-size: 18px; }
-  .wbp-baseline-options .wbp-baseline-option > span { font-size: 18px; }
-  .wbp-baseline-options .wbp-baseline-sale-option { padding: 0; }
+  .wbp-dashboard--baseline { height: 100dvh; min-height: 0; overflow: hidden; }
+  .wbp-dashboard--baseline > .overflow-hidden > .flex { height: 100%; }
+  .wbp-dashboard--baseline > .overflow-hidden > .flex > [aria-hidden="false"] { min-height: 0; }
+  .wbp-dashboard--baseline .wbp-occupy-panel { height: 100%; overflow: hidden; }
+  .wbp-dashboard--baseline .wbp-occupy-panel > .wbp-property-banner,
+  .wbp-dashboard--baseline .wbp-performance-stage { flex: none; }
+  .wbp-dashboard--baseline .wbp-linear-performance-track { height: 78px; margin-top: 10px; }
+  .wbp-dashboard--baseline .wbp-performance-stage--linear { padding-bottom: 6px; }
+  .wbp-baseline-report { display: flex; flex: 1; min-height: 0; flex-direction: column; gap: 8px; padding-top: 8px; padding-bottom: 8px; overflow: hidden; }
+  .wbp-baseline-summary { width: 100%; flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 12px; }
+  .wbp-baseline-summary .mt-4 { margin-top: 10px; }
+  .wbp-baseline-summary .space-y-3 > * + * { margin-top: 8px; }
+  .wbp-baseline-summary .border-t.pt-3 { padding-top: 8px; }
+  .wbp-baseline-options { width: 100%; flex: none; max-width: 960px !important; gap: 8px; margin-top: 0; padding-top: 6px; }
+  .wbp-baseline-options h3 { margin-bottom: 0; font-size: 14px; }
+  .wbp-baseline-options .wbp-baseline-option { min-height: 88px; padding: 12px; }
+  .wbp-baseline-options .wbp-baseline-option > span { font-size: 16px; }
+  .wbp-baseline-options .wbp-baseline-sale-option { min-height: 88px; padding: 0; }
+  .wbp-baseline-sale-house { width: 88px; height: 88px; }
+  .wbp-baseline-sale-label { padding: 8px 12px; }
 }
 
 @media (min-width: 600px) and (max-width: 1100px) and (orientation: portrait) {

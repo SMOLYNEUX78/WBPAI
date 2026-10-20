@@ -151,7 +151,7 @@ export default function BaselineDataPanel({ DetailSurface, onOpenDetailedReport,
   };
 
   return <section className="wbp-baseline-report -mx-4 border-t border-gray-300 bg-white px-4 py-4 text-gray-900 sm:px-8" aria-label="Baseline report: issues found">
-    <div className={`border p-4 sm:p-5 ${reportTone}`}>
+    <div className={`wbp-baseline-summary border p-4 sm:p-5 ${reportTone}`} role="region" aria-label="Baseline findings" tabIndex={0}>
     <div className="flex flex-wrap items-center justify-between gap-3">
       <h2 className="text-base font-bold">Baseline report: issues found</h2>
       <div className="flex shrink-0 items-center gap-2">
