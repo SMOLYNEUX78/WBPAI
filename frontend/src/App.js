@@ -1347,7 +1347,7 @@ const StockWorkspace = () => {
 
   return <main className="wbp-stock-shell">
     <header className="wbp-stock-nav"><strong>Whole Build Profile</strong><button type="button" onClick={() => navigate("/login")}>Back</button></header>
-    <section className="wbp-stock-banner"><span>OCCUPY</span><h1>Homes I manage</h1></section>
+    <section className="wbp-stock-banner"><span>OCCUPY</span></section>
     <section className="wbp-stock-profile-banner" aria-label="Organisation profile">
       <div className="wbp-stock-profile-identity">
         <div className="wbp-stock-logo" aria-hidden="true">{stockProfile?.logoDataUrl ? <img src={stockProfile.logoDataUrl} alt="" /> : (stockProfile?.organisationName || "HM").slice(0, 2).toUpperCase()}</div>

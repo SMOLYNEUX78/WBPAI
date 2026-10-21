@@ -643,7 +643,7 @@ code {
 .wbp-stock-nav { display: flex; align-items: center; justify-content: space-between; min-height: 64px; padding: 0 clamp(16px, 4vw, 58px); border-bottom: 1px solid #d1d5db; background: #fff; }
 .wbp-stock-nav strong { font-size: 19px; }
 .wbp-stock-nav button { min-height: 38px; padding: 0 14px; border: 1px solid #9ca3af; background: #fff; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
-.wbp-stock-banner { display: flex; align-items: center; gap: 16px; min-height: 76px; padding: 12px clamp(16px, 4vw, 58px); border-bottom: 1px solid #d9b94d; background: #f1d35f; }
+.wbp-stock-banner { display: flex; align-items: center; gap: 16px; min-height: 76px; padding: 12px clamp(16px, 4vw, 58px); border-bottom: 1px solid #d9b94d; background: #f8e6a0; }
 .wbp-stock-banner span { padding: 5px 9px; background: #111827; color: #fff; font-size: 12px; font-weight: 800; }
 .wbp-stock-banner h1 { margin: 0; font-size: 22px; font-weight: 750; }
 .wbp-stock-banner small { margin-left: auto; font-size: 13px; }
