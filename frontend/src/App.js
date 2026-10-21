@@ -1208,6 +1208,7 @@ const StockWorkspace = () => {
   const [setupOpen, setSetupOpen] = useState(false);
   const [setupError, setSetupError] = useState("");
   const [stockProfile, setStockProfile] = useState(null);
+  const [stockLogo, setStockLogo] = useState(null);
 
   useEffect(() => {
     let active = true;
@@ -1262,6 +1263,8 @@ const StockWorkspace = () => {
       city: String(fields.get("city") || "").trim(),
       postcode: String(fields.get("postcode") || "").trim(),
       website: String(fields.get("website") || "").trim(),
+      logoDataUrl: stockLogo?.dataUrl || stockProfile?.logoDataUrl || "",
+      logoName: stockLogo?.name || stockProfile?.logoName || "",
     };
     setBusy(true);
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -1272,6 +1275,7 @@ const StockWorkspace = () => {
     setBusy(false);
     if (error) { setSetupError(error.message); return; }
     setStockProfile(profile);
+    setStockLogo(null);
     setSetupOpen(false);
     setStatus("Organisation profile saved. Stock access is separate.");
   };
@@ -1332,13 +1336,24 @@ const StockWorkspace = () => {
     setStatus(`${data} homes imported. Design and Build names remain unverified.`);
   };
 
+  const changeStockLogo = async (file) => {
+    if (!file) return;
+    try {
+      const dataUrl = await readProfileImage(file);
+      setStockLogo({ dataUrl, name: file.name });
+      setSetupError("");
+    } catch (error) { setSetupError(error.message); }
+  };
+
   return <main className="wbp-stock-shell">
     <header className="wbp-stock-nav"><strong>Whole Build Profile</strong><button type="button" onClick={() => navigate("/login")}>Back</button></header>
-    <section className="wbp-stock-banner"><span>OCCUPY</span><h1>Homes I manage</h1>{stockProfile?.organisationName ? <small>{stockProfile.organisationName}</small> : null}</section>
-    <div className="wbp-stock-content">
-    {status ? <p role="status" className="mt-4 border border-amber-300 bg-amber-50 p-3 text-sm">{status}</p> : null}
-    <section className="wbp-stock-section" aria-label="Organisation profile">
-      <div className="wbp-stock-profile-heading"><div><h2>{stockProfile?.organisationName || "Organisation profile"}</h2><p>{stockProfile ? `${stockProfile.organisationType === "local-authority" ? "Local authority" : "Housing provider"} · ${accountEmail}` : "Add your organisation details to get started."}</p></div><button type="button" className="wbp-stock-setup-trigger" onClick={() => setSetupOpen(true)}>{stockProfile ? "Edit profile" : "Set up profile"}</button></div>
+    <section className="wbp-stock-banner"><span>OCCUPY</span><h1>Homes I manage</h1></section>
+    <section className="wbp-stock-profile-banner" aria-label="Organisation profile">
+      <div className="wbp-stock-profile-identity">
+        <div className="wbp-stock-logo" aria-hidden="true">{stockProfile?.logoDataUrl ? <img src={stockProfile.logoDataUrl} alt="" /> : (stockProfile?.organisationName || "HM").slice(0, 2).toUpperCase()}</div>
+        <div><h2>{stockProfile?.organisationName || "Organisation profile"}</h2><p>{stockProfile ? `${stockProfile.organisationType === "local-authority" ? "Local authority" : "Housing provider"} · ${accountEmail}` : "Add your organisation details to get started."}</p></div>
+      </div>
+      <button type="button" className="wbp-stock-setup-trigger" onClick={() => { setStockLogo(null); setSetupError(""); setSetupOpen(true); }}>{stockProfile ? "Edit profile" : "Set up profile"}</button>
       {stockProfile?.organisationName ? <dl className="wbp-stock-profile-details">
         {[
           ["Main contact", stockProfile.contactName],
@@ -1351,6 +1366,8 @@ const StockWorkspace = () => {
       </dl> : null}
       {stockProfile && !organisations.length && onboardingAvailable && onboarding?.request_status !== "pending" ? <button type="button" className="wbp-stock-setup-trigger" disabled={busy} onClick={requestOrganisation}>Request organisation approval</button> : null}
     </section>
+    <div className="wbp-stock-content">
+    {status ? <p role="status" className="mt-4 border border-amber-300 bg-amber-50 p-3 text-sm">{status}</p> : null}
     {setupOpen ? <div className="wbp-auth-backdrop wbp-profile-setup-backdrop" role="presentation" onMouseDown={() => setSetupOpen(false)}>
       <section className="wbp-auth-modal wbp-profile-setup wbp-stock-setup" role="dialog" aria-modal="true" aria-labelledby="stock-org-title" onMouseDown={(event) => event.stopPropagation()}>
         <button type="button" className="wbp-auth-close" aria-label="Close setup" onClick={() => setSetupOpen(false)}>&times;</button>
@@ -1366,6 +1383,8 @@ const StockWorkspace = () => {
         <label>Town / city<input name="city" defaultValue={stockProfile?.city || ""} maxLength="100" /></label>
         <label>Postcode<input name="postcode" defaultValue={stockProfile?.postcode || ""} maxLength="12" /></label>
         <label>Website<input name="website" defaultValue={stockProfile?.website || ""} type="url" maxLength="250" placeholder="https://" /></label>
+        <label className="wbp-stock-image-field">Profile picture or logo<input type="file" accept="image/png,image/jpeg,image/webp" aria-label="Profile picture or logo" onChange={(event) => changeStockLogo(event.target.files?.[0])} /></label>
+        {(stockLogo?.dataUrl || stockProfile?.logoDataUrl) ? <div className="wbp-stock-image-preview"><img src={stockLogo?.dataUrl || stockProfile.logoDataUrl} alt="Profile preview" /></div> : null}
         {setupError ? <p role="alert" className="wbp-stock-setup-error">{setupError}</p> : null}
         <button type="submit" disabled={busy || !accountEmail}>{busy ? "Saving..." : "Save profile"}</button>
         </form>

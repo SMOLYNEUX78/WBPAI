@@ -643,20 +643,28 @@ code {
 .wbp-stock-nav { display: flex; align-items: center; justify-content: space-between; min-height: 64px; padding: 0 clamp(16px, 4vw, 58px); border-bottom: 1px solid #d1d5db; background: #fff; }
 .wbp-stock-nav strong { font-size: 19px; }
 .wbp-stock-nav button { min-height: 38px; padding: 0 14px; border: 1px solid #9ca3af; background: #fff; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
-.wbp-stock-banner { display: flex; align-items: center; gap: 16px; min-height: 85px; padding: 16px clamp(16px, 4vw, 58px); border-bottom: 1px solid #d9b94d; background: #f1d35f; }
+.wbp-stock-banner { display: flex; align-items: center; gap: 16px; min-height: 76px; padding: 12px clamp(16px, 4vw, 58px); border-bottom: 1px solid #d9b94d; background: #f1d35f; }
 .wbp-stock-banner span { padding: 5px 9px; background: #111827; color: #fff; font-size: 12px; font-weight: 800; }
 .wbp-stock-banner h1 { margin: 0; font-size: 22px; font-weight: 750; }
 .wbp-stock-banner small { margin-left: auto; font-size: 13px; }
+.wbp-stock-profile-banner { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-content: start; align-items: start; gap: 16px 24px; min-height: 250px; padding: 22px clamp(16px, 4vw, 58px); border-bottom: 1px solid #d9b94d; background: #f1d35f; }
+.wbp-stock-profile-identity { display: flex; align-items: center; gap: 16px; min-width: 0; }
+.wbp-stock-profile-identity h2 { margin: 0; font-size: clamp(24px, 3vw, 36px); line-height: 1.1; overflow-wrap: anywhere; }
+.wbp-stock-profile-identity p { margin: 6px 0 0; font-size: 13px; overflow-wrap: anywhere; }
+.wbp-stock-logo { display: grid; flex: none; width: 76px; height: 76px; place-items: center; overflow: hidden; background: #fff; font-size: 22px; font-weight: 800; }
+.wbp-stock-logo img, .wbp-stock-image-preview img { width: 100%; height: 100%; object-fit: contain; }
+.wbp-stock-profile-banner > .wbp-stock-setup-trigger { margin-top: 0; }
 .wbp-stock-content { padding: 24px clamp(16px, 4vw, 58px) 56px; }
 .wbp-stock-section { margin-top: 24px; padding-top: 18px; border-top: 1px solid #cbd5e1; }
+.wbp-stock-content > .wbp-stock-section:first-of-type { margin-top: 0; padding-top: 0; border-top: 0; }
 .wbp-stock-section h2 { margin: 0; font-size: 18px; font-weight: 750; }
 .wbp-stock-section > p { margin: 8px 0 0; color: #4b5563; font-size: 14px; }
 .wbp-stock-profile-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .wbp-stock-profile-heading p { margin: 5px 0 0; color: #4b5563; font-size: 13px; }
-.wbp-stock-profile-details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 24px; max-width: 800px; margin: 18px 0 0; font-size: 13px; }
+.wbp-stock-profile-details { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 24px; margin: 0; padding-top: 14px; border-top: 1px solid rgba(17, 24, 39, .18); font-size: 13px; }
 .wbp-stock-profile-details dt { color: #4b5563; }
 .wbp-stock-profile-details dd { margin: 2px 0 0; overflow-wrap: anywhere; font-weight: 650; }
-@media (max-width: 600px) { .wbp-stock-profile-details { grid-template-columns: 1fr; } }
+@media (max-width: 600px) { .wbp-stock-profile-details { grid-template-columns: 1fr; } .wbp-stock-profile-banner { grid-template-columns: 1fr; min-height: 0; } .wbp-stock-logo { width: 58px; height: 58px; } }
 .wbp-stock-upload { display: flex; align-items: center; gap: 14px; width: fit-content; max-width: 100%; min-height: 46px; margin-top: 16px; padding: 8px 12px; border: 1px solid #374151; background: #fff; font-size: 14px; font-weight: 700; cursor: pointer; }
 .wbp-stock-upload input { max-width: 220px; font-size: 12px; font-weight: 400; }
 .wbp-stock-upload input::file-selector-button { padding: 7px 10px; border: 1px solid #9ca3af; background: #f3f4f6; color: #111827; font: inherit; font-weight: 700; cursor: pointer; }
@@ -669,6 +677,8 @@ code {
 .wbp-stock-setup { width: min(100%, 680px); }
 .wbp-stock-setup .wbp-stock-org-form { margin-top: 22px; }
 .wbp-stock-setup-error { grid-column: 1 / -1; margin: 0; color: #b91c1c; font-size: 13px; }
+.wbp-stock-image-field { grid-column: 1 / -1; }
+.wbp-stock-image-preview { grid-column: 1 / -1; width: 76px; height: 76px; overflow: hidden; background: #fff; border: 1px solid #d1d5db; }
 .wbp-stock-setup-trigger { min-height: 42px; margin-top: 18px; padding: 0 15px; border: 1px solid #111827; background: #fff; color: #111827; font: inherit; font-size: 13px; font-weight: 750; cursor: pointer; }
 @media (max-width: 600px) { .wbp-stock-banner { flex-wrap: wrap; gap: 9px; } .wbp-stock-banner small { width: 100%; margin-left: 0; } .wbp-stock-upload { display: grid; } }
 @media (max-width: 600px) { .wbp-stock-org-form { grid-template-columns: minmax(0, 1fr); } }
