@@ -1,6 +1,30 @@
 const HALF_HOUR_MS = 30 * 60 * 1000;
 const TEMPERATURE_WINDOW_MS = 75 * 60 * 1000;
 
+export function dailyGasFromIntervals(rows, today = new Date().toISOString().slice(0, 10)) {
+  const byTime = new Map();
+  (rows || []).forEach((row) => {
+    const time = Date.parse(row.timestamp || row.observed_at);
+    const kwh = Number(row.usage_kwh);
+    if (Number.isFinite(time) && Number.isFinite(kwh) && kwh >= 0) {
+      byTime.set(time, Math.max(byTime.get(time) || 0, kwh));
+    }
+  });
+  const londonDate = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit",
+  });
+  const days = new Map();
+  byTime.forEach((kwh, time) => {
+    const parts = Object.fromEntries(londonDate.formatToParts(time).map(({ type, value }) => [type, value]));
+    const date = `${parts.year}-${parts.month}-${parts.day}`;
+    const day = days.get(date) || { date, gasKwh: 0, intervals: 0 };
+    day.gasKwh += kwh;
+    day.intervals += 1;
+    days.set(date, day);
+  });
+  return [...days.values()].filter((day) => day.date < today && day.intervals >= 36);
+}
+
 export function detectHeatingOnset(dailyRows, today = new Date().toISOString().slice(0, 10)) {
   const days = (dailyRows || [])
     .filter((row) => /^\d{4}-\d{2}-\d{2}$/.test(row.date) && Number.isFinite(row.gasKwh) && row.gasKwh >= 0 && row.date < today)

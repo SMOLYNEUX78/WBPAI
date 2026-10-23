@@ -10,7 +10,7 @@ import { getReadinessGates } from "./readinessGates";
 import { mergeMonthlyHlaRows } from "./monthlyHla";
 import { hasFreshRoomReading, liveRedReadings } from "./liveRedReadings";
 import { homeComfortSuggestion } from "./comfortSuggestions";
-import { detectHeatingEvents, detectHeatingOnset } from "./heatingEvents";
+import { dailyGasFromIntervals, detectHeatingEvents, detectHeatingOnset } from "./heatingEvents";
 import { extractEnergyBillImage, extractEnergyBillPdf, normaliseBillReview } from "./energyBill";
 import RetrofitPlanner from "./RetrofitPlanner";
 import BaselineDataPanel from "./BaselineDataPanel";
@@ -2512,16 +2512,41 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
     return data || [];
   };
 
+  const fetchPropertyGasIntervals = async (since, maxPages = 3) => {
+    if (!homePassportDatabaseId) return null;
+    const rows = [];
+    for (let page = 0; page < maxPages; page += 1) {
+      const { data, error } = await supabase.from("WBPBuildingEnergyMeasurements")
+        .select("observed_at, usage_kwh")
+        .eq("building_record_id", homePassportDatabaseId)
+        .eq("fuel_type", "gas").eq("reading_type", "interval")
+        .gte("observed_at", since).order("observed_at", { ascending: false })
+        .range(page * 1000, page * 1000 + 999);
+      if (error) {
+        console.warn("Property gas intervals unavailable:", error.message);
+        return null;
+      }
+      rows.push(...(data || []));
+      if (!data || data.length < 1000) break;
+    }
+    return rows.map((row) => ({ timestamp: row.observed_at, usage_kwh: row.usage_kwh }));
+  };
+
   const fetchHeatingEvents = async () => {
     if (dataSourceBuildingId !== "home" || !isActive) return;
     const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
     try {
-      const { data: gasRows, error: gasError } = await supabase.from("EnergyReadings")
-        .select("timestamp, usage_kwh")
-        .eq("building_id", dataSourceBuildingId).eq("fuel_type", "gas")
-        .eq("reading_type", "interval_30m").gte("timestamp", since)
-        .order("timestamp", { ascending: false }).limit(500);
-      if (gasError) throw gasError;
+      const propertyGasRows = await fetchPropertyGasIntervals(since, 1);
+      let gasRows = propertyGasRows || [];
+      if (!gasRows.length) {
+        const { data, error } = await supabase.from("EnergyReadings")
+          .select("timestamp, usage_kwh")
+          .eq("building_id", dataSourceBuildingId).eq("fuel_type", "gas")
+          .eq("reading_type", "interval_30m").gte("timestamp", since)
+          .order("timestamp", { ascending: false }).limit(500);
+        if (error) throw error;
+        gasRows = data || [];
+      }
       const temperatures = [];
       for (let page = 0; page < 6; page += 1) {
         const { data, error } = await applyBuildingScope(supabase.from("Readings")
@@ -2533,8 +2558,8 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
         temperatures.push(...(data || []));
         if (!data || data.length < 1000) break;
       }
-      setHeatingEvents(detectHeatingEvents(gasRows || [], temperatures));
-      setHeatingEventStatus((gasRows || []).length ? "ready" : "no-intervals");
+      setHeatingEvents(detectHeatingEvents(gasRows, temperatures));
+      setHeatingEventStatus(gasRows.length ? "ready" : "no-intervals");
     } catch (error) {
       console.warn("Heating events unavailable:", error.message);
       setHeatingEventStatus("unavailable");
@@ -2880,11 +2905,15 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
         todayDailyData,
         gasIntervalData,
         compactDailyHistory,
+        propertyGasIntervals,
       ] = await Promise.all([
         fetchEnergyDailyTotals({ beforeToday: true }),
         fetchEnergyDailyTotals({ beforeToday: false }),
         fetchGasIntervalRows(),
         fetchCompactDailyEnergyHistory(),
+        dataSourceBuildingId === "home"
+          ? fetchPropertyGasIntervals(new Date(Date.now() - 50 * 86400000).toISOString())
+          : Promise.resolve(null),
       ]);
 
       const { data: latestElectricPowerRows, error: powerError } =
@@ -2903,9 +2932,10 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
       const completedRows = completedDailyData || [];
       const todayRows = todayDailyData || [];
       const rows = [...completedRows, ...todayRows];
+      const propertyGasDays = dailyGasFromIntervals(propertyGasIntervals || []);
       const latestElectricPower = latestElectricPowerRows?.[0];
 
-      if (rows.length > 0 || latestElectricPower) {
+      if (rows.length > 0 || latestElectricPower || propertyGasDays.length) {
         const completedDailyTotalsByFuel = completedRows.reduce((totals, row) => {
           const usageKwh = Number(row.usage_kwh);
           if (!Number.isFinite(usageKwh)) {
@@ -2998,7 +3028,8 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
         };
 
         const electricityDailyAverage = averageDailyUsage("electricity");
-        const gasDailyAverage = averageDailyUsage("gas");
+        const gasDailyAverage = averageDailyUsage("gas") ??
+          (propertyGasDays.length ? average(propertyGasDays.map((day) => day.gasKwh)) : null);
         const availableDailyAverages = [
           electricityDailyAverage,
           gasDailyAverage,
@@ -3008,7 +3039,7 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
           : null;
         const electricityTodayKwh = latestDailyTotal("electricity");
         const gasTodayKwh = latestDailyTotal("gas");
-        const hasGasData = rows.some((row) => row.fuel_type === "gas");
+        const hasGasData = propertyGasDays.length > 0 || rows.some((row) => row.fuel_type === "gas");
         const gasDayRows = Object.values(completedDailyTotalsByDay)
           .map((day) => ({
             gas: Number(day.fuels.gas),
@@ -3086,16 +3117,26 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
                 )
               )
             : null;
-        const recentGasDays = Object.entries(completedDailyTotalsByDay)
+        const legacyRecentGasDays = Object.entries(completedDailyTotalsByDay)
           .filter(([, day]) => Number.isFinite(day.fuels.gas))
           .sort(([a], [b]) => b.localeCompare(a)).slice(0, 3);
+        const recentGasDays = propertyGasDays.length >= 3
+          ? propertyGasDays.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 3)
+              .map((day) => [day.date, { fuels: { gas: day.gasKwh } }])
+          : legacyRecentGasDays;
         const gasRecentDaily = recentGasDays.length === 3
           ? average(recentGasDays.map(([, day]) => day.fuels.gas)) : null;
+        const onsetGasDays = new Map((compactDailyHistory || [])
+          .filter((row) => row.saving_date >= "2026-03-18" && row.baseline_gas_kwh != null)
+          .map((row) => [row.saving_date, { date: row.saving_date, gasKwh: Number(row.baseline_gas_kwh) }]));
+        Object.entries(completedDailyTotalsByDay).forEach(([date, day]) => {
+          if (date >= "2026-03-18" && Number.isFinite(day.fuels.gas)) {
+            onsetGasDays.set(date, { date, gasKwh: day.fuels.gas });
+          }
+        });
+        propertyGasDays.forEach((day) => onsetGasDays.set(day.date, day));
         const gasHeatingOnset = dataSourceBuildingId === "home"
-          ? detectHeatingOnset(Object.entries(completedDailyTotalsByDay)
-              .filter(([date, day]) => date >= "2026-03-18" && Number.isFinite(day.fuels.gas))
-              .map(([date, day]) => ({ date, gasKwh: day.fuels.gas })))
-          : null;
+          ? detectHeatingOnset([...onsetGasDays.values()]) : null;
         const gasAnomalyDaily = Number.isFinite(gasBaseloadDaily)
           ? average(
               gasDayRows.map((day) => {

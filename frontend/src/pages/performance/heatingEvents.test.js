@@ -1,4 +1,4 @@
-import { detectHeatingEvents, detectHeatingOnset } from "./heatingEvents";
+import { dailyGasFromIntervals, detectHeatingEvents, detectHeatingOnset } from "./heatingEvents";
 
 const gas = (hour, kwh) => ({ timestamp: new Date(Date.UTC(2026, 9, 20, 16) + hour * 3600000).toISOString(), usage_kwh: kwh });
 const temp = (hour, inside, outside) => ({ timestamp: gas(hour, 0).timestamp, temperature_inside: inside, temperature_outside: outside });
@@ -50,4 +50,15 @@ test("ignores isolated hot-water spikes and stale or short histories", () => {
   expect(detectHeatingOnset(dailyGas("2026-10-01", [...Array(17).fill(1.5), 9, 1.5, 1.5, 1.5, 1.5]), "2026-10-23")).toBeNull();
   expect(detectHeatingOnset(dailyGas("2026-10-01", Array(15).fill(8)), "2026-10-23")).toBeNull();
   expect(detectHeatingOnset(dailyGas("2026-09-01", [...Array(17).fill(1.5), ...Array(5).fill(8)]), "2026-10-23")).toBeNull();
+});
+
+test("builds completed London gas days from property intervals without doubling duplicate timestamps", () => {
+  const rows = Array.from({ length: 48 }, (_, slot) => ({
+    observed_at: new Date(Date.UTC(2026, 9, 18, 23) + slot * 30 * 60000).toISOString(),
+    usage_kwh: 0.25,
+  }));
+  rows.push({ ...rows[0], usage_kwh: 0.25 });
+  const days = dailyGasFromIntervals(rows, "2026-10-21");
+  expect(days).toEqual([{ date: "2026-10-19", gasKwh: 12, intervals: 48 }]);
+  expect(dailyGasFromIntervals(rows.slice(0, 20), "2026-10-21")).toEqual([]);
 });
