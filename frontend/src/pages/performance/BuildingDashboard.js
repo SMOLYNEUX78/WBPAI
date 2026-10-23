@@ -2534,7 +2534,7 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
         if (!data || data.length < 1000) break;
       }
       setHeatingEvents(detectHeatingEvents(gasRows || [], temperatures));
-      setHeatingEventStatus("ready");
+      setHeatingEventStatus((gasRows || []).length ? "ready" : "no-intervals");
     } catch (error) {
       console.warn("Heating events unavailable:", error.message);
       setHeatingEventStatus("unavailable");
@@ -8147,8 +8147,12 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
                         <strong>Above low-use level:</strong> +{formatNumber(energySummary.gasRecentAboveLowUseDaily)} kWh/day. This may reflect heating, but gas readings alone cannot separate heating from hot water.
                       </p> : null}
                       {dataSourceBuildingId === "home" ? <div className="border-t border-gray-200 pt-2">
-                        <strong>Gas-use runs · last 7 days</strong>
-                        {heatingEventStatus === "unavailable" ? <p>Event readings unavailable.</p> : heatingEventStatus === "loading" ? <p>Checking gas and room readings...</p> : heatingEvents.length === 0 ? <p>No sustained runs identified yet.</p> : <>
+                        <strong>Heating onset</strong>
+                        {heatingOnset ? <p>
+                          Gas use rose from {new Date(`${heatingOnset.date}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Europe/London" })}: {formatNumber(heatingOnset.recentDaily, 1)} kWh/day recently, against {formatNumber(heatingOnset.priorDaily, 1)} kWh/day before the rise. This is indicative of heating, not a measured heating-only figure.
+                        </p> : <p>No sustained multi-day rise confirmed against earlier gas use.</p>}
+                        <strong>Half-hour gas runs · last 7 days</strong>
+                        {heatingEventStatus === "unavailable" ? <p>Half-hour or room readings unavailable.</p> : heatingEventStatus === "loading" ? <p>Checking gas and room readings...</p> : heatingEventStatus === "no-intervals" ? <p>No half-hour gas readings available for this check.</p> : heatingEvents.length === 0 ? <p>No individual run met the half-hour criteria; this does not rule out cycling heating.</p> : <>
                           <p>{heatingEvents.filter((event) => event.classification === "probable heating").length} probable heating run(s); hot water can overlap.</p>
                           {heatingEvents.slice(0, 4).map((event) => <p key={event.start}>
                             {new Date(event.start).toLocaleString("en-GB", { dateStyle: "short", timeStyle: "short", timeZone: "Europe/London" })}: {event.classification}, {formatNumber(event.durationHours, 1)} h, {formatNumber(event.gasKwh, 1)} kWh gas

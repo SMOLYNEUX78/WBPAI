@@ -24,6 +24,16 @@ test("keeps sustained gas unclassified without outdoor evidence", () => {
   expect(events[0].indoorRiseC).toBeNull();
 });
 
+test("recognises the sustained gas burst in the supplied 18 October readings", () => {
+  const rows = [0, 0, 2.356, 1.128, 0.201, 0.067, 0.134, 2.813, 5.08, 2.467, 0]
+    .map((kwh, slot) => ({
+      timestamp: new Date(Date.UTC(2026, 9, 18, 14, 30) + slot * 30 * 60000).toISOString(),
+      usage_kwh: kwh,
+    }));
+  const events = detectHeatingEvents(rows);
+  expect(events.some((event) => event.gasKwh > 9)).toBe(true);
+});
+
 const dailyGas = (start, values) => values.map((gasKwh, index) => ({
   date: new Date(Date.parse(`${start}T00:00:00Z`) + index * 86400000).toISOString().slice(0, 10),
   gasKwh,
