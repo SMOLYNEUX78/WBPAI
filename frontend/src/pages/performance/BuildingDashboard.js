@@ -10,6 +10,7 @@ import { getReadinessGates } from "./readinessGates";
 import { mergeMonthlyHlaRows } from "./monthlyHla";
 import { hasFreshRoomReading, liveRedReadings } from "./liveRedReadings";
 import { homeComfortSuggestion } from "./comfortSuggestions";
+import { detectHeatingEvents } from "./heatingEvents";
 import { extractEnergyBillImage, extractEnergyBillPdf, normaliseBillReview } from "./energyBill";
 import RetrofitPlanner from "./RetrofitPlanner";
 import BaselineDataPanel from "./BaselineDataPanel";
@@ -1770,6 +1771,8 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
   });
   const [mrvEvidence, setMrvEvidence] = useState(readCachedMrvEvidence);
   const [energySummary, setEnergySummary] = useState(readCachedEnergySummary);
+  const [heatingEvents, setHeatingEvents] = useState([]);
+  const [heatingEventStatus, setHeatingEventStatus] = useState("loading");
 
   const [performanceBreakdown, setPerformanceBreakdown] = useState(() => {
     const cachedPerformanceSummary = readCachedPerformanceSummary();
@@ -2506,6 +2509,35 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
     }
 
     return data || [];
+  };
+
+  const fetchHeatingEvents = async () => {
+    if (dataSourceBuildingId !== "home" || !isActive) return;
+    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    try {
+      const { data: gasRows, error: gasError } = await supabase.from("EnergyReadings")
+        .select("timestamp, usage_kwh")
+        .eq("building_id", dataSourceBuildingId).eq("fuel_type", "gas")
+        .eq("reading_type", "interval_30m").gte("timestamp", since)
+        .order("timestamp", { ascending: false }).limit(500);
+      if (gasError) throw gasError;
+      const temperatures = [];
+      for (let page = 0; page < 6; page += 1) {
+        const { data, error } = await applyBuildingScope(supabase.from("Readings")
+          .select("timestamp, temperature_inside, temperature_outside")
+          .or("temperature_inside.not.is.null,temperature_outside.not.is.null")
+          .gte("timestamp", since).order("timestamp", { ascending: false })
+          .range(page * 1000, page * 1000 + 999));
+        if (error) throw error;
+        temperatures.push(...(data || []));
+        if (!data || data.length < 1000) break;
+      }
+      setHeatingEvents(detectHeatingEvents(gasRows || [], temperatures));
+      setHeatingEventStatus("ready");
+    } catch (error) {
+      console.warn("Heating events unavailable:", error.message);
+      setHeatingEventStatus("unavailable");
+    }
   };
 
   const fetchCompactDailyEnergyHistory = async () => {
@@ -5606,6 +5638,15 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
   }, [dataSourceBuildingId, matterportMetadata.internalArea]);
 
   useEffect(() => {
+    if (dataSourceBuildingId !== "home" || !isActive) return undefined;
+    fetchHeatingEvents();
+    const interval = setInterval(fetchHeatingEvents, DASHBOARD_SNAPSHOT_REFRESH_MS);
+    return () => clearInterval(interval);
+    // The active home panel owns the event query.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dataSourceBuildingId, isActive]);
+
+  useEffect(() => {
     if (dataSourceBuildingId !== "home" || selectedHealthTrendArea === "all") {
       return;
     }
@@ -8068,6 +8109,18 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
                       {Number.isFinite(energySummary.gasRecentAboveLowUseDaily) && energySummary.gasRecentAboveLowUseDaily > 0 ? <p>
                         <strong>Above low-use level:</strong> +{formatNumber(energySummary.gasRecentAboveLowUseDaily)} kWh/day. This may reflect heating, but gas readings alone cannot separate heating from hot water.
                       </p> : null}
+                      {dataSourceBuildingId === "home" ? <div className="border-t border-gray-200 pt-2">
+                        <strong>Gas-use runs · last 7 days</strong>
+                        {heatingEventStatus === "unavailable" ? <p>Event readings unavailable.</p> : heatingEventStatus === "loading" ? <p>Checking gas and room readings...</p> : heatingEvents.length === 0 ? <p>No sustained runs identified yet.</p> : <>
+                          <p>{heatingEvents.filter((event) => event.classification === "probable heating").length} probable heating run(s); hot water can overlap.</p>
+                          {heatingEvents.slice(0, 4).map((event) => <p key={event.start}>
+                            {new Date(event.start).toLocaleString("en-GB", { dateStyle: "short", timeStyle: "short", timeZone: "Europe/London" })}: {event.classification}, {formatNumber(event.durationHours, 1)} h, {formatNumber(event.gasKwh, 1)} kWh gas
+                            {Number.isFinite(event.outdoorStart) ? `, outside ${formatNumber(event.outdoorStart, 1)}°C` : ""}
+                            {Number.isFinite(event.indoorRiseC) ? `, inside change ${event.indoorRiseC >= 0 ? "+" : ""}${formatNumber(event.indoorRiseC, 1)}°C` : ""}.
+                            {Number.isFinite(event.gasKwhPerDegreeHour) ? ` Gas per indoor/outdoor degree-hour: ${formatNumber(event.gasKwhPerDegreeHour, 2)} kWh/°C·h (indicative).` : ""}
+                          </p>)}
+                        </>}
+                      </div> : null}
                       <p>
                         <strong>Gas Baseload:</strong>{" "}
                         {Number.isFinite(gasBaseloadDailyKwh)
