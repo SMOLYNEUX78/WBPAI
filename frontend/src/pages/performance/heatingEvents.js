@@ -1,6 +1,27 @@
 const HALF_HOUR_MS = 30 * 60 * 1000;
 const TEMPERATURE_WINDOW_MS = 75 * 60 * 1000;
 
+export function detectHeatingOnset(dailyRows, today = new Date().toISOString().slice(0, 10)) {
+  const days = (dailyRows || [])
+    .filter((row) => /^\d{4}-\d{2}-\d{2}$/.test(row.date) && Number.isFinite(row.gasKwh) && row.gasKwh >= 0 && row.date < today)
+    .sort((a, b) => a.date.localeCompare(b.date));
+  if (days.length < 17 || Date.parse(`${today}T00:00:00Z`) - Date.parse(`${days[days.length - 1].date}T00:00:00Z`) > 3 * 86400000) return null;
+
+  const recent = days.slice(-3);
+  for (let index = Math.max(14, days.length - 14); index < days.length - 1; index += 1) {
+    const prior = days.slice(Math.max(0, index - 30), index);
+    if (prior.length < 14) continue;
+    const priorDaily = prior.reduce((sum, day) => sum + day.gasKwh, 0) / prior.length;
+    const threshold = Math.max(priorDaily * 2.5, priorDaily + 3);
+    const consecutive = Date.parse(`${days[index + 1].date}T00:00:00Z`) - Date.parse(`${days[index].date}T00:00:00Z`) === 86400000;
+    if (!consecutive || days[index].gasKwh < threshold || days[index + 1].gasKwh < threshold) continue;
+    if (recent.filter((day) => day.gasKwh >= threshold).length < 2) continue;
+    const recentDaily = recent.reduce((sum, day) => sum + day.gasKwh, 0) / recent.length;
+    return { date: days[index].date, priorDaily, priorDays: prior.length, recentDaily };
+  }
+  return null;
+}
+
 const finiteTemperature = (value) => {
   if (value === null || value === undefined || value === "") return null;
   const number = Number(value);

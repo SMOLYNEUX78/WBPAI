@@ -10,7 +10,7 @@ import { getReadinessGates } from "./readinessGates";
 import { mergeMonthlyHlaRows } from "./monthlyHla";
 import { hasFreshRoomReading, liveRedReadings } from "./liveRedReadings";
 import { homeComfortSuggestion } from "./comfortSuggestions";
-import { detectHeatingEvents } from "./heatingEvents";
+import { detectHeatingEvents, detectHeatingOnset } from "./heatingEvents";
 import { extractEnergyBillImage, extractEnergyBillPdf, normaliseBillReview } from "./energyBill";
 import RetrofitPlanner from "./RetrofitPlanner";
 import BaselineDataPanel from "./BaselineDataPanel";
@@ -1506,6 +1506,7 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
     gasRecentEndDate: null,
     gasLowUseDaily: null,
     gasRecentAboveLowUseDaily: null,
+    gasHeatingOnset: null,
     totalDailyAverage: null,
     electricityPowerKw: 0,
     hasGasData: false,
@@ -2682,7 +2683,7 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
         ...Object.fromEntries([
           "gasBaseloadDaily", "gasHeatingDaily", "gasAnomalyDaily", "gasDhwDaily",
           "gasUnregulatedDaily", "gasDhwWindows", "gasDecompositionConfidence",
-          "gasRecentDaily", "gasRecentEndDate", "gasLowUseDaily", "gasRecentAboveLowUseDaily",
+          "gasRecentDaily", "gasRecentEndDate", "gasLowUseDaily", "gasRecentAboveLowUseDaily", "gasHeatingOnset",
         ].filter((key) => !Object.prototype.hasOwnProperty.call(snapshotEnergySummary, key))
           .map((key) => [key, previous[key]])),
         ...snapshotEnergySummary,
@@ -3090,6 +3091,11 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
           .sort(([a], [b]) => b.localeCompare(a)).slice(0, 3);
         const gasRecentDaily = recentGasDays.length === 3
           ? average(recentGasDays.map(([, day]) => day.fuels.gas)) : null;
+        const gasHeatingOnset = dataSourceBuildingId === "home"
+          ? detectHeatingOnset(Object.entries(completedDailyTotalsByDay)
+              .filter(([date, day]) => date >= "2026-03-18" && Number.isFinite(day.fuels.gas))
+              .map(([date, day]) => ({ date, gasKwh: day.fuels.gas })))
+          : null;
         const gasAnomalyDaily = Number.isFinite(gasBaseloadDaily)
           ? average(
               gasDayRows.map((day) => {
@@ -3130,6 +3136,7 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
           gasDailyAverage,
           gasTodayKwh,
           gasRecentDaily,
+          gasHeatingOnset,
           gasRecentEndDate: recentGasDays[0]?.[0] || null,
           gasLowUseDaily: gasBaseloadDaily,
           gasRecentAboveLowUseDaily: Number.isFinite(gasRecentDaily) && Number.isFinite(gasBaseloadDaily)
@@ -5694,6 +5701,10 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
       ? energySummary.gasDailyAverage
       : 0;
   const estimatedTotalDailyKwh = estimatedElectricityDailyKwh + estimatedGasDailyKwh;
+  const heatingOnset = energySummary.gasHeatingOnset;
+  const temperatureMatchedHeatingRun = heatingOnset && heatingEvents.find((event) =>
+    event.classification === "probable heating" && event.start.slice(0, 10) >= heatingOnset.date
+  );
   const regulatedElectricFraction =
     building.regulatedElectricFraction ?? (energySummary.hasGasData ? 0.15 : 0.35);
   const gasHeatingDailyKwh =
@@ -7969,6 +7980,17 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
                   </div>
                 ) : <span className="wbp-linear-performance-pending">Pending</span>}
               </button>
+              {dataSourceBuildingId === "home" && heatingOnset ? <button
+                type="button"
+                onClick={() => setOccupyDetail("performance")}
+                className="mt-2 w-full border-l-4 border-amber-600 bg-amber-50 px-3 py-2 text-left text-xs text-gray-900"
+              >
+                <strong>Gas use rose from {new Date(`${heatingOnset.date}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Europe/London" })}</strong>
+                {": "}{formatNumber(heatingOnset.recentDaily, 1)} kWh/day recently versus {formatNumber(heatingOnset.priorDaily, 1)} kWh/day across the previous {heatingOnset.priorDays} days.
+                {" "}{temperatureMatchedHeatingRun
+                  ? `A sustained gas run in cool outdoor conditions supports possible heating${Number.isFinite(temperatureMatchedHeatingRun.indoorRiseC) ? `; indoor temperature changed ${temperatureMatchedHeatingRun.indoorRiseC >= 0 ? "+" : ""}${formatNumber(temperatureMatchedHeatingRun.indoorRiseC, 1)}°C` : ""}.`
+                  : heatingEventStatus === "loading" ? "Possible heating; checking indoor and outdoor temperatures." : "Possible heating; no temperature-matched run confirmed yet."}
+              </button> : null}
               {building.id !== "bl" ? <div className="wbp-linear-performance-baseline">
                 <div className="flex flex-wrap items-center justify-between gap-1 text-xs font-semibold text-gray-700">
                   <span>Baseline confidence: {baselineConfidence.label}</span>
