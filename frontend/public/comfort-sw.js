@@ -1,7 +1,9 @@
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
+  const key = event.notification.data?.key || "";
+  const target = `/dashboard/home?comfort=${encodeURIComponent(key)}`;
   event.waitUntil(clients.matchAll({ type: "window", includeUncontrolled: true }).then((windows) => {
     const existing = windows.find((windowClient) => windowClient.url.includes("/dashboard/"));
-    return existing ? existing.focus() : clients.openWindow("/dashboard/home");
+    return existing ? existing.navigate(target).then((client) => client.focus()) : clients.openWindow(target);
   }));
 });

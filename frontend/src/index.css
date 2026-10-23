@@ -1021,3 +1021,12 @@ button.wbp-project-row:hover { background: #f9fafb; }
 }
 .wbp-app-update { position: fixed; z-index: 10000; left: max(12px, env(safe-area-inset-left)); right: max(12px, env(safe-area-inset-right)); bottom: max(12px, env(safe-area-inset-bottom)); display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; background: #10251e; color: #fff; font-size: 14px; box-shadow: 0 4px 16px #0003; }
 .wbp-app-update button { flex: none; border: 1px solid #fff; background: #fff; color: #10251e; padding: 8px 12px; font: inherit; font-weight: 700; }
+.wbp-occupy-choices button[aria-pressed="true"] { border-color: #047857; background: #ecfdf5; }
+.wbp-comfort-backdrop { position: fixed; z-index: 100; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(17, 24, 39, .45); }
+.wbp-comfort-panel { position: relative; width: min(100%, 440px); padding: 30px; border-radius: 20px; background: #fff; color: #172c25; box-shadow: 0 24px 70px #0003; font-size: 15px; line-height: 1.55; }
+.wbp-comfort-panel h2 { margin: 2px 0 20px; font-size: 25px; font-weight: 750; }
+.wbp-comfort-panel p { margin: 0 0 14px; }
+.wbp-comfort-eyebrow { color: #047857; font-size: 12px; font-weight: 750; text-transform: uppercase; }
+.wbp-comfort-panel .wbp-comfort-summary { font-weight: 750; }
+.wbp-comfort-close { position: absolute; top: 14px; right: 16px; width: 32px; height: 32px; border: 0; background: transparent; font-size: 25px; line-height: 1; }
+.wbp-comfort-action { margin-top: 12px; width: 100%; padding: 11px 15px; border: 0; border-radius: 8px; background: #087f5b; color: #fff; font-weight: 700; }

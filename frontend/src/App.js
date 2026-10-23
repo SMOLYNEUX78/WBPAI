@@ -21,6 +21,11 @@ import { parseStockCsv } from "./stockImport";
 
 const AUTH_INTENT_KEY = "wbp-auth-intent:v1";
 const ACTIVE_ROUTE_KEY = "wbp-active-route:v1";
+const routeForUser = (userId) => `${ACTIVE_ROUTE_KEY}:${userId}`;
+const savedRouteFor = (userId) => {
+  const route = userId && window.localStorage.getItem(routeForUser(userId));
+  return route && isWorkspaceRoute(route.split("?")[0]) ? route : null;
+};
 const isWorkspaceRoute = (path) => path === "/dashboard" || path.startsWith("/dashboard/")
   || path === "/workspaces" || path.startsWith("/workspace/");
 const PROFILE_IMAGE_LIMIT_BYTES = 750 * 1024;
@@ -137,17 +142,29 @@ const ActiveRouteTracker = () => {
   const location = useLocation();
   useEffect(() => {
     if (isWorkspaceRoute(location.pathname)) {
-      window.sessionStorage.setItem(ACTIVE_ROUTE_KEY, `${location.pathname}${location.search}`);
+      supabase.auth.getSession().then(({ data }) => {
+        if (data.session?.user.id) {
+          const search = new URLSearchParams(location.search);
+          search.delete("comfort");
+          window.localStorage.setItem(routeForUser(data.session.user.id), `${location.pathname}${search.size ? `?${search}` : ""}`);
+        }
+      });
     }
   }, [location.pathname, location.search]);
   return null;
 };
 
 const LaunchRoute = () => {
-  const lastRoute = window.sessionStorage.getItem(ACTIVE_ROUTE_KEY);
-  return lastRoute && isWorkspaceRoute(lastRoute.split("?")[0])
-    ? <Navigate to={lastRoute} replace />
-    : <SplashScreen />;
+  const [destination, setDestination] = useState(null);
+  useEffect(() => {
+    let active = true;
+    supabase.auth.getSession().then(({ data }) => {
+      if (active) setDestination(data.session ? savedRouteFor(data.session.user.id) || (data.session.user.user_metadata?.role === "stock" ? "/workspace/stock" : "/dashboard/home") : "splash");
+    });
+    return () => { active = false; };
+  }, []);
+  if (!destination) return null;
+  return destination === "splash" ? <SplashScreen /> : <Navigate to={destination} replace />;
 };
 
 const RoleGateway = () => {
@@ -158,7 +175,6 @@ const RoleGateway = () => {
   const occupySignup = new URLSearchParams(location.search).get("role") === "homeowner"
     && new URLSearchParams(location.search).get("mode") === "signup";
   const [selectedRole, setSelectedRole] = useState(designSignup ? "architect" : occupySignup ? "homeowner" : "");
-  const [occupyChoiceOpen, setOccupyChoiceOpen] = useState(false);
   const [authMode, setAuthMode] = useState(designSignup || occupySignup ? "signup" : "signin");
   const [occupyMode, setOccupyMode] = useState("new");
   const [email, setEmail] = useState("");
@@ -201,7 +217,9 @@ const RoleGateway = () => {
       setAuthMessage("Use your organisation email address.");
       return;
     }
-    window.localStorage.setItem("wbp-user-role", intent.role);
+    const resolvedRole = intent.authMode === "signin" && intent.role === "homeowner"
+      ? (session.user.user_metadata?.role === "stock" ? "stock" : "homeowner") : intent.role;
+    window.localStorage.setItem("wbp-user-role", resolvedRole);
     window.localStorage.setItem("wbp-user-email", session.user.email || intent.email || "");
 
     if (intent.profile?.contactName) {
@@ -231,12 +249,14 @@ const RoleGateway = () => {
     }
 
     window.localStorage.removeItem(AUTH_INTENT_KEY);
-    if (intent.role !== "homeowner") {
-      navigate(`/workspace/${intent.role}`, { state: { profile: intent.profile || {} } });
+    if (resolvedRole !== "homeowner") {
+      const lastRoute = savedRouteFor(session.user.id);
+      navigate(intent.authMode === "signin" && lastRoute?.startsWith(`/workspace/${resolvedRole}`) ? lastRoute : `/workspace/${resolvedRole}`, { state: { profile: intent.profile || {} } });
       return;
     }
 
-    navigate("/dashboard/home");
+    const lastRoute = savedRouteFor(session.user.id);
+    navigate(intent.authMode === "signin" && lastRoute?.startsWith("/dashboard/") ? lastRoute : "/dashboard/home");
   }, [navigate]);
 
   useEffect(() => {
@@ -255,6 +275,8 @@ const RoleGateway = () => {
       }
       if (intent?.role) {
         await finishAuthenticatedAccess(data.session, intent);
+      } else {
+        navigate(savedRouteFor(data.session.user.id) || (data.session.user.user_metadata?.role === "stock" ? "/workspace/stock" : "/dashboard/home"), { replace: true });
       }
     };
     resumeAuthenticatedAccess();
@@ -275,7 +297,7 @@ const RoleGateway = () => {
       mounted = false;
       listener.subscription.unsubscribe();
     };
-  }, [finishAuthenticatedAccess]);
+  }, [finishAuthenticatedAccess, navigate]);
 
   const openWorkspace = async (event) => {
     event.preventDefault();
@@ -408,8 +430,8 @@ const RoleGateway = () => {
             className={`wbp-route-band is-${role.position}`}
             key={role.id}
             onClick={() => {
-              if (role.id === "homeowner") {
-                setOccupyChoiceOpen(true);
+              if (role.id === "homeowner" && testSession) {
+                navigate(savedRouteFor(testSession.user.id) || "/dashboard/home");
                 return;
               }
               if (testSession) {
@@ -420,7 +442,7 @@ const RoleGateway = () => {
                 });
               } else {
                 setSelectedRole(role.id);
-                setAuthMode(role.id === "homeowner" ? "signup" : "signin");
+                setAuthMode("signin");
               }
             }}
           >
@@ -433,17 +455,6 @@ const RoleGateway = () => {
           </button>
         ))}
       </section>
-
-       {occupyChoiceOpen ? <div className="wbp-auth-backdrop" role="presentation" onMouseDown={() => setOccupyChoiceOpen(false)}>
-         <section className="wbp-auth-modal" role="dialog" aria-modal="true" aria-labelledby="wbp-occupy-choice-title" onMouseDown={(event) => event.stopPropagation()}>
-           <button type="button" className="wbp-auth-close" aria-label="Close" onClick={() => setOccupyChoiceOpen(false)}>&#215;</button>
-           <div className="wbp-auth-heading"><p>Occupy</p><h2 id="wbp-occupy-choice-title">Choose your view</h2></div>
-           <div className="wbp-occupy-choices">
-             <button type="button" onClick={() => { setOccupyChoiceOpen(false); setSelectedRole("homeowner"); setAuthMode("signup"); }}><strong>My home</strong><span>See and manage your own property</span></button>
-             <button type="button" onClick={() => { setOccupyChoiceOpen(false); setSelectedRole("stock"); setAuthMode("signup"); }}><strong>Homes I manage</strong><span>For councils and housing providers</span></button>
-           </div>
-         </section>
-       </div> : null}
 
       {activeRole ? (
         <div className="wbp-auth-backdrop" role="presentation" onMouseDown={() => setSelectedRole("")}>
@@ -475,6 +486,11 @@ const RoleGateway = () => {
               <button type="button" className={authMode === "signin" ? "is-active" : ""} onClick={() => setAuthMode("signin")}>Sign in</button>
               <button type="button" className={authMode === "signup" ? "is-active" : ""} onClick={() => setAuthMode("signup")}>Sign up</button>
              </div>
+
+            {authMode === "signup" && ["homeowner", "stock"].includes(selectedRole) ? <div className="wbp-occupy-choices" role="group" aria-label="Profile type">
+              <button type="button" aria-pressed={selectedRole === "homeowner"} onClick={() => setSelectedRole("homeowner")}><strong>My home</strong><span>My own property</span></button>
+              <button type="button" aria-pressed={selectedRole === "stock"} onClick={() => setSelectedRole("stock")}><strong>Homes I manage</strong><span>Council or housing-provider stock</span></button>
+            </div> : null}
 
             {authStatus === "sent" ? (
               <div className="wbp-auth-form" role="status">

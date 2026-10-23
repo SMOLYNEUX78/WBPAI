@@ -13615,6 +13615,7 @@ const BuildingDashboard = () => {
   const [headerRoomFresh, setHeaderRoomFresh] = useState(null);
   const [headerPerformanceValue, setHeaderPerformanceValue] = useState(null);
   const [comfortSuggestion, setComfortSuggestion] = useState(null);
+  const [comfortPanelOpen, setComfortPanelOpen] = useState(false);
   const [comfortNoticesEnabled, setComfortNoticesEnabled] = useState(() => window.localStorage.getItem("wbp-comfort-notices") === "yes");
   const [comfortNoticeStatus, setComfortNoticeStatus] = useState("");
   const [dismissedComfort, setDismissedComfort] = useState(() => {
@@ -13693,10 +13694,20 @@ const BuildingDashboard = () => {
       if (cancelled) return;
       return registration.showNotification(comfortSuggestion.title, {
         body: comfortSuggestion.message, icon: "/wbp-rounded-192.png", tag: `wbp-${comfortSuggestion.key}`,
+        data: { key: comfortSuggestion.key },
       }).then(() => window.localStorage.setItem("wbp-comfort-last-notice", JSON.stringify({ key: comfortSuggestion.key, at: Date.now() })));
     }).catch(() => {});
     return () => { cancelled = true; };
   }, [accessRole, comfortSuggestion, comfortNoticesEnabled]);
+
+  useEffect(() => {
+    if (new URLSearchParams(location.search).has("comfort")) setComfortPanelOpen(true);
+  }, [location.search]);
+
+  const closeComfortPanel = () => {
+    setComfortPanelOpen(false);
+    if (new URLSearchParams(location.search).has("comfort")) navigate(location.pathname, { replace: true });
+  };
 
   useEffect(() => {
     if (!accountMenuOpen) return undefined;
@@ -13835,7 +13846,7 @@ const BuildingDashboard = () => {
             </div>
             <div className="min-w-0 flex-1" />
             {showComfortBanner ? <div className="flex w-fit min-w-0 items-center border-l-4 border-amber-700 bg-white px-2 py-1 text-xs text-gray-900 sm:text-sm" role="status">
-              <p className="min-w-0 truncate" title={comfortSuggestion.bannerText || comfortSuggestion.message}>{comfortSuggestion.bannerText || comfortSuggestion.message}</p>
+              <button type="button" className="min-w-0 truncate text-left" title={comfortSuggestion.bannerText || comfortSuggestion.message} onClick={() => setComfortPanelOpen(true)}>{comfortSuggestion.bannerText || comfortSuggestion.message}</button>
               <button type="button" aria-label="Dismiss comfort suggestion" className="ml-1 shrink-0 px-1 text-base leading-none" onClick={() => {
                 const dismissed = { key: comfortSuggestion.key, until: Date.now() + 12 * 60 * 60 * 1000 };
                 window.localStorage.setItem("wbp-comfort-dismissed", JSON.stringify(dismissed));
@@ -13863,6 +13874,15 @@ const BuildingDashboard = () => {
           </div>
         </section>
       ) : null}
+      {comfortPanelOpen ? <div className="wbp-comfort-backdrop" role="presentation" onMouseDown={closeComfortPanel}>
+        <section className="wbp-comfort-panel" role="dialog" aria-modal="true" aria-labelledby="wbp-comfort-title" onMouseDown={(event) => event.stopPropagation()}>
+          <button type="button" className="wbp-comfort-close" aria-label="Close comfort suggestions" onClick={closeComfortPanel}>×</button>
+          <p className="wbp-comfort-eyebrow">Your home</p>
+          <h2 id="wbp-comfort-title">Comfort &amp; energy</h2>
+          {comfortSuggestion ? <><p className="wbp-comfort-summary">{comfortSuggestion.bannerText}</p><p>{comfortSuggestion.message}</p></> : <p>Current room readings are still loading. Check your home profile for the latest measurements.</p>}
+          <button type="button" className="wbp-comfort-action" onClick={closeComfortPanel}>View my home</button>
+        </section>
+      </div> : null}
       </div>
 
       <div className="overflow-hidden">
