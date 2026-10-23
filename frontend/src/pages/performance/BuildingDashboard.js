@@ -5699,11 +5699,11 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
   const gasHeatingDailyKwh =
     shouldShowGas && Number.isFinite(energySummary.gasHeatingDaily)
       ? energySummary.gasHeatingDaily
-      : 0;
+      : null;
   const gasDhwDailyKwh =
     shouldShowGas && Number.isFinite(energySummary.gasDhwDaily)
       ? energySummary.gasDhwDaily
-      : 0;
+      : null;
   const gasBaseloadDailyKwh =
     shouldShowGas && Number.isFinite(energySummary.gasBaseloadDaily)
       ? energySummary.gasBaseloadDaily
@@ -5716,13 +5716,16 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
     shouldShowGas && Number.isFinite(energySummary.gasAnomalyDaily)
       ? energySummary.gasAnomalyDaily
       : null;
-  const gasSplitReady = !shouldShowGas || !energySummary.hasGasData || Number.isFinite(energySummary.gasHeatingDaily);
-  const regulatedDailyKwh = estimatedTotalDailyKwh && gasSplitReady
+  const hasWeatherGasSplit = Number.isFinite(gasHeatingDailyKwh) && Number.isFinite(gasDhwDailyKwh);
+  const regulatedGasDailyKwh = shouldShowGas && energySummary.hasGasData
+    ? hasWeatherGasSplit
+      ? gasDhwDailyKwh + gasHeatingDailyKwh
+      : estimatedGasDailyKwh
+    : 0;
+  const regulatedDailyKwh = estimatedTotalDailyKwh > 0
     ? Math.min(
         estimatedTotalDailyKwh,
-        gasDhwDailyKwh +
-          gasHeatingDailyKwh +
-          estimatedElectricityDailyKwh * regulatedElectricFraction
+        regulatedGasDailyKwh + estimatedElectricityDailyKwh * regulatedElectricFraction
       )
     : null;
   const unregulatedDailyKwh = Number.isFinite(regulatedDailyKwh)
@@ -5736,7 +5739,9 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
     ? building.heatingSystem === "none"
       ? "Estimate / no heating system; needs submetered data"
       : energySummary.hasGasData
-      ? energySummary.gasDecompositionConfidence
+      ? hasWeatherGasSplit
+        ? energySummary.gasDecompositionConfidence
+        : "Provisional: all gas counted as regulated; heating, hot water and cooking are not yet separated"
       : heatLossSummary.hddDays >= 30 || heatLossSummary.hddSource === "legacy"
       ? "Electric estimate"
       : "Estimate / needs seasonal/submetered data"
