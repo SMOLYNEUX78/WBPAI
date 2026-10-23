@@ -1805,6 +1805,7 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
   const loadedDatedHealthRef = useRef(new Set());
   const [datedTrendError, setDatedTrendError] = useState("");
   const [selectedTrendMetricKeys, setSelectedTrendMetricKeys] = useState([]);
+  const [trendMetricGroupKey, setTrendMetricGroupKey] = useState("all");
   const [selectedHealthTrendArea, setSelectedHealthTrendArea] = useState("all");
   const [hoveredTrendSlot, setHoveredTrendSlot] = useState(null);
 
@@ -6677,16 +6678,7 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
       ),
     }))
     .filter((group) => group.key === "all" || group.metricKeys.length > 0);
-  const selectedTrendMetricGroupKey =
-    selectedTrendMetricKeys.length === 0
-      ? "all"
-      : selectedTrendMetricKeys.length > 0
-      ? activeTrendMetricGroups.find(
-          (group) =>
-            group.metricKeys.length === selectedTrendMetricKeys.length &&
-            group.metricKeys.every((key) => selectedTrendMetricKeys.includes(key))
-        )?.key
-      : "";
+  const selectedTrendMetricGroupKey = trendMetricGroupKey;
   const selectedActiveTrendMetrics = selectedTrendMetricKeys.length
     ? activeTrendMetrics.filter((metric) =>
         selectedTrendMetricKeys.includes(metric.key)
@@ -6709,10 +6701,7 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
       metricKeys: HEALTH_TREND_KEYS.filter((key) => key.startsWith("downstairs")),
     },
   ];
-  const healthTrendKeys = HEALTH_TREND_KEYS;
-  const healthTrendSelected =
-    selectedTrendMetricGroupKey === "health" ||
-    selectedTrendMetricKeys.some((key) => healthTrendKeys.includes(key));
+  const healthTrendSelected = selectedTrendMetricGroupKey === "health";
   const activeHealthTrendArea =
     healthTrendAreaOptions.find((option) => option.key === selectedHealthTrendArea) ||
     healthTrendAreaOptions[0];
@@ -6746,13 +6735,20 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
       }
 
       if (cleanedKeys.includes(metricKey)) {
-        return cleanedKeys.length === 1 ? [] : [metricKey];
+        return cleanedKeys.length === 1
+          ? selectedTrendMetricGroupKey === "all"
+            ? []
+            : activeTrendMetricGroups.find((group) => group.key === selectedTrendMetricGroupKey)?.metricKeys.filter((key) =>
+                selectedTrendMetricGroupKey !== "health" || selectedHealthTrendArea === "all" || key.startsWith(selectedHealthTrendArea)
+              ) || []
+          : cleanedKeys.filter((key) => key !== metricKey);
       }
 
       return [...cleanedKeys, metricKey];
     });
   };
-  const selectTrendMetricGroup = (metricKeys) => {
+  const selectTrendMetricGroup = (groupKey, metricKeys) => {
+    setTrendMetricGroupKey(groupKey);
     if (metricKeys.length === 0) {
       setSelectedTrendMetricKeys([]);
       setSelectedHealthTrendArea("all");
@@ -7086,12 +7082,11 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
       </button>
     );
   };
-  const selectableTrendMetrics = healthTrendSelected
-    ? activeTrendMetrics.filter((metric) =>
-        HEALTH_TREND_KEYS.includes(metric.key) &&
-        (selectedHealthTrendArea === "all" || metric.key.startsWith(selectedHealthTrendArea))
-      )
-    : activeTrendMetrics;
+  const selectableGroupKeys = activeTrendMetricGroups.find((group) => group.key === selectedTrendMetricGroupKey)?.metricKeys || [];
+  const selectableTrendMetrics = activeTrendMetrics.filter((metric) =>
+    (selectedTrendMetricGroupKey === "all" || selectableGroupKeys.includes(metric.key)) &&
+    (!healthTrendSelected || selectedHealthTrendArea === "all" || metric.key.startsWith(selectedHealthTrendArea))
+  );
   const visibleDownstairsMetrics = selectableTrendMetrics.filter((metric) =>
     metric.key.startsWith("downstairs")
   );
@@ -7484,15 +7479,13 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
             <>
               <div className="flex flex-wrap gap-2 text-xs">
                 {activeTrendMetricGroups.map((group) => {
-                  const groupSelected =
-                    selectedTrendMetricGroupKey === group.key ||
-                    (group.key === "health" && healthTrendSelected);
+                  const groupSelected = selectedTrendMetricGroupKey === group.key;
 
                   return (
                     <button
                       type="button"
                       key={group.key}
-                      onClick={() => selectTrendMetricGroup(group.metricKeys)}
+                      onClick={() => selectTrendMetricGroup(group.key, group.metricKeys)}
                       className={`rounded border px-3 py-1.5 font-semibold transition ${
                         groupSelected
                           ? "border-blue-600 bg-blue-600 text-white"
