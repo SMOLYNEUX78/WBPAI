@@ -6694,9 +6694,7 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
       }
 
       if (cleanedKeys.includes(metricKey)) {
-        return cleanedKeys.length === 1
-          ? []
-          : cleanedKeys.filter((key) => key !== metricKey);
+        return [metricKey];
       }
 
       return [...cleanedKeys, metricKey];
@@ -7036,13 +7034,19 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
       </button>
     );
   };
-  const visibleDownstairsMetrics = visibleTrendMetrics.filter((metric) =>
+  const selectableTrendMetrics = healthTrendSelected
+    ? activeTrendMetrics.filter((metric) =>
+        HEALTH_TREND_KEYS.includes(metric.key) &&
+        (selectedHealthTrendArea === "all" || metric.key.startsWith(selectedHealthTrendArea))
+      )
+    : activeTrendMetrics;
+  const visibleDownstairsMetrics = selectableTrendMetrics.filter((metric) =>
     metric.key.startsWith("downstairs")
   );
-  const visibleUpstairsMetrics = visibleTrendMetrics.filter((metric) =>
+  const visibleUpstairsMetrics = selectableTrendMetrics.filter((metric) =>
     metric.key.startsWith("upstairs")
   );
-  const visibleOtherMetrics = visibleTrendMetrics.filter((metric) =>
+  const visibleOtherMetrics = selectableTrendMetrics.filter((metric) =>
     !metric.key.startsWith("downstairs") && !metric.key.startsWith("upstairs")
   );
   const showFloorMetricColumns = visibleDownstairsMetrics.length > 0 ||
@@ -7817,8 +7821,7 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
                 </div>
               ) : (
                 <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 text-xs">
-                  {(healthTrendSelected ? visibleTrendMetrics : activeTrendMetrics)
-                    .map(renderTrendMetricButton)}
+                  {selectableTrendMetrics.map(renderTrendMetricButton)}
                 </div>
               )}
             </>
