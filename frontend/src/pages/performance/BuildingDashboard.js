@@ -8114,6 +8114,13 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
                         <strong>Recent gas:</strong> {formatNumber(energySummary.gasRecentDaily)} kWh/day over the last 3 completed days
                         {energySummary.gasRecentEndDate ? ` (to ${energySummary.gasRecentEndDate})` : ""}
                       </p> : null}
+                      {Number.isFinite(energySummary.gasRecentDaily) &&
+                      Number.isFinite(energySummary.gasDailyAverage) &&
+                      energySummary.gasDailyAverage > 0 ? <p>
+                        <strong>Compared with monitored average:</strong>{" "}
+                        {formatNumber(energySummary.gasRecentDaily / energySummary.gasDailyAverage, 1)}x
+                        {" "}(average {formatNumber(energySummary.gasDailyAverage)} kWh/day)
+                      </p> : null}
                       {Number.isFinite(energySummary.gasRecentAboveLowUseDaily) && energySummary.gasRecentAboveLowUseDaily > 0 ? <p>
                         <strong>Above low-use level:</strong> +{formatNumber(energySummary.gasRecentAboveLowUseDaily)} kWh/day. This may reflect heating, but gas readings alone cannot separate heating from hot water.
                       </p> : null}
