@@ -6746,7 +6746,7 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
       }
 
       if (cleanedKeys.includes(metricKey)) {
-        return [metricKey];
+        return cleanedKeys.length === 1 ? [] : [metricKey];
       }
 
       return [...cleanedKeys, metricKey];

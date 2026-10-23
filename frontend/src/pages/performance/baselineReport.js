@@ -122,7 +122,7 @@ const INTERACTIVE_CHART_SCRIPT = `<script>(function(){
       var dot=document.createElement('span');dot.className='chart-dot';dot.style.backgroundColor=item.color;
       var label=document.createElement('span');label.textContent=item.label;
       var value=document.createElement('strong');var mean=average(rows,item.key);value.textContent=Number.isFinite(mean)?mean.toFixed(1)+' '+(group==='energy'&&period!=='month'?'kWh/h':group==='energy'?'kWh/day':item.unit):'No data';
-      button.append(dot,label,value);button.onclick=function(){if(selected.has(item.key))selected=new Set([item.key]);else selected.add(item.key);draw()};metricBox.appendChild(button);
+      button.append(dot,label,value);button.onclick=function(){if(selected.has(item.key))selected=selected.size===1?new Set(available.map(function(metric){return metric.key})):new Set([item.key]);else selected.add(item.key);draw()};metricBox.appendChild(button);
     });
     if(!visible.length){caption.textContent='No readings for this season and view.';return}
     var values=rows.flatMap(function(row){return visible.map(function(item){return row[item.key]})}).filter(Number.isFinite);
