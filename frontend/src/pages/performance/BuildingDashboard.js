@@ -8021,17 +8021,6 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
                   </div>
                 ) : <span className="wbp-linear-performance-pending">Pending</span>}
               </button>
-              {dataSourceBuildingId === "home" && heatingOnset ? <button
-                type="button"
-                onClick={() => setOccupyDetail("performance")}
-                className="mt-2 w-full border-l-4 border-amber-600 bg-amber-50 px-3 py-2 text-left text-xs text-gray-900"
-              >
-                <strong>Gas use rose from {new Date(`${heatingOnset.date}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Europe/London" })}</strong>
-                {": "}{formatNumber(heatingOnset.recentDaily, 1)} kWh/day recently versus {formatNumber(heatingOnset.priorDaily, 1)} kWh/day across the previous {heatingOnset.priorDays} days.
-                {" "}{temperatureMatchedHeatingRun
-                  ? `A sustained gas run in cool outdoor conditions supports possible heating${Number.isFinite(temperatureMatchedHeatingRun.indoorRiseC) ? `; indoor temperature changed ${temperatureMatchedHeatingRun.indoorRiseC >= 0 ? "+" : ""}${formatNumber(temperatureMatchedHeatingRun.indoorRiseC, 1)}°C` : ""}.`
-                  : heatingEventStatus === "loading" ? "Possible heating; checking indoor and outdoor temperatures." : "Possible heating; no temperature-matched run confirmed yet."}
-              </button> : null}
               {building.id !== "bl" ? <div className="wbp-linear-performance-baseline">
                 <div className="flex flex-wrap items-center justify-between gap-1 text-xs font-semibold text-gray-700">
                   <span>Baseline confidence: {baselineConfidence.label}</span>
@@ -8156,9 +8145,9 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
                       ? `${formatNumber(displayedRegulatedEnergyShare, 0)}%`
                       : "No Data"}
                   </p>
-                  <p className="text-gray-600">
+                  {isNewPerformanceDeepDive || !shouldShowGas || !energySummary.hasGasData ? <p className="text-gray-600">
                     {displayedSplitConfidence}
-                  </p>
+                  </p> : null}
                   {isNewPerformanceDeepDive ? (
                     <div className="pt-2 mt-2 border-t border-gray-200 space-y-1">
                       <p>
@@ -8172,7 +8161,10 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
                       </p>
                     </div>
                   ) : shouldShowGas && energySummary.hasGasData ? (
-                    <div className="pt-2 mt-2 border-t border-gray-200 space-y-1">
+                    <details className="pt-2 mt-2 border-t border-gray-200">
+                      <summary className="cursor-pointer font-semibold">Heating insights</summary>
+                      <div className="mt-2 space-y-1">
+                      <p className="text-gray-600">{displayedSplitConfidence}</p>
                       {Number.isFinite(energySummary.gasRecentDaily) ? <p>
                         <strong>Recent gas:</strong> {formatNumber(energySummary.gasRecentDaily)} kWh/day over the last 3 completed days
                         {energySummary.gasRecentEndDate ? ` (to ${energySummary.gasRecentEndDate})` : ""}
@@ -8192,9 +8184,12 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
                         {heatingOnset ? <p>
                           Gas use rose from {new Date(`${heatingOnset.date}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Europe/London" })}: {formatNumber(heatingOnset.recentDaily, 1)} kWh/day recently, against {formatNumber(heatingOnset.priorDaily, 1)} kWh/day before the rise. This is indicative of heating, not a measured heating-only figure.
                         </p> : <p>No sustained multi-day rise confirmed against earlier gas use.</p>}
-                        <details className="mt-2 border-t border-gray-200 pt-2">
-                          <summary className="cursor-pointer font-semibold">Half-hour gas runs</summary>
-                          <div className="mt-2 space-y-1">
+                        {heatingOnset ? <p>{temperatureMatchedHeatingRun
+                          ? `A sustained gas run in cool outdoor conditions supports possible heating${Number.isFinite(temperatureMatchedHeatingRun.indoorRiseC) ? `; indoor temperature changed ${temperatureMatchedHeatingRun.indoorRiseC >= 0 ? "+" : ""}${formatNumber(temperatureMatchedHeatingRun.indoorRiseC, 1)}°C` : ""}.`
+                          : heatingEventStatus === "loading" ? "Checking indoor and outdoor temperatures." : "No temperature-matched run confirmed yet."}</p> : null}
+                        <div className="mt-2 border-t border-gray-200 pt-2">
+                          <strong>Half-hour gas runs</strong>
+                          <div className="mt-1 space-y-1">
                             {heatingEventStatus === "unavailable" ? <p>Half-hour or room readings unavailable.</p> : heatingEventStatus === "loading" ? <p>Checking gas and room readings...</p> : heatingEventStatus === "no-intervals" ? <p>No half-hour gas readings available for this check.</p> : heatingEvents.length === 0 ? <p>No individual run met the half-hour criteria; this does not rule out cycling heating.</p> : <>
                               <p>{heatingEvents.filter((event) => event.classification === "probable heating").length} probable heating run(s) in the last 7 days; hot water can overlap.</p>
                               {heatingEvents.slice(0, 4).map((event) => <p key={event.start}>
@@ -8205,7 +8200,7 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
                               </p>)}
                             </>}
                           </div>
-                        </details>
+                        </div>
                       </div> : null}
                       <p>
                         <strong>Gas Baseload:</strong>{" "}
@@ -8244,7 +8239,8 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
                           DHW windows: {energySummary.gasDhwWindows.join(", ")}
                         </p>
                       ) : null}
-                    </div>
+                      </div>
+                    </details>
                   ) : null}
                 </div>
               </div>
