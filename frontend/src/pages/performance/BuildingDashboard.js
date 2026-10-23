@@ -4818,19 +4818,24 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
       };
 
       const fetchOutdoorTrendRows = async () => {
-        const { data, error } = await applyBuildingScope(
-          supabase
-            .from("Readings")
-            .select("timestamp, temperature_outside")
-            .not("temperature_outside", "is", null)
-            .gte("timestamp", trendWindowStart.toISOString())
-            .lte("timestamp", trendWindowEnd.toISOString())
-            .order("timestamp", { ascending: true })
-            .limit(5000)
-        );
+        const rows = [];
+        for (let page = 0; page < 30; page += 1) {
+          const { data, error } = await applyBuildingScope(
+            supabase
+              .from("Readings")
+              .select("timestamp, temperature_outside")
+              .not("temperature_outside", "is", null)
+              .gte("timestamp", trendWindowStart.toISOString())
+              .lte("timestamp", trendWindowEnd.toISOString())
+              .order("timestamp", { ascending: true })
+              .range(page * 1000, (page + 1) * 1000 - 1)
+          );
 
-        if (error) throw error;
-        return data || [];
+          if (error) throw error;
+          rows.push(...(data || []));
+          if (!data || data.length < 1000) break;
+        }
+        return rows;
       };
 
       const iaqRowsPromise = fetchIaqTrendRows().catch((error) => {
