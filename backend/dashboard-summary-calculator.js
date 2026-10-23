@@ -309,6 +309,18 @@ function buildEnergySummary(energyRows, carbonDailyRows = []) {
         .map((row) => row.gas)
         .filter((value) => Number.isFinite(value))
     : rawGasValues;
+  const completedGasByDay = new Map(
+    (hasCompactHistory ? completedDailyHistory.map((row) => [row.day, row.gas]) : rawDays.map((day) => [day, byDay[day].gas]))
+      .filter(([day, gas]) => day < today && Number.isFinite(gas))
+  );
+  // Raw readings can be newer than the compact history job.
+  rawDays.forEach((day) => {
+    if (day < today && Number.isFinite(byDay[day].gas)) completedGasByDay.set(day, byDay[day].gas);
+  });
+  const recentGasDays = [...completedGasByDay.entries()].sort(([a], [b]) => b.localeCompare(a)).slice(0, 3);
+  const lowUseGas = [...completedGasByDay.values()].sort((a, b) => a - b);
+  const gasLowUseDaily = lowUseGas.length ? average(lowUseGas.slice(0, Math.max(1, Math.ceil(lowUseGas.length * 0.3)))) : null;
+  const gasRecentDaily = recentGasDays.length === 3 ? average(recentGasDays.map(([, gas]) => gas)) : null;
   const dayTotals = hasCompactHistory
     ? completedDailyHistory
         .map((row) => (row.electricity || 0) + (row.gas || 0))
@@ -320,6 +332,11 @@ function buildEnergySummary(energyRows, carbonDailyRows = []) {
     electricityTodayKwh: byDay[today]?.electricity || 0,
     gasDailyAverage: average(gasValues),
     gasTodayKwh: byDay[today]?.gas || 0,
+    gasRecentDaily,
+    gasRecentEndDate: recentGasDays[0]?.[0] || null,
+    gasLowUseDaily,
+    gasRecentAboveLowUseDaily: Number.isFinite(gasRecentDaily) && Number.isFinite(gasLowUseDaily)
+      ? Math.max(0, gasRecentDaily - gasLowUseDaily) : null,
     totalDailyAverage: average(dayTotals),
     electricityPowerKw: latestPower ? Number(latestPower.power_kw) : 0,
     hasGasData: gasValues.length > 0 || energyRows.some((row) => row.fuel_type === "gas"),

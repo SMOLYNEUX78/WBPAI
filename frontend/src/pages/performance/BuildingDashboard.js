@@ -1501,6 +1501,10 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
     electricityTodayKwh: 0,
     gasDailyAverage: null,
     gasTodayKwh: 0,
+    gasRecentDaily: null,
+    gasRecentEndDate: null,
+    gasLowUseDaily: null,
+    gasRecentAboveLowUseDaily: null,
     totalDailyAverage: null,
     electricityPowerKw: 0,
     hasGasData: false,
@@ -2640,8 +2644,15 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
 
     const snapshotEnergySummary = snapshot.energy_summary;
     if (snapshotEnergySummary && typeof snapshotEnergySummary === "object") {
+      const previous = readCachedEnergySummary();
       const nextEnergySummary = {
         ...defaultEnergySummary,
+        ...Object.fromEntries([
+          "gasBaseloadDaily", "gasHeatingDaily", "gasAnomalyDaily", "gasDhwDaily",
+          "gasUnregulatedDaily", "gasDhwWindows", "gasDecompositionConfidence",
+          "gasRecentDaily", "gasRecentEndDate", "gasLowUseDaily", "gasRecentAboveLowUseDaily",
+        ].filter((key) => !Object.prototype.hasOwnProperty.call(snapshotEnergySummary, key))
+          .map((key) => [key, previous[key]])),
         ...snapshotEnergySummary,
       };
       applyEnergySummary(nextEnergySummary, nextEnergySummary.totalDailyAverage);
@@ -3041,7 +3052,12 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
                     : 0
                 )
               )
-            : 0;
+            : null;
+        const recentGasDays = Object.entries(completedDailyTotalsByDay)
+          .filter(([, day]) => Number.isFinite(day.fuels.gas))
+          .sort(([a], [b]) => b.localeCompare(a)).slice(0, 3);
+        const gasRecentDaily = recentGasDays.length === 3
+          ? average(recentGasDays.map(([, day]) => day.fuels.gas)) : null;
         const gasAnomalyDaily = Number.isFinite(gasBaseloadDaily)
           ? average(
               gasDayRows.map((day) => {
@@ -3057,7 +3073,7 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
               })
             )
           : null;
-        const gasDhwDaily = Number.isFinite(gasDhwDailyFromSchedule)
+        const gasDhwEstimate = Number.isFinite(gasDhwDailyFromSchedule)
           ? Math.min(
               gasDhwDailyFromSchedule,
               Number.isFinite(gasBaseloadDaily)
@@ -3065,16 +3081,15 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
                 : gasDhwDailyFromSchedule
             )
           : gasBaseloadDaily;
+        const gasDhwDaily = hasWeatherGasSample ? gasDhwEstimate : null;
         const gasUnregulatedDaily =
           Number.isFinite(gasDhwDaily) && Number.isFinite(gasBaseloadDaily)
             ? Math.max(0, gasBaseloadDaily - gasDhwDaily)
             : null;
         const gasDecompositionConfidence = hasGasData
-          ? recurringDhwSlots.length
-            ? "DHW schedule + HDD decomposition"
-            : hasWeatherGasSample
-            ? "Baseload + HDD decomposition"
-            : "Summer baseload estimate / needs winter HDD data"
+          ? hasWeatherGasSample
+            ? recurringDhwSlots.length ? "Estimated DHW schedule + HDD decomposition" : "Estimated baseload + HDD decomposition"
+            : "Gas use recorded; heating / hot-water split needs weather evidence"
           : "No gas data";
 
         applyEnergySummary({
@@ -3082,6 +3097,11 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
           electricityTodayKwh,
           gasDailyAverage,
           gasTodayKwh,
+          gasRecentDaily,
+          gasRecentEndDate: recentGasDays[0]?.[0] || null,
+          gasLowUseDaily: gasBaseloadDaily,
+          gasRecentAboveLowUseDaily: Number.isFinite(gasRecentDaily) && Number.isFinite(gasBaseloadDaily)
+            ? Math.max(0, gasRecentDaily - gasBaseloadDaily) : null,
           totalDailyAverage,
           electricityPowerKw: latestElectricPower
             ? Number(latestElectricPower.power_kw)
@@ -5535,9 +5555,7 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
         Number(snapshot?.performance_summary?.value)
       );
 
-      if (!snapshot) {
-        await fetchLongTermAverage();
-      }
+      await fetchLongTermAverage();
 
       if (!snapshot || !hasSharedPerformance) {
         const nextHeatLossSummary = monthlyHla?.heatLossSummary || await fetchHeatLossSummary();
@@ -5657,7 +5675,8 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
     shouldShowGas && Number.isFinite(energySummary.gasAnomalyDaily)
       ? energySummary.gasAnomalyDaily
       : null;
-  const regulatedDailyKwh = estimatedTotalDailyKwh
+  const gasSplitReady = !shouldShowGas || !energySummary.hasGasData || Number.isFinite(energySummary.gasHeatingDaily);
+  const regulatedDailyKwh = estimatedTotalDailyKwh && gasSplitReady
     ? Math.min(
         estimatedTotalDailyKwh,
         gasDhwDailyKwh +
@@ -8042,6 +8061,13 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
                     </div>
                   ) : shouldShowGas && energySummary.hasGasData ? (
                     <div className="pt-2 mt-2 border-t border-gray-200 space-y-1">
+                      {Number.isFinite(energySummary.gasRecentDaily) ? <p>
+                        <strong>Recent gas:</strong> {formatNumber(energySummary.gasRecentDaily)} kWh/day over the last 3 completed days
+                        {energySummary.gasRecentEndDate ? ` (to ${energySummary.gasRecentEndDate})` : ""}
+                      </p> : null}
+                      {Number.isFinite(energySummary.gasRecentAboveLowUseDaily) && energySummary.gasRecentAboveLowUseDaily > 0 ? <p>
+                        <strong>Above low-use level:</strong> +{formatNumber(energySummary.gasRecentAboveLowUseDaily)} kWh/day. This may reflect heating, but gas readings alone cannot separate heating from hot water.
+                      </p> : null}
                       <p>
                         <strong>Gas Baseload:</strong>{" "}
                         {Number.isFinite(gasBaseloadDailyKwh)
