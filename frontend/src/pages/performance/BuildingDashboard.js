@@ -13890,7 +13890,7 @@ const BuildingDashboard = () => {
     };
     checkAnswer();
     return () => { cancelled = true; };
-  }, [accessRole, heatingRun?.event?.start, heatingRun?.buildingRecordId]);
+  }, [accessRole, heatingRun]);
 
   useEffect(() => {
     const run = heatingPrompt?.event;
