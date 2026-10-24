@@ -11,6 +11,7 @@ import { mergeMonthlyHlaRows } from "./monthlyHla";
 import { hasFreshRoomReading, liveRedReadings } from "./liveRedReadings";
 import { homeComfortSuggestion } from "./comfortSuggestions";
 import { dailyGasFromIntervals, detectHeatingEvents, detectHeatingOnset } from "./heatingEvents";
+import { recentProbableHeatingRun, shouldAskAboutHeating } from "./heatingPrompt";
 import { extractEnergyBillImage, extractEnergyBillPdf, normaliseBillReview } from "./energyBill";
 import RetrofitPlanner from "./RetrofitPlanner";
 import BaselineDataPanel from "./BaselineDataPanel";
@@ -1288,7 +1289,7 @@ const getEstimatedInternalArea = (modelId, building) => {
   return building.estimatedInternalArea;
 };
 
-const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, onComfortSuggestionChange, onPerformanceChange, onRoomFreshnessChange }) => {
+const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, onComfortSuggestionChange, onHeatingRunChange, heatingUseAnswer, onPerformanceChange, onRoomFreshnessChange }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const dataSourceBuildingId = building.dataSourceId || building.id;
@@ -5701,6 +5702,12 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
   }, [dataSourceBuildingId, isActive]);
 
   useEffect(() => {
+    if (dataSourceBuildingId === "home" && isActive && heatingEventStatus === "ready") {
+      onHeatingRunChange?.({ event: recentProbableHeatingRun(heatingEvents), buildingRecordId: homePassportDatabaseId });
+    }
+  }, [dataSourceBuildingId, isActive, heatingEventStatus, heatingEvents, homePassportDatabaseId, onHeatingRunChange]);
+
+  useEffect(() => {
     if (dataSourceBuildingId !== "home" || selectedHealthTrendArea === "all") {
       return;
     }
@@ -8179,6 +8186,7 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
                       </p> : null}
                       {dataSourceBuildingId === "home" ? <div className="border-t border-gray-200 pt-2">
                         <strong>Heating onset</strong>
+                        {heatingUseAnswer ? <p>Occupant reported: {({ one_off: "one-off heating", intermittent: "intermittent heating", regular: "regular heating", not_heating: "this gas run was not heating" })[heatingUseAnswer.answer] || "not yet classified"}.</p> : null}
                         {heatingOnset ? <p>
                           Gas use rose from {new Date(`${heatingOnset.date}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Europe/London" })}: {formatNumber(heatingOnset.recentDaily, 1)} kWh/day recently, against {formatNumber(heatingOnset.priorDaily, 1)} kWh/day before the rise. This is indicative of heating, not a measured heating-only figure.
                         </p> : <p>No sustained multi-day rise confirmed against earlier gas use.</p>}
@@ -13775,6 +13783,12 @@ const BuildingDashboard = () => {
   const [headerPerformanceValue, setHeaderPerformanceValue] = useState(null);
   const [comfortSuggestion, setComfortSuggestion] = useState(null);
   const [comfortPanelOpen, setComfortPanelOpen] = useState(false);
+  const [heatingRun, setHeatingRun] = useState(null);
+  const [heatingUseAnswer, setHeatingUseAnswer] = useState(null);
+  const [heatingPrompt, setHeatingPrompt] = useState(null);
+  const [heatingPromptOpen, setHeatingPromptOpen] = useState(false);
+  const [heatingPromptStatus, setHeatingPromptStatus] = useState("");
+  const [heatingAnswerBusy, setHeatingAnswerBusy] = useState(false);
   const [comfortNoticesEnabled, setComfortNoticesEnabled] = useState(() => window.localStorage.getItem("wbp-comfort-notices") === "yes");
   const [comfortNoticeStatus, setComfortNoticeStatus] = useState("");
   const [dismissedComfort, setDismissedComfort] = useState(() => {
@@ -13805,6 +13819,109 @@ const BuildingDashboard = () => {
   const activeBuilding = BUILDINGS[activeIndex];
   const showComfortBanner = accessRole === "homeowner" && ["home", "bl", "cc"].includes(activeBuilding.id)
     && comfortSuggestion && !(dismissedComfort?.key === comfortSuggestion.key && dismissedComfort.until > Date.now());
+
+  useEffect(() => {
+    const run = heatingRun?.event;
+    const buildingRecordId = heatingRun?.buildingRecordId;
+    if (accessRole !== "homeowner" || !buildingRecordId) {
+      setHeatingPrompt(null);
+      setHeatingUseAnswer(null);
+      return undefined;
+    }
+    let cancelled = false;
+    const checkAnswer = async () => {
+      const storageKey = `wbp-heating-answer:${buildingRecordId}`;
+      let localAnswer;
+      try { localAnswer = JSON.parse(window.localStorage.getItem(storageKey) || "null"); } catch { localAnswer = null; }
+      const { data, error } = await supabase.from("WBPAuditEvents")
+        .select("event_data, occurred_at")
+        .eq("building_record_id", buildingRecordId)
+        .eq("event_type", "heating-use-confirmed")
+        .order("occurred_at", { ascending: false }).limit(1);
+      if (cancelled) return;
+      const remoteAnswer = !error && data?.[0] ? {
+        ...data[0].event_data, answeredAt: data[0].occurred_at,
+      } : null;
+      const lastAnswer = remoteAnswer && (!localAnswer || Date.parse(remoteAnswer.answeredAt) > Date.parse(localAnswer.answeredAt))
+        ? remoteAnswer : localAnswer;
+      setHeatingUseAnswer(lastAnswer || null);
+      if (!run) {
+        setHeatingPrompt(null);
+        return;
+      }
+      if (!shouldAskAboutHeating(run, lastAnswer)) {
+        setHeatingPrompt(null);
+        return;
+      }
+      let dismissed;
+      try { dismissed = JSON.parse(window.localStorage.getItem(`wbp-heating-dismissed:${buildingRecordId}`) || "null"); } catch { dismissed = null; }
+      if (dismissed && Date.now() - dismissed.at < 24 * 60 * 60 * 1000) return;
+      setHeatingPrompt({ ...heatingRun, event: run });
+      let seen;
+      try { seen = JSON.parse(window.localStorage.getItem(`wbp-heating-seen:${buildingRecordId}`) || "null"); } catch { seen = null; }
+      if (!seen || Date.now() - seen.at >= 24 * 60 * 60 * 1000) {
+        window.localStorage.setItem(`wbp-heating-seen:${buildingRecordId}`, JSON.stringify({ eventStart: run.start, at: Date.now() }));
+        setHeatingPromptOpen(true);
+      }
+    };
+    checkAnswer();
+    return () => { cancelled = true; };
+  }, [accessRole, heatingRun?.event?.start, heatingRun?.buildingRecordId]);
+
+  useEffect(() => {
+    const run = heatingPrompt?.event;
+    if (!run || !comfortNoticesEnabled || window.Notification?.permission !== "granted") return undefined;
+    const key = `wbp-heating-notified:${heatingPrompt.buildingRecordId}`;
+    let lastNotice;
+    try { lastNotice = JSON.parse(window.localStorage.getItem(key) || "null"); } catch { lastNotice = null; }
+    if (lastNotice && Date.now() - lastNotice.at < 24 * 60 * 60 * 1000) return undefined;
+    let cancelled = false;
+    navigator.serviceWorker.ready.then((registration) => {
+      if (cancelled) return;
+      return registration.showNotification("Was the heating on?", {
+        body: "Gas use has risen. Tell WBP if this is one-off, intermittent or regular heating.",
+        icon: "/wbp-rounded-192.png", tag: `wbp-heating-${heatingPrompt.buildingRecordId}`,
+        data: { type: "heating" },
+      }).then(() => window.localStorage.setItem(key, JSON.stringify({ eventStart: run.start, at: Date.now() })));
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [heatingPrompt, comfortNoticesEnabled]);
+
+  const answerHeatingPrompt = async (answer) => {
+    const run = heatingPrompt?.event;
+    const buildingRecordId = heatingPrompt?.buildingRecordId;
+    if (!run || !buildingRecordId || heatingAnswerBusy) return;
+    setHeatingAnswerBusy(true);
+    setHeatingPromptStatus("");
+    try {
+      const { data: auth, error: authError } = await supabase.auth.getUser();
+      if (authError || !auth?.user) throw new Error("Sign in to save your answer.");
+      const response = { eventStart: run.start, answer, gasKwh: Number(run.gasKwh.toFixed(2)) };
+      const { error } = await supabase.from("WBPAuditEvents").insert({
+        building_record_id: buildingRecordId,
+        actor_user_id: auth.user.id,
+        event_type: "heating-use-confirmed",
+        event_data: response,
+      });
+      if (error) throw error;
+      window.localStorage.setItem(`wbp-heating-answer:${buildingRecordId}`, JSON.stringify({ ...response, answeredAt: new Date().toISOString() }));
+      setHeatingUseAnswer({ ...response, answeredAt: new Date().toISOString() });
+      setHeatingPrompt(null);
+      setHeatingPromptOpen(false);
+    } catch (error) {
+      setHeatingPromptStatus(error.message || "Could not save your answer. Please try again.");
+    } finally {
+      setHeatingAnswerBusy(false);
+    }
+  };
+
+  const dismissHeatingPrompt = () => {
+    if (heatingPrompt?.buildingRecordId) {
+      window.localStorage.setItem(`wbp-heating-dismissed:${heatingPrompt.buildingRecordId}`, JSON.stringify({ at: Date.now() }));
+    }
+    setHeatingPrompt(null);
+    setHeatingPromptOpen(false);
+  };
 
   const toggleComfortNotices = async () => {
     if (comfortNoticesEnabled) {
@@ -13861,6 +13978,7 @@ const BuildingDashboard = () => {
 
   useEffect(() => {
     if (new URLSearchParams(location.search).has("comfort")) setComfortPanelOpen(true);
+    if (new URLSearchParams(location.search).has("heating")) setHeatingPromptOpen(true);
   }, [location.search]);
 
   const closeComfortPanel = () => {
@@ -14004,7 +14122,8 @@ const BuildingDashboard = () => {
               </span>
             </div>
             <div className="min-w-0 flex-1" />
-            {showComfortBanner ? <div className="flex w-fit min-w-0 items-center border-l-4 border-amber-700 bg-white px-2 py-1 text-xs text-gray-900 sm:text-sm" role="status">
+            {heatingPrompt ? <button type="button" className="min-w-0 truncate border-l-4 border-orange-700 bg-white px-2 py-1 text-left text-xs font-semibold text-gray-900 sm:text-sm" onClick={() => setHeatingPromptOpen(true)}>Was the heating on?</button> : null}
+            {!heatingPrompt && showComfortBanner ? <div className="flex w-fit min-w-0 items-center border-l-4 border-amber-700 bg-white px-2 py-1 text-xs text-gray-900 sm:text-sm" role="status">
               <button type="button" className="min-w-0 truncate text-left" title={comfortSuggestion.bannerText || comfortSuggestion.message} onClick={() => setComfortPanelOpen(true)}>{comfortSuggestion.bannerText || comfortSuggestion.message}</button>
               <button type="button" aria-label="Dismiss comfort suggestion" className="ml-1 shrink-0 px-1 text-base leading-none" onClick={() => {
                 const dismissed = { key: comfortSuggestion.key, until: Date.now() + 12 * 60 * 60 * 1000 };
@@ -14024,7 +14143,7 @@ const BuildingDashboard = () => {
                   <span className="mt-1 block text-xs text-emerald-800">Confirmed proceeds £0.00</span>
                   <span className="mt-1 block text-xs text-emerald-800">Exchange</span>
                 </button> : null}
-                {accessRole === "homeowner" ? <label className="flex items-start gap-2 border-b border-gray-200 px-2 py-3 text-xs text-gray-800"><input type="checkbox" className="mt-0.5" checked={comfortNoticesEnabled} onChange={toggleComfortNotices} /><span>Phone comfort suggestions<span className="mt-1 block text-gray-600">While WBP is running; only after readings stay elevated.</span></span></label> : null}
+                {accessRole === "homeowner" ? <label className="flex items-start gap-2 border-b border-gray-200 px-2 py-3 text-xs text-gray-800"><input type="checkbox" className="mt-0.5" checked={comfortNoticesEnabled} onChange={toggleComfortNotices} /><span>Phone suggestions<span className="mt-1 block text-gray-600">Comfort and possible heating, while WBP is running.</span></span></label> : null}
                 {comfortNoticeStatus ? <p role="status" className="px-2 py-1 text-xs text-gray-700">{comfortNoticeStatus}</p> : null}
                 <button type="button" onClick={logOut} className="w-full px-2 py-2 text-left font-semibold text-gray-900 hover:bg-gray-100">Log out</button>
               </div> : null}
@@ -14040,6 +14159,21 @@ const BuildingDashboard = () => {
           <h2 id="wbp-comfort-title">Comfort &amp; energy</h2>
           {comfortSuggestion ? <><p className="wbp-comfort-summary">{comfortSuggestion.bannerText}</p><p>{comfortSuggestion.message}</p></> : <p>Current room readings are still loading. Check your home profile for the latest measurements.</p>}
           <button type="button" className="wbp-comfort-action" onClick={closeComfortPanel}>View my home</button>
+        </section>
+      </div> : null}
+      {heatingPromptOpen && heatingPrompt ? <div className="wbp-comfort-backdrop" role="presentation" onMouseDown={dismissHeatingPrompt}>
+        <section className="wbp-comfort-panel" role="dialog" aria-modal="true" aria-labelledby="wbp-heating-title" onMouseDown={(event) => event.stopPropagation()}>
+          <button type="button" className="wbp-comfort-close" aria-label="Ask me later" onClick={dismissHeatingPrompt}>×</button>
+          <p className="wbp-comfort-eyebrow">Your home</p>
+          <h2 id="wbp-heating-title">Was the heating on?</h2>
+          <p>We noticed a rise in gas use. Hot water can look similar, so your answer helps us understand the readings.</p>
+          <div className="grid gap-2 text-sm sm:grid-cols-3">
+            {[["one_off", "One-off"], ["intermittent", "Intermittent"], ["regular", "Regular"]].map(([value, label]) =>
+              <button key={value} type="button" disabled={heatingAnswerBusy} onClick={() => answerHeatingPrompt(value)} className="border border-emerald-700 bg-emerald-50 px-3 py-3 font-semibold text-emerald-950 disabled:opacity-50">{label}</button>
+            )}
+          </div>
+          <button type="button" disabled={heatingAnswerBusy} onClick={() => answerHeatingPrompt("not_heating")} className="mt-3 w-full border border-gray-300 bg-white px-3 py-2 text-sm font-semibold disabled:opacity-50">No, it wasn't the heating</button>
+          {heatingPromptStatus ? <p role="alert" className="mt-3 text-sm text-red-700">{heatingPromptStatus}</p> : null}
         </section>
       </div> : null}
       </div>
@@ -14073,7 +14207,7 @@ const BuildingDashboard = () => {
                 ) : building.exchangeOnly ? (
                   <ExchangeDashboardPanel homeValue={new URLSearchParams(location.search).get("source") === "cc" ? bridgewoodValue : null} />
                 ) : (
-                  <BuildingDashboardPanel building={building} isActive={isActiveSlide} onLiveRedChange={setHeaderRedReadings} onComfortSuggestionChange={setComfortSuggestion} onPerformanceChange={setHeaderPerformanceValue} onRoomFreshnessChange={setHeaderRoomFresh} />
+                  <BuildingDashboardPanel building={building} isActive={isActiveSlide} onLiveRedChange={setHeaderRedReadings} onComfortSuggestionChange={setComfortSuggestion} onHeatingRunChange={setHeatingRun} heatingUseAnswer={heatingUseAnswer} onPerformanceChange={setHeaderPerformanceValue} onRoomFreshnessChange={setHeaderRoomFresh} />
                 )}
               </div>
             );
