@@ -94,6 +94,9 @@ test("Build history shows its form and council route without claiming ecosystem 
   expect(screen.getByRole("textbox", { name: "Main contractor / builder" })).toBeInTheDocument();
   expect(screen.getByRole("textbox", { name: "Building control / completion reference" })).toBeInTheDocument();
   expect(screen.getByLabelText("Upload historical build documents")).toBeInTheDocument();
+  const saveBuild = screen.getByRole("button", { name: "Save build" });
+  expect(saveBuild).toHaveAttribute("form", "wbp-build-history-form");
+  expect(screen.getByLabelText("Upload historical build documents").compareDocumentPosition(saveBuild) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(screen.getByRole("heading", { name: "East Suffolk records" })).toBeInTheDocument();
   expect(screen.getByRole("link", { name: "buildingcontrol@eastsuffolk.gov.uk" })).toHaveAttribute("href", expect.stringContaining("mailto:buildingcontrol@eastsuffolk.gov.uk"));
   expect(screen.getByRole("link", { name: "01394 444219" })).toHaveAttribute("href", "tel:+441394444219");

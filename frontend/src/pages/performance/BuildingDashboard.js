@@ -821,7 +821,7 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
                 } }))} className="shrink-0 border border-emerald-700 px-2 py-1 font-semibold text-emerald-900">Use reference</button> : null}
               </div>)}</div> : null}
           </div> : null}
-          {(showHistoryInputs || editingStage === contentStage) ? <form onSubmit={saveHistory} className="grid gap-2 border-t border-emerald-200 pt-2 sm:grid-cols-3">
+          {(showHistoryInputs || editingStage === contentStage) ? <form id={`wbp-${stage}-history-form`} onSubmit={saveHistory} className="grid gap-3 border border-emerald-200 bg-white p-3 sm:grid-cols-3">
             {isBuild ? <div className="sm:col-span-3"><h3 className="font-bold text-gray-900">Historical build details</h3><p className="mt-1 text-gray-600">Add details from building control, completion certificates or archived construction records.</p></div> : null}
             {fields.map(([key, label]) => <React.Fragment key={key}><label className="min-w-0 font-semibold text-emerald-950">{label}<input aria-label={label} value={shownHistory[stage]?.[key] || ""} onChange={(event) => changeHistory((current) => ({ ...current, [stage]: { ...current[stage], [key]: event.target.value, ...(key === "architectPractice" || key === "designerOfficeAddress" ? { designProfileRef: null, designProfileConfirmedByOwnerAt: null } : {}), ...(key === "mainContractor" ? { buildProfileRef: null, buildProfileConfirmedByOwnerAt: null } : {}) } }))} className="mt-1 block w-full min-w-0 border border-emerald-300 bg-white px-2 py-1.5 font-normal text-gray-900" />
               {key === "architectPractice" && practiceName ? <span role="status" className={`mt-1 block text-xs font-normal ${practiceNameStatus === "matched" ? "text-amber-800" : "text-gray-600"}`}>
@@ -870,7 +870,7 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
                 </label>)}
               </fieldset>
             </> : null}
-            {isBuild ? <fieldset className="border-t border-emerald-200 pt-2 sm:col-span-3"><legend className="font-bold text-emerald-950">Upgrades</legend>
+            {isBuild ? <fieldset className="mt-2 border-t-2 border-emerald-200 pt-3 sm:col-span-3"><legend className="font-bold text-emerald-950">Upgrades</legend>
               <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{HISTORICAL_BUILD_UPGRADES.map(([key, label]) => <label key={key} className="flex items-center gap-2 font-medium text-gray-800">
                 <input type="checkbox" checked={(shownHistory.build?.upgrades || []).includes(key)} onChange={(event) => changeHistory((current) => {
                   const upgrades = current.build?.upgrades || [];
@@ -881,15 +881,19 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
                 <textarea value={shownHistory.build?.upgradeNotes || ""} onChange={(event) => changeHistory((current) => ({ ...current, build: { ...current.build, upgradeNotes: event.target.value } }))} rows="2" className="mt-1 block w-full border border-emerald-300 bg-white px-2 py-1.5 font-normal text-gray-900" placeholder="Date, product or evidence reference, if known" />
               </label>
             </fieldset> : null}
-            <div className="flex items-end gap-2"><button type="submit" disabled={!recordId} className="bg-emerald-700 px-3 py-1.5 font-semibold text-white disabled:opacity-50">Save {stage}</button>{saveStatus ? <span role="status" className="text-gray-700">{saveStatus}</span> : null}</div>
+            {isDesign ? <div className="flex items-end gap-2"><button type="submit" disabled={!recordId} className="bg-emerald-700 px-3 py-1.5 font-semibold text-white disabled:opacity-50">Save {stage}</button>{saveStatus ? <span role="status" className="text-gray-700">{saveStatus}</span> : null}</div> : null}
           </form> : null}
-          {(showHistoryInputs || editingStage === contentStage) ? <div className="min-w-0">
+          {(showHistoryInputs || editingStage === contentStage) ? <div className="min-w-0 border border-emerald-200 bg-white p-3">
             <label className="block font-semibold text-emerald-950" htmlFor={`wbp-${stage}-file`}>Upload historical {stage} documents</label>
             <input id={`wbp-${stage}-file`} type="file" accept=".pdf,.jpg,.jpeg,.png" disabled={busy || !recordId}
               onChange={(event) => { uploadDocument(event.target.files?.[0]); event.target.value = ""; }} className="mt-1 block w-full min-w-0 text-xs" />
             {!recordId ? <p className="mt-1 text-gray-700">Save this home before uploading.</p> : null}
             {uploadStatus ? <p role="status" className="mt-1 text-gray-700">{uploadStatus}</p> : null}
             {renderDocumentList(true)}
+          </div> : null}
+          {isBuild && (showHistoryInputs || editingStage === contentStage) ? <div className="flex flex-wrap items-center gap-3 border-t border-emerald-200 pt-3">
+            <button type="submit" form="wbp-build-history-form" disabled={!recordId} className="min-w-36 bg-emerald-700 px-6 py-2.5 font-semibold text-white disabled:opacity-50">Save build</button>
+            {saveStatus ? <span role="status" className="text-gray-700">{saveStatus}</span> : null}
           </div> : null}
           </> : !hasRecordedStage ? renderDocumentList() : null}
         </div>}
