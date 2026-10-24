@@ -222,6 +222,19 @@ const historicalDocumentLabel = (document) => document.display_name || (document
   ? `${document.version_number}.${historicalDocumentExtension(document.mime_type, document.original_file_name)}`
   : document.original_file_name);
 
+const HISTORICAL_FABRIC_FIELDS = [
+  ["structureType", "Structure", ["Brick / masonry", "Timber frame", "Steel frame", "Concrete frame", "SIPs", "Other / mixed"]],
+  ["wallConstruction", "External walls", ["Solid brick", "Cavity brick / block", "Timber frame", "SIPs", "Concrete", "Other / mixed"]],
+  ["roofConstruction", "Roof", ["Pitched timber", "Flat timber", "Concrete", "Other / mixed"]],
+  ["floorConstruction", "Ground floor", ["Suspended timber", "Solid concrete", "Beam and block", "Other / mixed"]],
+];
+const HISTORICAL_BUILD_UPGRADES = [
+  ["windows", "New windows"], ["doors", "New external doors"],
+  ["cavity-wall", "Cavity wall insulation"], ["ewi", "External wall insulation"],
+  ["iwi", "Internal wall insulation"], ["loft", "Roof / loft insulation"],
+  ["floor", "Floor insulation"], ["airtightness", "Airtightness works"],
+];
+
 export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed = false, activeStage, contentOnly = false, addressDraft, onAddressDraftChange, draftHistory, onDraftHistoryChange, onPlanningLookup, internalArea, onInternalAreaChange, onEditProfile }) => {
   const [localStage, setLocalStage] = useState(initiallyCollapsed ? null : "audit");
   const stage = activeStage || localStage;
@@ -718,11 +731,10 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
       {contentStage === "audit" ? <><ProfileSummaryColumns record={record} property={property} setup={setup} />{onEditProfile ? <div className="flex justify-end px-3 py-2 sm:px-5"><button type="button" onClick={onEditProfile} className="border border-emerald-700 px-3 py-2 text-xs font-semibold text-emerald-900">Edit profile</button></div> : null}</> :
         <div className={isAddressHistory ? "grid gap-3 px-3 py-2 text-xs sm:px-5" : "grid gap-2 px-3 py-2 text-xs sm:grid-cols-2 sm:px-5"}>
           {hasRecordedStage ? <div className="min-w-0 border-t border-emerald-200 pt-2 text-gray-800">
-            {isDesign ? <div className="mt-1 grid min-w-0 grid-cols-4 gap-2 text-[10px] leading-tight [overflow-wrap:anywhere] sm:gap-3 sm:text-xs">
+            {isDesign ? <div className="mt-1 grid min-w-0 grid-cols-2 gap-2 text-[10px] leading-tight [overflow-wrap:anywhere] sm:grid-cols-4 sm:gap-3 sm:text-xs">
               {[
                 [["architectPractice", "Architect / practice"], ["leadDesigner", "Lead designer"], ["designerOfficeAddress", "Address"]],
-                [["planningReference", "Planning application reference"], ["planningDecisionDate", "Planning decision date"]],
-                [["originalUse", "Original building use"], ["internalArea", "Internal floor area"], ["areaSource", "Area source"]],
+                [["originalUse", "Original building use"], ["internalArea", "Internal floor area"], ["areaSource", "Area source"], ["planningReference", "Planning application reference"], ["planningDecisionDate", "Planning decision date"]],
               ].map((column, index) => <dl key={index} className="min-w-0 border-r border-emerald-200 pr-2">
                 {column.filter(([key]) => recordedStage[key]).map(([key, label]) => <div key={key} className="mb-2 min-w-0"><dt className="text-gray-600">{label}</dt><dd className="break-words font-semibold">{key === "architectPractice" && recordedStage.designProfileRef
                   ? <a href={`/workspace/design-profile/${encodeURIComponent(recordedStage.designProfileRef)}`} className="text-emerald-900 underline underline-offset-2">{recordedStage[key]}</a>
@@ -730,10 +742,14 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
                   ? <a href={`/workspace/design-match/${encodeURIComponent(recordId)}`} className="text-emerald-900 underline underline-offset-2">{recordedStage[key]}</a>
                   : key === "internalArea" ? `${recordedStage[key]} m2` : recordedStage[key]}</dd></div>)}
               </dl>)}
+              <dl className="min-w-0 border-r border-emerald-200 pr-2"><dt className="mb-2 font-semibold text-emerald-950">Specified fabric</dt>
+                {HISTORICAL_FABRIC_FIELDS.filter(([key]) => recordedStage[key]).map(([key, label]) => <div key={key} className="mb-2"><dt className="text-gray-600">{label}</dt><dd className="break-words font-semibold">{recordedStage[key]}</dd></div>)}
+                {!HISTORICAL_FABRIC_FIELDS.some(([key]) => recordedStage[key]) ? <dd className="text-gray-500">Not yet recorded</dd> : null}
+              </dl>
               <div className="min-w-0">{renderDocumentList() || <><h4 className="font-semibold text-emerald-950">Historical documents</h4><p className="mt-1 text-gray-600">None uploaded</p></>}
                 {/^https?:\/\//i.test(recordedStage.planningPortalUrl || "") ? <a href={recordedStage.planningPortalUrl} target="_blank" rel="noopener noreferrer" className="mt-2 block font-semibold text-emerald-900 underline underline-offset-2">Planning portal record URL</a> : null}
               </div>
-            </div> : <div className="mt-1 grid min-w-0 grid-cols-3 gap-2 text-[10px] leading-tight [overflow-wrap:anywhere] sm:gap-3 sm:text-xs">
+            </div> : <div className="mt-1 grid min-w-0 grid-cols-2 gap-2 text-[10px] leading-tight [overflow-wrap:anywhere] sm:grid-cols-4 sm:gap-3 sm:text-xs">
               {[
                 [["mainContractor", "Main contractor / builder"], ["builderAddress", "Address"]],
                 [["buildingControlReference", "Building control / completion reference"], ["developer", "Developer / client"], ["constructionStart", "Construction start"], ["completionDate", "Completion year / date"], ["evidenceSourceUrl", "Building record URL"]],
@@ -742,6 +758,10 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
                 const value = recordedStage[key] || (suggestedAddress ? linkedBuilderAddress : "Not yet provided");
                 return <div key={key} className="mb-2 min-w-0"><dt className="text-gray-600">{label}</dt><dd className={`break-words font-semibold ${!recordedStage[key] ? "text-gray-500" : ""}`}>{key === "mainContractor" && recordedStage.buildProfileRef ? <a href={`/workspace/build-profile/${encodeURIComponent(recordedStage.buildProfileRef)}`} className="text-emerald-900 underline underline-offset-2">{value}</a> : value}</dd>{suggestedAddress ? <small className="text-gray-600">From selected Build profile · unverified</small> : null}</div>;
               })}</dl>)}
+              <div className="min-w-0 border-r border-emerald-200 pr-2"><h4 className="font-semibold text-emerald-950">Upgrades</h4>
+                {(recordedStage.upgrades || []).length ? <ul className="mt-1 space-y-1">{HISTORICAL_BUILD_UPGRADES.filter(([key]) => recordedStage.upgrades.includes(key)).map(([key, label]) => <li key={key}>{label}</li>)}</ul> : <p className="mt-1 text-gray-500">None recorded</p>}
+                {recordedStage.upgradeNotes ? <p className="mt-2 break-words">{recordedStage.upgradeNotes}</p> : null}
+              </div>
               <div className="min-w-0">{renderDocumentList() || <><h4 className="font-semibold text-emerald-950">Historical documents</h4><p className="mt-1 text-gray-600">None uploaded</p></>}</div>
             </div>}
             <div className="mt-2 flex justify-end">
@@ -842,7 +862,25 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
                 </select>
               </label>
               <p className="self-end text-gray-600">Check that the area covers the intended heated floors before using it for EUI.</p>
+              <fieldset className="grid gap-2 border-t border-emerald-200 pt-2 sm:col-span-3 sm:grid-cols-2"><legend className="font-bold text-emerald-950">Specified fabric</legend>
+                {HISTORICAL_FABRIC_FIELDS.map(([key, label, options]) => <label key={key} className="min-w-0 font-semibold text-emerald-950">{label}
+                  <select aria-label={label} value={shownHistory.design?.[key] || ""} onChange={(event) => changeHistory((current) => ({ ...current, design: { ...current.design, [key]: event.target.value } }))} className="mt-1 block w-full min-w-0 border border-emerald-300 bg-white px-2 py-1.5 font-normal text-gray-900">
+                    <option value="">Not recorded</option>{options.map((option) => <option key={option} value={option}>{option}</option>)}
+                  </select>
+                </label>)}
+              </fieldset>
             </> : null}
+            {isBuild ? <fieldset className="border-t border-emerald-200 pt-2 sm:col-span-3"><legend className="font-bold text-emerald-950">Upgrades</legend>
+              <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{HISTORICAL_BUILD_UPGRADES.map(([key, label]) => <label key={key} className="flex items-center gap-2 font-medium text-gray-800">
+                <input type="checkbox" checked={(shownHistory.build?.upgrades || []).includes(key)} onChange={(event) => changeHistory((current) => {
+                  const upgrades = current.build?.upgrades || [];
+                  return { ...current, build: { ...current.build, upgrades: event.target.checked ? [...upgrades, key] : upgrades.filter((item) => item !== key) } };
+                })} />{label}
+              </label>)}</div>
+              <label className="mt-3 block font-semibold text-emerald-950">Upgrade details
+                <textarea value={shownHistory.build?.upgradeNotes || ""} onChange={(event) => changeHistory((current) => ({ ...current, build: { ...current.build, upgradeNotes: event.target.value } }))} rows="2" className="mt-1 block w-full border border-emerald-300 bg-white px-2 py-1.5 font-normal text-gray-900" placeholder="Date, product or evidence reference, if known" />
+              </label>
+            </fieldset> : null}
             <div className="flex items-end gap-2"><button type="submit" disabled={!recordId} className="bg-emerald-700 px-3 py-1.5 font-semibold text-white disabled:opacity-50">Save {stage}</button>{saveStatus ? <span role="status" className="text-gray-700">{saveStatus}</span> : null}</div>
           </form> : null}
           {(showHistoryInputs || editingStage === contentStage) ? <div className="min-w-0">

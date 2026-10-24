@@ -102,6 +102,28 @@ test("Build history shows its form and council route without claiming ecosystem 
   expect(screen.queryByRole("button", { name: "Use record details" })).not.toBeInTheDocument();
 });
 
+test("Design history offers construction choices and shows saved fabric", () => {
+  render(<MemoryRouter><OccupyHistoryTabs record={null} property={null} activeStage="design" contentOnly
+    setup={{ historicalStages: { design: { originalUse: "House", internalArea: "85", areaSource: "original-plans", structureType: "Timber frame", wallConstruction: "Cavity brick / block", savedAt: "2026-10-01" } } }} /></MemoryRouter>);
+  expect(screen.getByText("Specified fabric")).toBeInTheDocument();
+  expect(screen.getByText("Timber frame")).toBeInTheDocument();
+  expect(screen.getByText("Cavity brick / block")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Edit details" }));
+  expect(screen.getByRole("combobox", { name: "Structure" })).toHaveValue("Timber frame");
+  expect(screen.getByRole("combobox", { name: "Ground floor" })).toBeInTheDocument();
+});
+
+test("Build history offers upgrade selections and shows recorded measures", () => {
+  render(<MemoryRouter><OccupyHistoryTabs record={null} property={null} activeStage="build" contentOnly
+    setup={{ historicalStages: { build: { mainContractor: "Example Builders", upgrades: ["windows", "ewi"], upgradeNotes: "Installed in 2024", savedAt: "2026-10-01" } } }} /></MemoryRouter>);
+  expect(screen.getByText("New windows")).toBeInTheDocument();
+  expect(screen.getByText("External wall insulation")).toBeInTheDocument();
+  expect(screen.getByText("Installed in 2024")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Edit details" }));
+  expect(screen.getByRole("checkbox", { name: "New windows" })).toBeChecked();
+  expect(screen.getByRole("checkbox", { name: "Cavity wall insulation" })).not.toBeChecked();
+});
+
 test("Build history does not present East Suffolk contacts for another council", () => {
   render(<MemoryRouter><OccupyHistoryTabs record={null}
     property={{ address: "1 Example Street", postcode: "NR1 1AA", localAuthority: "Norwich City Council" }}
