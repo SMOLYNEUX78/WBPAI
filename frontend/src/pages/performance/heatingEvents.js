@@ -1,6 +1,22 @@
 const HALF_HOUR_MS = 30 * 60 * 1000;
 const TEMPERATURE_WINDOW_MS = 75 * 60 * 1000;
 
+export function selectRecentGasDays(propertyDays, legacyDays, today) {
+  const latestThree = (rows) => {
+    const days = (rows || [])
+      .filter((row) => /^\d{4}-\d{2}-\d{2}$/.test(row.date) && row.date < today &&
+        Number.isFinite(row.gasKwh) && (row.intervals == null || row.intervals >= 48))
+      .sort((a, b) => b.date.localeCompare(a.date)).slice(0, 3);
+    if (days.length !== 3) return [];
+    const consecutive = days.every((day, index) => index === 0 ||
+      Date.parse(`${days[index - 1].date}T00:00:00Z`) - Date.parse(`${day.date}T00:00:00Z`) === 86400000);
+    return consecutive ? days : [];
+  };
+  const property = latestThree(propertyDays);
+  const legacy = latestThree(legacyDays);
+  return property[0]?.date >= (legacy[0]?.date || "") ? property : legacy;
+}
+
 export function dailyGasFromIntervals(rows, today = new Date().toISOString().slice(0, 10)) {
   const byTime = new Map();
   (rows || []).forEach((row) => {

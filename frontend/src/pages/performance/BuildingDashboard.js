@@ -10,7 +10,7 @@ import { getReadinessGates } from "./readinessGates";
 import { mergeMonthlyHlaRows } from "./monthlyHla";
 import { hasFreshRoomReading, liveRedReadings } from "./liveRedReadings";
 import { homeComfortSuggestion } from "./comfortSuggestions";
-import { dailyGasFromIntervals, detectHeatingEvents, detectHeatingOnset } from "./heatingEvents";
+import { dailyGasFromIntervals, detectHeatingEvents, detectHeatingOnset, selectRecentGasDays } from "./heatingEvents";
 import { recentProbableHeatingRun, shouldAskAboutHeating } from "./heatingPrompt";
 import { extractEnergyBillImage, extractEnergyBillPdf, normaliseBillReview } from "./energyBill";
 import RetrofitPlanner from "./RetrofitPlanner";
@@ -1504,6 +1504,7 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
     gasDailyAverage: null,
     gasTodayKwh: 0,
     gasRecentDaily: null,
+    gasRecentStartDate: null,
     gasRecentEndDate: null,
     gasLowUseDaily: null,
     gasRecentAboveLowUseDaily: null,
@@ -2710,7 +2711,7 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
         ...Object.fromEntries([
           "gasBaseloadDaily", "gasHeatingDaily", "gasAnomalyDaily", "gasDhwDaily",
           "gasUnregulatedDaily", "gasDhwWindows", "gasDecompositionConfidence",
-          "gasRecentDaily", "gasRecentEndDate", "gasLowUseDaily", "gasRecentAboveLowUseDaily", "gasHeatingOnset",
+          "gasRecentDaily", "gasRecentStartDate", "gasRecentEndDate", "gasLowUseDaily", "gasRecentAboveLowUseDaily", "gasHeatingOnset",
         ].filter((key) => !Object.prototype.hasOwnProperty.call(snapshotEnergySummary, key))
           .map((key) => [key, previous[key]])),
         ...snapshotEnergySummary,
@@ -3119,15 +3120,16 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
                 )
               )
             : null;
-        const legacyRecentGasDays = Object.entries(completedDailyTotalsByDay)
+        const legacyGasDays = Object.entries(completedDailyTotalsByDay)
           .filter(([, day]) => Number.isFinite(day.fuels.gas))
-          .sort(([a], [b]) => b.localeCompare(a)).slice(0, 3);
-        const recentGasDays = propertyGasDays.length >= 3
-          ? propertyGasDays.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 3)
-              .map((day) => [day.date, { fuels: { gas: day.gasKwh } }])
-          : legacyRecentGasDays;
+          .map(([date, day]) => ({ date, gasKwh: day.fuels.gas }));
+        const recentGasDays = selectRecentGasDays(
+          propertyGasDays,
+          legacyGasDays,
+          new Date().toISOString().slice(0, 10)
+        );
         const gasRecentDaily = recentGasDays.length === 3
-          ? average(recentGasDays.map(([, day]) => day.fuels.gas)) : null;
+          ? average(recentGasDays.map((day) => day.gasKwh)) : null;
         const onsetGasDays = new Map((compactDailyHistory || [])
           .filter((row) => row.saving_date >= "2026-03-18" && row.baseline_gas_kwh != null)
           .map((row) => [row.saving_date, { date: row.saving_date, gasKwh: Number(row.baseline_gas_kwh) }]));
@@ -3180,7 +3182,8 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
           gasTodayKwh,
           gasRecentDaily,
           gasHeatingOnset,
-          gasRecentEndDate: recentGasDays[0]?.[0] || null,
+          gasRecentStartDate: recentGasDays[2]?.date || null,
+          gasRecentEndDate: recentGasDays[0]?.date || null,
           gasLowUseDaily: gasBaseloadDaily,
           gasRecentAboveLowUseDaily: Number.isFinite(gasRecentDaily) && Number.isFinite(gasBaseloadDaily)
             ? Math.max(0, gasRecentDaily - gasBaseloadDaily) : null,
@@ -5756,6 +5759,17 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
       : 0;
   const estimatedTotalDailyKwh = estimatedElectricityDailyKwh + estimatedGasDailyKwh;
   const heatingOnset = energySummary.gasHeatingOnset;
+  const probableHeatingRuns = heatingEvents.filter((event) => event.classification === "probable heating");
+  const formatGasDate = (date) => date
+    ? new Date(`${date}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Europe/London" })
+    : "";
+  const londonTodayParts = Object.fromEntries(new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(new Date()).map(({ type, value }) => [type, value]));
+  const gasRecentLagDays = energySummary.gasRecentEndDate
+    ? Math.max(0, Math.round((Date.UTC(Number(londonTodayParts.year), Number(londonTodayParts.month) - 1, Number(londonTodayParts.day)) -
+      Date.parse(`${energySummary.gasRecentEndDate}T00:00:00Z`)) / 86400000) - 1)
+    : null;
   const temperatureMatchedHeatingRun = heatingOnset && heatingEvents.find((event) =>
     event.classification === "probable heating" && event.start.slice(0, 10) >= heatingOnset.date
   );
@@ -8171,9 +8185,12 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
                       <div className="mt-2 space-y-1">
                       <p className="text-gray-600">{displayedSplitConfidence}</p>
                       {Number.isFinite(energySummary.gasRecentDaily) ? <p>
-                        <strong>Recent gas:</strong> {formatNumber(energySummary.gasRecentDaily)} kWh/day over the last 3 completed days
-                        {energySummary.gasRecentEndDate ? ` (to ${energySummary.gasRecentEndDate})` : ""}
-                      </p> : null}
+                        <strong>Recent gas:</strong> {formatNumber(energySummary.gasRecentDaily)} kWh/day
+                        {energySummary.gasRecentStartDate && energySummary.gasRecentEndDate
+                          ? ` · ${formatGasDate(energySummary.gasRecentStartDate)}–${formatGasDate(energySummary.gasRecentEndDate)} (3 complete days)`
+                          : " · 3 complete days"}
+                        {gasRecentLagDays > 0 ? ` · ${gasRecentLagDays} ${gasRecentLagDays === 1 ? "day" : "days"} behind` : ""}
+                      </p> : <p><strong>Recent gas:</strong> Waiting for three consecutive complete days.</p>}
                       {Number.isFinite(energySummary.gasRecentDaily) &&
                       Number.isFinite(energySummary.gasDailyAverage) &&
                       energySummary.gasDailyAverage > 0 ? <p>
@@ -8194,18 +8211,25 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
                           ? `A sustained gas run in cool outdoor conditions supports possible heating${Number.isFinite(temperatureMatchedHeatingRun.indoorRiseC) ? `; indoor temperature changed ${temperatureMatchedHeatingRun.indoorRiseC >= 0 ? "+" : ""}${formatNumber(temperatureMatchedHeatingRun.indoorRiseC, 1)}°C` : ""}.`
                           : heatingEventStatus === "loading" ? "Checking indoor and outdoor temperatures." : "No temperature-matched run confirmed yet."}</p> : null}
                         <div className="mt-2 border-t border-gray-200 pt-2">
-                          <strong>Half-hour gas runs</strong>
-                          <div className="mt-1 space-y-1">
-                            {heatingEventStatus === "unavailable" ? <p>Half-hour or room readings unavailable.</p> : heatingEventStatus === "loading" ? <p>Checking gas and room readings...</p> : heatingEventStatus === "no-intervals" ? <p>No half-hour gas readings available for this check.</p> : heatingEvents.length === 0 ? <p>No individual run met the half-hour criteria; this does not rule out cycling heating.</p> : <>
-                              <p>{heatingEvents.filter((event) => event.classification === "probable heating").length} probable heating run(s) in the last 7 days; hot water can overlap.</p>
-                              {heatingEvents.slice(0, 4).map((event) => <p key={event.start}>
-                                {new Date(event.start).toLocaleString("en-GB", { dateStyle: "short", timeStyle: "short", timeZone: "Europe/London" })}: {event.classification}, {formatNumber(event.durationHours, 1)} h, {formatNumber(event.gasKwh, 1)} kWh gas
-                                {Number.isFinite(event.outdoorStart) ? `, outside ${formatNumber(event.outdoorStart, 1)}°C` : ""}
-                                {Number.isFinite(event.indoorRiseC) ? `, inside change ${event.indoorRiseC >= 0 ? "+" : ""}${formatNumber(event.indoorRiseC, 1)}°C` : ""}.
-                                {Number.isFinite(event.gasKwhPerDegreeHour) ? ` Gas per indoor/outdoor degree-hour: ${formatNumber(event.gasKwhPerDegreeHour, 2)} kWh/°C·h (indicative).` : ""}
-                              </p>)}
-                            </>}
-                          </div>
+                          {heatingEventStatus === "unavailable" ? <p>Half-hour or room readings unavailable.</p> : heatingEventStatus === "loading" ? <p>Checking gas and room readings...</p> : heatingEventStatus === "no-intervals" ? <p>No half-hour gas readings available for this check.</p> : heatingEvents.length === 0 ? <p>No sustained gas runs detected in the last 7 days.</p> : <>
+                            <p><strong>{probableHeatingRuns.length} probable heating {probableHeatingRuns.length === 1 ? "run" : "runs"}</strong> in the last 7 days. Hot water can overlap.</p>
+                            <details className="mt-2 border-t border-gray-200 pt-2">
+                              <summary className="cursor-pointer font-semibold">View {heatingEvents.length} gas {heatingEvents.length === 1 ? "run" : "runs"}</summary>
+                              <ul className="mt-2 divide-y divide-gray-200 text-xs sm:text-sm">
+                                {heatingEvents.map((event) => <li key={event.start} className="py-2">
+                                  <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+                                    <strong>{new Date(event.start).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" })}</strong>
+                                    <span className="text-gray-600">{event.classification === "probable heating" ? "Possible heating" : "Gas use"}</span>
+                                  </div>
+                                  <p>{formatNumber(event.gasKwh, 1)} kWh gas · {formatNumber(event.durationHours, 1)} h
+                                    {Number.isFinite(event.outdoorStart) ? ` · Outside ${formatNumber(event.outdoorStart, 1)}°C` : ""}
+                                    {Number.isFinite(event.indoorRiseC) ? ` · Inside ${event.indoorRiseC >= 0 ? "+" : ""}${formatNumber(event.indoorRiseC, 1)}°C` : ""}
+                                  </p>
+                                  {Number.isFinite(event.gasKwhPerDegreeHour) ? <p className="text-gray-500">Gas per degree-hour: {formatNumber(event.gasKwhPerDegreeHour, 2)} kWh/°C·h (indicative)</p> : null}
+                                </li>)}
+                              </ul>
+                            </details>
+                          </>}
                         </div>
                       </div> : null}
                       <p>

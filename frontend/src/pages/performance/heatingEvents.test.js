@@ -1,4 +1,4 @@
-import { dailyGasFromIntervals, detectHeatingEvents, detectHeatingOnset } from "./heatingEvents";
+import { dailyGasFromIntervals, detectHeatingEvents, detectHeatingOnset, selectRecentGasDays } from "./heatingEvents";
 
 const gas = (hour, kwh) => ({ timestamp: new Date(Date.UTC(2026, 9, 20, 16) + hour * 3600000).toISOString(), usage_kwh: kwh });
 const temp = (hour, inside, outside) => ({ timestamp: gas(hour, 0).timestamp, temperature_inside: inside, temperature_outside: outside });
@@ -61,4 +61,16 @@ test("builds completed London gas days from property intervals without doubling 
   const days = dailyGasFromIntervals(rows, "2026-10-21");
   expect(days).toEqual([{ date: "2026-10-19", gasKwh: 12, intervals: 48 }]);
   expect(dailyGasFromIntervals(rows.slice(0, 20), "2026-10-21")).toEqual([]);
+});
+
+test("uses the freshest three consecutive completed gas days", () => {
+  const property = dailyGas("2026-10-20", [10, 11, 12]);
+  const legacy = dailyGas("2026-10-21", [11, 12, 13]);
+  expect(selectRecentGasDays(property, legacy, "2026-10-24").map((day) => day.date))
+    .toEqual(["2026-10-23", "2026-10-22", "2026-10-21"]);
+  expect(selectRecentGasDays(legacy, property, "2026-10-24")[0].date).toBe("2026-10-23");
+  expect(selectRecentGasDays(property, [...legacy.slice(0, 1), legacy[2]], "2026-10-24")[0].date)
+    .toBe("2026-10-22");
+  expect(selectRecentGasDays([...legacy.slice(0, 2), { ...legacy[2], intervals: 36 }], legacy, "2026-10-24")[0].gasKwh)
+    .toBe(13);
 });
