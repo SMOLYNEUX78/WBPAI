@@ -233,6 +233,8 @@
   box-shadow: 0 20px 60px rgb(0 0 0 / 20%);
 }
 
+.wbp-detail-dialog--stable { height: min(760px, calc(100dvh - 32px)); }
+
 .wbp-detail-header {
   display: flex;
   flex-wrap: wrap;

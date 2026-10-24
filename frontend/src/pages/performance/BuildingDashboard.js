@@ -24,13 +24,13 @@ import { calculateModelledWalletBalance } from "./dataWallet";
 import { performanceShade } from "./performanceShade";
 import "./occupyScreen.css";
 
-export const DetailSurface = ({ children, title, onClose, modal, headerExtra }) => {
+export const DetailSurface = ({ children, title, onClose, modal, headerExtra, stableHeight = false }) => {
   if (!modal || typeof document === "undefined") return children;
   return createPortal(
     <div className="wbp-detail-backdrop" onMouseDown={(event) => {
       if (event.target === event.currentTarget) onClose();
     }}>
-      <section className="wbp-detail-dialog" role="dialog" aria-modal="true" aria-label={title || "Building performance details"}>
+      <section className={`wbp-detail-dialog${stableHeight ? " wbp-detail-dialog--stable" : ""}`} role="dialog" aria-modal="true" aria-label={title || "Building performance details"}>
         <header className="wbp-detail-header">
           {title ? <h2>{title}</h2> : null}
           {headerExtra}
@@ -7498,55 +7498,8 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
               </button>
             ))}
           </div>
-          {datedTrendError && (trendPeriod !== "week" || selectedTrendSeason !== activeSeasonInfo.name)
-            ? <p className="text-xs text-red-700">{datedTrendError}</p> : null}
-
           {activeTrendMetrics.length > 0 ? (
             <>
-              <div className="flex flex-wrap gap-2 text-xs">
-                {activeTrendMetricGroups.map((group) => {
-                  const groupSelected = selectedTrendMetricGroupKey === group.key;
-
-                  return (
-                    <button
-                      type="button"
-                      key={group.key}
-                      onClick={() => selectTrendMetricGroup(group.key, group.metricKeys)}
-                      className={`rounded border px-3 py-1.5 font-semibold transition ${
-                        groupSelected
-                          ? "border-blue-600 bg-blue-600 text-white"
-                          : "border-gray-300 bg-white text-gray-700"
-                      }`}
-                    >
-                      {group.label}
-                    </button>
-                  );
-                })}
-              </div>
-              {dataSourceBuildingId === "home" && healthTrendSelected ? (
-                <div className="flex flex-wrap gap-2 text-xs">
-                  {healthTrendAreaOptions.map((option) => {
-                    const optionSelected =
-                      (activeHealthTrendArea?.key || "all") === option.key;
-
-                    return (
-                      <button
-                        type="button"
-                        key={option.key}
-                        onClick={() => selectHealthTrendArea(option.key)}
-                        className={`rounded border px-3 py-1.5 font-semibold transition ${
-                          optionSelected
-                            ? "border-purple-600 bg-purple-600 text-white"
-                            : "border-gray-300 bg-white text-gray-700"
-                        }`}
-                      >
-                        {option.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : null}
-
               <div className="w-full overflow-x-auto">
                 <svg
                   viewBox={`0 0 ${chartWidth} ${chartHeight}`}
@@ -7873,6 +7826,52 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
                   />
                 </svg>
               </div>
+
+              <div className="flex flex-wrap gap-2 text-xs">
+                {activeTrendMetricGroups.map((group) => {
+                  const groupSelected = selectedTrendMetricGroupKey === group.key;
+
+                  return (
+                    <button
+                      type="button"
+                      key={group.key}
+                      onClick={() => selectTrendMetricGroup(group.key, group.metricKeys)}
+                      className={`rounded border px-3 py-1.5 font-semibold transition ${
+                        groupSelected
+                          ? "border-blue-600 bg-blue-600 text-white"
+                          : "border-gray-300 bg-white text-gray-700"
+                      }`}
+                    >
+                      {group.label}
+                    </button>
+                  );
+                })}
+              </div>
+              {dataSourceBuildingId === "home" && healthTrendSelected ? (
+                <div className="flex flex-wrap gap-2 text-xs">
+                  {healthTrendAreaOptions.map((option) => {
+                    const optionSelected =
+                      (activeHealthTrendArea?.key || "all") === option.key;
+
+                    return (
+                      <button
+                        type="button"
+                        key={option.key}
+                        onClick={() => selectHealthTrendArea(option.key)}
+                        className={`rounded border px-3 py-1.5 font-semibold transition ${
+                          optionSelected
+                            ? "border-purple-600 bg-purple-600 text-white"
+                            : "border-gray-300 bg-white text-gray-700"
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
+              {datedTrendError && (trendPeriod !== "week" || selectedTrendSeason !== activeSeasonInfo.name)
+                ? <p className="text-xs text-red-700">{datedTrendError}</p> : null}
 
               {showFloorMetricColumns ? (
                 <div className="space-y-3 text-xs">
@@ -8653,7 +8652,7 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
         </div>
 
         {!shouldShowDeepDive || occupyDetail !== "trends" ? null : (
-        <DetailSurface modal={Boolean(occupyPerformanceTabs)} title={occupyPerformanceTabs ? "" : "Seasonal performance trends"} onClose={() => setOccupyDetail(null)} headerExtra={occupyPerformanceTabs}>
+        <DetailSurface modal={Boolean(occupyPerformanceTabs)} stableHeight title={occupyPerformanceTabs ? "" : "Seasonal performance trends"} onClose={() => setOccupyDetail(null)} headerExtra={occupyPerformanceTabs}>
         {seasonalChartsContent}
         </DetailSurface>
         )}
