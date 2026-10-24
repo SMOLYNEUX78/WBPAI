@@ -731,7 +731,7 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
       {contentStage === "audit" ? <><ProfileSummaryColumns record={record} property={property} setup={setup} />{onEditProfile ? <div className="flex justify-end px-3 py-2 sm:px-5"><button type="button" onClick={onEditProfile} className="border border-emerald-700 px-3 py-2 text-xs font-semibold text-emerald-900">Edit profile</button></div> : null}</> :
         <div className={isAddressHistory ? "grid gap-3 px-3 py-2 text-xs sm:px-5" : "grid gap-2 px-3 py-2 text-xs sm:grid-cols-2 sm:px-5"}>
           {hasRecordedStage ? <div className="min-w-0 border-t border-emerald-200 pt-2 text-gray-800">
-            {isDesign ? <div className="mt-1 grid min-w-0 grid-cols-2 gap-2 text-[10px] leading-tight [overflow-wrap:anywhere] sm:grid-cols-4 sm:gap-3 sm:text-xs">
+            {isDesign ? <div className="mt-1 grid min-w-0 grid-cols-4 gap-2 text-[10px] leading-tight [overflow-wrap:anywhere] sm:gap-3 sm:text-xs">
               {[
                 [["architectPractice", "Architect / practice"], ["leadDesigner", "Lead designer"], ["designerOfficeAddress", "Address"]],
                 [["originalUse", "Original building use"], ["internalArea", "Internal floor area"], ["areaSource", "Area source"], ["planningReference", "Planning application reference"], ["planningDecisionDate", "Planning decision date"]],
@@ -749,7 +749,7 @@ export const OccupyHistoryTabs = ({ record, property, setup, initiallyCollapsed 
               <div className="min-w-0">{renderDocumentList() || <><h4 className="font-semibold text-emerald-950">Historical documents</h4><p className="mt-1 text-gray-600">None uploaded</p></>}
                 {/^https?:\/\//i.test(recordedStage.planningPortalUrl || "") ? <a href={recordedStage.planningPortalUrl} target="_blank" rel="noopener noreferrer" className="mt-2 block font-semibold text-emerald-900 underline underline-offset-2">Planning portal record URL</a> : null}
               </div>
-            </div> : <div className="mt-1 grid min-w-0 grid-cols-2 gap-2 text-[10px] leading-tight [overflow-wrap:anywhere] sm:grid-cols-4 sm:gap-3 sm:text-xs">
+            </div> : <div className="mt-1 grid min-w-0 grid-cols-4 gap-2 text-[10px] leading-tight [overflow-wrap:anywhere] sm:gap-3 sm:text-xs">
               {[
                 [["mainContractor", "Main contractor / builder"], ["builderAddress", "Address"]],
                 [["buildingControlReference", "Building control / completion reference"], ["developer", "Developer / client"], ["constructionStart", "Construction start"], ["completionDate", "Completion year / date"], ["evidenceSourceUrl", "Building record URL"]],
