@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import App from "./App";
+import App, { homeDestinationFor } from "./App";
 import supabase from "./supabaseClient";
 
 jest.mock("./supabaseClient", () => ({
@@ -28,6 +28,19 @@ beforeEach(() => {
     upsert: () => Promise.resolve({ error: null }),
   }));
   supabase.rpc.mockResolvedValue({ data: [], error: null });
+});
+
+test("a new owner enters setup and cannot reuse another account's cached home", async () => {
+  window.localStorage.setItem("wbp-new-building-passport", JSON.stringify({ databaseId: "bridgewood", ownerUserId: "old-owner" }));
+  supabase.from.mockImplementation(() => ({ select: () => ({ eq: () => ({ eq: () => ({ order: () => ({ limit: async () => ({ data: [], error: null }) }) }) }) }) }));
+  expect(await homeDestinationFor({ id: "new-owner" })).toBe("/dashboard/new");
+  expect(window.localStorage.getItem("wbp-new-building-passport")).toBeNull();
+});
+
+test("an existing owner resumes their own saved dashboard route", async () => {
+  window.localStorage.setItem("wbp-active-route:v1:existing-owner", "/dashboard/bl");
+  supabase.from.mockImplementation(() => ({ select: () => ({ eq: () => ({ eq: () => ({ order: () => ({ limit: async () => ({ data: [{ id: "home-1" }], error: null }) }) }) }) }) }));
+  expect(await homeDestinationFor({ id: "existing-owner" })).toBe("/dashboard/bl");
 });
 
 test("managed stock saves a draft profile before requesting approval", async () => {

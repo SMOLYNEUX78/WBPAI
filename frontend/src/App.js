@@ -26,6 +26,22 @@ const savedRouteFor = (userId) => {
   const route = userId && window.localStorage.getItem(routeForUser(userId));
   return route && isWorkspaceRoute(route.split("?")[0]) ? route : null;
 };
+export const homeDestinationFor = async (user) => {
+  let cachedHome = null;
+  try { cachedHome = JSON.parse(window.localStorage.getItem("wbp-new-building-passport") || "null"); } catch { /* Ignore invalid cache. */ }
+  if (cachedHome && cachedHome.ownerUserId !== user.id) {
+    window.localStorage.removeItem("wbp-new-building-passport");
+  }
+  const { data, error } = await supabase.from("WBPBuildingRecords")
+    .select("id").eq("custodian_user_id", user.id).eq("lifecycle_stage", "occupy")
+    .order("updated_at", { ascending: false }).limit(1);
+  if (error || !data?.length) {
+    window.localStorage.removeItem("wbp-new-building-passport");
+    return "/dashboard/new";
+  }
+  const lastRoute = savedRouteFor(user.id);
+  return lastRoute?.startsWith("/dashboard/") ? lastRoute : "/dashboard/home";
+};
 const isWorkspaceRoute = (path) => path === "/dashboard" || path.startsWith("/dashboard/")
   || path === "/workspaces" || path.startsWith("/workspace/");
 const PROFILE_IMAGE_LIMIT_BYTES = 750 * 1024;
@@ -158,8 +174,14 @@ const LaunchRoute = () => {
   const [destination, setDestination] = useState(null);
   useEffect(() => {
     let active = true;
-    supabase.auth.getSession().then(({ data }) => {
-      if (active) setDestination(data.session ? savedRouteFor(data.session.user.id) || (data.session.user.user_metadata?.role === "stock" ? "/workspace/stock" : "/dashboard/home") : "splash");
+    supabase.auth.getSession().then(async ({ data }) => {
+      if (!active) return;
+      if (!data.session) { setDestination("splash"); return; }
+      const user = data.session.user;
+      const saved = savedRouteFor(user.id);
+      const destination = user.user_metadata?.role === "stock" ? saved || "/workspace/stock"
+        : saved?.startsWith("/workspace/") ? saved : await homeDestinationFor(user);
+      if (active) setDestination(destination);
     });
     return () => { active = false; };
   }, []);
@@ -255,8 +277,8 @@ const RoleGateway = () => {
       return;
     }
 
-    const lastRoute = savedRouteFor(session.user.id);
-    navigate(intent.authMode === "signin" && lastRoute?.startsWith("/dashboard/") ? lastRoute : "/dashboard/home");
+    const homeDestination = await homeDestinationFor(session.user);
+    navigate(intent.authMode === "signup" ? "/dashboard/new" : homeDestination);
   }, [navigate]);
 
   useEffect(() => {
@@ -276,7 +298,11 @@ const RoleGateway = () => {
       if (intent?.role) {
         await finishAuthenticatedAccess(data.session, intent);
       } else {
-        navigate(savedRouteFor(data.session.user.id) || (data.session.user.user_metadata?.role === "stock" ? "/workspace/stock" : "/dashboard/home"), { replace: true });
+        const user = data.session.user;
+        const saved = savedRouteFor(user.id);
+        const destination = user.user_metadata?.role === "stock" ? saved || "/workspace/stock"
+          : saved?.startsWith("/workspace/") ? saved : await homeDestinationFor(user);
+        if (mounted) navigate(destination, { replace: true });
       }
     };
     resumeAuthenticatedAccess();
@@ -431,7 +457,7 @@ const RoleGateway = () => {
             key={role.id}
             onClick={() => {
               if (role.id === "homeowner" && testSession) {
-                navigate(savedRouteFor(testSession.user.id) || "/dashboard/home");
+                homeDestinationFor(testSession.user).then((destination) => navigate(destination));
                 return;
               }
               if (testSession) {

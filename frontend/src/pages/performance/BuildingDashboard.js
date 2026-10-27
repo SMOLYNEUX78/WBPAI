@@ -1368,6 +1368,12 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
       const { data: auth } = await supabase.auth.getUser();
       if (!active || !auth?.user) return;
       const { data, error } = await findAccountHomeRecord(supabase, auth.user.id, readSavedHomePassport()?.databaseId);
+      if (active && !error && !data) {
+        window.localStorage.removeItem("wbp-new-building-passport");
+        setHomePassport(null);
+        navigate("/dashboard/new", { replace: true });
+        return;
+      }
       if (active && !error && data?.record_reference) {
         const { data: snapshot } = await supabase.from("WBPPropertyDiscoverySnapshots")
           .select("latitude, longitude, local_authority")
@@ -1398,7 +1404,7 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
     };
     loadPassportId();
     return () => { active = false; };
-  }, [dataSourceBuildingId, isActive]);
+  }, [dataSourceBuildingId, isActive, navigate]);
   useEffect(() => {
     if (dataSourceBuildingId !== "home" || !isActive) return;
     try {
