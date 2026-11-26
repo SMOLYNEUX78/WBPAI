@@ -11,6 +11,7 @@ import { mergeMonthlyHlaRows } from "./monthlyHla";
 import { hasFreshRoomReading, liveRedReadings } from "./liveRedReadings";
 import { homeComfortSuggestion } from "./comfortSuggestions";
 import { dailyGasFromIntervals, detectHeatingEvents, detectHeatingOnset, selectRecentGasDays } from "./heatingEvents";
+import { estimateHeatingOnlyHtc } from "./heatingHtc";
 import { recentProbableHeatingRun, shouldAskAboutHeating } from "./heatingPrompt";
 import { extractEnergyBillImage, extractEnergyBillPdf, normaliseBillReview } from "./energyBill";
 import RetrofitPlanner from "./RetrofitPlanner";
@@ -1753,11 +1754,16 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
           : {},
     };
   };
-  const readCachedHeatLossSummary = () =>
-    readCachedDashboardState(
+  const readCachedHeatLossSummary = () => {
+    const cached = readCachedDashboardState(
       `${dataSourceBuildingId}:heatLossSummary`,
       defaultHeatLossSummary
     );
+    return cached.htcConfidence === "provisional-heating-gas"
+      ? cached
+      : { ...cached, htcEstimate: null, htcSamples: 0, htcDeltaTotal: 0,
+          htcConfidence: "pending-heating" };
+  };
   const readCachedHeatExclusionSummary = () =>
     readCachedDashboardState(
       `${dataSourceBuildingId}:heatExclusionSummary`,
@@ -3307,6 +3313,59 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
     }
   };
 
+  const fetchHeatingOnlyHtcSummary = async () => {
+    const pending = { htcEstimate: null, htcSamples: 0, htcDeltaTotal: 0,
+      htcConfidence: "pending-heating" };
+    if (dataSourceBuildingId !== "home") return pending;
+    try {
+      const now = new Date();
+      const baselineYear = now.getUTCMonth() >= 9 ? now.getUTCFullYear() : now.getUTCFullYear() - 1;
+      const baselineStart = `${baselineYear}-08-01T00:00:00Z`;
+      const baselineEnd = `${baselineYear}-10-01T00:00:00Z`;
+      const recentStart = new Date(now.getTime() - 14 * 86400000).toISOString();
+      const fetchGas = async (from, to) => {
+        const rows = [];
+        for (let page = 0; page < 8; page += 1) {
+          const { data, error } = await supabase.from("EnergyReadings")
+            .select("timestamp,usage_kwh")
+            .eq("building_id", "home").eq("fuel_type", "gas")
+            .eq("reading_type", "interval_30m")
+            .gte("timestamp", from).lt("timestamp", to)
+            .order("timestamp", { ascending: true })
+            .range(page * 1000, (page + 1) * 1000 - 1);
+          if (error) throw error;
+          rows.push(...(data || []));
+          if (!data || data.length < 1000) break;
+        }
+        return rows;
+      };
+      const fetchTemperatures = async () => {
+        const rows = [];
+        for (let page = 0; page < 25; page += 1) {
+          const { data, error } = await applyBuildingScope(supabase.from("Readings")
+            .select("timestamp,temperature_inside,temperature_outside")
+            .or("temperature_inside.not.is.null,temperature_outside.not.is.null")
+            .gte("timestamp", recentStart).lt("timestamp", now.toISOString())
+            .order("timestamp", { ascending: true })
+            .range(page * 1000, (page + 1) * 1000 - 1));
+          if (error) throw error;
+          rows.push(...(data || []));
+          if (!data || data.length < 1000) break;
+        }
+        return rows;
+      };
+      const [baselineGas, recentGas, temperatures] = await Promise.all([
+        fetchGas(baselineStart, baselineEnd),
+        fetchGas(recentStart, now.toISOString()),
+        fetchTemperatures(),
+      ]);
+      return estimateHeatingOnlyHtc(baselineGas, recentGas, temperatures, now);
+    } catch (error) {
+      console.warn("Heating-only HTC unavailable:", error.message);
+      return pending;
+    }
+  };
+
   const fetchMonthlyHlaSummary = async () => {
     const { data, error } = await supabase.from("BuildingMonthlyHlaSummary")
       .select("month_start,summary,calculated_at")
@@ -3321,13 +3380,16 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
     if (!data?.length) {
       monthlyHlaReadyRef.current = true;
       setMonthlyHlaCoverage(null);
+      const heatLossSummary = { ...readCachedHeatLossSummary(), ...await fetchHeatingOnlyHtcSummary() };
+      setHeatLossSummary(heatLossSummary);
       return {
-        heatLossSummary: readCachedHeatLossSummary(),
+        heatLossSummary,
         heatExclusionSummary: readCachedHeatExclusionSummary(),
       };
     }
     const merged = mergeMonthlyHlaRows(data);
     if (!merged) return null;
+    merged.heatLossSummary = { ...merged.heatLossSummary, ...await fetchHeatingOnlyHtcSummary() };
     monthlyHlaReadyRef.current = true;
     setMonthlyHlaCoverage(merged.coverage);
     setHeatLossSummary((current) => ({ ...current, ...merged.heatLossSummary }));
@@ -3941,20 +4003,22 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
       const flatlineIndoorTemp = false;
       const nightCooldownSummary = calculateNightCooldownHtc();
 
+      const heatingHtc = await fetchHeatingOnlyHtcSummary();
       const nextHeatLossSummary = {
         kwhPerHdd: displayedHeatLoss.kwhPerHdd,
         weatherNormalisedEui: displayedHeatLoss.weatherNormalisedEui,
-        htcEstimate: displayedHeatLoss.htcEstimate,
+        htcEstimate: heatingHtc.htcEstimate,
         hddDays: displayedHeatLoss.hddDays || 0,
         hddTotal: displayedHeatLoss.hddTotal || 0,
-        htcSamples: displayedHeatLoss.htcSamples || 0,
-        htcDeltaTotal: displayedHeatLoss.htcDeltaTotal || 0,
+        htcSamples: heatingHtc.htcSamples,
+        htcDeltaTotal: heatingHtc.htcDeltaTotal,
         hddSource: displayedHeatLoss.hddSource || "current",
         hlaConfidence: displayedHeatLoss.hlaConfidence,
         hddConfidence: displayedHeatLoss.hddConfidence,
-        htcConfidence: displayedHeatLoss.htcConfidence,
+        htcConfidence: heatingHtc.htcConfidence,
+        htcBoilerEfficiency: heatingHtc.htcBoilerEfficiency,
         auditKwhPerHdd: auditHeatLoss.kwhPerHdd,
-        auditHtcEstimate: auditHeatLoss.htcEstimate,
+        auditHtcEstimate: null,
         averageInternalTemp: displayedHeatLoss.averageInternalTemp,
         comfortHddDays: displayedHeatLoss.comfortHddDays || 0,
         nightCooldownHtc: nightCooldownSummary.nightCooldownHtc,
@@ -4702,10 +4766,11 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
           ? scoreHeatLossSummary.htcEstimate / estimatedArea
           : null;
       const hasReliableHtcSampleForScore =
-        scoreHeatLossSummary.hddSource === "legacy" ||
+        scoreHeatLossSummary.htcConfidence !== "provisional-heating-gas" &&
+        (scoreHeatLossSummary.hddSource === "legacy" ||
         ((scoreHeatLossSummary.htcSamples || 0) >= MIN_RELIABLE_HTC_SAMPLES &&
           (scoreHeatLossSummary.htcDeltaTotal || 0) >=
-            MIN_RELIABLE_HTC_DELTA_TOTAL);
+            MIN_RELIABLE_HTC_DELTA_TOTAL));
       const htcScore = lowerIsBetterScore(
         hasReliableHtcSampleForScore ? htcPerM2ForScore : null,
         1.5,
@@ -5984,6 +6049,8 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
   const htcStatus =
     heatLossSummary.flatlineIndoorTemp || hasWeakHtcSample
       ? "pending"
+      : heatLossSummary.htcConfidence === "provisional-heating-gas" && rawHtcStatus === "good"
+      ? "warning"
       : rawHtcStatus;
   const nightCooldownHtcPerM2 =
     Number.isFinite(heatLossSummary.nightCooldownHtc) &&
@@ -8498,12 +8565,14 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
                   </p>
                   <p className={heatLossStatusClass(displayedHtcStatus)}>
                     <HeatLossStatusDot status={displayedHtcStatus} />{" "}
-                    <strong>HTC Estimate:</strong>{" "}
+                    <strong>{!isNewPerformanceDeepDive && dataSourceBuildingId === "home" ? "Provisional heating-gas HTC:" : "HTC Estimate:"}</strong>{" "}
                     {Number.isFinite(displayedHeatLossSummary.htcEstimate)
-                      ? `${formatNumber(displayedHeatLossSummary.htcEstimate, 1)} W/K`
+                      ? `${formatNumber(displayedHeatLossSummary.htcEstimate, 1)} W/K${!isNewPerformanceDeepDive && dataSourceBuildingId === "home" ? ` (provisional; ${displayedHeatLossSummary.htcSamples || 0} days, 85% assumed boiler efficiency)` : ""}`
                       : (displayedHeatLossSummary.htcSamples || 0) > 0
-                      ? "Pending energy + indoor/outdoor temperature overlap"
-                      : "Needs indoor/outdoor temperature and energy overlap"}
+                      ? "Pending enough steady heated days"
+                      : dataSourceBuildingId === "museum"
+                      ? "No measured heating input"
+                      : "Needs pre-heating gas pattern and steady heated days"}
                     {!isNewPerformanceDeepDive && hasWeakHtcSample
                       ? ` (Low confidence / weak temperature separation, ${formatNumber(
                           heatLossSummary.htcDeltaTotal || 0,
