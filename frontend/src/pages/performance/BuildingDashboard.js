@@ -3317,6 +3317,7 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
     const pending = { htcEstimate: null, htcSamples: 0, htcDeltaTotal: 0,
       htcConfidence: "pending-heating" };
     if (dataSourceBuildingId !== "home") return pending;
+    if (!homePassportDatabaseId) return { ...pending, htcPendingReason: "Loading home energy history" };
     try {
       const now = new Date();
       const baselineYear = now.getUTCMonth() >= 9 ? now.getUTCFullYear() : now.getUTCFullYear() - 1;
@@ -3326,15 +3327,15 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
       const fetchGas = async (from, to) => {
         const rows = [];
         for (let page = 0; page < 8; page += 1) {
-          const { data, error } = await supabase.from("EnergyReadings")
-            .select("timestamp,usage_kwh")
-            .eq("building_id", "home").eq("fuel_type", "gas")
-            .eq("reading_type", "interval_30m")
-            .gte("timestamp", from).lt("timestamp", to)
-            .order("timestamp", { ascending: true })
+          const { data, error } = await supabase.from("WBPBuildingEnergyMeasurements")
+            .select("observed_at,usage_kwh")
+            .eq("building_record_id", homePassportDatabaseId).eq("fuel_type", "gas")
+            .eq("reading_type", "interval")
+            .gte("observed_at", from).lt("observed_at", to)
+            .order("observed_at", { ascending: true })
             .range(page * 1000, (page + 1) * 1000 - 1);
           if (error) throw error;
-          rows.push(...(data || []));
+          rows.push(...(data || []).map((row) => ({ timestamp: row.observed_at, usage_kwh: row.usage_kwh })));
           if (!data || data.length < 1000) break;
         }
         return rows;
@@ -5780,7 +5781,7 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
     };
     // Building switch refresh only; polling effect below handles continuing updates.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dataSourceBuildingId]);
+  }, [dataSourceBuildingId, homePassportDatabaseId]);
 
   useEffect(() => {
     let refreshCount = 0;
@@ -5809,7 +5810,7 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
     return () => clearInterval(interval);
     // The interval should reset only when the selected building or area source changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dataSourceBuildingId, matterportMetadata.internalArea]);
+  }, [dataSourceBuildingId, homePassportDatabaseId, matterportMetadata.internalArea]);
 
   useEffect(() => {
     if (dataSourceBuildingId !== "home" || !isActive) return undefined;
