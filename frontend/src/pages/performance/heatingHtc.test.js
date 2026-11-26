@@ -36,4 +36,16 @@ test("does not publish HTC without enough reference or steady heated days", () =
   const result = estimateHeatingOnlyHtc(baseline, recent, temperatures("2026-11-01"), new Date("2026-11-03"));
   expect(result.htcEstimate).toBeNull();
   expect(result.htcConfidence).toBe("pending-heating");
+  expect(result.htcPendingReason).toBe("Pre-heating gas: 10/14 complete days");
+});
+
+test("identifies missing paired temperatures separately from gas history", () => {
+  const baseline = Array.from({ length: 20 }, (_, day) =>
+    intervals(`2026-09-${String(day + 1).padStart(2, "0")}`, 0)
+  ).flat();
+  const recent = Array.from({ length: 6 }, (_, day) =>
+    intervals(`2026-11-${String(day + 1).padStart(2, "0")}`, 0.5)
+  ).flat();
+  const result = estimateHeatingOnlyHtc(baseline, recent, [], new Date("2026-11-08"));
+  expect(result.htcPendingReason).toBe("Paired temperatures: 0/5 days");
 });

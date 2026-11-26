@@ -28,7 +28,7 @@ export function estimateHeatingOnlyHtc(baselineGasRows, recentGasRows, temperatu
   const pending = { htcEstimate: null, htcSamples: 0, htcDeltaTotal: 0,
     htcConfidence: "pending-heating", htcBoilerEfficiency: ASSUMED_BOILER_EFFICIENCY };
   const baselineDays = byCompleteDay(baselineGasRows);
-  if (baselineDays.length < 14) return pending;
+  if (baselineDays.length < 14) return { ...pending, htcPendingReason: `Pre-heating gas: ${baselineDays.length}/14 complete days` };
 
   const typicalBySlot = new Map();
   for (let slot = 0; slot < 48; slot += 1) {
@@ -36,7 +36,7 @@ export function estimateHeatingOnlyHtc(baselineGasRows, recentGasRows, temperatu
       .filter(Number.isFinite).sort((a, b) => a - b);
     if (values.length >= 10) typicalBySlot.set(slot, values[Math.floor((values.length - 1) * 0.75)]);
   }
-  if (typicalBySlot.size < 44) return pending;
+  if (typicalBySlot.size < 44) return { ...pending, htcPendingReason: `Pre-heating gas: ${typicalBySlot.size}/44 usable half-hour slots` };
 
   const temperatureBuckets = new Map();
   (temperatureRows || []).forEach((row) => {
@@ -62,7 +62,8 @@ export function estimateHeatingOnlyHtc(baselineGasRows, recentGasRows, temperatu
   let degreeHours = 0;
   let days = 0;
   let deltaTotal = 0;
-  byCompleteDay(recentGasRows).forEach(([day, slots]) => {
+  const recentDays = byCompleteDay(recentGasRows);
+  recentDays.forEach(([day, slots]) => {
     if (day >= now.toISOString().slice(0, 10)) return;
     const temperatures = (temperaturesByDay.get(day) || []).sort((a, b) => a.time - b.time);
     if (temperatures.length < 6) return;
@@ -84,5 +85,10 @@ export function estimateHeatingOnlyHtc(baselineGasRows, recentGasRows, temperatu
     ? { htcEstimate: deliveredKwh * 1000 / degreeHours, htcSamples: days,
       htcDeltaTotal: deltaTotal, htcConfidence: "provisional-heating-gas",
       htcBoilerEfficiency: ASSUMED_BOILER_EFFICIENCY }
-    : { ...pending, htcSamples: days, htcDeltaTotal: deltaTotal };
+    : { ...pending, htcSamples: days, htcDeltaTotal: deltaTotal,
+      htcPendingReason: recentDays.length < 5
+        ? `Recent gas: ${recentDays.length}/5 complete days`
+        : temperaturesByDay.size < 5
+        ? `Paired temperatures: ${temperaturesByDay.size}/5 days`
+        : `Steady heated days: ${days}/5 qualifying days` };
 }
