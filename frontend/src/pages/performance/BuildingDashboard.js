@@ -3362,7 +3362,7 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
       return estimateHeatingOnlyHtc(baselineGas, recentGas, temperatures, now);
     } catch (error) {
       console.warn("Heating-only HTC unavailable:", error.message);
-      return pending;
+      return { ...pending, htcConfidence: "heating-data-unavailable" };
     }
   };
 
@@ -3375,7 +3375,9 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
     if (error) {
       monthlyHlaReadyRef.current = false;
       setMonthlyHlaCoverage(null);
-      return null;
+      const heatLossSummary = { ...readCachedHeatLossSummary(), ...await fetchHeatingOnlyHtcSummary() };
+      setHeatLossSummary(heatLossSummary);
+      return { heatLossSummary };
     }
     if (!data?.length) {
       monthlyHlaReadyRef.current = true;
@@ -8570,6 +8572,8 @@ const BuildingDashboardPanel = ({ building, isActive = false, onLiveRedChange, o
                       ? `${formatNumber(displayedHeatLossSummary.htcEstimate, 1)} W/K${!isNewPerformanceDeepDive && dataSourceBuildingId === "home" ? ` (provisional; ${displayedHeatLossSummary.htcSamples || 0} days, 85% assumed boiler efficiency)` : ""}`
                       : (displayedHeatLossSummary.htcSamples || 0) > 0
                       ? "Pending enough steady heated days"
+                      : displayedHeatLossSummary.htcConfidence === "heating-data-unavailable"
+                      ? "Heating data could not be loaded; retry after refreshing"
                       : dataSourceBuildingId === "museum"
                       ? "No measured heating input"
                       : "Needs pre-heating gas pattern and steady heated days"}
